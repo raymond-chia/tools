@@ -1,39 +1,129 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="zh-TW">
   <head>
     <meta charset="UTF-8" />
-    <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
-    <script type="module" src="/main.js" defer></script>
+    <title>TOML 技能編輯器</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="css/skill-editor.css" />
   </head>
-
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
-
-      <div class="row">
-        <a href="https://tauri.app" target="_blank">
-          <img src="/assets/tauri.svg" class="logo tauri" alt="Tauri logo" />
-        </a>
-        <a
-          href="https://developer.mozilla.org/en-US/docs/Web/JavaScript"
-          target="_blank"
-        >
-          <img
-            src="/assets/javascript.svg"
-            class="logo vanilla"
-            alt="JavaScript logo"
-          />
-        </a>
+    <!-- 頭部導航 -->
+    <header class="app-header">
+      <div class="header-content">
+        <h1 class="app-title">TOML 技能編輯器</h1>
+        <nav class="nav-menu">
+          <button id="home-btn" class="active">首頁</button>
+          <button id="editor-btn">技能編輯</button>
+        </nav>
       </div>
-      <p>Click on the Tauri logo to learn more about the framework</p>
+    </header>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-msg"></p>
+    <main class="content">
+      <!-- 首頁視圖 -->
+      <section id="home-view" class="view">
+        <div class="welcome-section">
+          <h2>歡迎使用 TOML 技能編輯器</h2>
+          <p class="description">此工具用於編輯 TOML 格式的遊戲技能資料。</p>
+
+          <div class="features-list">
+            <h3>主要功能：</h3>
+            <ul>
+              <li>載入並顯示技能檔案</li>
+              <li>編輯技能名稱和描述</li>
+              <li>保存修改回 TOML 檔案</li>
+            </ul>
+          </div>
+
+          <button id="start-btn" class="start-button">開始編輯技能</button>
+        </div>
+      </section>
+
+      <!-- 技能編輯器視圖 -->
+      <section id="editor-view" class="view hidden">
+        <div class="skill-editor">
+          <div class="editor-toolbar">
+            <button id="select-file-btn" class="file-button">
+              選擇技能檔案
+            </button>
+            <div id="file-info" class="file-info hidden">
+              <span id="current-file" class="current-file"></span>
+            </div>
+          </div>
+
+          <div id="editor-content" class="editor-content hidden">
+            <div id="skill-list" class="skill-list">
+              <div class="skill-list-header">
+                <div class="skill-list-title">
+                  <h3>技能列表</h3>
+                  <div id="skill-count" class="skill-count">0 個技能</div>
+                </div>
+                <button id="new-skill-btn" class="new-skill-button">
+                  新增技能
+                </button>
+              </div>
+              <div id="skill-items" class="skill-items"></div>
+            </div>
+
+            <div id="skill-detail" class="skill-detail hidden">
+              <div class="skill-detail-header">
+                <div class="skill-detail-title">
+                  <h3>技能詳情</h3>
+                  <div id="skill-id" class="skill-id"></div>
+                </div>
+                <button id="delete-skill-btn" class="delete-button">
+                  刪除技能
+                </button>
+              </div>
+
+              <div class="skill-content">
+                <div class="field">
+                  <label for="skill-name">名稱：</label>
+                  <input
+                    id="skill-name"
+                    type="text"
+                    placeholder="輸入技能名稱"
+                  />
+                </div>
+                <div class="field">
+                  <label for="skill-desc">描述：</label>
+                  <textarea
+                    id="skill-desc"
+                    placeholder="輸入技能描述"
+                    rows="4"
+                  ></textarea>
+                </div>
+                <button id="save-btn" class="save-button">保存變更</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="empty-state" class="empty-state">
+            <p>請選擇技能檔案以開始編輯</p>
+            <p class="instruction">請選擇 <code>skills.toml</code> 檔案</p>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <!-- 確認對話框 -->
+    <div id="confirm-dialog" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>確認操作</h3>
+        </div>
+        <div class="modal-body">
+          <p id="confirm-message"></p>
+        </div>
+        <div class="modal-footer">
+          <button id="confirm-cancel-btn" class="btn">取消</button>
+          <button id="confirm-ok-btn" class="btn btn-danger">確認</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/skill-editor.js"></script>
+    <script src="js/main.js"></script>
   </body>
 </html>
