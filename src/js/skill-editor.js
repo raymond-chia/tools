@@ -112,8 +112,8 @@ class SkillEditor {
     // 技能詳情
     this.skillDetail = document.getElementById("skill-detail");
     this.skillIdElement = document.getElementById("skill-id");
-    this.skillName = document.getElementById("skill-name");
-    this.skillDesc = document.getElementById("skill-desc");
+    this.skillActive = document.getElementById("skill-active");
+    this.skillBeneficial = document.getElementById("skill-beneficial");
     this.saveBtn = document.getElementById("save-btn");
     this.deleteBtn = document.getElementById("delete-skill-btn");
   }
@@ -132,13 +132,9 @@ class SkillEditor {
   async handleDeleteSkill() {
     if (!this.selectedSkill) return;
 
-    // 獲取技能名稱
-    const skillName =
-      this.skillsData.skills[this.selectedSkill].name || this.selectedSkill;
-
     // 第一次確認
     const firstConfirmed = await this.showConfirmDialog(
-      `確定要刪除技能 "${skillName}" 嗎？\n此操作無法復原。`
+      `確定要刪除技能 "${this.selectedSkill}" 嗎？\n此操作無法復原。`
     );
     if (!firstConfirmed) return;
 
@@ -184,14 +180,8 @@ class SkillEditor {
       return;
     }
 
-    const name = prompt("請輸入技能名稱:");
-    if (!name) return;
-
-    const description = prompt("請輸入技能描述:");
-    if (!description) return;
-
     try {
-      await api.createSkill(this.selectedFile, skillId, name, description);
+      await api.createSkill(this.selectedFile, skillId);
 
       // 重新載入技能列表
       await this.loadSkills(this.selectedFile);
@@ -282,8 +272,10 @@ class SkillEditor {
 
       // 創建內容
       itemElement.innerHTML = `
-        <div class="skill-name">${skill.name || skillKey}</div>
-        <div class="skill-key">${skillKey}</div>
+        <div class="skill-name">${skillKey}</div>
+        <div class="skill-key">${!skill.is_active ? "（被動）" : "（主動）"} ${
+        skill.is_beneficial ? "（有益）" : "（有害）"
+      }</div>
       `;
 
       this.skillItems.appendChild(itemElement);
@@ -318,8 +310,8 @@ class SkillEditor {
 
       // 更新技能詳情
       this.skillIdElement.textContent = `ID: ${skillId}`;
-      this.skillName.value = skill.name || "";
-      this.skillDesc.value = skill.description || "";
+      this.skillActive.checked = skill.is_active || true;
+      this.skillBeneficial.checked = skill.is_beneficial || false;
 
       // 顯示詳情面板
       this.skillDetail.classList.remove("hidden");
@@ -333,15 +325,15 @@ class SkillEditor {
   async handleSaveSkill() {
     if (!this.selectedSkill) return;
 
-    const name = this.skillName.value;
-    const description = this.skillDesc.value;
+    const isActive = this.skillActive.checked;
+    const isBeneficial = this.skillBeneficial.checked;
 
     try {
       await api.saveSkill(
         this.selectedFile,
         this.selectedSkill,
-        name,
-        description
+        isActive,
+        isBeneficial
       );
 
       // 更新本地資料，避免重新載入
@@ -350,8 +342,8 @@ class SkillEditor {
           this.skillsData.skills[this.selectedSkill] = {};
         }
 
-        this.skillsData.skills[this.selectedSkill].name = name;
-        this.skillsData.skills[this.selectedSkill].description = description;
+        this.skillsData.skills[this.selectedSkill].is_active = isActive;
+        this.skillsData.skills[this.selectedSkill].is_beneficial = isBeneficial;
 
         // 只更新技能列表，不重新載入整個資料
         this.updateSkillList();

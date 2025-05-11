@@ -30,7 +30,7 @@
             <h3>主要功能：</h3>
             <ul>
               <li>載入並顯示技能檔案</li>
-              <li>編輯技能名稱和描述</li>
+              <li>設定技能被動屬性</li>
               <li>保存修改回 TOML 檔案</li>
             </ul>
           </div>
@@ -78,20 +78,22 @@
 
               <div class="skill-content">
                 <div class="field">
-                  <label for="skill-name">名稱：</label>
+                  <label for="skill-active">主動技能：</label>
                   <input
-                    id="skill-name"
-                    type="text"
-                    placeholder="輸入技能名稱"
+                    id="skill-active"
+                    type="checkbox"
+                    class="active-toggle"
+                    checked
                   />
                 </div>
                 <div class="field">
-                  <label for="skill-desc">描述：</label>
-                  <textarea
-                    id="skill-desc"
-                    placeholder="輸入技能描述"
-                    rows="4"
-                  ></textarea>
+                  <label for="skill-beneficial">有益技能：</label>
+                  <input
+                    id="skill-beneficial"
+                    type="checkbox"
+                    class="beneficial-toggle"
+                    checked
+                  />
                 </div>
                 <button id="save-btn" class="save-button">保存變更</button>
               </div>

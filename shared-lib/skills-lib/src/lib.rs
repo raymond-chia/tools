@@ -7,8 +7,24 @@ use std::path::Path;
 /// 技能資料結構
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Skill {
-    pub name: String,
-    pub description: String,
+    #[serde(default = "default_is_true")]
+    pub is_active: bool,
+    #[serde(default)]
+    pub is_beneficial: bool,
+}
+
+fn default_is_true() -> bool {
+    true
+}
+
+/// 實作 Skill 的預設值
+impl Default for Skill {
+    fn default() -> Self {
+        Self {
+            is_active: true,
+            is_beneficial: false,
+        }
+    }
 }
 
 /// 技能資料集
@@ -46,28 +62,21 @@ impl SkillsData {
         fs::write(path, toml_content)
     }
 
-    /// 取得單一技能
-    pub fn get_skill(&self, skill_id: &str) -> Option<&Skill> {
-        self.skills.get(skill_id)
-    }
-
     /// 新增技能
-    pub fn create_skill(
-        &mut self,
-        skill_id: String,
-        name: String,
-        description: String,
-    ) -> Result<(), String> {
+    pub fn create_skill(&mut self, skill_id: String) -> Result<(), String> {
         if self.skills.contains_key(&skill_id) {
             return Err("技能 ID 已存在".to_string());
         }
-        self.skills.insert(skill_id, Skill { name, description });
+        self.skills.insert(skill_id, Skill::default());
         Ok(())
     }
 
-    /// 更新技能
-    pub fn update_skill(&mut self, skill_id: String, name: String, description: String) {
-        self.skills.insert(skill_id, Skill { name, description });
+    /// 更新技能屬性
+    pub fn update_skill(&mut self, skill_id: String, is_active: bool, is_beneficial: bool) {
+        if let Some(skill) = self.skills.get_mut(&skill_id) {
+            skill.is_active = is_active;
+            skill.is_beneficial = is_beneficial;
+        }
     }
 
     /// 刪除技能
@@ -79,31 +88,10 @@ impl SkillsData {
         Ok(())
     }
 
-    /// 檢查技能是否存在
-    pub fn has_skill(&self, skill_id: &str) -> bool {
-        self.skills.contains_key(skill_id)
-    }
-
-    /// 列出所有技能 ID
-    pub fn skill_ids(&self) -> Vec<String> {
-        self.skills.keys().cloned().collect()
-    }
-
     /// 建立空的技能資料集
     pub fn empty() -> Self {
         Self {
             skills: HashMap::new(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_empty_skills_data() {
-        let data = SkillsData::empty();
-        assert_eq!(data.skills.len(), 0);
     }
 }

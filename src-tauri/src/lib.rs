@@ -37,15 +37,16 @@ fn load_skills(path: &str) -> Result<SkillsResponse, String> {
 }
 
 #[tauri::command]
-fn save_skill(path: &str, skill_id: &str, name: &str, description: &str) -> Result<(), String> {
+fn save_skill(
+    path: &str,
+    skill_id: &str,
+    is_active: bool,
+    is_beneficial: bool,
+) -> Result<(), String> {
     let mut skills_data =
         SkillsData::from_file(path).map_err(|e| format!("載入技能檔案失敗: {}", e))?;
 
-    skills_data.update_skill(
-        skill_id.to_string(),
-        name.to_string(),
-        description.to_string(),
-    );
+    skills_data.update_skill(skill_id.to_string(), is_active, is_beneficial);
 
     skills_data
         .save_to_file(path)
@@ -55,15 +56,11 @@ fn save_skill(path: &str, skill_id: &str, name: &str, description: &str) -> Resu
 }
 
 #[tauri::command]
-fn create_skill(path: &str, skill_id: &str, name: &str, description: &str) -> Result<(), String> {
+fn create_skill(path: &str, skill_id: &str) -> Result<(), String> {
     let mut skills_data =
         SkillsData::from_file(path).map_err(|e| format!("載入技能檔案失敗: {}", e))?;
 
-    skills_data.create_skill(
-        skill_id.to_string(),
-        name.to_string(),
-        description.to_string(),
-    )?;
+    skills_data.create_skill(skill_id.to_string())?;
 
     skills_data
         .save_to_file(path)
