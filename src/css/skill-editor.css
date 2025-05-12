@@ -243,6 +243,173 @@ code {
   min-height: 2rem;
 }
 
+.field input[type="text"],
+.field input[type="number"],
+.field select {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #f0f0f0;
+}
+
+.field input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* 標籤樣式 */
+.section-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  color: #ddd;
+}
+
+.tags-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tag-group {
+  display: flex;
+  flex-direction: column;
+  background-color: #292929;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #333;
+}
+
+.tag-group-title {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  color: #ccc;
+  font-size: 0.95rem;
+}
+
+.tag-options {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.tag-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tag-field label {
+  margin: 0;
+  cursor: pointer;
+  color: #aaa;
+}
+
+.tag-field input[type="radio"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.tag-field input[type="radio"]:checked + label {
+  color: var(--primary-color, #0d6efd);
+  font-weight: bold;
+}
+
+.tag-field input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.tag-field input[type="checkbox"]:checked + label {
+  color: var(--primary-color, #0d6efd);
+  font-weight: bold;
+}
+
+/* 基本屬性樣式 */
+.basic-attributes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* 效果樣式 */
+.effects-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.effect-item {
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: #2a2a2a;
+  position: relative;
+}
+
+.effect-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.effect-title {
+  font-weight: bold;
+  color: #ddd;
+}
+
+.remove-effect {
+  background-color: var(--danger-color);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.effect-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.effect-buttons {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.add-effect-button {
+  padding: 0.5rem 1rem;
+  background-color: #444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.add-effect-button:hover {
+  background-color: #555;
+}
+
 .save-button {
   margin-top: 1rem;
   background-color: var(--primary-color);
@@ -346,5 +513,13 @@ code {
   .modal-content {
     width: 90%;
     margin: 0 1rem;
+  }
+
+  .basic-attributes {
+    grid-template-columns: 1fr;
+  }
+
+  .tag-group {
+    flex-direction: column;
   }
 }

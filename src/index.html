@@ -77,24 +77,214 @@
               </div>
 
               <div class="skill-content">
-                <div class="field">
-                  <label for="skill-active">主動技能：</label>
-                  <input
-                    id="skill-active"
-                    type="checkbox"
-                    class="active-toggle"
-                    checked
-                  />
+                <div class="section-title">標籤</div>
+                <div class="tags-container">
+                  <!-- 主動/被動 二選一 -->
+                  <div class="tag-group">
+                    <div class="tag-group-title">技能類型：</div>
+                    <div class="tag-options">
+                      <div class="field tag-field">
+                        <input
+                          id="tag-active"
+                          type="radio"
+                          name="active-passive"
+                          data-tag="active"
+                          class="tag-radio"
+                        />
+                        <label for="tag-active">主動</label>
+                      </div>
+                      <div class="field tag-field">
+                        <input
+                          id="tag-passive"
+                          type="radio"
+                          name="active-passive"
+                          data-tag="passive"
+                          class="tag-radio"
+                        />
+                        <label for="tag-passive">被動</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 單體/範圍 二選一 -->
+                  <div class="tag-group">
+                    <div class="tag-group-title">影響範圍：</div>
+                    <div class="tag-options">
+                      <div class="field tag-field">
+                        <input
+                          id="tag-single"
+                          type="radio"
+                          name="single-area"
+                          data-tag="single"
+                          class="tag-radio"
+                        />
+                        <label for="tag-single">單體</label>
+                      </div>
+                      <div class="field tag-field">
+                        <input
+                          id="tag-area"
+                          type="radio"
+                          name="single-area"
+                          data-tag="area"
+                          class="tag-radio"
+                        />
+                        <label for="tag-area">範圍</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 近戰/遠程 二選一 -->
+                  <div class="tag-group">
+                    <div class="tag-group-title">攻擊距離：</div>
+                    <div class="tag-options">
+                      <div class="field tag-field">
+                        <input
+                          id="tag-melee"
+                          type="radio"
+                          name="melee-ranged"
+                          data-tag="melee"
+                          class="tag-radio"
+                        />
+                        <label for="tag-melee">近戰</label>
+                      </div>
+                      <div class="field tag-field">
+                        <input
+                          id="tag-ranged"
+                          type="radio"
+                          name="melee-ranged"
+                          data-tag="ranged"
+                          class="tag-radio"
+                        />
+                        <label for="tag-ranged">遠程</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 攻擊/有益 二選一 -->
+                  <div class="tag-group">
+                    <div class="tag-group-title">效果類型：</div>
+                    <div class="tag-options">
+                      <div class="field tag-field">
+                        <input
+                          id="tag-attack"
+                          type="radio"
+                          name="attack-beneficial"
+                          data-tag="attack"
+                          class="tag-radio"
+                        />
+                        <label for="tag-attack">攻擊</label>
+                      </div>
+                      <div class="field tag-field">
+                        <input
+                          id="tag-beneficial"
+                          type="radio"
+                          name="attack-beneficial"
+                          data-tag="beneficial"
+                          class="tag-radio"
+                        />
+                        <label for="tag-beneficial">有益</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="tag-group">
+                    <div class="field tag-field">
+                      <label for="tag-bodycontrol">身體控制</label>
+                      <input
+                        id="tag-bodycontrol"
+                        type="checkbox"
+                        data-tag="bodycontrol"
+                        class="tag-checkbox"
+                      />
+                    </div>
+                    <div class="field tag-field">
+                      <label for="tag-mindcontrol">精神控制</label>
+                      <input
+                        id="tag-mindcontrol"
+                        type="checkbox"
+                        data-tag="mindcontrol"
+                        class="tag-checkbox"
+                      />
+                    </div>
+                    <div class="field tag-field">
+                      <label for="tag-magic">魔法</label>
+                      <input
+                        id="tag-magic"
+                        type="checkbox"
+                        data-tag="magic"
+                        class="tag-checkbox"
+                      />
+                    </div>
+                    <div class="field tag-field">
+                      <label for="tag-heal">治療</label>
+                      <input
+                        id="tag-heal"
+                        type="checkbox"
+                        data-tag="heal"
+                        class="tag-checkbox"
+                      />
+                    </div>
+                    <div class="field tag-field">
+                      <label for="tag-fire">火焰</label>
+                      <input
+                        id="tag-fire"
+                        type="checkbox"
+                        data-tag="fire"
+                        class="tag-checkbox"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div class="field">
-                  <label for="skill-beneficial">有益技能：</label>
-                  <input
-                    id="skill-beneficial"
-                    type="checkbox"
-                    class="beneficial-toggle"
-                    checked
-                  />
+
+                <div class="section-title">基本屬性</div>
+                <div class="basic-attributes">
+                  <div class="field">
+                    <label for="skill-range">範圍：</label>
+                    <input id="skill-range" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field">
+                    <label for="skill-area">面積：</label>
+                    <input id="skill-area" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field">
+                    <label for="skill-cost">消耗：</label>
+                    <input id="skill-cost" type="number" min="0" value="0" />
+                  </div>
+                  <div class="field">
+                    <label for="skill-hit-rate">命中率：</label>
+                    <input
+                      id="skill-hit-rate"
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="無"
+                    />
+                  </div>
+                  <div class="field">
+                    <label for="skill-crit-rate">暴擊率：</label>
+                    <input
+                      id="skill-crit-rate"
+                      type="number"
+                      min="0"
+                      max="100"
+                      placeholder="無"
+                    />
+                  </div>
                 </div>
+
+                <div class="section-title">效果</div>
+                <div id="effects-container" class="effects-container">
+                  <!-- 效果將通過 JS 動態生成 -->
+                </div>
+                <div class="effect-buttons">
+                  <button id="add-hp-effect" class="add-effect-button">
+                    添加 HP 效果
+                  </button>
+                  <button id="add-burn-effect" class="add-effect-button">
+                    添加燃燒效果
+                  </button>
+                </div>
+
                 <button id="save-btn" class="save-button">保存變更</button>
               </div>
             </div>

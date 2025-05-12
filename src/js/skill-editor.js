@@ -4,6 +4,7 @@ class SkillEditor {
     this.selectedFile = null;
     this.skillsData = null;
     this.selectedSkill = null;
+    this.effectIdCounter = 0;
 
     // 初始化 UI 元素引用
     this.initElements();
@@ -112,10 +113,24 @@ class SkillEditor {
     // 技能詳情
     this.skillDetail = document.getElementById("skill-detail");
     this.skillIdElement = document.getElementById("skill-id");
-    this.skillActive = document.getElementById("skill-active");
-    this.skillBeneficial = document.getElementById("skill-beneficial");
     this.saveBtn = document.getElementById("save-btn");
     this.deleteBtn = document.getElementById("delete-skill-btn");
+
+    // 標籤選擇器
+    this.tagCheckboxes = document.querySelectorAll(".tag-checkbox");
+    this.tagRadios = document.querySelectorAll(".tag-radio");
+
+    // 基本屬性
+    this.skillRange = document.getElementById("skill-range");
+    this.skillArea = document.getElementById("skill-area");
+    this.skillCost = document.getElementById("skill-cost");
+    this.skillHitRate = document.getElementById("skill-hit-rate");
+    this.skillCritRate = document.getElementById("skill-crit-rate");
+
+    // 效果相關
+    this.effectsContainer = document.getElementById("effects-container");
+    this.addHpEffectBtn = document.getElementById("add-hp-effect");
+    this.addBurnEffectBtn = document.getElementById("add-burn-effect");
   }
 
   // 初始化事件監聽器
@@ -126,6 +141,12 @@ class SkillEditor {
       .getElementById("new-skill-btn")
       .addEventListener("click", () => this.handleNewSkill());
     this.deleteBtn.addEventListener("click", () => this.handleDeleteSkill());
+
+    // 效果按鈕
+    this.addHpEffectBtn.addEventListener("click", () => this.addEffect("hp"));
+    this.addBurnEffectBtn.addEventListener("click", () =>
+      this.addEffect("burn")
+    );
   }
 
   // 處理刪除技能
@@ -270,11 +291,19 @@ class SkillEditor {
       // 添加點擊事件
       itemElement.addEventListener("click", () => this.selectSkill(skillKey));
 
+      // 獲取技能類型標籤
+      const hasActiveTag =
+        skill.tags &&
+        skill.tags.some((tag) => tag === "active" || tag === "Active");
+      const hasBeneficialTag =
+        skill.tags &&
+        skill.tags.some((tag) => tag === "beneficial" || tag === "Beneficial");
+
       // 創建內容
       itemElement.innerHTML = `
         <div class="skill-name">${skillKey}</div>
-        <div class="skill-key">${!skill.is_active ? "（被動）" : "（主動）"} ${
-        skill.is_beneficial ? "（有益）" : "（有害）"
+        <div class="skill-key">${!hasActiveTag ? "（被動）" : "（主動）"} ${
+        hasBeneficialTag ? "（有益）" : "（有害）"
       }</div>
       `;
 
@@ -294,6 +323,10 @@ class SkillEditor {
   selectSkill(skillId) {
     this.selectedSkill = skillId;
 
+    // 清除效果容器
+    this.effectsContainer.innerHTML = "";
+    this.effectIdCounter = 0;
+
     // 更新技能列表選中狀態
     const skillItems = this.skillItems.querySelectorAll(".skill-item");
     skillItems.forEach((item) => {
@@ -310,8 +343,57 @@ class SkillEditor {
 
       // 更新技能詳情
       this.skillIdElement.textContent = `ID: ${skillId}`;
-      this.skillActive.checked = skill.is_active || true;
-      this.skillBeneficial.checked = skill.is_beneficial || false;
+
+      // 重置所有標籤
+      this.tagCheckboxes.forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+
+      this.tagRadios.forEach((radio) => {
+        radio.checked = false;
+      });
+
+      // 設置標籤
+      if (skill.tags && Array.isArray(skill.tags)) {
+        skill.tags.forEach((tag) => {
+          const tagName =
+            typeof tag === "string" ? tag.toLowerCase() : tag.toLowerCase();
+
+          // 檢查複選框
+          const checkbox = document.querySelector(
+            `.tag-checkbox[data-tag="${tagName}"]`
+          );
+          if (checkbox) {
+            checkbox.checked = true;
+          }
+
+          // 檢查單選按鈕
+          const radio = document.querySelector(
+            `.tag-radio[data-tag="${tagName}"]`
+          );
+          if (radio) {
+            radio.checked = true;
+          }
+        });
+      }
+
+      // 設置基本屬性
+      this.skillRange.value = skill.range || 0;
+      this.skillArea.value = skill.area || 0;
+      this.skillCost.value = skill.cost || 0;
+      this.skillHitRate.value = skill.hit_rate || "";
+      this.skillCritRate.value = skill.crit_rate || "";
+
+      // 添加效果
+      if (skill.effects && Array.isArray(skill.effects)) {
+        skill.effects.forEach((effect) => {
+          if (effect.type === "hp") {
+            this.addEffect("hp", effect.target_type, effect.value);
+          } else if (effect.type === "burn") {
+            this.addEffect("burn", null, null, effect.duration);
+          }
+        });
+      }
 
       // 顯示詳情面板
       this.skillDetail.classList.remove("hidden");
@@ -321,29 +403,208 @@ class SkillEditor {
     }
   }
 
+  // 添加效果
+  addEffect(type, targetType = null, value = null, duration = null) {
+    const effectId = `effect-${this.effectIdCounter++}`;
+    const effectElement = document.createElement("div");
+    effectElement.className = "effect-item";
+    effectElement.dataset.effectId = effectId;
+    effectElement.dataset.effectType = type;
+
+    const effectHeader = document.createElement("div");
+    effectHeader.className = "effect-header";
+
+    const effectTitle = document.createElement("div");
+    effectTitle.className = "effect-title";
+    effectTitle.textContent = type === "hp" ? "HP 效果" : "燃燒效果";
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "remove-effect";
+    removeButton.textContent = "×";
+    removeButton.addEventListener("click", () => {
+      effectElement.remove();
+    });
+
+    effectHeader.appendChild(effectTitle);
+    effectHeader.appendChild(removeButton);
+    effectElement.appendChild(effectHeader);
+
+    const effectFields = document.createElement("div");
+    effectFields.className = "effect-fields";
+
+    // 根據效果類型添加不同的欄位
+    if (type === "hp") {
+      // 目標類型選擇器
+      const targetTypeField = document.createElement("div");
+      targetTypeField.className = "field";
+
+      const targetTypeLabel = document.createElement("label");
+      targetTypeLabel.textContent = "目標類型：";
+      targetTypeLabel.htmlFor = `${effectId}-target-type`;
+
+      const targetTypeSelect = document.createElement("select");
+      targetTypeSelect.id = `${effectId}-target-type`;
+      targetTypeSelect.name = "target_type";
+
+      const targetOptions = [
+        { value: "caster", text: "施法者" },
+        { value: "ally", text: "友方" },
+        { value: "ally_exclude_caster", text: "友方（不包括施法者）" },
+        { value: "enemy", text: "敵人" },
+        { value: "any", text: "任何單位" },
+        { value: "any_exclude_caster", text: "任何單位（不包括施法者）" },
+      ];
+
+      targetOptions.forEach((option) => {
+        const optionElement = document.createElement("option");
+        optionElement.value = option.value;
+        optionElement.textContent = option.text;
+
+        // 如果有傳入的目標類型，設為選中
+        if (targetType && option.value === targetType.toLowerCase()) {
+          optionElement.selected = true;
+        }
+
+        targetTypeSelect.appendChild(optionElement);
+      });
+
+      targetTypeField.appendChild(targetTypeLabel);
+      targetTypeField.appendChild(targetTypeSelect);
+      effectFields.appendChild(targetTypeField);
+
+      // 數值輸入
+      const valueField = document.createElement("div");
+      valueField.className = "field";
+
+      const valueLabel = document.createElement("label");
+      valueLabel.textContent = "數值 (負數為傷害)：";
+      valueLabel.htmlFor = `${effectId}-value`;
+
+      const valueInput = document.createElement("input");
+      valueInput.type = "number";
+      valueInput.id = `${effectId}-value`;
+      valueInput.name = "value";
+      valueInput.value = value !== null ? value : 0;
+
+      valueField.appendChild(valueLabel);
+      valueField.appendChild(valueInput);
+      effectFields.appendChild(valueField);
+    } else if (type === "burn") {
+      // 持續時間
+      const durationField = document.createElement("div");
+      durationField.className = "field";
+
+      const durationLabel = document.createElement("label");
+      durationLabel.textContent = "持續回合：";
+      durationLabel.htmlFor = `${effectId}-duration`;
+
+      const durationInput = document.createElement("input");
+      durationInput.type = "number";
+      durationInput.id = `${effectId}-duration`;
+      durationInput.name = "duration";
+      durationInput.min = "1";
+      durationInput.value = duration !== null ? duration : 1;
+
+      durationField.appendChild(durationLabel);
+      durationField.appendChild(durationInput);
+      effectFields.appendChild(durationField);
+    }
+
+    effectElement.appendChild(effectFields);
+    this.effectsContainer.appendChild(effectElement);
+  }
+
+  // 從表單中收集效果數據
+  collectEffects() {
+    const effects = [];
+    const effectElements =
+      this.effectsContainer.querySelectorAll(".effect-item");
+
+    effectElements.forEach((element) => {
+      const effectType = element.dataset.effectType;
+
+      if (effectType === "hp") {
+        const targetType = element.querySelector(
+          "select[name='target_type']"
+        ).value;
+        const value = parseInt(
+          element.querySelector("input[name='value']").value || 0
+        );
+
+        effects.push({
+          type: "hp",
+          target_type: targetType,
+          value: value,
+        });
+      } else if (effectType === "burn") {
+        const duration = parseInt(
+          element.querySelector("input[name='duration']").value || 1
+        );
+
+        effects.push({
+          type: "burn",
+          duration: duration,
+        });
+      }
+    });
+
+    return effects;
+  }
+
   // 保存技能
   async handleSaveSkill() {
     if (!this.selectedSkill) return;
 
-    const isActive = this.skillActive.checked;
-    const isBeneficial = this.skillBeneficial.checked;
+    // 收集標籤
+    const selectedTags = [];
+
+    // 收集複選框標籤
+    this.tagCheckboxes.forEach((checkbox) => {
+      if (checkbox.checked) {
+        selectedTags.push(checkbox.dataset.tag);
+      }
+    });
+
+    // 收集單選按鈕標籤
+    this.tagRadios.forEach((radio) => {
+      if (radio.checked) {
+        selectedTags.push(radio.dataset.tag);
+      }
+    });
+
+    // 收集基本屬性
+    const range = parseInt(this.skillRange.value || 0);
+    const area = parseInt(this.skillArea.value || 0);
+    const cost = parseInt(this.skillCost.value || 0);
+
+    // 命中率和暴擊率可能為空
+    const hitRateStr = this.skillHitRate.value.trim();
+    const critRateStr = this.skillCritRate.value.trim();
+
+    const hitRate = hitRateStr ? parseInt(hitRateStr) : null;
+    const critRate = critRateStr ? parseInt(critRateStr) : null;
+
+    // 收集效果
+    const effects = this.collectEffects();
+
+    // 創建技能數據對象
+    const skillData = {
+      tags: selectedTags,
+      range,
+      area,
+      cost,
+      hit_rate: hitRate,
+      crit_rate: critRate,
+      effects,
+    };
 
     try {
-      await api.saveSkill(
-        this.selectedFile,
-        this.selectedSkill,
-        isActive,
-        isBeneficial
-      );
+      await api.saveSkill(this.selectedFile, this.selectedSkill, skillData);
 
       // 更新本地資料，避免重新載入
       if (this.skillsData && this.skillsData.skills) {
-        if (!this.skillsData.skills[this.selectedSkill]) {
-          this.skillsData.skills[this.selectedSkill] = {};
-        }
-
-        this.skillsData.skills[this.selectedSkill].is_active = isActive;
-        this.skillsData.skills[this.selectedSkill].is_beneficial = isBeneficial;
+        // 直接替換整個技能對象，確保 effects 數組被完整保留
+        this.skillsData.skills[this.selectedSkill] = skillData;
 
         // 只更新技能列表，不重新載入整個資料
         this.updateSkillList();

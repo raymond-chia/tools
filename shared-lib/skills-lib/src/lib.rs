@@ -3,26 +3,81 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::path::Path;
+use strum_macros::{Display, EnumString};
+
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum Tag {
+    // 主動; 被動
+    Active,
+    Passive,
+    // 範圍
+    Single,
+    Area,
+    // 距離
+    Melee,
+    Ranged,
+    // 特性
+    Attack,
+    Beneficial,
+    BodyControl,
+    MindControl,
+    // 其他
+    Magic,
+    Heal,
+    Fire,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum TargetType {
+    Caster,
+    Ally,
+    AllyExcludeCaster,
+    Enemy,
+    Any,
+    AnyExcludeCaster,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum Effect {
+    Hp { target_type: TargetType, value: i32 },
+    Burn { duration: u16 },
+}
 
 /// 技能資料結構
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Skill {
-    #[serde(default = "default_is_true")]
-    pub is_active: bool,
     #[serde(default)]
-    pub is_beneficial: bool,
-}
-
-fn default_is_true() -> bool {
-    true
+    pub tags: Vec<Tag>,
+    #[serde(default)]
+    pub range: usize,
+    #[serde(default)]
+    pub area: usize,
+    #[serde(default)]
+    pub cost: u16,
+    #[serde(default)]
+    pub hit_rate: Option<u16>,
+    #[serde(default)]
+    pub crit_rate: Option<u16>,
+    #[serde(default)]
+    pub effects: Vec<Effect>,
 }
 
 /// 實作 Skill 的預設值
 impl Default for Skill {
     fn default() -> Self {
         Self {
-            is_active: true,
-            is_beneficial: false,
+            tags: vec![],
+            range: 0,
+            area: 0,
+            cost: 0,
+            hit_rate: None,
+            crit_rate: None,
+            effects: vec![],
         }
     }
 }
@@ -72,10 +127,12 @@ impl SkillsData {
     }
 
     /// 更新技能屬性
-    pub fn update_skill(&mut self, skill_id: String, is_active: bool, is_beneficial: bool) {
+    pub fn update_skill(&mut self, skill_id: String, updated_skill: Skill) -> Result<(), String> {
         if let Some(skill) = self.skills.get_mut(&skill_id) {
-            skill.is_active = is_active;
-            skill.is_beneficial = is_beneficial;
+            *skill = updated_skill;
+            Ok(())
+        } else {
+            Err(format!("找不到技能 ID: {}", skill_id))
         }
     }
 

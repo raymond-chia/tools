@@ -1,0 +1,28 @@
+[fireball]
+tags = ["active", "area", "ranged", "attack", "magic", "fire"]
+range = 5
+area = 2
+cost = 10
+effects = [
+    { type = "hp", target_type = "any", value = -100 },
+    { type = "burn", duration = 5 },
+]
+
+[heal]
+tags = ["active", "single", "melee", "beneficial", "magic", "heal"]
+range = 1
+area = 1
+cost = 5
+effects = [{ type = "hp", target_type = "any", value = 80 }]
+
+[vampiric_strike]
+tags = ["active", "single", "melee", "attack", "magic", "heal"]
+range = 1
+area = 1
+cost = 10
+hit_rate = 80
+crit_rate = 20
+effects = [
+    { type = "hp", target_type = "any", value = -100 },
+    { type = "hp", target_type = "caster", value = 80 },
+]

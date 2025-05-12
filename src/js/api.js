@@ -26,16 +26,15 @@ const api = {
   },
 
   // 保存技能屬性
-  saveSkill: async (path, skillId, isActive, isBeneficial) => {
+  saveSkill: async (path, skillId, skillData) => {
     try {
       return await invoke("save_skill", {
         path,
         skillId,
-        isActive,
-        isBeneficial,
+        skillData,
       });
     } catch (error) {
-      console.error("保存技能被動屬性失敗:", error);
+      console.error("保存技能屬性失敗:", error);
       throw error;
     }
   },
