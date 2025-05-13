@@ -1,28 +1,89 @@
 [fireball]
-tags = ["active", "area", "ranged", "attack", "magic", "fire"]
-range = 5
-area = 2
-cost = 10
-effects = [
-    { type = "hp", target_type = "any", value = -100 },
-    { type = "burn", duration = 5 },
+tags = [
+    "magic",
+    "fire",
+    "active",
+    "area",
+    "ranged",
+    "attack",
 ]
+range = 5
+cost = 10
 
-[heal]
-tags = ["active", "single", "melee", "beneficial", "magic", "heal"]
-range = 1
-area = 1
-cost = 5
-effects = [{ type = "hp", target_type = "any", value = 80 }]
+[[fireball.effects]]
+type = "hp"
+target_type = "any"
+value = -10
+
+[fireball.effects.shape]
+circle = 2
+
+[[fireball.effects]]
+type = "burn"
+target_type = "any"
+duration = 5
+
+[fireball.effects.shape]
+circle = 2
 
 [vampiric_strike]
-tags = ["active", "single", "melee", "attack", "magic", "heal"]
+tags = [
+    "magic",
+    "heal",
+    "active",
+    "single",
+    "melee",
+    "attack",
+]
 range = 1
-area = 1
 cost = 10
 hit_rate = 80
 crit_rate = 20
-effects = [
-    { type = "hp", target_type = "any", value = -100 },
-    { type = "hp", target_type = "caster", value = 80 },
+
+[[vampiric_strike.effects]]
+type = "hp"
+target_type = "any"
+shape = "point"
+value = -10
+
+[[vampiric_strike.effects]]
+type = "hp"
+target_type = "caster"
+shape = "point"
+value = 8
+
+[heal]
+tags = [
+    "magic",
+    "heal",
+    "active",
+    "single",
+    "melee",
+    "beneficial",
 ]
+range = 1
+cost = 5
+
+[[heal.effects]]
+type = "hp"
+target_type = "any"
+shape = "point"
+value = 8
+
+[sword_pierce]
+tags = [
+    "active",
+    "single",
+    "melee",
+    "attack",
+]
+range = 1
+cost = 0
+hit_rate = 100
+crit_rate = 10
+
+[[sword_pierce.effects]]
+type = "hp"
+target_type = "any_exclude_caster"
+shape = "point"
+value = -5

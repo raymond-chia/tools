@@ -41,11 +41,30 @@ pub enum TargetType {
     AnyExcludeCaster,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum Shape {
+    Point,
+    Circle(usize),
+    Rectangle(usize, usize),
+    Line(usize),
+    Cone(usize, f32),
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Effect {
-    Hp { target_type: TargetType, value: i32 },
-    Burn { duration: u16 },
+    Hp {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,
+    },
+    Burn {
+        target_type: TargetType,
+        shape: Shape,
+        duration: u16,
+    },
 }
 
 /// 技能資料結構
@@ -55,8 +74,6 @@ pub struct Skill {
     pub tags: Vec<Tag>,
     #[serde(default)]
     pub range: usize,
-    #[serde(default)]
-    pub area: usize,
     #[serde(default)]
     pub cost: u16,
     #[serde(default)]
@@ -73,7 +90,6 @@ impl Default for Skill {
         Self {
             tags: vec![],
             range: 0,
-            area: 0,
             cost: 0,
             hit_rate: None,
             crit_rate: None,

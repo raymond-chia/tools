@@ -122,7 +122,6 @@ class SkillEditor {
 
     // 基本屬性
     this.skillRange = document.getElementById("skill-range");
-    this.skillArea = document.getElementById("skill-area");
     this.skillCost = document.getElementById("skill-cost");
     this.skillHitRate = document.getElementById("skill-hit-rate");
     this.skillCritRate = document.getElementById("skill-crit-rate");
@@ -172,23 +171,35 @@ class SkillEditor {
   // 執行刪除操作
   async executeDelete() {
     try {
-      await api.deleteSkill(this.selectedFile, this.selectedSkill);
+      // 獲取檔案路徑，優先使用 this.selectedFile，如果 skillsData 有 file_path 則使用
+      const filePath =
+        this.selectedFile || (this.skillsData && this.skillsData.file_path);
+      if (!filePath) {
+        throw new Error("找不到檔案路徑");
+      }
+
+      console.log("刪除技能:", filePath, "技能ID:", this.selectedSkill);
+      await api.deleteSkill(filePath, this.selectedSkill);
 
       // 重新載入技能列表
-      await this.loadSkills(this.selectedFile);
+      await this.loadSkills(filePath);
 
       // 隱藏詳情面板
       this.selectSkill(null);
 
       alert("刪除技能成功!");
     } catch (error) {
+      console.error("刪除技能時出錯:", error);
       alert(`刪除技能失敗: ${error}`);
     }
   }
 
   // 處理新增技能
   async handleNewSkill() {
-    if (!this.selectedFile) {
+    // 獲取檔案路徑，優先使用 this.selectedFile，如果 skillsData 有 file_path 則使用
+    const filePath =
+      this.selectedFile || (this.skillsData && this.skillsData.file_path);
+    if (!filePath) {
       alert("請先選擇技能檔案");
       return;
     }
@@ -202,16 +213,18 @@ class SkillEditor {
     }
 
     try {
-      await api.createSkill(this.selectedFile, skillId);
+      console.log("新增技能:", filePath, "技能ID:", skillId);
+      await api.createSkill(filePath, skillId);
 
       // 重新載入技能列表
-      await this.loadSkills(this.selectedFile);
+      await this.loadSkills(filePath);
 
       // 選中新建的技能
       this.selectSkill(skillId);
 
       alert("新增技能成功!");
     } catch (error) {
+      console.error("新增技能時出錯:", error);
       alert(`新增技能失敗: ${error}`);
     }
   }
@@ -247,8 +260,22 @@ class SkillEditor {
   // 載入技能資料
   async loadSkills(filePath) {
     try {
-      const data = await api.loadSkills(filePath);
-      this.skillsData = data;
+      const response = await api.loadSkills(filePath);
+      // 查看控制台中的數據結構
+      console.log("從後端載入的技能數據:", response);
+
+      // 確保 response 有 skills 屬性
+      if (!response || !response.skills) {
+        throw new Error("技能數據格式無效");
+      }
+
+      // 將後端回傳的數據格式標準化為前端需要的格式
+      this.skillsData = {
+        skills: response.skills,
+        file_path: response.file_path || filePath,
+      };
+
+      console.log("處理後的技能數據:", this.skillsData);
 
       // 更新界面
       this.updateSkillList();
@@ -260,6 +287,7 @@ class SkillEditor {
       // 重置選擇的技能
       this.selectSkill(null);
     } catch (error) {
+      console.error("載入技能時出錯:", error);
       alert(`載入失敗: ${error}`);
     }
   }
@@ -269,6 +297,17 @@ class SkillEditor {
     // 清空現有列表
     this.skillItems.innerHTML = "";
 
+    // 檢查 skillsData 是否有效且含有 skills 屬性
+    if (!this.skillsData || !this.skillsData.skills) {
+      console.error("技能資料無效:", this.skillsData);
+      const noSkillsMsg = document.createElement("div");
+      noSkillsMsg.className = "no-skills-message";
+      noSkillsMsg.textContent = "技能資料格式無效";
+      this.skillItems.appendChild(noSkillsMsg);
+      this.skillCount.textContent = "0 個技能";
+      return;
+    }
+
     // 獲取排序後的技能列表
     const skillEntries = Object.entries(this.skillsData.skills).sort(
       ([keyA], [keyB]) => keyA.localeCompare(keyB)
@@ -276,6 +315,8 @@ class SkillEditor {
 
     // 更新技能數量
     this.skillCount.textContent = `${skillEntries.length} 個技能`;
+
+    console.log("解析後的技能列表:", skillEntries);
 
     // 添加技能項目
     skillEntries.forEach(([skillKey, skill]) => {
@@ -321,6 +362,7 @@ class SkillEditor {
 
   // 選擇技能
   selectSkill(skillId) {
+    console.log("選擇技能:", skillId);
     this.selectedSkill = skillId;
 
     // 清除效果容器
@@ -337,8 +379,15 @@ class SkillEditor {
       }
     });
 
+    // 檢查 skillsData 是否有效
+    if (!this.skillsData || !this.skillsData.skills) {
+      console.error("選擇技能時 skillsData 無效:", this.skillsData);
+      return;
+    }
+
     // 如果選了技能，顯示詳情
     if (skillId && this.skillsData.skills[skillId]) {
+      console.log("選擇的技能數據:", this.skillsData.skills[skillId]);
       const skill = this.skillsData.skills[skillId];
 
       // 更新技能詳情
@@ -379,7 +428,6 @@ class SkillEditor {
 
       // 設置基本屬性
       this.skillRange.value = skill.range || 0;
-      this.skillArea.value = skill.area || 0;
       this.skillCost.value = skill.cost || 0;
       this.skillHitRate.value = skill.hit_rate || "";
       this.skillCritRate.value = skill.crit_rate || "";
@@ -388,9 +436,21 @@ class SkillEditor {
       if (skill.effects && Array.isArray(skill.effects)) {
         skill.effects.forEach((effect) => {
           if (effect.type === "hp") {
-            this.addEffect("hp", effect.target_type, effect.value);
+            this.addEffect(
+              "hp",
+              effect.target_type,
+              effect.value,
+              null,
+              effect.shape
+            );
           } else if (effect.type === "burn") {
-            this.addEffect("burn", null, null, effect.duration);
+            this.addEffect(
+              "burn",
+              effect.target_type,
+              null,
+              effect.duration,
+              effect.shape
+            );
           }
         });
       }
@@ -404,7 +464,13 @@ class SkillEditor {
   }
 
   // 添加效果
-  addEffect(type, targetType = null, value = null, duration = null) {
+  addEffect(
+    type,
+    targetType = null,
+    value = null,
+    duration = null,
+    shape = null
+  ) {
     const effectId = `effect-${this.effectIdCounter++}`;
     const effectElement = document.createElement("div");
     effectElement.className = "effect-item";
@@ -432,46 +498,209 @@ class SkillEditor {
     const effectFields = document.createElement("div");
     effectFields.className = "effect-fields";
 
+    // 目標類型選擇器
+    const targetTypeField = document.createElement("div");
+    targetTypeField.className = "field";
+
+    const targetTypeLabel = document.createElement("label");
+    targetTypeLabel.textContent = "目標類型：";
+    targetTypeLabel.htmlFor = `${effectId}-target-type`;
+
+    const targetTypeSelect = document.createElement("select");
+    targetTypeSelect.id = `${effectId}-target-type`;
+    targetTypeSelect.name = "target_type";
+
+    const targetOptions = [
+      { value: "caster", text: "施法者" },
+      { value: "ally", text: "友方" },
+      { value: "ally_exclude_caster", text: "友方（不包括施法者）" },
+      { value: "enemy", text: "敵人" },
+      { value: "any", text: "任何單位" },
+      { value: "any_exclude_caster", text: "任何單位（不包括施法者）" },
+    ];
+
+    targetOptions.forEach((option) => {
+      const optionElement = document.createElement("option");
+      optionElement.value = option.value;
+      optionElement.textContent = option.text;
+
+      // 如果有傳入的目標類型，設為選中
+      if (targetType && option.value === targetType.toLowerCase()) {
+        optionElement.selected = true;
+      }
+
+      targetTypeSelect.appendChild(optionElement);
+    });
+
+    targetTypeField.appendChild(targetTypeLabel);
+    targetTypeField.appendChild(targetTypeSelect);
+    effectFields.appendChild(targetTypeField);
+
+    // 形狀選擇器
+    const shapeField = document.createElement("div");
+    shapeField.className = "field";
+
+    const shapeLabel = document.createElement("label");
+    shapeLabel.textContent = "效果形狀：";
+    shapeLabel.htmlFor = `${effectId}-shape-type`;
+
+    const shapeSelect = document.createElement("select");
+    shapeSelect.id = `${effectId}-shape-type`;
+    shapeSelect.name = "shape_type";
+    shapeSelect.addEventListener("change", (e) => {
+      // 顯示或隱藏相應的區域參數
+      const shapeParamsContainer = effectElement.querySelector(".shape-params");
+      if (shapeParamsContainer) {
+        const shapeType = e.target.value;
+
+        // 清空容器
+        shapeParamsContainer.innerHTML = "";
+
+        // 根據形狀類型添加不同參數
+        if (shapeType === "circle") {
+          const areaField = document.createElement("div");
+          areaField.className = "field";
+
+          const areaLabel = document.createElement("label");
+          areaLabel.textContent = "半徑：";
+          areaLabel.htmlFor = `${effectId}-shape-area`;
+
+          const areaInput = document.createElement("input");
+          areaInput.type = "number";
+          areaInput.id = `${effectId}-shape-area`;
+          areaInput.name = "shape_area";
+          areaInput.min = "1";
+          areaInput.value = "1";
+
+          areaField.appendChild(areaLabel);
+          areaField.appendChild(areaInput);
+          shapeParamsContainer.appendChild(areaField);
+        } else if (shapeType === "rectangle") {
+          // 寬度
+          const widthField = document.createElement("div");
+          widthField.className = "field";
+
+          const widthLabel = document.createElement("label");
+          widthLabel.textContent = "寬度：";
+          widthLabel.htmlFor = `${effectId}-shape-width`;
+
+          const widthInput = document.createElement("input");
+          widthInput.type = "number";
+          widthInput.id = `${effectId}-shape-width`;
+          widthInput.name = "shape_width";
+          widthInput.min = "1";
+          widthInput.value = "1";
+
+          widthField.appendChild(widthLabel);
+          widthField.appendChild(widthInput);
+          shapeParamsContainer.appendChild(widthField);
+
+          // 高度
+          const heightField = document.createElement("div");
+          heightField.className = "field";
+
+          const heightLabel = document.createElement("label");
+          heightLabel.textContent = "高度：";
+          heightLabel.htmlFor = `${effectId}-shape-height`;
+
+          const heightInput = document.createElement("input");
+          heightInput.type = "number";
+          heightInput.id = `${effectId}-shape-height`;
+          heightInput.name = "shape_height";
+          heightInput.min = "1";
+          heightInput.value = "1";
+
+          heightField.appendChild(heightLabel);
+          heightField.appendChild(heightInput);
+          shapeParamsContainer.appendChild(heightField);
+        } else if (shapeType === "line") {
+          const lengthField = document.createElement("div");
+          lengthField.className = "field";
+
+          const lengthLabel = document.createElement("label");
+          lengthLabel.textContent = "長度：";
+          lengthLabel.htmlFor = `${effectId}-shape-length`;
+
+          const lengthInput = document.createElement("input");
+          lengthInput.type = "number";
+          lengthInput.id = `${effectId}-shape-length`;
+          lengthInput.name = "shape_length";
+          lengthInput.min = "1";
+          lengthInput.value = "1";
+
+          lengthField.appendChild(lengthLabel);
+          lengthField.appendChild(lengthInput);
+          shapeParamsContainer.appendChild(lengthField);
+        } else if (shapeType === "cone") {
+          // 長度
+          const lengthField = document.createElement("div");
+          lengthField.className = "field";
+
+          const lengthLabel = document.createElement("label");
+          lengthLabel.textContent = "長度：";
+          lengthLabel.htmlFor = `${effectId}-shape-cone-length`;
+
+          const lengthInput = document.createElement("input");
+          lengthInput.type = "number";
+          lengthInput.id = `${effectId}-shape-cone-length`;
+          lengthInput.name = "shape_cone_length";
+          lengthInput.min = "1";
+          lengthInput.value = "1";
+
+          lengthField.appendChild(lengthLabel);
+          lengthField.appendChild(lengthInput);
+          shapeParamsContainer.appendChild(lengthField);
+
+          // 角度
+          const angleField = document.createElement("div");
+          angleField.className = "field";
+
+          const angleLabel = document.createElement("label");
+          angleLabel.textContent = "角度：";
+          angleLabel.htmlFor = `${effectId}-shape-angle`;
+
+          const angleInput = document.createElement("input");
+          angleInput.type = "number";
+          angleInput.id = `${effectId}-shape-angle`;
+          angleInput.name = "shape_angle";
+          angleInput.min = "0";
+          angleInput.max = "360";
+          angleInput.step = "0.1";
+          angleInput.value = "60";
+
+          angleField.appendChild(angleLabel);
+          angleField.appendChild(angleInput);
+          shapeParamsContainer.appendChild(angleField);
+        }
+      }
+    });
+
+    const shapeOptions = [
+      { value: "point", text: "點" },
+      { value: "circle", text: "圓形" },
+      { value: "rectangle", text: "矩形" },
+      { value: "line", text: "直線" },
+      { value: "cone", text: "扇形" },
+    ];
+
+    shapeOptions.forEach((option) => {
+      const optionElement = document.createElement("option");
+      optionElement.value = option.value;
+      optionElement.textContent = option.text;
+      shapeSelect.appendChild(optionElement);
+    });
+
+    shapeField.appendChild(shapeLabel);
+    shapeField.appendChild(shapeSelect);
+    effectFields.appendChild(shapeField);
+
+    // 形狀參數容器
+    const shapeParamsContainer = document.createElement("div");
+    shapeParamsContainer.className = "shape-params";
+    effectFields.appendChild(shapeParamsContainer);
+
     // 根據效果類型添加不同的欄位
     if (type === "hp") {
-      // 目標類型選擇器
-      const targetTypeField = document.createElement("div");
-      targetTypeField.className = "field";
-
-      const targetTypeLabel = document.createElement("label");
-      targetTypeLabel.textContent = "目標類型：";
-      targetTypeLabel.htmlFor = `${effectId}-target-type`;
-
-      const targetTypeSelect = document.createElement("select");
-      targetTypeSelect.id = `${effectId}-target-type`;
-      targetTypeSelect.name = "target_type";
-
-      const targetOptions = [
-        { value: "caster", text: "施法者" },
-        { value: "ally", text: "友方" },
-        { value: "ally_exclude_caster", text: "友方（不包括施法者）" },
-        { value: "enemy", text: "敵人" },
-        { value: "any", text: "任何單位" },
-        { value: "any_exclude_caster", text: "任何單位（不包括施法者）" },
-      ];
-
-      targetOptions.forEach((option) => {
-        const optionElement = document.createElement("option");
-        optionElement.value = option.value;
-        optionElement.textContent = option.text;
-
-        // 如果有傳入的目標類型，設為選中
-        if (targetType && option.value === targetType.toLowerCase()) {
-          optionElement.selected = true;
-        }
-
-        targetTypeSelect.appendChild(optionElement);
-      });
-
-      targetTypeField.appendChild(targetTypeLabel);
-      targetTypeField.appendChild(targetTypeSelect);
-      effectFields.appendChild(targetTypeField);
-
       // 數值輸入
       const valueField = document.createElement("div");
       valueField.className = "field";
@@ -510,6 +739,74 @@ class SkillEditor {
       effectFields.appendChild(durationField);
     }
 
+    // 如果有現有的形狀數據，設置為選中
+    if (shape && shape.type && typeof shape.type === "string") {
+      // 先記錄形狀類型及其小寫形式，避免重複調用
+      const shapeType = shape.type;
+      const shapeTypeLower = shapeType.toLowerCase();
+      console.log("形狀類型:", shapeType, "小寫:", shapeTypeLower);
+
+      // 設置形狀類型
+      const shapeTypeOption = Array.from(shapeSelect.options).find(
+        (option) => option.value === shapeTypeLower
+      );
+      if (shapeTypeOption) {
+        shapeTypeOption.selected = true;
+      } else {
+        console.warn("找不到對應的形狀類型選項:", shapeType);
+      }
+    } else if (shape) {
+      console.warn("形狀數據無效或缺少類型屬性:", shape);
+    }
+
+    // 觸發形狀變更事件以初始化參數
+    shapeSelect.dispatchEvent(new Event("change"));
+
+    // 如果有現有的形狀數據，設置參數值
+    if (shape && shape.type && typeof shape.type === "string") {
+      // 等待 DOM 更新
+      setTimeout(() => {
+        const shapeParamsContainer =
+          effectElement.querySelector(".shape-params");
+        if (!shapeParamsContainer) return;
+
+        const shapeType = shape.type.toLowerCase();
+
+        // 根據形狀類型設置參數
+        if (shapeType === "circle" && shape.area) {
+          const areaInput = shapeParamsContainer.querySelector(
+            "input[name='shape_area']"
+          );
+          if (areaInput) areaInput.value = shape.area;
+        } else if (shapeType === "rectangle") {
+          const widthInput = shapeParamsContainer.querySelector(
+            "input[name='shape_width']"
+          );
+          const heightInput = shapeParamsContainer.querySelector(
+            "input[name='shape_height']"
+          );
+          if (widthInput && shape.width) widthInput.value = shape.width;
+          if (heightInput && shape.height) heightInput.value = shape.height;
+        } else if (shapeType === "line" && shape.length) {
+          const lengthInput = shapeParamsContainer.querySelector(
+            "input[name='shape_length']"
+          );
+          if (lengthInput) lengthInput.value = shape.length;
+        } else if (shapeType === "cone") {
+          const lengthInput = shapeParamsContainer.querySelector(
+            "input[name='shape_cone_length']"
+          );
+          const angleInput = shapeParamsContainer.querySelector(
+            "input[name='shape_angle']"
+          );
+          if (lengthInput && shape.length) lengthInput.value = shape.length;
+          if (angleInput && shape.angle) angleInput.value = shape.angle;
+        }
+      }, 0);
+    } else if (shape) {
+      console.warn("設置形狀參數時發現無效的形狀類型:", shape);
+    }
+
     effectElement.appendChild(effectFields);
     this.effectsContainer.appendChild(effectElement);
   }
@@ -522,11 +819,49 @@ class SkillEditor {
 
     effectElements.forEach((element) => {
       const effectType = element.dataset.effectType;
+      const targetType = element.querySelector(
+        "select[name='target_type']"
+      )?.value;
+
+      // 收集形狀資料
+      const shapeType = element.querySelector(
+        "select[name='shape_type']"
+      ).value;
+      let shape = {
+        type: shapeType,
+      };
+
+      // 根據形狀類型添加額外屬性
+      switch (shapeType) {
+        case "circle":
+          shape.area = parseInt(
+            element.querySelector("input[name='shape_area']")?.value || 1
+          );
+          break;
+        case "rectangle":
+          shape.width = parseInt(
+            element.querySelector("input[name='shape_width']")?.value || 1
+          );
+          shape.height = parseInt(
+            element.querySelector("input[name='shape_height']")?.value || 1
+          );
+          break;
+        case "line":
+          shape.length = parseInt(
+            element.querySelector("input[name='shape_length']")?.value || 1
+          );
+          break;
+        case "cone":
+          shape.length = parseInt(
+            element.querySelector("input[name='shape_cone_length']")?.value || 1
+          );
+          shape.angle = parseFloat(
+            element.querySelector("input[name='shape_angle']")?.value || 60
+          );
+          break;
+      }
 
       if (effectType === "hp") {
-        const targetType = element.querySelector(
-          "select[name='target_type']"
-        ).value;
         const value = parseInt(
           element.querySelector("input[name='value']").value || 0
         );
@@ -534,6 +869,7 @@ class SkillEditor {
         effects.push({
           type: "hp",
           target_type: targetType,
+          shape: shape,
           value: value,
         });
       } else if (effectType === "burn") {
@@ -543,6 +879,8 @@ class SkillEditor {
 
         effects.push({
           type: "burn",
+          target_type: targetType,
+          shape: shape,
           duration: duration,
         });
       }
@@ -574,7 +912,6 @@ class SkillEditor {
 
     // 收集基本屬性
     const range = parseInt(this.skillRange.value || 0);
-    const area = parseInt(this.skillArea.value || 0);
     const cost = parseInt(this.skillCost.value || 0);
 
     // 命中率和暴擊率可能為空
@@ -591,7 +928,6 @@ class SkillEditor {
     const skillData = {
       tags: selectedTags,
       range,
-      area,
       cost,
       hit_rate: hitRate,
       crit_rate: critRate,
@@ -599,18 +935,28 @@ class SkillEditor {
     };
 
     try {
-      await api.saveSkill(this.selectedFile, this.selectedSkill, skillData);
+      // 獲取檔案路徑，優先使用 this.selectedFile，如果 skillsData 有 file_path 則使用
+      const filePath =
+        this.selectedFile || (this.skillsData && this.skillsData.file_path);
+      if (!filePath) {
+        throw new Error("找不到檔案路徑");
+      }
+
+      console.log("保存技能到:", filePath, "技能ID:", this.selectedSkill);
+      await api.saveSkill(filePath, this.selectedSkill, skillData);
 
       // 更新本地資料，避免重新載入
       if (this.skillsData && this.skillsData.skills) {
         // 直接替換整個技能對象，確保 effects 數組被完整保留
         this.skillsData.skills[this.selectedSkill] = skillData;
+        console.log("本地技能數據已更新:", this.skillsData);
 
         // 只更新技能列表，不重新載入整個資料
         this.updateSkillList();
       } else {
         // 如果出現問題，仍然可以回退到完全重新載入
-        await this.loadSkills(this.selectedFile);
+        console.warn("本地技能數據無效，重新載入中...");
+        await this.loadSkills(filePath);
       }
 
       // 確保選中的技能仍然選中
@@ -619,6 +965,7 @@ class SkillEditor {
       // 顯示成功訊息
       alert("保存成功!");
     } catch (error) {
+      console.error("保存技能時出錯:", error);
       alert(`保存失敗: ${error}`);
     }
   }

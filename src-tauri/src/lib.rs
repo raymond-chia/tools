@@ -37,18 +37,28 @@ fn load_skills(path: &str) -> Result<SkillsResponse, String> {
 }
 
 use serde::Deserialize;
-use skills_lib::{Effect, Tag, TargetType};
+use skills_lib::{Effect, Shape, Tag, TargetType};
 
 /// 從前端接收的技能編輯請求
 #[derive(Deserialize)]
 struct SkillUpdateRequest {
     tags: Vec<String>,
     range: usize,
-    area: usize,
     cost: u16,
     hit_rate: Option<u16>,
     crit_rate: Option<u16>,
     effects: Vec<EffectRequest>,
+}
+
+/// 從前端接收的形狀請求
+#[derive(Deserialize)]
+struct ShapeRequest {
+    r#type: String,
+    area: Option<usize>,
+    width: Option<usize>,
+    height: Option<usize>,
+    length: Option<usize>,
+    angle: Option<f32>,
 }
 
 /// 從前端接收的效果請求
@@ -56,6 +66,7 @@ struct SkillUpdateRequest {
 struct EffectRequest {
     r#type: String,
     target_type: Option<String>,
+    shape: Option<ShapeRequest>,
     value: Option<i32>,
     duration: Option<u16>,
 }
@@ -87,24 +98,62 @@ fn save_skill(path: &str, skill_id: &str, skill_data: SkillUpdateRequest) -> Res
         })
         .collect();
 
+    // 將形狀請求轉換為 Shape 枚舉
+    fn parse_shape(shape_req: &Option<ShapeRequest>) -> Option<Shape> {
+        let shape = shape_req.as_ref()?;
+
+        match shape.r#type.as_str() {
+            "point" => Some(Shape::Point),
+            "circle" => {
+                let area = shape.area?;
+                Some(Shape::Circle(area))
+            }
+            "rectangle" => {
+                let width = shape.width?;
+                let height = shape.height?;
+                Some(Shape::Rectangle(width, height))
+            }
+            "line" => {
+                let length = shape.length?;
+                Some(Shape::Line(length))
+            }
+            "cone" => {
+                let length = shape.length?;
+                let angle = shape.angle?;
+                Some(Shape::Cone(length, angle))
+            }
+            _ => None,
+        }
+    }
+
     // 處理效果
     let effects = skill_data
         .effects
         .iter()
-        .filter_map(|effect_req| match effect_req.r#type.as_str() {
-            "hp" => {
-                let target_type_str = effect_req.target_type.as_ref()?;
-                let value = effect_req.value?;
+        .filter_map(|effect_req| {
+            let target_type_str = effect_req.target_type.as_ref()?;
+            let target_type = TargetType::from_str(target_type_str).ok()?;
+            let shape = parse_shape(&effect_req.shape)?;
 
-                let target_type = TargetType::from_str(target_type_str).ok()?;
-
-                Some(Effect::Hp { target_type, value })
+            match effect_req.r#type.as_str() {
+                "hp" => {
+                    let value = effect_req.value?;
+                    Some(Effect::Hp {
+                        target_type,
+                        shape,
+                        value,
+                    })
+                }
+                "burn" => {
+                    let duration = effect_req.duration?;
+                    Some(Effect::Burn {
+                        target_type,
+                        shape,
+                        duration,
+                    })
+                }
+                _ => None,
             }
-            "burn" => {
-                let duration = effect_req.duration?;
-                Some(Effect::Burn { duration })
-            }
-            _ => None,
         })
         .collect();
 
@@ -112,7 +161,6 @@ fn save_skill(path: &str, skill_id: &str, skill_data: SkillUpdateRequest) -> Res
     let updated_skill = Skill {
         tags,
         range: skill_data.range,
-        area: skill_data.area,
         cost: skill_data.cost,
         hit_rate: skill_data.hit_rate,
         crit_rate: skill_data.crit_rate,
