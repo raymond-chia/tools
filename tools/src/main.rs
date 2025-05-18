@@ -217,7 +217,12 @@ impl SkillsEditor {
         ui.add_space(10.0);
 
         ScrollArea::vertical().show(ui, |ui| {
-            for skill_id in self.skills_data.skills.keys().collect::<Vec<_>>() {
+            // 收集所有技能 ID 並按字母順序排序
+            let mut skill_ids: Vec<_> = self.skills_data.skills.keys().collect();
+            skill_ids.sort(); // 按字母排序
+
+            // 顯示排序後的技能列表
+            for skill_id in skill_ids {
                 let selected = self.temp_skill.as_ref().map(|(id, _)| id) == Some(skill_id);
 
                 let button = Button::new(skill_id)
@@ -254,9 +259,14 @@ impl SkillsEditor {
             ui.add_space(8.0);
             ui.add(Separator::default());
 
-            // 添加可捲動區域
+            // 計算 ScrollArea 的最大高度，為底部留出空間
+            let available_height = ui.available_height();
+            let scroll_height = available_height.max(100.0) - 40.0; // 為底部狀態欄保留空間
+
+            // 添加可捲動區域，設定最大高度
             ScrollArea::vertical()
                 .auto_shrink([false; 2])
+                .max_height(scroll_height)
                 .show(ui, |ui| {
                     // 在可捲動區域內編輯技能，直接使用 self.temp_skill
                     if let Some((_, skill)) = &mut self.temp_skill {
