@@ -756,6 +756,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
+name = "dialogs-lib"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3068,12 +3077,14 @@ checksum = "bfb942dfe1d8e29a7ee7fcbde5bd2b9a25fb89aa70caea2eba3bee836ff41076"
 name = "tools"
 version = "0.1.0"
 dependencies = [
+ "dialogs-lib",
  "eframe",
  "egui",
  "egui_extras",
  "rfd",
  "serde",
  "skills-lib",
+ "strum 0.27.1",
  "toml",
  "winapi",
 ]

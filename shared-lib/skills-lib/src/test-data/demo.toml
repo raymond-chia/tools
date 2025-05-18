@@ -39,7 +39,7 @@ tags = [
     "beneficial",
 ]
 range = [
-    1,
+    0,
     1,
 ]
 cost = 5
