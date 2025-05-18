@@ -4,8 +4,8 @@ tags = [
     "fire",
     "active",
     "area",
-    "ranged",
     "attack",
+    "ranged",
 ]
 range = [
     0,

@@ -3,7 +3,7 @@ mod skills;
 
 use dialogs::DialogsEditor;
 use eframe::{Frame, egui};
-use egui::{FontData, FontDefinitions, FontFamily, RichText, Ui};
+use egui::{FontData, FontDefinitions, FontFamily, Ui};
 use skills::SkillsEditor;
 
 /// 編輯器模式

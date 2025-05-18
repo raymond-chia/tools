@@ -88,9 +88,9 @@ impl SkillsData {
 
         // 檢查標籤的互斥條件
         // 條件1: active, passive 只能擇一
-        let has_active = skill.tags.contains(&Tag::Active);
         let has_passive = skill.tags.contains(&Tag::Passive);
-        if has_active && has_passive {
+        let has_active = skill.tags.contains(&Tag::Active);
+        if has_passive && has_active {
             return Err("技能不能同時是主動 (Active) 和被動 (Passive)".to_string());
         }
 
@@ -159,6 +159,9 @@ impl SkillsData {
 
         // 施法者技能檢查
         if skill.tags.contains(&Tag::Caster) {
+            if skill.range.0 != 0 || skill.range.1 != 0 {
+                return Err("施法者技能的範圍必須是 (0, 0)".to_string());
+            }
             match &skill.effects[0] {
                 Effect::Hp { target_type, .. } | Effect::Burn { target_type, .. } => {
                     if target_type != &skills_lib::TargetType::Caster {
@@ -531,19 +534,98 @@ impl SkillsEditor {
     }
 
     fn show_tags_editor(ui: &mut Ui, skill: &mut Skill) {
-        for tag in Tag::iter() {
-            let tag_str = format!("{:?}", tag).to_lowercase();
-            let has_tag = skill.tags.contains(&tag);
-            let mut checked = has_tag;
+        let active = vec![Tag::Passive, Tag::Active];
+        let area = vec![Tag::Single, Tag::Area];
+        let range = vec![Tag::Caster, Tag::Melee, Tag::Ranged];
 
-            if ui.checkbox(&mut checked, tag_str).changed() {
-                if checked && !has_tag {
-                    skill.tags.push(tag.clone());
-                } else if !checked && has_tag {
-                    skill.tags.retain(|t| t != &tag);
+        ui.group(|ui| {
+            let mut selected = if skill.tags.contains(&Tag::Passive) {
+                0
+            } else {
+                1 // 默認為 Active
+            };
+
+            ui.horizontal(|ui| {
+                active.iter().enumerate().for_each(|(i, tag)| {
+                    if ui
+                        .radio_value(&mut selected, i, format!("{:?}", tag).to_lowercase())
+                        .clicked()
+                    {
+                        skill.tags.retain(|t| !active.contains(t));
+                        if !skill.tags.contains(tag) {
+                            skill.tags.push(tag.clone());
+                        }
+                    }
+                });
+            });
+        });
+
+        ui.group(|ui| {
+            let mut selected = if skill.tags.contains(&Tag::Area) {
+                1
+            } else {
+                0 // 默認為 Single
+            };
+
+            ui.horizontal(|ui| {
+                area.iter().enumerate().for_each(|(i, tag)| {
+                    if ui
+                        .radio_value(&mut selected, i, format!("{:?}", tag).to_lowercase())
+                        .clicked()
+                    {
+                        skill.tags.retain(|t| !area.contains(t));
+                        if !skill.tags.contains(tag) {
+                            skill.tags.push(tag.clone());
+                        }
+                    }
+                });
+            });
+        });
+
+        ui.group(|ui| {
+            let mut selected = if skill.tags.contains(&Tag::Caster) {
+                0
+            } else if skill.tags.contains(&Tag::Ranged) {
+                2
+            } else {
+                1 // 默認為 Melee
+            };
+
+            ui.horizontal(|ui| {
+                range.iter().enumerate().for_each(|(i, tag)| {
+                    if ui
+                        .radio_value(&mut selected, i, format!("{:?}", tag).to_lowercase())
+                        .clicked()
+                    {
+                        skill.tags.retain(|t| !range.contains(t));
+                        if !skill.tags.contains(tag) {
+                            skill.tags.push(tag.clone());
+                        }
+                    }
+                });
+            });
+        });
+
+        ui.group(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                for tag in Tag::iter() {
+                    if active.contains(&tag) || area.contains(&tag) || range.contains(&tag) {
+                        continue;
+                    }
+                    let tag_str = format!("{:?}", tag).to_lowercase();
+                    let has_tag = skill.tags.contains(&tag);
+                    let mut checked = has_tag;
+
+                    if ui.checkbox(&mut checked, tag_str).changed() {
+                        if checked && !has_tag {
+                            skill.tags.push(tag.clone());
+                        } else if !checked && has_tag {
+                            skill.tags.retain(|t| t != &tag);
+                        }
+                    }
                 }
-            }
-        }
+            });
+        });
     }
 
     fn show_effect_editor(

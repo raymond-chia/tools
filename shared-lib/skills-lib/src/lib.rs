@@ -6,8 +6,8 @@ use strum_macros::{Display, EnumIter, EnumString};
 #[strum(serialize_all = "snake_case")]
 pub enum Tag {
     // 主動; 被動
-    Active,
     Passive,
+    Active,
     // 範圍
     Single,
     Area,
