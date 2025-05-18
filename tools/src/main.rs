@@ -78,32 +78,23 @@ impl EditorApp {
 
     fn show_mode_selector(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
-            if ui
-                .selectable_label(self.editor_mode == EditorMode::Skills, "技能編輯器")
-                .clicked()
-            {
-                if self.editor_mode == EditorMode::Dialogs {
-                    // 從對話編輯器切換到技能編輯器
-                    if self.dialogs_editor.has_unsaved_changes() {
+            for (mode, label) in [
+                (EditorMode::Skills, "技能編輯器"),
+                (EditorMode::Dialogs, "劇情編輯器"),
+            ] {
+                if ui
+                    .selectable_label(self.editor_mode == mode, label)
+                    .clicked()
+                {
+                    let has_unsaved_changes = match self.editor_mode {
+                        EditorMode::Skills => self.skills_editor.has_unsaved_changes(),
+                        EditorMode::Dialogs => self.dialogs_editor.has_unsaved_changes(),
+                    };
+                    if has_unsaved_changes {
                         self.show_mode_switch_confirmation = true;
-                        self.pending_mode = Some(EditorMode::Skills);
+                        self.pending_mode = Some(mode);
                     } else {
-                        self.editor_mode = EditorMode::Skills;
-                    }
-                }
-            }
-
-            if ui
-                .selectable_label(self.editor_mode == EditorMode::Dialogs, "劇情編輯器")
-                .clicked()
-            {
-                if self.editor_mode == EditorMode::Skills {
-                    // 從技能編輯器切換到對話編輯器
-                    if self.skills_editor.has_unsaved_changes() {
-                        self.show_mode_switch_confirmation = true;
-                        self.pending_mode = Some(EditorMode::Dialogs);
-                    } else {
-                        self.editor_mode = EditorMode::Dialogs;
+                        self.editor_mode = mode;
                     }
                 }
             }
