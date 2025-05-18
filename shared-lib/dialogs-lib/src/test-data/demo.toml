@@ -1,0 +1,12 @@
+name = ""
+author = ""
+version = ""
+
+[prelude]
+scene_type = "dialogue"
+title = ""
+description = ""
+events = []
+options = []
+
+[prelude.prerequisites]

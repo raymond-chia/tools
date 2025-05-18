@@ -184,6 +184,8 @@ pub struct SkillsEditor {
     show_add_effect_popup: bool,
     show_confirmation_dialog: bool,
     confirmation_action: ConfirmationAction,
+    pending_skill_switch: Option<String>, // 等待切換的技能 ID
+    show_unsaved_changes_dialog: bool,    // 是否顯示未保存變動的確認對話框
 }
 
 #[derive(Debug, Clone)]
@@ -206,6 +208,8 @@ impl Default for SkillsEditor {
             show_add_effect_popup: false,
             show_confirmation_dialog: false,
             confirmation_action: ConfirmationAction::None,
+            pending_skill_switch: None,
+            show_unsaved_changes_dialog: false,
         }
     }
 }
@@ -213,6 +217,17 @@ impl Default for SkillsEditor {
 impl SkillsEditor {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
         Self::default()
+    }
+
+    /// 檢查目前編輯中的技能是否有未保存的變動
+    pub fn has_unsaved_changes(&self) -> bool {
+        if let Some((skill_id, temp_skill)) = &self.temp_skill {
+            // 與 skills_data 中的原始技能比較
+            if let Some(original_skill) = self.skills_data.skills.get(skill_id) {
+                return temp_skill != original_skill;
+            }
+        }
+        false
     }
 
     fn load_file(&mut self, path: PathBuf) {
@@ -356,8 +371,16 @@ impl SkillsEditor {
                     .min_size(egui::vec2(ui.available_width(), 0.0));
 
                 if ui.add(button).clicked() {
-                    let skill = self.skills_data.skills.get(skill_id).unwrap().clone();
-                    self.temp_skill = Some((skill_id.clone(), skill));
+                    // 檢查當前編輯的技能是否有未保存的變動
+                    if self.has_unsaved_changes() {
+                        // 保存點擊的技能 ID，等待確認後再切換
+                        self.pending_skill_switch = Some(skill_id.clone());
+                        self.show_unsaved_changes_dialog = true;
+                    } else {
+                        // 沒有未保存的變動，直接切換
+                        let skill = self.skills_data.skills.get(skill_id).unwrap().clone();
+                        self.temp_skill = Some((skill_id.clone(), skill));
+                    }
                 }
             }
         });
@@ -919,6 +942,43 @@ impl SkillsEditor {
             });
         }
     }
+
+    fn show_unsaved_changes_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_unsaved_changes_dialog {
+            return;
+        }
+
+        let mut open = self.show_unsaved_changes_dialog;
+        let mut confirm_clicked = false;
+        let mut cancel_clicked = false;
+
+        egui::Window::new("未保存的變動")
+            .open(&mut open)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label("目前編輯的技能有未保存的變動，切換將會遺失這些變動。");
+                ui.horizontal(|ui| {
+                    confirm_clicked = ui.button("繼續切換").clicked();
+                    cancel_clicked = ui.button("取消").clicked();
+                });
+            });
+
+        // 在閉包外處理按鈕事件
+        if confirm_clicked && self.pending_skill_switch.is_some() {
+            let skill_id = self.pending_skill_switch.as_ref().unwrap().clone();
+            let skill = self.skills_data.skills.get(&skill_id).unwrap().clone();
+            self.temp_skill = Some((skill_id, skill));
+            open = false;
+            self.pending_skill_switch = None;
+        }
+
+        if cancel_clicked {
+            open = false;
+            self.pending_skill_switch = None;
+        }
+
+        self.show_unsaved_changes_dialog = open;
+    }
 }
 
 impl eframe::App for SkillsEditor {
@@ -939,6 +999,7 @@ impl eframe::App for SkillsEditor {
 
         self.show_add_effect_popup(ctx);
         self.show_confirmation_dialog(ctx);
+        self.show_unsaved_changes_dialog(ctx);
         self.show_status_message(ctx);
     }
 }

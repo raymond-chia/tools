@@ -7,7 +7,7 @@ use egui::{FontData, FontDefinitions, FontFamily, Ui};
 use skills::SkillsEditor;
 
 /// 編輯器模式
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 enum EditorMode {
     Skills,
     Dialogs,
@@ -18,6 +18,8 @@ struct EditorApp {
     editor_mode: EditorMode,
     skills_editor: SkillsEditor,
     dialogs_editor: DialogsEditor,
+    pending_mode: Option<EditorMode>,
+    show_mode_switch_confirmation: bool,
 }
 
 impl EditorApp {
@@ -69,6 +71,8 @@ impl EditorApp {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::new(cc),
             dialogs_editor: DialogsEditor::new(cc),
+            pending_mode: None,
+            show_mode_switch_confirmation: false,
         }
     }
 
@@ -78,15 +82,83 @@ impl EditorApp {
                 .selectable_label(self.editor_mode == EditorMode::Skills, "技能編輯器")
                 .clicked()
             {
-                self.editor_mode = EditorMode::Skills;
+                if self.editor_mode == EditorMode::Dialogs {
+                    // 從對話編輯器切換到技能編輯器
+                    if self.dialogs_editor.has_unsaved_changes() {
+                        self.show_mode_switch_confirmation = true;
+                        self.pending_mode = Some(EditorMode::Skills);
+                    } else {
+                        self.editor_mode = EditorMode::Skills;
+                    }
+                }
             }
+
             if ui
                 .selectable_label(self.editor_mode == EditorMode::Dialogs, "劇情編輯器")
                 .clicked()
             {
-                self.editor_mode = EditorMode::Dialogs;
+                if self.editor_mode == EditorMode::Skills {
+                    // 從技能編輯器切換到對話編輯器
+                    if self.skills_editor.has_unsaved_changes() {
+                        self.show_mode_switch_confirmation = true;
+                        self.pending_mode = Some(EditorMode::Dialogs);
+                    } else {
+                        self.editor_mode = EditorMode::Dialogs;
+                    }
+                }
             }
         });
+    }
+
+    fn show_mode_switch_confirmation(&mut self, ctx: &egui::Context) {
+        if !self.show_mode_switch_confirmation {
+            return;
+        }
+
+        let mut open = self.show_mode_switch_confirmation;
+        let title = "未保存的變動";
+        let current_mode = match self.editor_mode {
+            EditorMode::Skills => "技能編輯器",
+            EditorMode::Dialogs => "劇情編輯器",
+        };
+        let target_mode = match self.pending_mode {
+            Some(EditorMode::Skills) => "技能編輯器",
+            Some(EditorMode::Dialogs) => "劇情編輯器",
+            None => "其他編輯器",
+        };
+
+        let message = format!(
+            "{}中有未保存的變動，切換到{}將會遺失這些變動。",
+            current_mode, target_mode
+        );
+
+        let mut confirm_clicked = false;
+        let mut cancel_clicked = false;
+
+        egui::Window::new(title)
+            .open(&mut open)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label(&message);
+                ui.horizontal(|ui| {
+                    confirm_clicked = ui.button("繼續切換").clicked();
+                    cancel_clicked = ui.button("取消").clicked();
+                });
+            });
+
+        // 在閉包外處理按鈕事件
+        if confirm_clicked && self.pending_mode.is_some() {
+            self.editor_mode = self.pending_mode.clone().unwrap();
+            open = false;
+            self.pending_mode = None;
+        }
+
+        if cancel_clicked {
+            open = false;
+            self.pending_mode = None;
+        }
+
+        self.show_mode_switch_confirmation = open;
     }
 }
 
@@ -105,6 +177,9 @@ impl eframe::App for EditorApp {
                 self.dialogs_editor.update(ctx, frame);
             }
         }
+
+        // 顯示確認對話框
+        self.show_mode_switch_confirmation(ctx);
     }
 }
 

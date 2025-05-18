@@ -3,6 +3,7 @@ use eframe::{Frame, egui};
 use egui::{Button, RichText, ScrollArea, Separator, Ui};
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Error, ErrorKind};
@@ -29,6 +30,7 @@ impl StoryData {
     }
 
     /// 從多個檔案載入劇情
+    #[allow(dead_code)]
     fn load_from_directory<P: AsRef<Path>>(dir_path: P) -> io::Result<Self> {
         let mut story = StoryData::empty();
 
@@ -72,6 +74,7 @@ impl StoryData {
     }
 
     /// 儲存為多個檔案 (按章節)
+    #[allow(dead_code)]
     fn save_to_directory<P: AsRef<Path>>(&self, dir_path: P, prefix: &str) -> io::Result<()> {
         let dir_path = dir_path.as_ref();
         if !dir_path.exists() {
@@ -145,6 +148,7 @@ impl StoryData {
     }
 
     /// 檢查劇情完整性
+    #[allow(dead_code)]
     fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
@@ -234,9 +238,22 @@ impl Default for DialogsEditor {
     }
 }
 
+// 為用戶界面元素定義thread_local變量，避免使用static mut
+thread_local! {
+    static NEW_FLAG: RefCell<String> = RefCell::new(String::new());
+    static NEW_VALUE: RefCell<bool> = RefCell::new(true);
+    static NEW_PREREQ_FLAG: RefCell<String> = RefCell::new(String::new());
+    static NEW_PREREQ_VALUE: RefCell<bool> = RefCell::new(true);
+}
+
 impl DialogsEditor {
     pub fn new(_: &eframe::CreationContext<'_>) -> Self {
         Self::default()
+    }
+
+    /// 檢查目前編輯中的場景是否有未保存的變動
+    pub fn has_unsaved_changes(&self) -> bool {
+        false
     }
 
     fn load_file(&mut self, path: PathBuf) {
@@ -390,7 +407,7 @@ impl DialogsEditor {
         let mut save_clicked = false;
         let mut delete_clicked = false;
 
-        if let Some((scene_id, _)) = &self.temp_scene {
+        if let Some((scene_id, scene)) = &mut self.temp_scene {
             ui.heading(format!("編輯場景: {}", scene_id));
 
             ui.horizontal(|ui| {
@@ -410,8 +427,569 @@ impl DialogsEditor {
                 .auto_shrink([false; 2])
                 .max_height(scroll_height)
                 .show(ui, |ui| {
-                    // 在可捲動區域內編輯場景，暫時顯示一個簡單的消息
-                    ui.label("劇情編輯器功能正在開發中...");
+                    // 基本場景屬性
+                    ui.group(|ui| {
+                        ui.heading("基本資訊");
+
+                        // 場景類型
+                        ui.horizontal(|ui| {
+                            ui.label("場景類型:");
+                            egui::ComboBox::from_id_salt("scene_type")
+                                .selected_text(format!("{:?}", scene.scene_type))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut scene.scene_type,
+                                        dialogs_lib::SceneType::Dialogue,
+                                        "對話",
+                                    );
+                                    ui.selectable_value(
+                                        &mut scene.scene_type,
+                                        dialogs_lib::SceneType::Choice,
+                                        "選項",
+                                    );
+                                    ui.selectable_value(
+                                        &mut scene.scene_type,
+                                        dialogs_lib::SceneType::Battle,
+                                        "戰鬥",
+                                    );
+                                    ui.selectable_value(
+                                        &mut scene.scene_type,
+                                        dialogs_lib::SceneType::Ending,
+                                        "結局",
+                                    );
+                                });
+                        });
+
+                        // 標題和描述
+                        ui.horizontal(|ui| {
+                            ui.label("標題:");
+                            ui.text_edit_singleline(&mut scene.title);
+                        });
+
+                        ui.label("描述:");
+                        ui.text_edit_multiline(&mut scene.description);
+                    });
+
+                    ui.add_space(10.0);
+
+                    // 事件編輯區
+                    ui.group(|ui| {
+                        ui.heading("事件列表");
+
+                        // 新增事件按鈕
+                        if ui.button("新增事件").clicked() {
+                            // 添加一個默認事件
+                            scene.events.push(EventType::Dialogue {
+                                speaker: None,
+                                content: "新事件內容".to_string(),
+                                portrait: None,
+                            });
+                        }
+
+                        ui.add_space(5.0);
+
+                        // 顯示現有事件列表
+                        let mut event_to_remove = None;
+
+                        for (index, event) in scene.events.iter_mut().enumerate() {
+                            ui.push_id(format!("event_{}", index), |ui| {
+                                ui.group(|ui| {
+                                    ui.horizontal(|ui| {
+                                        // 顯示事件標識和刪除按鈕
+                                        ui.label(format!("事件 #{}", index + 1));
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::RIGHT),
+                                            |ui| {
+                                                if ui.button("刪除").clicked() {
+                                                    event_to_remove = Some(index);
+                                                }
+                                            },
+                                        );
+                                    });
+
+                                    // 事件類型選擇器
+                                    ui.horizontal(|ui| {
+                                        ui.label("類型:");
+
+                                        let current_type = match event {
+                                            EventType::Dialogue { .. } => "對話",
+                                            EventType::Choice { .. } => "選項",
+                                            EventType::SetFlag { .. } => "設置旗標",
+                                            EventType::Condition { .. } => "條件",
+                                            EventType::PlaySound { .. } => "播放音效",
+                                            EventType::ChangeItem { .. } => "物品變更",
+                                        };
+
+                                        egui::ComboBox::from_id_salt(format!(
+                                            "event_type_{}",
+                                            index
+                                        ))
+                                        .selected_text(current_type)
+                                        .show_ui(
+                                            ui,
+                                            |ui| {
+                                                let mut selected = false;
+
+                                                if ui
+                                                    .selectable_label(
+                                                        matches!(event, EventType::Dialogue { .. }),
+                                                        "對話",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *event = EventType::Dialogue {
+                                                        speaker: None,
+                                                        content: String::new(),
+                                                        portrait: None,
+                                                    };
+                                                    selected = true;
+                                                }
+
+                                                if ui
+                                                    .selectable_label(
+                                                        matches!(event, EventType::Choice { .. }),
+                                                        "選項",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *event = EventType::Choice {
+                                                        prompt: String::new(),
+                                                        next_scene_key: String::new(),
+                                                    };
+                                                    selected = true;
+                                                }
+
+                                                if ui
+                                                    .selectable_label(
+                                                        matches!(event, EventType::SetFlag { .. }),
+                                                        "設置旗標",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *event = EventType::SetFlag {
+                                                        flag: String::new(),
+                                                        value: true,
+                                                    };
+                                                    selected = true;
+                                                }
+
+                                                if ui
+                                                    .selectable_label(
+                                                        matches!(
+                                                            event,
+                                                            EventType::Condition { .. }
+                                                        ),
+                                                        "條件",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *event = EventType::Condition {
+                                                        flag: String::new(),
+                                                        value: true,
+                                                        next_scene: String::new(),
+                                                    };
+                                                    selected = true;
+                                                }
+
+                                                if ui
+                                                    .selectable_label(
+                                                        matches!(
+                                                            event,
+                                                            EventType::PlaySound { .. }
+                                                        ),
+                                                        "播放音效",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *event = EventType::PlaySound {
+                                                        sound_id: String::new(),
+                                                    };
+                                                    selected = true;
+                                                }
+
+                                                if ui
+                                                    .selectable_label(
+                                                        matches!(
+                                                            event,
+                                                            EventType::ChangeItem { .. }
+                                                        ),
+                                                        "物品變更",
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *event = EventType::ChangeItem {
+                                                        item_id: String::new(),
+                                                        quantity: 1,
+                                                    };
+                                                    selected = true;
+                                                }
+
+                                                selected
+                                            },
+                                        );
+                                    });
+
+                                    // 根據事件類型顯示相應的編輯控件
+                                    match event {
+                                        EventType::Dialogue {
+                                            speaker,
+                                            content,
+                                            portrait,
+                                        } => {
+                                            ui.horizontal(|ui| {
+                                                ui.label("說話者:");
+                                                if let Some(s) = speaker {
+                                                    ui.text_edit_singleline(s);
+                                                    if ui.button("清除").clicked() {
+                                                        *speaker = None;
+                                                    }
+                                                } else {
+                                                    if ui.button("添加說話者").clicked() {
+                                                        *speaker = Some(String::new());
+                                                    }
+                                                }
+                                            });
+
+                                            ui.label("對話內容:");
+                                            ui.text_edit_multiline(content);
+
+                                            ui.horizontal(|ui| {
+                                                ui.label("頭像 (選填):");
+                                                if let Some(port) = portrait {
+                                                    ui.text_edit_singleline(port);
+                                                    if ui.button("清除").clicked() {
+                                                        *portrait = None;
+                                                    }
+                                                } else {
+                                                    if ui.button("添加頭像").clicked() {
+                                                        *portrait = Some(String::new());
+                                                    }
+                                                }
+                                            });
+                                        }
+                                        EventType::Choice {
+                                            prompt,
+                                            next_scene_key,
+                                        } => {
+                                            ui.horizontal(|ui| {
+                                                ui.label("提示文字:");
+                                                ui.text_edit_singleline(prompt);
+                                            });
+
+                                            ui.horizontal(|ui| {
+                                                ui.label("下一場景ID:");
+
+                                                // 顯示場景列表下拉選單
+                                                egui::ComboBox::from_id_salt(format!(
+                                                    "choice_next_scene_{}",
+                                                    index
+                                                ))
+                                                .selected_text(next_scene_key.clone())
+                                                .show_ui(ui, |ui| {
+                                                    // 僅顯示有效的場景ID
+                                                    let mut scene_ids: Vec<_> =
+                                                        self.story_data.scenes.keys().collect();
+                                                    scene_ids.sort();
+
+                                                    for scene_id in scene_ids {
+                                                        if ui
+                                                            .selectable_label(
+                                                                next_scene_key == scene_id,
+                                                                scene_id,
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            *next_scene_key = scene_id.clone();
+                                                        }
+                                                    }
+                                                });
+
+                                                ui.text_edit_singleline(next_scene_key);
+                                            });
+                                        }
+                                        EventType::SetFlag { flag, value } => {
+                                            ui.horizontal(|ui| {
+                                                ui.label("旗標名稱:");
+                                                ui.text_edit_singleline(flag);
+                                            });
+
+                                            ui.checkbox(value, "旗標值");
+                                        }
+                                        EventType::Condition {
+                                            flag,
+                                            value,
+                                            next_scene,
+                                        } => {
+                                            ui.horizontal(|ui| {
+                                                ui.label("條件旗標:");
+                                                ui.text_edit_singleline(flag);
+                                            });
+
+                                            ui.checkbox(value, "期望值");
+
+                                            ui.horizontal(|ui| {
+                                                ui.label("符合時前往場景:");
+
+                                                // 顯示場景列表下拉選單
+                                                egui::ComboBox::from_id_salt(format!(
+                                                    "condition_next_scene_{}",
+                                                    index
+                                                ))
+                                                .selected_text(next_scene.clone())
+                                                .show_ui(ui, |ui| {
+                                                    let mut scene_ids: Vec<_> =
+                                                        self.story_data.scenes.keys().collect();
+                                                    scene_ids.sort();
+
+                                                    for scene_id in scene_ids {
+                                                        if ui
+                                                            .selectable_label(
+                                                                next_scene == scene_id,
+                                                                scene_id,
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            *next_scene = scene_id.clone();
+                                                        }
+                                                    }
+                                                });
+
+                                                ui.text_edit_singleline(next_scene);
+                                            });
+                                        }
+                                        EventType::PlaySound { sound_id } => {
+                                            ui.horizontal(|ui| {
+                                                ui.label("音效ID:");
+                                                ui.text_edit_singleline(sound_id);
+                                            });
+                                        }
+                                        EventType::ChangeItem { item_id, quantity } => {
+                                            ui.horizontal(|ui| {
+                                                ui.label("物品ID:");
+                                                ui.text_edit_singleline(item_id);
+                                            });
+
+                                            ui.horizontal(|ui| {
+                                                ui.label("變更數量:");
+                                                ui.add(
+                                                    egui::DragValue::new(quantity)
+                                                        .speed(1)
+                                                        .range(-100..=100),
+                                                );
+                                            });
+
+                                            ui.label(if *quantity > 0 {
+                                                "正數表示獲得物品"
+                                            } else if *quantity < 0 {
+                                                "負數表示失去物品"
+                                            } else {
+                                                "數量為零無效果"
+                                            });
+                                        }
+                                    }
+                                });
+                            });
+
+                            ui.add_space(5.0);
+                        }
+
+                        // 處理事件刪除
+                        if let Some(index) = event_to_remove {
+                            if index < scene.events.len() {
+                                scene.events.remove(index);
+                            }
+                        }
+                    });
+
+                    ui.add_space(10.0);
+
+                    // 選項編輯區
+                    ui.group(|ui| {
+                        ui.heading("選項列表");
+
+                        // 新增選項按鈕
+                        if ui.button("新增選項").clicked() {
+                            scene.options.push(dialogs_lib::DialogOption {
+                                text: "新選項".to_string(),
+                                next_scene: "".to_string(),
+                                condition_flags: HashMap::new(),
+                            });
+                        }
+
+                        ui.add_space(5.0);
+
+                        // 顯示現有選項列表
+                        let mut option_to_remove = None;
+
+                        for (index, option) in scene.options.iter_mut().enumerate() {
+                            ui.push_id(format!("option_{}", index), |ui| {
+                                ui.group(|ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("選項 #{}", index + 1));
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::RIGHT),
+                                            |ui| {
+                                                if ui.button("刪除").clicked() {
+                                                    option_to_remove = Some(index);
+                                                }
+                                            },
+                                        );
+                                    });
+
+                                    ui.horizontal(|ui| {
+                                        ui.label("選項文字:");
+                                        ui.text_edit_singleline(&mut option.text);
+                                    });
+
+                                    ui.horizontal(|ui| {
+                                        ui.label("下一場景:");
+
+                                        // 顯示場景列表下拉選單
+                                        egui::ComboBox::from_id_salt(format!(
+                                            "option_next_scene_{}",
+                                            index
+                                        ))
+                                        .selected_text(option.next_scene.clone())
+                                        .show_ui(
+                                            ui,
+                                            |ui| {
+                                                let mut scene_ids: Vec<_> =
+                                                    self.story_data.scenes.keys().collect();
+                                                scene_ids.sort();
+
+                                                for scene_id in scene_ids {
+                                                    if ui
+                                                        .selectable_label(
+                                                            option.next_scene == *scene_id,
+                                                            scene_id,
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        option.next_scene = scene_id.clone();
+                                                    }
+                                                }
+                                            },
+                                        );
+
+                                        ui.text_edit_singleline(&mut option.next_scene);
+                                    });
+
+                                    // 條件旗標編輯
+                                    ui.collapsing("條件旗標", |ui| {
+                                        ui.label("選項顯示條件 (需滿足所有條件):");
+
+                                        // 顯示現有條件
+                                        let mut flag_to_remove = None;
+
+                                        for (flag, value) in option.condition_flags.iter_mut() {
+                                            ui.horizontal(|ui| {
+                                                ui.label(flag);
+                                                ui.checkbox(value, "");
+                                                if ui.button("刪除").clicked() {
+                                                    flag_to_remove = Some(flag.clone());
+                                                }
+                                            });
+                                        }
+
+                                        // 處理旗標刪除
+                                        if let Some(flag) = flag_to_remove {
+                                            option.condition_flags.remove(&flag);
+                                        }
+
+                                        // 添加新條件
+                                        ui.add_space(5.0);
+                                        ui.label("添加新條件:");
+
+                                        let mut new_flag = String::new();
+                                        NEW_FLAG.with(|f| new_flag = f.borrow().clone());
+                                        let mut new_value = true;
+                                        NEW_VALUE.with(|v| new_value = *v.borrow());
+
+                                        ui.horizontal(|ui| {
+                                            ui.label("旗標名稱:");
+                                            if ui.text_edit_singleline(&mut new_flag).changed() {
+                                                NEW_FLAG
+                                                    .with(|f| *f.borrow_mut() = new_flag.clone());
+                                            }
+
+                                            if ui.checkbox(&mut new_value, "值").changed() {
+                                                NEW_VALUE.with(|v| *v.borrow_mut() = new_value);
+                                            }
+
+                                            if ui.button("添加").clicked() && !new_flag.is_empty()
+                                            {
+                                                option
+                                                    .condition_flags
+                                                    .insert(new_flag.clone(), new_value);
+                                                NEW_FLAG.with(|f| f.borrow_mut().clear());
+                                            }
+                                        });
+                                    });
+                                });
+                            });
+
+                            ui.add_space(5.0);
+                        }
+
+                        // 處理選項刪除
+                        if let Some(index) = option_to_remove {
+                            if index < scene.options.len() {
+                                scene.options.remove(index);
+                            }
+                        }
+                    });
+
+                    ui.add_space(10.0);
+
+                    // 前置條件編輯區
+                    ui.group(|ui| {
+                        ui.heading("場景前置條件");
+                        ui.label("進入此場景需要滿足的條件:");
+
+                        let mut prereq_to_remove = None;
+
+                        for (flag, value) in scene.prerequisites.iter_mut() {
+                            ui.horizontal(|ui| {
+                                ui.label(flag);
+                                ui.checkbox(value, "");
+                                if ui.button("刪除").clicked() {
+                                    prereq_to_remove = Some(flag.clone());
+                                }
+                            });
+                        }
+
+                        // 處理前置條件刪除
+                        if let Some(flag) = prereq_to_remove {
+                            scene.prerequisites.remove(&flag);
+                        }
+
+                        // 添加新前置條件
+                        ui.add_space(5.0);
+                        ui.label("添加新前置條件:");
+
+                        let mut new_prereq_flag = String::new();
+                        NEW_PREREQ_FLAG.with(|f| new_prereq_flag = f.borrow().clone());
+                        let mut new_prereq_value = true;
+                        NEW_PREREQ_VALUE.with(|v| new_prereq_value = *v.borrow());
+
+                        ui.horizontal(|ui| {
+                            ui.label("旗標名稱:");
+                            if ui.text_edit_singleline(&mut new_prereq_flag).changed() {
+                                NEW_PREREQ_FLAG.with(|f| *f.borrow_mut() = new_prereq_flag.clone());
+                            }
+
+                            if ui.checkbox(&mut new_prereq_value, "值").changed() {
+                                NEW_PREREQ_VALUE.with(|v| *v.borrow_mut() = new_prereq_value);
+                            }
+
+                            if ui.button("添加").clicked() && !new_prereq_flag.is_empty() {
+                                scene
+                                    .prerequisites
+                                    .insert(new_prereq_flag.clone(), new_prereq_value);
+                                NEW_PREREQ_FLAG.with(|f| f.borrow_mut().clear());
+                            }
+                        });
+                    });
                 });
         } else {
             ui.heading("劇情編輯器");

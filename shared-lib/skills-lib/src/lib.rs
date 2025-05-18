@@ -26,7 +26,7 @@ pub enum Tag {
     Fire,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display, EnumIter, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TargetType {
@@ -49,7 +49,7 @@ pub enum Shape {
     Cone(usize, f32),
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Effect {
     Hp {
@@ -65,7 +65,7 @@ pub enum Effect {
 }
 
 /// 技能資料結構
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Skill {
     #[serde(default)]
     pub tags: Vec<Tag>,
