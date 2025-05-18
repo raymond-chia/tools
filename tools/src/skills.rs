@@ -76,14 +76,44 @@ impl SkillsData {
         Ok(())
     }
 
-    /// 建立空的技能資料集
+    /// 檢查技能的合法性
     fn validate(skill: &Skill) -> Result<(), String> {
         if skill.effects.len() == 0 {
             return Err("技能必須至少有一個效果".to_string());
         }
+
         if skill.range.0 > skill.range.1 {
             return Err("技能範圍的最小值不能大於最大值".to_string());
         }
+
+        // 檢查標籤的互斥條件
+        // 條件1: active, passive 只能擇一
+        let has_active = skill.tags.contains(&Tag::Active);
+        let has_passive = skill.tags.contains(&Tag::Passive);
+        if has_active && has_passive {
+            return Err("技能不能同時是主動 (Active) 和被動 (Passive)".to_string());
+        }
+
+        // 條件2: single, area 只能擇一
+        let has_single = skill.tags.contains(&Tag::Single);
+        let has_area = skill.tags.contains(&Tag::Area);
+        if has_single && has_area {
+            return Err("技能不能同時是單體 (Single) 和範圍 (Area)".to_string());
+        }
+
+        // 條件3: caster, melee, ranged 只能擇一
+        let has_caster = skill.tags.contains(&Tag::Caster);
+        let has_melee = skill.tags.contains(&Tag::Melee);
+        let has_ranged = skill.tags.contains(&Tag::Ranged);
+        let range_count = [has_caster, has_melee, has_ranged]
+            .iter()
+            .filter(|&&b| b)
+            .count();
+        if range_count > 1 {
+            return Err("技能的作用範圍 (Caster/Melee/Ranged) 只能擇一".to_string());
+        }
+
+        // 單體技能檢查
         if skill.tags.contains(&Tag::Single) {
             match &skill.effects[0] {
                 Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => {
@@ -93,6 +123,8 @@ impl SkillsData {
                 }
             }
         }
+
+        // 範圍技能檢查
         if skill.tags.contains(&Tag::Area) {
             match &skill.effects[0] {
                 Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => match shape {
@@ -124,6 +156,8 @@ impl SkillsData {
                 },
             }
         }
+
+        // 施法者技能檢查
         if skill.tags.contains(&Tag::Caster) {
             match &skill.effects[0] {
                 Effect::Hp { target_type, .. } | Effect::Burn { target_type, .. } => {
@@ -133,7 +167,8 @@ impl SkillsData {
                 }
             }
         }
-        return Ok(());
+
+        Ok(())
     }
 }
 
