@@ -18,7 +18,6 @@ struct EditorApp {
     editor_mode: EditorMode,
     skills_editor: SkillsEditor,
     dialogs_editor: DialogsEditor,
-    status_message: Option<(String, bool)>, // message, is_error
 }
 
 impl EditorApp {
@@ -70,7 +69,6 @@ impl EditorApp {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::new(cc),
             dialogs_editor: DialogsEditor::new(cc),
-            status_message: None,
         }
     }
 
@@ -90,24 +88,6 @@ impl EditorApp {
             }
         });
     }
-
-    fn set_status(&mut self, message: String, is_error: bool) {
-        self.status_message = Some((message, is_error));
-    }
-
-    fn show_status_message(&mut self, ctx: &egui::Context) {
-        if let Some((message, is_error)) = &self.status_message {
-            let color = if *is_error {
-                egui::Color32::RED
-            } else {
-                egui::Color32::GREEN
-            };
-
-            egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
-                ui.label(RichText::new(message).color(color));
-            });
-        }
-    }
 }
 
 impl eframe::App for EditorApp {
@@ -125,9 +105,6 @@ impl eframe::App for EditorApp {
                 self.dialogs_editor.update(ctx, frame);
             }
         }
-
-        // 顯示共享的狀態消息
-        self.show_status_message(ctx);
     }
 }
 
