@@ -12,6 +12,7 @@ pub enum Tag {
     Single,
     Area,
     // 距離
+    Caster,
     Melee,
     Ranged,
     // 特性

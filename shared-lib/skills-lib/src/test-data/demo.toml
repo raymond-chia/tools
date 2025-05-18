@@ -8,7 +8,7 @@ tags = [
     "attack",
 ]
 range = [
-    1,
+    0,
     5,
 ]
 cost = 10

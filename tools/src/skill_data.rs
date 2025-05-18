@@ -43,17 +43,17 @@ impl SkillsData {
     }
 
     /// 新增技能
-    pub fn create_skill(&mut self, skill_id: String) -> Result<(), String> {
-        if self.skills.contains_key(&skill_id) {
+    pub fn create_skill(&mut self, skill_id: &str) -> Result<(), String> {
+        if self.skills.contains_key(skill_id) {
             return Err("技能 ID 已存在".to_string());
         }
-        self.skills.insert(skill_id, Skill::default());
+        self.skills.insert(skill_id.to_string(), Skill::default());
         Ok(())
     }
 
     /// 更新技能屬性
-    pub fn update_skill(&mut self, skill_id: String, updated_skill: Skill) -> Result<(), String> {
-        let Some(skill) = self.skills.get_mut(&skill_id) else {
+    pub fn update_skill(&mut self, skill_id: &str, updated_skill: Skill) -> Result<(), String> {
+        let Some(skill) = self.skills.get_mut(skill_id) else {
             return Err(format!("找不到技能 ID: {}", skill_id));
         };
         if let Err(e) = Self::sanity_check(&updated_skill) {
@@ -77,6 +77,9 @@ impl SkillsData {
         if skill.effects.len() == 0 {
             return Err("技能必須至少有一個效果".to_string());
         }
+        if skill.range.0 > skill.range.1 {
+            return Err("技能範圍的最小值不能大於最大值".to_string());
+        }
         if skill.tags.contains(&Tag::Single) {
             match &skill.effects[0] {
                 Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => {
@@ -88,9 +91,40 @@ impl SkillsData {
         }
         if skill.tags.contains(&Tag::Area) {
             match &skill.effects[0] {
-                Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => {
-                    if shape == &Shape::Point {
+                Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => match shape {
+                    Shape::Point => {
                         return Err("範圍技能的效果形狀不能是點".to_string());
+                    }
+                    Shape::Circle(radius) => {
+                        if *radius < 2 {
+                            return Err("範圍技能的效果形狀半徑不能小於 2".to_string());
+                        }
+                    }
+                    Shape::Rectangle(width, height) => {
+                        if *width < 2 && *height < 2 {
+                            return Err("範圍技能的效果形狀寬度和高度不能小於 2".to_string());
+                        }
+                    }
+                    Shape::Line(length) => {
+                        if *length < 2 {
+                            return Err("範圍技能的效果形狀長度不能小於 2".to_string());
+                        }
+                    }
+                    Shape::Cone(radius, angle) => {
+                        if *radius < 2 && *angle < 90.0 {
+                            return Err(
+                                "範圍技能的效果形狀半徑不能小於 2 同時角度又小於 90".to_string()
+                            );
+                        }
+                    }
+                },
+            }
+        }
+        if skill.tags.contains(&Tag::Caster) {
+            match &skill.effects[0] {
+                Effect::Hp { target_type, .. } | Effect::Burn { target_type, .. } => {
+                    if target_type != &skills_lib::TargetType::Caster {
+                        return Err("施法者技能的目標類型必須是施法者".to_string());
                     }
                 }
             }

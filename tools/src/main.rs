@@ -10,20 +10,9 @@ use skills_lib::{Effect, Shape, Skill, Tag, TargetType};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-// 編輯器狀態，用於解決借用問題
-struct EditorState {
-    skill_id: String,
-    skill: Skill,
-    save_clicked: bool,
-    delete_clicked: bool,
-    add_effect_clicked: bool,
-    delete_effect_indices: Vec<usize>,
-}
-
 struct SkillsEditor {
     skills_data: SkillsData,
     current_file_path: Option<PathBuf>,
-    selected_skill_id: Option<String>,
     new_skill_id: String,
     temp_skill: Option<(String, Skill)>,
     status_message: Option<(String, bool)>, // message, is_error
@@ -46,7 +35,6 @@ impl Default for SkillsEditor {
                 skills: HashMap::new(),
             },
             current_file_path: None,
-            selected_skill_id: None,
             new_skill_id: String::new(),
             temp_skill: None,
             status_message: None,
@@ -90,11 +78,15 @@ impl SkillsEditor {
         let mut style = (*cc.egui_ctx.style()).clone();
         style.text_styles.insert(
             egui::TextStyle::Body,
-            egui::FontId::new(14.0, egui::FontFamily::Proportional),
+            egui::FontId::new(24.0, egui::FontFamily::Proportional),
         );
         style.text_styles.insert(
             egui::TextStyle::Heading,
-            egui::FontId::new(18.0, egui::FontFamily::Proportional),
+            egui::FontId::new(32.0, egui::FontFamily::Proportional),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Button,
+            egui::FontId::new(24.0, egui::FontFamily::Proportional),
         );
         cc.egui_ctx.set_style(style);
 
@@ -106,7 +98,6 @@ impl SkillsEditor {
             Ok(data) => {
                 self.skills_data = data;
                 self.current_file_path = Some(path);
-                self.selected_skill_id = None;
                 self.temp_skill = None;
                 self.set_status(format!("成功載入檔案"), false);
             }
@@ -138,12 +129,10 @@ impl SkillsEditor {
             return;
         }
 
-        match self.skills_data.create_skill(self.new_skill_id.clone()) {
+        match self.skills_data.create_skill(&self.new_skill_id) {
             Ok(_) => {
-                let skill_id = self.new_skill_id.clone();
-                self.selected_skill_id = Some(skill_id.clone());
                 self.temp_skill = Some((
-                    skill_id,
+                    self.new_skill_id.clone(),
                     self.skills_data
                         .skills
                         .get(&self.new_skill_id)
@@ -167,7 +156,6 @@ impl SkillsEditor {
                         skills: HashMap::new(),
                     };
                     self.current_file_path = None;
-                    self.selected_skill_id = None;
                     self.temp_skill = None;
                     self.set_status("已建立新檔案".to_string(), false);
                     ui.close_menu();
@@ -230,7 +218,7 @@ impl SkillsEditor {
 
         ScrollArea::vertical().show(ui, |ui| {
             for skill_id in self.skills_data.skills.keys().collect::<Vec<_>>() {
-                let selected = self.selected_skill_id.as_ref() == Some(skill_id);
+                let selected = self.temp_skill.as_ref().map(|(id, _)| id) == Some(skill_id);
 
                 let button = Button::new(skill_id)
                     .fill(if selected {
@@ -241,7 +229,6 @@ impl SkillsEditor {
                     .min_size(egui::vec2(ui.available_width(), 0.0));
 
                 if ui.add(button).clicked() {
-                    self.selected_skill_id = Some(skill_id.clone());
                     let skill = self.skills_data.skills.get(skill_id).unwrap().clone();
                     self.temp_skill = Some((skill_id.clone(), skill));
                 }
@@ -250,168 +237,167 @@ impl SkillsEditor {
     }
 
     fn show_skill_editor(&mut self, ui: &mut Ui) {
-        // 使用不同的方法，創建一個包含所需狀態的結構
-        let mut editor_state = match &self.temp_skill {
-            Some((skill_id, skill)) => {
-                // 克隆數據以避免借用問題
-                let skill_id = skill_id.clone();
-                let skill = skill.clone();
-                Some(EditorState {
-                    skill_id,
-                    skill,
-                    save_clicked: false,
-                    delete_clicked: false,
-                    add_effect_clicked: false,
-                    delete_effect_indices: Vec::new(),
-                })
-            }
-            None => None,
-        };
+        // 首先添加標題和按鈕（這些保持在固定位置）
+        let mut save_clicked = false;
+        let mut delete_clicked = false;
+        let mut add_effect_clicked = false;
+        let mut delete_effect_indices: Vec<usize> = Vec::new();
 
-        if let Some(state) = &mut editor_state {
-            ui.heading(format!("編輯技能: {}", state.skill_id));
+        if let Some((skill_id, _)) = &self.temp_skill {
+            ui.heading(format!("編輯技能: {}", skill_id));
 
-            // 捕獲按鈕事件
             ui.horizontal(|ui| {
-                state.save_clicked = ui.button("儲存變更").clicked();
-                state.delete_clicked = ui.button("刪除技能").clicked();
+                save_clicked = ui.button("儲存變更").clicked();
+                delete_clicked = ui.button("刪除技能").clicked();
             });
 
             ui.add_space(8.0);
             ui.add(Separator::default());
 
-            // 基本屬性編輯
-            ui.heading("基本屬性");
+            // 添加可捲動區域
+            ScrollArea::vertical()
+                .auto_shrink([false; 2])
+                .show(ui, |ui| {
+                    // 在可捲動區域內編輯技能，直接使用 self.temp_skill
+                    if let Some((_, skill)) = &mut self.temp_skill {
+                        // 基本屬性編輯
+                        ui.heading("基本屬性");
 
-            // 標籤編輯
-            ui.collapsing("標籤", |ui| {
-                Self::show_tags_editor(ui, &mut state.skill);
-            });
+                        // 標籤編輯
+                        ui.collapsing("標籤", |ui| {
+                            Self::show_tags_editor(ui, skill);
+                        });
 
-            // 範圍編輯
-            ui.horizontal(|ui| {
-                ui.label("範圍:");
-                ui.add(DragValue::new(&mut state.skill.range.0).prefix("最小: "));
-                ui.add(DragValue::new(&mut state.skill.range.1).prefix("最大: "));
-            });
+                        // 範圍編輯
+                        ui.horizontal(|ui| {
+                            ui.label("範圍:");
+                            ui.add(DragValue::new(&mut skill.range.0).prefix("最小: "));
+                            ui.add(DragValue::new(&mut skill.range.1).prefix("最大: "));
+                        });
 
-            // 消耗編輯
-            ui.horizontal(|ui| {
-                ui.label("消耗:");
-                ui.add(DragValue::new(&mut state.skill.cost));
-            });
+                        // 消耗編輯
+                        ui.horizontal(|ui| {
+                            ui.label("消耗:");
+                            ui.add(DragValue::new(&mut skill.cost));
+                        });
 
-            // 命中率編輯
-            ui.horizontal(|ui| {
-                ui.label("命中率:");
-                let mut has_hit_rate = state.skill.hit_rate.is_some();
-                if ui.checkbox(&mut has_hit_rate, "").changed() {
-                    state.skill.hit_rate = if has_hit_rate { Some(100) } else { None };
-                }
-
-                if let Some(hit_rate) = &mut state.skill.hit_rate {
-                    ui.add_enabled(
-                        has_hit_rate,
-                        DragValue::new(hit_rate).range(0..=100).suffix("%"),
-                    );
-                }
-            });
-
-            // 爆擊率編輯
-            ui.horizontal(|ui| {
-                ui.label("爆擊率:");
-                let mut has_crit_rate = state.skill.crit_rate.is_some();
-                if ui.checkbox(&mut has_crit_rate, "").changed() {
-                    state.skill.crit_rate = if has_crit_rate { Some(10) } else { None };
-                }
-
-                if let Some(crit_rate) = &mut state.skill.crit_rate {
-                    ui.add_enabled(
-                        has_crit_rate,
-                        DragValue::new(crit_rate).range(0..=100).suffix("%"),
-                    );
-                }
-            });
-
-            ui.add_space(8.0);
-            ui.add(Separator::default());
-
-            // 效果編輯
-            ui.horizontal(|ui| {
-                ui.heading("效果");
-                state.add_effect_clicked = ui.button("新增效果").clicked();
-            });
-
-            // 處理效果編輯
-            for (index, effect) in state.skill.effects.iter_mut().enumerate() {
-                ui.push_id(index, |ui| {
-                    let mut delete_effect_clicked = false;
-                    ui.horizontal(|ui| {
-                        match effect {
-                            Effect::Hp { .. } => {
-                                ui.label("HP 效果");
+                        // 命中率編輯
+                        ui.horizontal(|ui| {
+                            ui.label("命中率:");
+                            let mut has_hit_rate = skill.hit_rate.is_some();
+                            if ui.checkbox(&mut has_hit_rate, "").changed() {
+                                skill.hit_rate = if has_hit_rate { Some(100) } else { None };
                             }
-                            Effect::Burn { .. } => {
-                                ui.label("燃燒效果");
+
+                            if let Some(hit_rate) = &mut skill.hit_rate {
+                                ui.add_enabled(
+                                    has_hit_rate,
+                                    DragValue::new(hit_rate).range(0..=100).suffix("%"),
+                                );
                             }
+                        });
+
+                        // 爆擊率編輯
+                        ui.horizontal(|ui| {
+                            ui.label("爆擊率:");
+                            let mut has_crit_rate = skill.crit_rate.is_some();
+                            if ui.checkbox(&mut has_crit_rate, "").changed() {
+                                skill.crit_rate = if has_crit_rate { Some(10) } else { None };
+                            }
+
+                            if let Some(crit_rate) = &mut skill.crit_rate {
+                                ui.add_enabled(
+                                    has_crit_rate,
+                                    DragValue::new(crit_rate).range(0..=100).suffix("%"),
+                                );
+                            }
+                        });
+
+                        ui.add_space(8.0);
+                        ui.add(Separator::default());
+
+                        // 效果編輯
+                        ui.horizontal(|ui| {
+                            ui.heading("效果");
+                            add_effect_clicked = ui.button("新增效果").clicked();
+                        });
+
+                        // 處理效果編輯
+                        for (index, effect) in skill.effects.iter_mut().enumerate() {
+                            ui.push_id(index, |ui| {
+                                let mut delete_effect_clicked = false;
+                                ui.horizontal(|ui| {
+                                    match effect {
+                                        Effect::Hp { .. } => {
+                                            ui.label("HP 效果");
+                                        }
+                                        Effect::Burn { .. } => {
+                                            ui.label("燃燒效果");
+                                        }
+                                    }
+
+                                    delete_effect_clicked = ui.button("🗑").clicked();
+                                });
+
+                                if delete_effect_clicked {
+                                    delete_effect_indices.push(index);
+                                }
+
+                                ui.indent(format!("effect_{}", index), |ui| {
+                                    Self::show_effect_editor(ui, effect, Self::show_shape_editor);
+                                });
+
+                                ui.add_space(8.0);
+                            });
                         }
-
-                        delete_effect_clicked = ui.button("🗑").clicked();
-                    });
-
-                    if delete_effect_clicked {
-                        state.delete_effect_indices.push(index);
                     }
-
-                    ui.indent(format!("effect_{}", index), |ui| {
-                        Self::show_effect_editor(ui, effect, Self::show_shape_editor);
-                    });
-
-                    ui.add_space(8.0);
                 });
-            }
-
-            // 處理狀態變更
-            if state.save_clicked {
-                match self
-                    .skills_data
-                    .update_skill(state.skill_id.clone(), state.skill.clone())
-                {
-                    Ok(_) => {
-                        self.set_status("成功更新技能".to_string(), false);
-                        // 更新 temp_skill
-                        if let Some((id, _)) = &self.temp_skill {
-                            if id == &state.skill_id {
-                                self.temp_skill =
-                                    Some((state.skill_id.clone(), state.skill.clone()));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        self.set_status(err, true);
-                    }
-                }
-            }
-
-            if state.delete_clicked {
-                self.confirmation_action = ConfirmationAction::DeleteSkill(state.skill_id.clone());
-                self.show_confirmation_dialog = true;
-            }
-
-            if state.add_effect_clicked {
-                self.show_add_effect_popup = true;
-            }
-
-            // 處理效果刪除
-            for index in state.delete_effect_indices.iter().rev() {
-                self.confirmation_action =
-                    ConfirmationAction::DeleteEffect(state.skill_id.clone(), *index);
-                self.show_confirmation_dialog = true;
-                break; // 僅處理第一個請求以避免多個確認對話框
-            }
         } else {
             ui.heading("技能編輯器");
             ui.label("選擇或建立一個技能開始編輯");
+        }
+
+        // 處理按鈕事件（在 ScrollArea 外部）
+        // 克隆必要的數據以避免借用衝突
+        let action = if save_clicked {
+            if let Some((skill_id, skill)) = &self.temp_skill {
+                let skill_id_clone = skill_id.clone();
+                let skill_clone = skill.clone();
+
+                match self.skills_data.update_skill(&skill_id_clone, skill_clone) {
+                    Ok(_) => Some(("成功更新技能".to_string(), false)),
+                    Err(err) => Some((err, true)),
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // 應用 save 操作的結果
+        if let Some((message, is_error)) = action {
+            self.set_status(message, is_error);
+        }
+
+        // 處理刪除技能按鈕
+        if delete_clicked && self.temp_skill.is_some() {
+            let skill_id = self.temp_skill.as_ref().unwrap().0.clone();
+            self.confirmation_action = ConfirmationAction::DeleteSkill(skill_id);
+            self.show_confirmation_dialog = true;
+        }
+
+        // 處理添加效果按鈕
+        if add_effect_clicked {
+            self.show_add_effect_popup = true;
+        }
+
+        // 處理刪除效果
+        if !delete_effect_indices.is_empty() && self.temp_skill.is_some() {
+            let skill_id = self.temp_skill.as_ref().unwrap().0.clone();
+            let index = *delete_effect_indices.first().unwrap(); // 僅處理第一個
+            self.confirmation_action = ConfirmationAction::DeleteEffect(skill_id, index);
+            self.show_confirmation_dialog = true;
         }
     }
 
@@ -696,7 +682,6 @@ impl SkillsEditor {
                         self.set_status(err, true);
                     } else {
                         self.set_status("成功刪除技能".to_string(), false);
-                        self.selected_skill_id = None;
                         self.temp_skill = None;
                     }
                 }
