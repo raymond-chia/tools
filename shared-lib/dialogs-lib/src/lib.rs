@@ -1,84 +1,107 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use strum_macros::{Display, EnumString};
+use toml;
 
-/// 場景類型
-#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display, PartialEq)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum SceneType {
-    Dialogue,
-    Choice,
-    Battle,
-    Ending,
+// TOML 結構體定義
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Script {
+    pub function_signature: Vec<String>,
+    pub node: HashMap<String, Node>,
 }
 
-/// 事件類型
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case", tag = "type")]
-pub enum EventType {
-    /// 角色對話
+#[derive(Deserialize, Serialize, Debug, EnumString, Display)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Node {
     Dialogue {
-        speaker: Option<String>,
-        content: String,
-        portrait: Option<String>,
+        pos: Pos,
+        dialogues: Vec<DialogueEntry>,
+        actions: Option<Vec<Action>>,
+        next_node: String,
     },
-    /// 選項提示
-    Choice {
-        prompt: String,
-        next_scene_key: String,
+    Option {
+        pos: Pos,
+        options: Vec<OptionEntry>,
     },
-    /// 設置旗標
-    SetFlag { flag: String, value: bool },
-    /// 條件檢查
+    Battle {
+        pos: Pos,
+        outcomes: Vec<Outcome>,
+    },
     Condition {
-        flag: String,
-        value: bool,
-        next_scene: String,
+        pos: Pos,
+        conditions: Vec<ConditionNodeEntry>,
     },
-    /// 播放音效
-    PlaySound { sound_id: String },
-    /// 物品變更
-    ChangeItem {
-        item_id: String,
-        quantity: i32, // 正數為獲得，負數為失去
+    End {
+        pos: Pos,
     },
 }
 
-/// 選項結構
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct DialogOption {
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub struct Pos {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct DialogueEntry {
+    pub speaker: String,
     pub text: String,
-    pub next_scene: String,
-    #[serde(default)]
-    pub condition_flags: HashMap<String, bool>, // 需要滿足的旗標條件
 }
 
-/// 場景結構
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Scene {
-    pub scene_type: SceneType,
-    pub title: String,
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub events: Vec<EventType>,
-    #[serde(default)]
-    pub options: Vec<DialogOption>,
-    #[serde(default)]
-    pub prerequisites: HashMap<String, bool>, // 進入場景需要的前置條件
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Action {
+    pub function: String,
+    pub params: HashMap<String, toml::Value>,
 }
 
-/// 實作 Scene 的預設值
-impl Default for Scene {
-    fn default() -> Self {
-        Self {
-            scene_type: SceneType::Dialogue,
-            title: String::new(),
-            description: String::new(),
-            events: vec![],
-            options: vec![],
-            prerequisites: HashMap::new(),
+#[derive(Deserialize, Serialize, Debug)]
+pub struct OptionEntry {
+    pub text: String,
+    pub next_node: String,
+    pub conditions: Option<Vec<ConditionCheckEntry>>,
+    pub actions: Option<Vec<Action>>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Outcome {
+    pub result: String,
+    pub next_node: String,
+    pub conditions: Option<Vec<ConditionCheckEntry>>,
+    pub actions: Option<Vec<Action>>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ConditionNodeEntry {
+    pub function: String,
+    pub params: HashMap<String, toml::Value>,
+    pub next_node: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct ConditionCheckEntry {
+    pub function: String,
+    pub params: HashMap<String, toml::Value>,
+}
+
+// 輔助方法：從 Node 獲取 pos
+impl Node {
+    pub fn pos(&self) -> &Pos {
+        match self {
+            Node::Dialogue { pos, .. } => pos,
+            Node::Option { pos, .. } => pos,
+            Node::Battle { pos, .. } => pos,
+            Node::Condition { pos, .. } => pos,
+            Node::End { pos } => pos,
+        }
+    }
+
+    pub fn set_pos(&mut self, p: Pos) {
+        match self {
+            Node::Dialogue { pos, .. } => *pos = p,
+            Node::Option { pos, .. } => *pos = p,
+            Node::Battle { pos, .. } => *pos = p,
+            Node::Condition { pos, .. } => *pos = p,
+            Node::End { pos } => *pos = p,
         }
     }
 }

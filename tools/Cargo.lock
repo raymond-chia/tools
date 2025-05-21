@@ -762,6 +762,7 @@ dependencies = [
  "serde",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "toml",
 ]
 
 [[package]]
@@ -3085,6 +3086,7 @@ dependencies = [
  "serde",
  "skills-lib",
  "strum 0.27.1",
+ "strum_macros 0.27.1",
  "toml",
  "winapi",
 ]

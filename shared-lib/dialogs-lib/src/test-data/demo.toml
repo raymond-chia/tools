@@ -1,12 +1,8 @@
 name = ""
-author = ""
-version = ""
 
 [prelude]
-scene_type = "dialogue"
+scene_type = "normal"
 title = ""
 description = ""
 events = []
 options = []
-
-[prelude.prerequisites]

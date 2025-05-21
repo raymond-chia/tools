@@ -215,7 +215,7 @@ impl Default for SkillsEditor {
 }
 
 impl SkillsEditor {
-    pub fn new(_: &eframe::CreationContext<'_>) -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
