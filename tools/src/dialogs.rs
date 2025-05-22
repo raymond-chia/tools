@@ -211,51 +211,31 @@ impl DialogsEditor {
         });
 
         // 側邊欄：顯示選中節點的詳細內容
-        egui::SidePanel::right("details").show(ctx, |ui| {
-            ui.heading("節點詳情");
-            if let Some(node_id) = &self.selected_node {
-                if let Some(node) = self.script.node.get(node_id) {
-                    match node {
-                        Node::Dialogue {
-                            dialogues,
-                            actions,
-                            next_node,
-                            pos,
-                        } => {
-                            ui.label(format!("節點 ID: {}", node_id));
-                            ui.label(format!("類型: {}", node.to_string()));
-                            ui.label(format!("位置: ({}, {})", pos.x, pos.y));
-                            for dialogue in dialogues {
-                                ui.label(format!("說者: {} - {}", dialogue.speaker, dialogue.text));
-                            }
-                            if let Some(actions) = actions {
-                                ui.label("動作:");
-                                for action in actions {
+        egui::SidePanel::right("details_panel")
+            .resizable(true)
+            .min_width(400.0)
+            .show(ctx, |ui| {
+                // 顯示詳細資訊
+                ui.heading("節點詳情");
+                if let Some(node_id) = &self.selected_node {
+                    if let Some(node) = self.script.node.get(node_id) {
+                        match node {
+                            Node::Dialogue {
+                                dialogues,
+                                actions,
+                                next_node,
+                                pos,
+                            } => {
+                                ui.label(format!("節點 ID: {}", node_id));
+                                ui.label(format!("類型: {}", node.to_string()));
+                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                for dialogue in dialogues {
                                     ui.label(format!(
-                                        "函數: {}, 參數: {:?}",
-                                        action.function, action.params
+                                        "說者: {} - {}",
+                                        dialogue.speaker, dialogue.text
                                     ));
                                 }
-                            }
-                            ui.label(format!("下一個節點: {}", next_node));
-                        }
-                        Node::Option { options, pos } => {
-                            ui.label(format!("節點 ID: {}", node_id));
-                            ui.label(format!("類型: {}", node.to_string()));
-                            ui.label(format!("位置: ({}, {})", pos.x, pos.y));
-                            for option in options {
-                                ui.label(format!("選項: {}", option.text));
-                                ui.label(format!("下一個節點: {}", option.next_node));
-                                if let Some(conditions) = &option.conditions {
-                                    ui.label("條件:");
-                                    for cond in conditions {
-                                        ui.label(format!(
-                                            "函數: {}, 參數: {:?}",
-                                            cond.function, cond.params
-                                        ));
-                                    }
-                                }
-                                if let Some(actions) = &option.actions {
+                                if let Some(actions) = actions {
                                     ui.label("動作:");
                                     for action in actions {
                                         ui.label(format!(
@@ -264,58 +244,85 @@ impl DialogsEditor {
                                         ));
                                     }
                                 }
+                                ui.label(format!("下一個節點: {}", next_node));
                             }
-                        }
-                        Node::Battle { outcomes, pos } => {
-                            ui.label(format!("節點 ID: {}", node_id));
-                            ui.label(format!("類型: {}", node.to_string()));
-                            ui.label(format!("位置: ({}, {})", pos.x, pos.y));
-                            for outcome in outcomes {
-                                ui.label(format!("結果: {}", outcome.result));
-                                ui.label(format!("下一個節點: {}", outcome.next_node));
-                                if let Some(conditions) = &outcome.conditions {
-                                    ui.label("條件:");
-                                    for cond in conditions {
-                                        ui.label(format!(
-                                            "函數: {}, 參數: {:?}",
-                                            cond.function, cond.params
-                                        ));
+                            Node::Option { options, pos } => {
+                                ui.label(format!("節點 ID: {}", node_id));
+                                ui.label(format!("類型: {}", node.to_string()));
+                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                for option in options {
+                                    ui.label(format!("選項: {}", option.text));
+                                    ui.label(format!("下一個節點: {}", option.next_node));
+                                    if let Some(conditions) = &option.conditions {
+                                        ui.label("條件:");
+                                        for cond in conditions {
+                                            ui.label(format!(
+                                                "函數: {}, 參數: {:?}",
+                                                cond.function, cond.params
+                                            ));
+                                        }
+                                    }
+                                    if let Some(actions) = &option.actions {
+                                        ui.label("動作:");
+                                        for action in actions {
+                                            ui.label(format!(
+                                                "函數: {}, 參數: {:?}",
+                                                action.function, action.params
+                                            ));
+                                        }
                                     }
                                 }
-                                if let Some(actions) = &outcome.actions {
-                                    ui.label("動作:");
-                                    for action in actions {
-                                        ui.label(format!(
-                                            "函數: {}, 參數: {:?}",
-                                            action.function, action.params
-                                        ));
+                            }
+                            Node::Battle { outcomes, pos } => {
+                                ui.label(format!("節點 ID: {}", node_id));
+                                ui.label(format!("類型: {}", node.to_string()));
+                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                for outcome in outcomes {
+                                    ui.label(format!("結果: {}", outcome.result));
+                                    ui.label(format!("下一個節點: {}", outcome.next_node));
+                                    if let Some(conditions) = &outcome.conditions {
+                                        ui.label("條件:");
+                                        for cond in conditions {
+                                            ui.label(format!(
+                                                "函數: {}, 參數: {:?}",
+                                                cond.function, cond.params
+                                            ));
+                                        }
+                                    }
+                                    if let Some(actions) = &outcome.actions {
+                                        ui.label("動作:");
+                                        for action in actions {
+                                            ui.label(format!(
+                                                "函數: {}, 參數: {:?}",
+                                                action.function, action.params
+                                            ));
+                                        }
                                     }
                                 }
                             }
-                        }
-                        Node::Condition { conditions, pos } => {
-                            ui.label(format!("節點 ID: {}", node_id));
-                            ui.label(format!("類型: {}", node.to_string()));
-                            ui.label(format!("位置: ({}, {})", pos.x, pos.y));
-                            for cond in conditions {
-                                ui.label(format!(
-                                    "函數: {}, 參數: {:?}",
-                                    cond.function, cond.params
-                                ));
-                                ui.label(format!("下一個節點: {}", cond.next_node));
+                            Node::Condition { conditions, pos } => {
+                                ui.label(format!("節點 ID: {}", node_id));
+                                ui.label(format!("類型: {}", node.to_string()));
+                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                for cond in conditions {
+                                    ui.label(format!(
+                                        "函數: {}, 參數: {:?}",
+                                        cond.function, cond.params
+                                    ));
+                                    ui.label(format!("下一個節點: {}", cond.next_node));
+                                }
                             }
-                        }
-                        Node::End { pos } => {
-                            ui.label(format!("節點 ID: {}", node_id));
-                            ui.label(format!("類型: {}", node.to_string()));
-                            ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                            Node::End { pos } => {
+                                ui.label(format!("節點 ID: {}", node_id));
+                                ui.label(format!("類型: {}", node.to_string()));
+                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                            }
                         }
                     }
+                } else {
+                    ui.label("未選中節點");
                 }
-            } else {
-                ui.label("未選中節點");
-            }
-        });
+            });
 
         // 顯示狀態訊息
         self.show_status_message(ctx);
