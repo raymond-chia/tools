@@ -224,16 +224,12 @@ impl DialogsEditor {
                                 dialogues,
                                 actions,
                                 next_node,
-                                pos,
+                                pos: _,
                             } => {
-                                ui.label(format!("節點 ID: {}", node_id));
                                 ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                ui.label(format!("ID: {}", node_id));
                                 for dialogue in dialogues {
-                                    ui.label(format!(
-                                        "說者: {} - {}",
-                                        dialogue.speaker, dialogue.text
-                                    ));
+                                    ui.label(format!("<{}>: {}", dialogue.speaker, dialogue.text));
                                 }
                                 if let Some(actions) = actions {
                                     ui.label("動作:");
@@ -246,10 +242,9 @@ impl DialogsEditor {
                                 }
                                 ui.label(format!("下一個節點: {}", next_node));
                             }
-                            Node::Option { options, pos } => {
-                                ui.label(format!("節點 ID: {}", node_id));
+                            Node::Option { options, pos: _ } => {
                                 ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                ui.label(format!("ID: {}", node_id));
                                 for option in options {
                                     ui.label(format!("選項: {}", option.text));
                                     ui.label(format!("下一個節點: {}", option.next_node));
@@ -273,10 +268,9 @@ impl DialogsEditor {
                                     }
                                 }
                             }
-                            Node::Battle { outcomes, pos } => {
-                                ui.label(format!("節點 ID: {}", node_id));
+                            Node::Battle { outcomes, pos: _ } => {
                                 ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                ui.label(format!("ID: {}", node_id));
                                 for outcome in outcomes {
                                     ui.label(format!("結果: {}", outcome.result));
                                     ui.label(format!("下一個節點: {}", outcome.next_node));
@@ -300,10 +294,9 @@ impl DialogsEditor {
                                     }
                                 }
                             }
-                            Node::Condition { conditions, pos } => {
-                                ui.label(format!("節點 ID: {}", node_id));
+                            Node::Condition { conditions, pos: _ } => {
                                 ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
+                                ui.label(format!("ID: {}", node_id));
                                 for cond in conditions {
                                     ui.label(format!(
                                         "函數: {}, 參數: {:?}",
@@ -312,10 +305,9 @@ impl DialogsEditor {
                                     ui.label(format!("下一個節點: {}", cond.next_node));
                                 }
                             }
-                            Node::End { pos } => {
+                            Node::End { pos: _ } => {
                                 ui.label(format!("節點 ID: {}", node_id));
                                 ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("位置: ({}, {})", pos.x, pos.y));
                             }
                         }
                     }
@@ -420,14 +412,35 @@ impl DialogsEditor {
                     [start, end],
                     egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
                 );
+
+                // 計算箭頭
+                let direction = (end - start).normalized();
+                let arrow_size = 10.0; // 箭頭大小
+
+                // 箭頭尖端位置（比終點略短一點）
+                let arrow_tip = start + (end - start) / 2.0;
+
+                // 計算箭頭的兩個翼點
+                let perpendicular = egui::vec2(-direction.y, direction.x) * arrow_size;
+                let left_wing = arrow_tip - direction * arrow_size + perpendicular;
+                let right_wing = arrow_tip - direction * arrow_size - perpendicular;
+
+                // 繪製箭頭（填充三角形）
+                let points = vec![arrow_tip, left_wing, right_wing, arrow_tip];
+                for i in 0..points.len() - 1 {
+                    painter.line_segment(
+                        [points[i], points[i + 1]],
+                        egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
+                    );
+                }
             }
 
             // 繪製節點
             for (node_id, node_rect, is_selected, node_type) in &node_data {
                 let color = if *is_selected {
-                    egui::Color32::LIGHT_GREEN
+                    egui::Color32::DARK_RED
                 } else {
-                    egui::Color32::LIGHT_GRAY
+                    egui::Color32::DARK_GREEN
                 };
 
                 // 繪製節點背景
@@ -438,19 +451,19 @@ impl DialogsEditor {
                 let max = node_rect.max;
                 painter.line_segment(
                     [egui::pos2(min.x, min.y), egui::pos2(max.x, min.y)],
-                    egui::Stroke::new(1.0, egui::Color32::BLACK),
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
                 );
                 painter.line_segment(
                     [egui::pos2(max.x, min.y), egui::pos2(max.x, max.y)],
-                    egui::Stroke::new(1.0, egui::Color32::BLACK),
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
                 );
                 painter.line_segment(
                     [egui::pos2(max.x, max.y), egui::pos2(min.x, max.y)],
-                    egui::Stroke::new(1.0, egui::Color32::BLACK),
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
                 );
                 painter.line_segment(
                     [egui::pos2(min.x, max.y), egui::pos2(min.x, min.y)],
-                    egui::Stroke::new(1.0, egui::Color32::BLACK),
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
                 );
 
                 // 繪製節點文字
@@ -459,9 +472,9 @@ impl DialogsEditor {
                 painter.text(
                     label_pos,
                     egui::Align2::CENTER_CENTER,
-                    format!("{} ({})", node_id, node_type),
+                    format!("<{}>\n{}", node_type, node_id),
                     egui::FontId::proportional(14.0 * self.camera_zoom),
-                    egui::Color32::BLACK,
+                    egui::Color32::WHITE,
                 );
             }
 

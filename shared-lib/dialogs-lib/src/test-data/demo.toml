@@ -1,78 +1,47 @@
 function_signature = ["check_item_quantity(item_id: string, operator: string, value: int) -> boolean", "modify_item_quantity(item_id: string, operation: string, value: int) -> boolean", "modify_character(character_id: string, operation: string) -> boolean", "always_true() -> boolean"]
 
+[node.dialogue_8]
+type = "dialogue"
+next_node = "end"
+
+[node.dialogue_8.pos]
+x = 1006.4000244140625
+y = 137.59999084472656
+
+[[node.dialogue_8.dialogues]]
+speaker = "NPC_002"
+text = "你有足夠的地圖！可以找到隱藏路徑。"
+
 [node.dialogue_6]
 type = "dialogue"
 next_node = "option_2"
 
 [node.dialogue_6.pos]
-x = 550.0
-y = 200.0
+x = 661.1998901367188
+y = 208.8000030517578
 
 [[node.dialogue_6.dialogues]]
 speaker = "Player"
 text = "我成功逃脫了戰鬥，但得小心行事。"
 
-[node.game_over]
+[node.dialogue_3]
 type = "dialogue"
 next_node = "end"
 
-[node.game_over.pos]
-x = 550.0
-y = 300.0
+[node.dialogue_3.pos]
+x = 354.79998779296875
+y = 317.6000061035156
 
-[[node.game_over.dialogues]]
-speaker = "System"
-text = "遊戲結束！你被擊敗了。"
-
-[node.dialogue_5]
-type = "dialogue"
-next_node = "end"
-
-[node.dialogue_5.pos]
-x = 700.0
-y = 100.0
-
-[[node.dialogue_5.dialogues]]
+[[node.dialogue_3.dialogues]]
 speaker = "NPC_001"
-text = "你擊敗了怪獸！村莊安全了！"
-
-[node.dialogue_7]
-type = "dialogue"
-next_node = "end"
-
-[node.dialogue_7.pos]
-x = 1000.0
-y = 100.0
-
-[[node.dialogue_7.dialogues]]
-speaker = "NPC_002"
-text = "你有鑰匙！可以進入寶藏房間。"
-
-[node.dialogue_2]
-type = "dialogue"
-next_node = "battle_1"
-
-[node.dialogue_2.pos]
-x = 400.0
-y = 100.0
-
-[[node.dialogue_2.dialogues]]
-speaker = "NPC_001"
-text = "太好了！戰士艾倫將加入你的隊伍，一起擊敗怪獸吧！"
-
-[[node.dialogue_2.actions]]
-function = "modify_character"
-
-[node.dialogue_2.actions.params]
-character_id = "char_001"
-operation = "+"
+text = "沒關係，也許下次你會改變主意。"
 
 [node.option_1]
 type = "option"
 
 [node.option_1.pos]
-x = 250.0
-y = 100.0
+x = 180.40000915527344
+y = 279.1999816894531
 
 [[node.option_1.options]]
 text = "接受任務"
@@ -91,47 +60,109 @@ function = "check_item_quantity"
 
 [node.option_1.options.conditions.params]
 operator = ">"
-item_id = "map_001"
 value = 0
+item_id = "map_001"
 
 [[node.option_1.options.actions]]
 function = "modify_item_quantity"
 
 [node.option_1.options.actions.params]
-operation = "-"
 value = 1
+operation = "-"
 item_id = "map_001"
 
-[node.dialogue_8]
+[node.condition_1]
+type = "condition"
+
+[node.condition_1.pos]
+x = 843.5999755859375
+y = 164.0
+
+[[node.condition_1.conditions]]
+function = "check_item_quantity"
+next_node = "dialogue_7"
+
+[node.condition_1.conditions.params]
+value = 0
+operator = ">"
+item_id = "key_001"
+
+[[node.condition_1.conditions]]
+function = "check_item_quantity"
+next_node = "dialogue_8"
+
+[node.condition_1.conditions.params]
+operator = ">="
+value = 2
+item_id = "map_001"
+
+[[node.condition_1.conditions]]
+function = "always_true"
+next_node = "dialogue_9"
+
+[node.condition_1.conditions.params]
+
+[node.dialogue_4]
 type = "dialogue"
-next_node = "end"
+next_node = "option_1"
 
-[node.dialogue_8.pos]
-x = 1000.0
-y = 200.0
+[node.dialogue_4.pos]
+x = 322.79998779296875
+y = 426.39996337890625
 
-[[node.dialogue_8.dialogues]]
-speaker = "NPC_002"
-text = "你有足夠的地圖！可以找到隱藏路徑。"
-
-[node.dialogue_3]
-type = "dialogue"
-next_node = "end"
-
-[node.dialogue_3.pos]
-x = 250.0
-y = 200.0
-
-[[node.dialogue_3.dialogues]]
+[[node.dialogue_4.dialogues]]
 speaker = "NPC_001"
-text = "沒關係，也許下次你會改變主意。"
+text = "這個村莊正面臨怪獸的威脅，我們需要勇者幫忙！"
+
+[node.dialogue_2]
+type = "dialogue"
+next_node = "battle_1"
+
+[node.dialogue_2.pos]
+x = 350.3999938964844
+y = 233.5999755859375
+
+[[node.dialogue_2.dialogues]]
+speaker = "NPC_001"
+text = "太好了！戰士艾倫將加入你的隊伍，一起擊敗怪獸吧！"
+
+[[node.dialogue_2.actions]]
+function = "modify_character"
+
+[node.dialogue_2.actions.params]
+character_id = "char_001"
+operation = "+"
+
+[node.dialogue_9]
+type = "dialogue"
+next_node = "end"
+
+[node.dialogue_9.pos]
+x = 1005.60009765625
+y = 214.39999389648438
+
+[[node.dialogue_9.dialogues]]
+speaker = "NPC_002"
+text = "你需要鑰匙或足夠的地圖才能繼續。"
+
+[node.game_over]
+type = "dialogue"
+next_node = "end"
+
+[node.game_over.pos]
+x = 670.0
+y = 448.7999572753906
+
+[[node.game_over.dialogues]]
+speaker = "System"
+text = "遊戲結束！你被擊敗了。"
 
 [node.battle_1]
 type = "battle"
 
 [node.battle_1.pos]
-x = 550.0
-y = 100.0
+x = 516.3999633789063
+y = 236.80001831054688
 
 [[node.battle_1.outcomes]]
 result = "victory"
@@ -165,9 +196,70 @@ value = 1
 function = "modify_item_quantity"
 
 [node.battle_1.outcomes.actions.params]
-operation = "-"
 value = 1
 item_id = "escape_orb"
+operation = "-"
+
+[node.end]
+type = "end"
+
+[node.end.pos]
+x = 1216.400146484375
+y = 234.39999389648438
+
+[node.option_2]
+type = "option"
+
+[node.option_2.pos]
+x = 634.3999633789063
+y = 120.80001831054688
+
+[[node.option_2.options]]
+text = "繼續探索"
+next_node = "condition_1"
+
+[[node.option_2.options]]
+text = "返回村莊"
+next_node = "dialogue_1"
+
+[[node.option_2.options.conditions]]
+function = "check_item_quantity"
+
+[node.option_2.options.conditions.params]
+item_id = "village_pass"
+value = 1
+operator = ">="
+
+[[node.option_2.options.actions]]
+function = "modify_character"
+
+[node.option_2.options.actions.params]
+operation = "-"
+character_id = "char_001"
+
+[node.dialogue_7]
+type = "dialogue"
+next_node = "end"
+
+[node.dialogue_7.pos]
+x = 1000.0
+y = 44.0
+
+[[node.dialogue_7.dialogues]]
+speaker = "NPC_002"
+text = "你有鑰匙！可以進入寶藏房間。"
+
+[node.dialogue_5]
+type = "dialogue"
+next_node = "end"
+
+[node.dialogue_5.pos]
+x = 704.7999267578125
+y = 332.8000183105469
+
+[[node.dialogue_5.dialogues]]
+speaker = "NPC_001"
+text = "你擊敗了怪獸！村莊安全了！"
 
 [node.dialogue_1]
 type = "dialogue"
@@ -192,95 +284,3 @@ function = "modify_item_quantity"
 item_id = "key_001"
 operation = "+"
 value = 1
-
-[node.condition_1]
-type = "condition"
-
-[node.condition_1.pos]
-x = 850.0
-y = 200.0
-
-[[node.condition_1.conditions]]
-function = "check_item_quantity"
-next_node = "dialogue_7"
-
-[node.condition_1.conditions.params]
-operator = ">"
-item_id = "key_001"
-value = 0
-
-[[node.condition_1.conditions]]
-function = "check_item_quantity"
-next_node = "dialogue_8"
-
-[node.condition_1.conditions.params]
-item_id = "map_001"
-value = 2
-operator = ">="
-
-[[node.condition_1.conditions]]
-function = "always_true"
-next_node = "dialogue_9"
-
-[node.condition_1.conditions.params]
-
-[node.dialogue_9]
-type = "dialogue"
-next_node = "end"
-
-[node.dialogue_9.pos]
-x = 1000.0
-y = 300.0
-
-[[node.dialogue_9.dialogues]]
-speaker = "NPC_002"
-text = "你需要鑰匙或足夠的地圖才能繼續。"
-
-[node.option_2]
-type = "option"
-
-[node.option_2.pos]
-x = 700.0
-y = 200.0
-
-[[node.option_2.options]]
-text = "繼續探索"
-next_node = "condition_1"
-
-[[node.option_2.options]]
-text = "返回村莊"
-next_node = "dialogue_1"
-
-[[node.option_2.options.conditions]]
-function = "check_item_quantity"
-
-[node.option_2.options.conditions.params]
-value = 1
-item_id = "village_pass"
-operator = ">="
-
-[[node.option_2.options.actions]]
-function = "modify_character"
-
-[node.option_2.options.actions.params]
-operation = "-"
-character_id = "char_001"
-
-[node.dialogue_4]
-type = "dialogue"
-next_node = "option_1"
-
-[node.dialogue_4.pos]
-x = 250.0
-y = 300.0
-
-[[node.dialogue_4.dialogues]]
-speaker = "NPC_001"
-text = "這個村莊正面臨怪獸的威脅，我們需要勇者幫忙！"
-
-[node.end]
-type = "end"
-
-[node.end.pos]
-x = 1150.0
-y = 200.0
