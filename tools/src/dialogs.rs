@@ -1,8 +1,10 @@
-use dialogs_lib::{
-    Action, ConditionNodeEntry, DialogueEntry, Node, OptionEntry, Outcome, Pos, Script,
-};
+use dialogs_lib::{Node, Pos, Script};
 use eframe::{Frame, egui};
+use rfd::FileDialog;
 use std::collections::HashMap;
+use std::fs;
+use std::io::{self, Error, ErrorKind};
+use std::path::{Path, PathBuf};
 use toml;
 
 // 節點的 UI 狀態
@@ -15,159 +17,21 @@ pub struct DialogsEditor {
     script: Script,
     node_states: HashMap<String, NodeState>,
     selected_node: Option<String>,
-    camera_offset: egui::Vec2,      // 攝影機平移量
-    camera_zoom: f32,               // 攝影機縮放比例
-    has_unsaved_changes_flag: bool, // 追蹤是否有未保存的變動
+    camera_offset: egui::Vec2,              // 攝影機平移量
+    camera_zoom: f32,                       // 攝影機縮放比例
+    has_unsaved_changes_flag: bool,         // 追蹤是否有未保存的變動
+    current_file_path: Option<PathBuf>,     // 目前檔案路徑
+    status_message: Option<(String, bool)>, // 狀態訊息 (訊息, 是否為錯誤)
 }
 
 impl DialogsEditor {
     pub fn new() -> Self {
-        // 模擬 TOML 數據（實際應用中應從文件讀取）
-        let toml_str = r#"
-            function_signature = [
-                "check_item_quantity(item_id: string, operator: string, value: int) -> boolean",
-                "modify_item_quantity(item_id: string, operation: string, value: int) -> boolean",
-                "modify_character(character_id: string, operation: string) -> boolean",
-                "always_true() -> boolean"
-            ]
-
-            [node.dialogue_1]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_001", text = "歡迎來到村莊！這是一把鑰匙，拿去吧！" },
-                { speaker = "Player", text = "謝謝，我會好好使用它。" }
-            ]
-            actions = [
-                { function = "modify_item_quantity", params = { item_id = "key_001", operation = "+", value = 1 } }
-            ]
-            next_node = "option_1"
-            pos = { x = 100.0, y = 100.0 }
-
-            [node.option_1]
-            type = "option"
-            options = [
-                { text = "接受任務", next_node = "dialogue_2" },
-                { text = "拒絕任務", next_node = "dialogue_3" },
-                { text = "詢問更多資訊", next_node = "dialogue_4", conditions = [{ function = "check_item_quantity", params = { item_id = "map_001", operator = ">", value = 0 } }], actions = [{ function = "modify_item_quantity", params = { item_id = "map_001", operation = "-", value = 1 } }] }
-            ]
-            pos = { x = 250.0, y = 100.0 }
-
-            [node.dialogue_2]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_001", text = "太好了！戰士艾倫將加入你的隊伍，一起擊敗怪獸吧！" }
-            ]
-            actions = [
-                { function = "modify_character", params = { character_id = "char_001", operation = "+" } }
-            ]
-            next_node = "battle_1"
-            pos = { x = 400.0, y = 100.0 }
-
-            [node.dialogue_3]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_001", text = "沒關係，也許下次你會改變主意。" }
-            ]
-            next_node = "end"
-            pos = { x = 250.0, y = 200.0 }
-
-            [node.dialogue_4]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_001", text = "這個村莊正面臨怪獸的威脅，我們需要勇者幫忙！" }
-            ]
-            next_node = "option_1"
-            pos = { x = 250.0, y = 300.0 }
-
-            [node.battle_1]
-            type = "battle"
-            outcomes = [
-                { result = "victory", next_node = "dialogue_5", actions = [{ function = "modify_item_quantity", params = { item_id = "map_001", operation = "+", value = 2 } }] },
-                { result = "defeat", next_node = "game_over" },
-                { result = "escape", next_node = "dialogue_6", conditions = [{ function = "check_item_quantity", params = { item_id = "escape_orb", operator = "=", value = 1 } }], actions = [{ function = "modify_item_quantity", params = { item_id = "escape_orb", operation = "-", value = 1 } }] }
-            ]
-            pos = { x = 550.0, y = 100.0 }
-
-            [node.dialogue_5]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_001", text = "你擊敗了怪獸！村莊安全了！" }
-            ]
-            next_node = "end"
-            pos = { x = 700.0, y = 100.0 }
-
-            [node.dialogue_6]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "Player", text = "我成功逃脫了戰鬥，但得小心行事。" }
-            ]
-            next_node = "option_2"
-            pos = { x = 550.0, y = 200.0 }
-
-            [node.game_over]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "System", text = "遊戲結束！你被擊敗了。" }
-            ]
-            next_node = "end"
-            pos = { x = 550.0, y = 300.0 }
-
-            [node.option_2]
-            type = "option"
-            options = [
-                { text = "繼續探索", next_node = "condition_1" },
-                { text = "返回村莊", next_node = "dialogue_1", conditions = [{ function = "check_item_quantity", params = { item_id = "village_pass", operator = ">=", value = 1 } }], actions = [{ function = "modify_character", params = { character_id = "char_001", operation = "-" } }] }
-            ]
-            pos = { x = 700.0, y = 200.0 }
-
-            [node.condition_1]
-            type = "condition"
-            conditions = [
-                { function = "check_item_quantity", params = { item_id = "key_001", operator = ">", value = 0 }, next_node = "dialogue_7" },
-                { function = "check_item_quantity", params = { item_id = "map_001", operator = ">=", value = 2 }, next_node = "dialogue_8" },
-                { function = "always_true", params = {}, next_node = "dialogue_9" }
-            ]
-            pos = { x = 850.0, y = 200.0 }
-
-            [node.dialogue_7]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_002", text = "你有鑰匙！可以進入寶藏房間。" }
-            ]
-            next_node = "end"
-            pos = { x = 1000.0, y = 100.0 }
-
-            [node.dialogue_8]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_002", text = "你有足夠的地圖！可以找到隱藏路徑。" }
-            ]
-            next_node = "end"
-            pos = { x = 1000.0, y = 200.0 }
-
-            [node.dialogue_9]
-            type = "dialogue"
-            dialogues = [
-                { speaker = "NPC_002", text = "你需要鑰匙或足夠的地圖才能繼續。" }
-            ]
-            next_node = "end"
-            pos = { x = 1000.0, y = 300.0 }
-
-            [node.end]
-            type = "end"
-            pos = { x = 1150.0, y = 200.0 }
-        "#;
-
-        let script: Script = toml::from_str(toml_str).expect("Failed to parse TOML");
-        let mut node_states = HashMap::new();
-        for (node_id, node) in &script.node {
-            node_states.insert(
-                node_id.clone(),
-                NodeState {
-                    pos: egui::pos2(node.pos().x, node.pos().y),
-                },
-            );
-        }
+        // 建立空的對話腳本
+        let script = Script {
+            function_signature: Vec::new(),
+            node: HashMap::new(),
+        };
+        let node_states = HashMap::new();
         Self {
             script,
             node_states,
@@ -175,6 +39,8 @@ impl DialogsEditor {
             camera_offset: egui::vec2(0.0, 0.0),
             camera_zoom: 1.0,
             has_unsaved_changes_flag: false,
+            current_file_path: None,
+            status_message: None,
         }
     }
 
@@ -183,9 +49,134 @@ impl DialogsEditor {
         self.has_unsaved_changes_flag
     }
 
+    // 從檔案載入對話腳本
+    fn load_file(&mut self, path: PathBuf) {
+        match self.load_from_file(&path) {
+            Ok(()) => {
+                self.current_file_path = Some(path);
+                self.set_status(format!("成功載入檔案"), false);
+                self.has_unsaved_changes_flag = false;
+            }
+            Err(err) => {
+                self.set_status(format!("載入檔案失敗: {}", err), true);
+            }
+        }
+    }
+
+    // 從檔案讀取對話腳本
+    fn load_from_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+        let content = fs::read_to_string(path)?;
+        let script: Script = toml::from_str(&content).map_err(|err| {
+            Error::new(ErrorKind::InvalidData, format!("解析 TOML 失敗: {}", err))
+        })?;
+
+        // 更新 script 和 node_states
+        self.script = script;
+        self.node_states.clear();
+        for (node_id, node) in &self.script.node {
+            self.node_states.insert(
+                node_id.clone(),
+                NodeState {
+                    pos: egui::pos2(node.pos().x, node.pos().y),
+                },
+            );
+        }
+
+        Ok(())
+    }
+
+    // 儲存到檔案
+    fn save_file(&mut self, path: &Path) {
+        match self.save_to_file(path) {
+            Ok(_) => {
+                self.current_file_path = Some(path.to_path_buf());
+                self.set_status(format!("成功儲存檔案"), false);
+                self.has_unsaved_changes_flag = false;
+            }
+            Err(err) => {
+                self.set_status(format!("儲存檔案失敗: {}", err), true);
+            }
+        }
+    }
+
+    // 儲存對話腳本到檔案
+    fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+        let toml_content = self.save_to_toml();
+        fs::write(path, toml_content)
+    }
+
+    // 設定狀態訊息
+    fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
     // 儲存 script 回 TOML
     fn save_to_toml(&self) -> String {
         toml::to_string(&self.script).expect("Failed to serialize to TOML")
+    }
+
+    // 顯示檔案選單
+    fn show_file_menu(&mut self, ui: &mut egui::Ui) {
+        egui::menu::bar(ui, |ui| {
+            egui::menu::menu_button(ui, "檔案", |ui| {
+                if ui.button("新增").clicked() {
+                    if self.has_unsaved_changes() {
+                        // 這裡可以添加一個確認對話框
+                        self.set_status("尚有未儲存變更，請先儲存".to_string(), true);
+                    } else {
+                        // 建立新的空白腳本
+                        self.script = Script {
+                            function_signature: Vec::new(),
+                            node: HashMap::new(),
+                        };
+                        self.node_states.clear();
+                        self.current_file_path = None;
+                        self.selected_node = None;
+                        self.set_status("已建立新檔案".to_string(), false);
+                    }
+                    ui.close_menu();
+                }
+
+                if ui.button("開啟...").clicked() {
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("TOML", &["toml"])
+                        .set_directory(".")
+                        .pick_file()
+                    {
+                        self.load_file(path);
+                    }
+                    ui.close_menu();
+                }
+
+                if ui.button("儲存").clicked() {
+                    let should_open_dialog = self.current_file_path.is_none();
+                    if !should_open_dialog {
+                        let path = self.current_file_path.as_ref().unwrap().clone();
+                        self.save_file(&path);
+                    } else {
+                        if let Some(path) = FileDialog::new()
+                            .add_filter("TOML", &["toml"])
+                            .set_directory(".")
+                            .save_file()
+                        {
+                            self.save_file(&path);
+                        }
+                    }
+                    ui.close_menu();
+                }
+
+                if ui.button("另存為...").clicked() {
+                    if let Some(path) = FileDialog::new()
+                        .add_filter("TOML", &["toml"])
+                        .set_directory(".")
+                        .save_file()
+                    {
+                        self.save_file(&path);
+                    }
+                    ui.close_menu();
+                }
+            });
+        });
     }
 
     // 將節點的世界坐標轉為螢幕坐標
@@ -198,7 +189,27 @@ impl DialogsEditor {
         screen_pos / self.camera_zoom + self.camera_offset
     }
 
+    // 顯示狀態訊息
+    fn show_status_message(&mut self, ctx: &egui::Context) {
+        if let Some((message, is_error)) = &self.status_message {
+            let color = if *is_error {
+                egui::Color32::RED
+            } else {
+                egui::Color32::GREEN
+            };
+
+            egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
+                ui.label(egui::RichText::new(message).color(color));
+            });
+        }
+    }
+
     pub fn update(&mut self, ctx: &egui::Context, _frame: &Frame) {
+        // 頂部面板：顯示檔案選單
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            self.show_file_menu(ui);
+        });
+
         // 側邊欄：顯示選中節點的詳細內容
         egui::SidePanel::right("details").show(ctx, |ui| {
             ui.heading("節點詳情");
@@ -304,14 +315,10 @@ impl DialogsEditor {
             } else {
                 ui.label("未選中節點");
             }
-
-            // 儲存按鈕
-            if ui.button("儲存為 TOML").clicked() {
-                let toml_output = self.save_to_toml();
-                println!("TOML 輸出:\n{}", toml_output);
-                self.has_unsaved_changes_flag = false;
-            }
         });
+
+        // 顯示狀態訊息
+        self.show_status_message(ctx);
 
         // 主畫布：顯示節點和連線
         egui::CentralPanel::default().show(ctx, |ui| {
