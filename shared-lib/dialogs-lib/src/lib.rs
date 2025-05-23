@@ -4,13 +4,13 @@ use strum_macros::{Display, EnumString};
 use toml;
 
 // TOML 結構體定義
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Script {
-    pub function_signature: Vec<String>,
-    pub node: HashMap<String, Node>,
+    pub function_signatures: Vec<String>,
+    pub nodes: HashMap<String, Node>,
 }
 
-#[derive(Deserialize, Serialize, Debug, EnumString, Display)]
+#[derive(Debug, Deserialize, Serialize, EnumString, Display)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Node {
     Dialogue {
@@ -36,25 +36,25 @@ pub enum Node {
     },
 }
 
-#[derive(Deserialize, Serialize, Debug, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Pos {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DialogueEntry {
     pub speaker: String,
     pub text: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Action {
     pub function: String,
     pub params: HashMap<String, toml::Value>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct OptionEntry {
     pub text: String,
     pub next_node: String,
@@ -62,7 +62,7 @@ pub struct OptionEntry {
     pub actions: Option<Vec<Action>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Outcome {
     pub result: String,
     pub next_node: String,
@@ -70,14 +70,14 @@ pub struct Outcome {
     pub actions: Option<Vec<Action>>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ConditionNodeEntry {
     pub function: String,
     pub params: HashMap<String, toml::Value>,
     pub next_node: String,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct ConditionCheckEntry {
     pub function: String,
     pub params: HashMap<String, toml::Value>,

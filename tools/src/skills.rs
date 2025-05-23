@@ -1,11 +1,10 @@
+use crate::common::{FileOperator, from_file, show_file_menu, to_file};
 use eframe::{Frame, egui};
 use egui::{Button, DragValue, RichText, ScrollArea, Separator, Ui};
-use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use skills_lib::{Effect, Shape, Skill, Tag, TargetType};
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::io::{self, Error, ErrorKind};
+use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 
@@ -17,33 +16,14 @@ struct SkillsData {
 }
 
 impl SkillsData {
-    /// 從指定路徑載入 TOML 檔案
     fn from_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let content = fs::read_to_string(path)?;
-        Self::from_toml_str(&content)
+        let skills = from_file(path)?;
+        return Ok(Self { skills });
     }
 
-    /// 從 TOML 字串解析
-    fn from_toml_str(content: &str) -> io::Result<Self> {
-        let skills_map: HashMap<String, Skill> = toml::from_str(content).map_err(|err| {
-            Error::new(ErrorKind::InvalidData, format!("解析 TOML 失敗: {}", err))
-        })?;
-
-        Ok(Self { skills: skills_map })
-    }
-
-    /// 轉換為 TOML 格式
-    fn to_toml(&self) -> io::Result<String> {
-        let sorted_skills: BTreeMap<_, _> = self.skills.clone().into_iter().collect();
-
-        toml::to_string_pretty(&sorted_skills)
-            .map_err(|err| Error::new(ErrorKind::InvalidData, format!("序列化 TOML 失敗: {}", err)))
-    }
-
-    /// 寫入到檔案
     fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        let toml_content = self.to_toml()?;
-        fs::write(path, toml_content)
+        let sorted_skills: BTreeMap<_, _> = self.skills.clone().into_iter().collect();
+        return to_file(path, &sorted_skills);
     }
 
     /// 新增技能
@@ -214,11 +194,22 @@ impl Default for SkillsEditor {
     }
 }
 
-impl SkillsEditor {
-    pub fn new() -> Self {
-        Self::default()
+impl FileOperator<PathBuf> for SkillsEditor {
+    fn current_file_path(&self) -> Option<PathBuf> {
+        self.current_file_path.clone()
     }
+    fn load_file(&mut self, path: PathBuf) {
+        self.load_file(path);
+    }
+    fn save_file(&mut self, path: PathBuf) {
+        self.save_file(path);
+    }
+    fn set_status(&mut self, status: String, is_error: bool) {
+        self.set_status(status, is_error);
+    }
+}
 
+impl SkillsEditor {
     /// 檢查目前編輯中的技能是否有未保存的變動
     pub fn has_unsaved_changes(&self) -> bool {
         if let Some((skill_id, temp_skill)) = &self.temp_skill {
@@ -232,10 +223,13 @@ impl SkillsEditor {
 
     fn load_file(&mut self, path: PathBuf) {
         match SkillsData::from_file(&path) {
-            Ok(data) => {
-                self.skills_data = data;
-                self.current_file_path = Some(path);
-                self.temp_skill = None;
+            Ok(skills_data) => {
+                let current_file_path = Some(path);
+                *self = Self {
+                    skills_data,
+                    current_file_path,
+                    ..Default::default()
+                };
                 self.set_status(format!("成功載入檔案"), false);
             }
             Err(err) => {
@@ -244,10 +238,10 @@ impl SkillsEditor {
         }
     }
 
-    fn save_file(&mut self, path: &Path) {
-        match self.skills_data.save_to_file(path) {
+    fn save_file(&mut self, path: PathBuf) {
+        match self.skills_data.save_to_file(&path) {
             Ok(_) => {
-                self.current_file_path = Some(path.to_path_buf());
+                self.current_file_path = Some(path);
                 self.set_status(format!("成功儲存檔案"), false);
             }
             Err(err) => {
@@ -258,6 +252,10 @@ impl SkillsEditor {
 
     fn set_status(&mut self, message: String, is_error: bool) {
         self.status_message = Some((message, is_error));
+    }
+
+    fn show_file_menu(&mut self, ui: &mut Ui) {
+        show_file_menu(ui, self);
     }
 
     fn create_skill(&mut self) {
@@ -283,61 +281,6 @@ impl SkillsEditor {
                 self.set_status(err, true);
             }
         }
-    }
-
-    fn show_file_menu(&mut self, ui: &mut Ui) {
-        egui::menu::bar(ui, |ui| {
-            egui::menu::menu_button(ui, "檔案", |ui| {
-                if ui.button("新增").clicked() {
-                    self.skills_data = SkillsData {
-                        skills: HashMap::new(),
-                    };
-                    self.current_file_path = None;
-                    self.temp_skill = None;
-                    self.set_status("已建立新檔案".to_string(), false);
-                    ui.close_menu();
-                }
-
-                if ui.button("開啟...").clicked() {
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("TOML", &["toml"])
-                        .set_directory(".")
-                        .pick_file()
-                    {
-                        self.load_file(path);
-                    }
-                    ui.close_menu();
-                }
-
-                if ui.button("儲存").clicked() {
-                    let should_open_dialog = self.current_file_path.is_none();
-                    if !should_open_dialog {
-                        let path = self.current_file_path.as_ref().unwrap().clone();
-                        self.save_file(&path);
-                    } else {
-                        if let Some(path) = FileDialog::new()
-                            .add_filter("TOML", &["toml"])
-                            .set_directory(".")
-                            .save_file()
-                        {
-                            self.save_file(&path);
-                        }
-                    }
-                    ui.close_menu();
-                }
-
-                if ui.button("另存為...").clicked() {
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("TOML", &["toml"])
-                        .set_directory(".")
-                        .save_file()
-                    {
-                        self.save_file(&path);
-                    }
-                    ui.close_menu();
-                }
-            });
-        });
     }
 
     fn show_skills_list(&mut self, ui: &mut Ui) {

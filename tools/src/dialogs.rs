@@ -1,21 +1,10 @@
+use crate::common::{FileOperator, from_file, show_file_menu, to_file};
 use dialogs_lib::{Node, Pos, Script};
 use eframe::{Frame, egui};
-use rfd::FileDialog;
-use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Error, ErrorKind};
-use std::path::{Path, PathBuf};
-use toml;
-
-// 節點的 UI 狀態
-#[derive(Clone, Debug)]
-struct NodeState {
-    pos: egui::Pos2,
-}
+use std::path::PathBuf;
 
 pub struct DialogsEditor {
     script: Script,
-    node_states: HashMap<String, NodeState>,
     selected_node: Option<String>,
     camera_offset: egui::Vec2,              // 攝影機平移量
     camera_zoom: f32,                       // 攝影機縮放比例
@@ -24,17 +13,10 @@ pub struct DialogsEditor {
     status_message: Option<(String, bool)>, // 狀態訊息 (訊息, 是否為錯誤)
 }
 
-impl DialogsEditor {
-    pub fn new() -> Self {
-        // 建立空的對話腳本
-        let script = Script {
-            function_signature: Vec::new(),
-            node: HashMap::new(),
-        };
-        let node_states = HashMap::new();
+impl Default for DialogsEditor {
+    fn default() -> Self {
         Self {
-            script,
-            node_states,
+            script: Script::default(),
             selected_node: None,
             camera_offset: egui::vec2(0.0, 0.0),
             camera_zoom: 1.0,
@@ -43,7 +25,38 @@ impl DialogsEditor {
             status_message: None,
         }
     }
+}
 
+fn convert_to_pos(value: &egui::Pos2) -> Pos {
+    return Pos {
+        x: value.x,
+        y: value.y,
+    };
+}
+
+fn convert_to_egui_pos(value: &Pos) -> egui::Pos2 {
+    return egui::Pos2::new(value.x, value.y);
+}
+
+impl FileOperator<PathBuf> for DialogsEditor {
+    fn current_file_path(&self) -> Option<PathBuf> {
+        return self.current_file_path.clone();
+    }
+
+    fn load_file(&mut self, path: PathBuf) {
+        self.load_file(path);
+    }
+
+    fn save_file(&mut self, path: PathBuf) {
+        self.save_file(path);
+    }
+
+    fn set_status(&mut self, status: String, is_error: bool) {
+        self.set_status(status, is_error);
+    }
+}
+
+impl DialogsEditor {
     // 檢查是否有未保存的變動
     pub fn has_unsaved_changes(&self) -> bool {
         self.has_unsaved_changes_flag
@@ -51,11 +64,15 @@ impl DialogsEditor {
 
     // 從檔案載入對話腳本
     fn load_file(&mut self, path: PathBuf) {
-        match self.load_from_file(&path) {
-            Ok(()) => {
-                self.current_file_path = Some(path);
+        match from_file(&path) {
+            Ok(script) => {
+                let current_file_path = Some(path);
+                *self = Self {
+                    script,
+                    current_file_path,
+                    ..Default::default()
+                };
                 self.set_status(format!("成功載入檔案"), false);
-                self.has_unsaved_changes_flag = false;
             }
             Err(err) => {
                 self.set_status(format!("載入檔案失敗: {}", err), true);
@@ -63,33 +80,11 @@ impl DialogsEditor {
         }
     }
 
-    // 從檔案讀取對話腳本
-    fn load_from_file<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-        let content = fs::read_to_string(path)?;
-        let script: Script = toml::from_str(&content).map_err(|err| {
-            Error::new(ErrorKind::InvalidData, format!("解析 TOML 失敗: {}", err))
-        })?;
-
-        // 更新 script 和 node_states
-        self.script = script;
-        self.node_states.clear();
-        for (node_id, node) in &self.script.node {
-            self.node_states.insert(
-                node_id.clone(),
-                NodeState {
-                    pos: egui::pos2(node.pos().x, node.pos().y),
-                },
-            );
-        }
-
-        Ok(())
-    }
-
     // 儲存到檔案
-    fn save_file(&mut self, path: &Path) {
-        match self.save_to_file(path) {
+    fn save_file(&mut self, path: PathBuf) {
+        match to_file(&path, &self.script) {
             Ok(_) => {
-                self.current_file_path = Some(path.to_path_buf());
+                self.current_file_path = Some(path);
                 self.set_status(format!("成功儲存檔案"), false);
                 self.has_unsaved_changes_flag = false;
             }
@@ -99,84 +94,14 @@ impl DialogsEditor {
         }
     }
 
-    // 儲存對話腳本到檔案
-    fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        let toml_content = self.save_to_toml();
-        fs::write(path, toml_content)
-    }
-
     // 設定狀態訊息
     fn set_status(&mut self, message: String, is_error: bool) {
         self.status_message = Some((message, is_error));
     }
 
-    // 儲存 script 回 TOML
-    fn save_to_toml(&self) -> String {
-        toml::to_string(&self.script).expect("Failed to serialize to TOML")
-    }
-
     // 顯示檔案選單
     fn show_file_menu(&mut self, ui: &mut egui::Ui) {
-        egui::menu::bar(ui, |ui| {
-            egui::menu::menu_button(ui, "檔案", |ui| {
-                if ui.button("新增").clicked() {
-                    if self.has_unsaved_changes() {
-                        // 這裡可以添加一個確認對話框
-                        self.set_status("尚有未儲存變更，請先儲存".to_string(), true);
-                    } else {
-                        // 建立新的空白腳本
-                        self.script = Script {
-                            function_signature: Vec::new(),
-                            node: HashMap::new(),
-                        };
-                        self.node_states.clear();
-                        self.current_file_path = None;
-                        self.selected_node = None;
-                        self.set_status("已建立新檔案".to_string(), false);
-                    }
-                    ui.close_menu();
-                }
-
-                if ui.button("開啟...").clicked() {
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("TOML", &["toml"])
-                        .set_directory(".")
-                        .pick_file()
-                    {
-                        self.load_file(path);
-                    }
-                    ui.close_menu();
-                }
-
-                if ui.button("儲存").clicked() {
-                    let should_open_dialog = self.current_file_path.is_none();
-                    if !should_open_dialog {
-                        let path = self.current_file_path.as_ref().unwrap().clone();
-                        self.save_file(&path);
-                    } else {
-                        if let Some(path) = FileDialog::new()
-                            .add_filter("TOML", &["toml"])
-                            .set_directory(".")
-                            .save_file()
-                        {
-                            self.save_file(&path);
-                        }
-                    }
-                    ui.close_menu();
-                }
-
-                if ui.button("另存為...").clicked() {
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("TOML", &["toml"])
-                        .set_directory(".")
-                        .save_file()
-                    {
-                        self.save_file(&path);
-                    }
-                    ui.close_menu();
-                }
-            });
-        });
+        return show_file_menu(ui, self);
     }
 
     // 將節點的世界坐標轉為螢幕坐標
@@ -218,7 +143,7 @@ impl DialogsEditor {
                 // 顯示詳細資訊
                 ui.heading("節點詳情");
                 if let Some(node_id) = &self.selected_node {
-                    if let Some(node) = self.script.node.get(node_id) {
+                    if let Some(node) = self.script.nodes.get(node_id) {
                         match node {
                             Node::Dialogue {
                                 dialogues,
@@ -346,9 +271,9 @@ impl DialogsEditor {
             let mut node_data = Vec::new();
 
             // 收集連線數據
-            for (node_id, node) in &self.script.node {
-                let source_state = self.node_states.get(node_id).unwrap();
-                let source_pos = self.world_to_screen(source_state.pos);
+            for (_, node) in &self.script.nodes {
+                let pos = convert_to_egui_pos(node.pos());
+                let source_pos = self.world_to_screen(pos);
                 let source_center = source_pos + node_size / 2.0;
 
                 let next_nodes: Vec<&str> = match node {
@@ -366,8 +291,9 @@ impl DialogsEditor {
                 };
 
                 for next_node_id in next_nodes {
-                    if let Some(target_state) = self.node_states.get(next_node_id) {
-                        let target_pos = self.world_to_screen(target_state.pos);
+                    if let Some(node) = self.script.nodes.get(next_node_id) {
+                        let pos = convert_to_egui_pos(node.pos());
+                        let target_pos = self.world_to_screen(pos);
                         let target_center = target_pos + node_size / 2.0;
 
                         node_connections.push((source_center, target_center));
@@ -376,11 +302,12 @@ impl DialogsEditor {
             }
 
             // 收集節點資訊
-            for (node_id, state) in &self.node_states {
-                let screen_pos = self.world_to_screen(state.pos);
+            for (node_id, node) in &self.script.nodes {
+                let pos = convert_to_egui_pos(node.pos());
+                let screen_pos = self.world_to_screen(pos);
                 let node_rect = egui::Rect::from_min_size(screen_pos, node_size);
                 let is_selected = self.selected_node.as_ref() == Some(node_id);
-                let node_type = self.script.node.get(node_id).unwrap().to_string();
+                let node_type = self.script.nodes.get(node_id).unwrap().to_string();
 
                 node_data.push((node_id.clone(), node_rect, is_selected, node_type));
             }
@@ -486,17 +413,11 @@ impl DialogsEditor {
 
             // 應用節點移動
             for (node_id, world_delta) in node_actions {
-                if let Some(state) = self.node_states.get_mut(&node_id) {
-                    state.pos = state.pos + world_delta;
-
-                    // 更新節點在 script 中的位置
-                    if let Some(node) = self.script.node.get_mut(&node_id) {
-                        node.set_pos(Pos {
-                            x: state.pos.x,
-                            y: state.pos.y,
-                        });
-                        self.has_unsaved_changes_flag = true;
-                    }
+                if let Some(node) = self.script.nodes.get_mut(&node_id) {
+                    let pos = convert_to_egui_pos(node.pos()) + world_delta;
+                    let pos = convert_to_pos(&pos);
+                    node.set_pos(pos);
+                    self.has_unsaved_changes_flag = true;
                 }
             }
         });

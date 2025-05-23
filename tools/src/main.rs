@@ -1,3 +1,4 @@
+mod common;
 mod dialogs;
 mod skills;
 
@@ -69,8 +70,8 @@ impl EditorApp {
 
         Self {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
-            skills_editor: SkillsEditor::new(),
-            dialogs_editor: DialogsEditor::new(),
+            skills_editor: SkillsEditor::default(),
+            dialogs_editor: DialogsEditor::default(),
             pending_mode: None,
             show_mode_switch_confirmation: false,
         }
