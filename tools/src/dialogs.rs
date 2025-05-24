@@ -319,7 +319,8 @@ impl DialogsEditor {
             for (node_id, node_rect, _, _) in &node_data {
                 let response = ui.allocate_rect(*node_rect, egui::Sense::click_and_drag());
 
-                if response.dragged() {
+                // 確保只有在左鍵按下的情況下才能拖曳
+                if response.dragged() && ui.input(|i| i.pointer.primary_down()) {
                     let delta = response.drag_delta();
                     let world_delta = delta / self.camera_zoom;
                     node_actions.push((node_id.clone(), world_delta));
