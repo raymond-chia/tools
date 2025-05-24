@@ -4,30 +4,51 @@ function_signatures = []
 type = "end"
 
 [nodes.end.pos]
-x = 786.3999633789063
-y = 373.20623779296875
+x = 994.3999633789063
+y = 212.40623474121094
 
-[nodes.ending1]
+[nodes.ending]
 type = "dialogue"
-dialogues = []
-next_node = ""
+next_node = "end"
 
-[nodes.ending1.pos]
-x = 651.2000732421875
-y = 476.7999267578125
+[nodes.ending.pos]
+x = 994.7083129882813
+y = 302.74725341796875
 
-[nodes.ending2]
-type = "end"
+[[nodes.ending.dialogues]]
+speaker = ""
+text = """
+王國大將被主和派欺騙，以為有援軍，孤軍奮戰，最終全滅。
+帝國殲滅王國主力後，撕毀約定，直接吞併王國。"""
 
-[nodes.ending2.pos]
-x = 732.7999877929688
-y = 550.4000244140625
+[[nodes.ending.dialogues]]
+speaker = ""
+text = """
+王國大將沒有堅持作戰。
+主和派發現帝國毀約後，協助大將撤離首都部分居民，主和派領袖留在首都引爆，大將則帶領居民遠走他鄉"""
+
+[[nodes.ending.dialogues]]
+speaker = ""
+text = """
+主和派領袖被說服？
+大將不斷游擊，且帝國因為戰爭不利，發生內亂"""
 
 [nodes.prelude]
 type = "dialogue"
-dialogues = []
 next_node = "end"
 
 [nodes.prelude.pos]
-x = 444.0
-y = 333.20623779296875
+x = 150.4000244140625
+y = 197.20626831054688
+
+[[nodes.prelude.dialogues]]
+speaker = ""
+text = "晨曦微露，金黃的麥穗在微風中搖曳，彷彿一片海洋。"
+
+[[nodes.prelude.dialogues]]
+speaker = ""
+text = "農夫們已經開始一天的勞作。有的在割麥，有的在挑水灌溉。"
+
+[[nodes.prelude.dialogues]]
+speaker = ""
+text = "雞鳴犬吠聲此起彼伏。炊煙從茅屋頂緩緩升起。整個村莊沉浸在寧靜祥和的氛圍中。"
