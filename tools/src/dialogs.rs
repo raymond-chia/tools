@@ -1,29 +1,38 @@
-use crate::common::{FileOperator, from_file, show_file_menu, to_file};
+use crate::common::{FileOperator, from_file, show_file_menu, show_status_message, to_file};
 use dialogs_lib::{Node, Pos, Script};
 use eframe::{Frame, egui};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 pub struct DialogsEditor {
     script: Script,
-    selected_node: Option<String>,
-    camera_offset: egui::Vec2,              // 攝影機平移量
-    camera_zoom: f32,                       // 攝影機縮放比例
     has_unsaved_changes_flag: bool,         // 追蹤是否有未保存的變動
     current_file_path: Option<PathBuf>,     // 目前檔案路徑
     status_message: Option<(String, bool)>, // 狀態訊息 (訊息, 是否為錯誤)
+    //
+    camera_offset: egui::Vec2, // 攝影機平移量
+    camera_zoom: f32,          // 攝影機縮放比例
+    //
+    adding_node: bool, // 是否正在添加節點
+    selected_node: Option<String>,
+    temp_node_name: String, // 新節點的名稱
 }
 
 impl Default for DialogsEditor {
     fn default() -> Self {
         Self {
             script: Script::default(),
-            selected_node: None,
-            camera_offset: egui::vec2(0.0, 0.0),
-            camera_zoom: 1.0,
             has_unsaved_changes_flag: false,
             current_file_path: None,
             status_message: None,
+            camera_offset: egui::vec2(0.0, 0.0),
+            camera_zoom: 1.0,
+            adding_node: false,
+            selected_node: None,
+            temp_node_name: String::new(),
         }
     }
 }
@@ -88,7 +97,7 @@ impl DialogsEditor {
         #[derive(Debug, Deserialize, Serialize, Default)]
         struct SortedScript {
             function_signatures: Vec<String>,
-            nodes: std::collections::BTreeMap<String, Node>,
+            nodes: BTreeMap<String, Node>,
         }
         let sorted = SortedScript {
             function_signatures: self.script.function_signatures.clone(),
@@ -131,134 +140,419 @@ impl DialogsEditor {
     // 顯示狀態訊息
     fn show_status_message(&mut self, ctx: &egui::Context) {
         if let Some((message, is_error)) = &self.status_message {
-            let color = if *is_error {
-                egui::Color32::RED
-            } else {
-                egui::Color32::GREEN
-            };
-
-            egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
-                ui.label(egui::RichText::new(message).color(color));
-            });
+            show_status_message(ctx, message, *is_error);
         }
     }
 
-    pub fn update(&mut self, ctx: &egui::Context, _frame: &Frame) {
-        // 頂部面板：顯示檔案選單
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            self.show_file_menu(ui);
-        });
+    // 顯示添加節點的視窗
+    fn show_add_node_window(&mut self, ctx: &egui::Context) {
+        egui::Window::new("添加新節點")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label("請輸入新節點的名稱：");
+                ui.text_edit_singleline(&mut self.temp_node_name);
 
-        // 側邊欄：顯示選中節點的詳細內容
+                ui.horizontal(|ui| {
+                    if ui.button("確認").clicked() {
+                        if self.temp_node_name.is_empty() {
+                            self.set_status(format!("節點名稱不能為空"), true);
+                            return;
+                        }
+                        if self.script.nodes.contains_key(&self.temp_node_name) {
+                            self.set_status(format!("節點名稱已存在"), true);
+                            return;
+                        }
+                        // 建立新節點
+                        let pos = ctx.screen_rect().center();
+                        let pos = self.camera_offset + egui::vec2(pos.x, pos.y) / self.camera_zoom;
+                        let pos = Pos { x: pos.x, y: pos.y };
+                        let node = Node::End { pos };
+
+                        self.script.nodes.insert(self.temp_node_name.clone(), node);
+                        self.selected_node = Some(self.temp_node_name.clone());
+                        self.adding_node = false;
+                        self.has_unsaved_changes_flag = true;
+                        self.set_status(format!("已添加新節點"), false);
+                    }
+
+                    if ui.button("取消").clicked() {
+                        self.adding_node = false;
+                        self.temp_node_name = String::new();
+                    }
+                });
+            });
+    }
+
+    fn side_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("details_panel")
             .resizable(true)
             .min_width(400.0)
             .show(ctx, |ui| {
                 // 顯示詳細資訊
                 ui.heading("節點詳情");
-                if let Some(node_id) = &self.selected_node {
-                    if let Some(node) = self.script.nodes.get(node_id) {
-                        match node {
-                            Node::Dialogue {
-                                dialogues,
-                                actions,
-                                next_node,
-                                pos: _,
-                            } => {
-                                ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("ID: {}", node_id));
-                                for dialogue in dialogues {
-                                    ui.label(format!("<{}>: {}", dialogue.speaker, dialogue.text));
-                                }
-                                if let Some(actions) = actions {
-                                    ui.label("動作:");
-                                    for action in actions {
-                                        ui.label(format!(
-                                            "函數: {}, 參數: {:?}",
-                                            action.function, action.params
-                                        ));
+
+                let Some(node_id) = &self.selected_node else {
+                    ui.label("未選中節點");
+                    return;
+                };
+                let node_id = node_id.clone();
+                let Some(_) = self.script.nodes.get(&node_id) else {
+                    ui.label("節點不在設定檔案中或已被刪除");
+                    return;
+                };
+
+                // 顯示節點 ID 和名稱編輯框
+                ui.horizontal(|ui| {
+                    ui.label(format!("節點 ID: {}", &node_id));
+                    ui.text_edit_singleline(&mut self.temp_node_name);
+                    if ui.button("儲存").clicked() {
+                        if self.temp_node_name.is_empty() {
+                            self.set_status(format!("節點名稱不能為空"), true);
+                            return;
+                        }
+                        if self.script.nodes.contains_key(&self.temp_node_name) {
+                            self.set_status(format!("節點名稱已存在"), true);
+                            return;
+                        }
+                        // 更新節點 ID
+                        let node = self.script.nodes.remove(&node_id).unwrap();
+                        self.script.nodes.insert(self.temp_node_name.clone(), node);
+                        self.selected_node = Some(self.temp_node_name.clone());
+                        self.has_unsaved_changes_flag = true;
+                        self.set_status(
+                            format!("已更新節點 ID 為: {}", self.temp_node_name),
+                            false,
+                        );
+                    }
+                });
+                let Some(node_id) = &self.selected_node else {
+                    ui.label("未選中節點");
+                    return;
+                };
+                let node_id = node_id.clone();
+
+                // 顯示節點類型選擇器
+                let Some(node) = self.script.nodes.get(&node_id) else {
+                    ui.label("節點不在設定檔案中或已被刪除");
+                    return;
+                };
+                let node_type = node.to_string();
+                let pos = node.pos().clone();
+                ui.label(format!("當前類型: {}", node_type.clone()));
+                ui.horizontal(|ui| {
+                    ui.label("更改節點類型為：");
+                    let mut changed_type = false;
+                    let mut current_type = node_type.clone();
+
+                    egui::ComboBox::from_id_salt("node_type_selector")
+                        .selected_text(node_type.clone())
+                        .show_ui(ui, |ui| {
+                            Node::iter().for_each(|node_type| {
+                                let node_type = node_type.to_string();
+                                changed_type |= ui
+                                    .selectable_value(
+                                        &mut current_type,
+                                        node_type.clone(),
+                                        node_type,
+                                    )
+                                    .clicked();
+                            });
+                        });
+
+                    if changed_type {
+                        let mut node = Node::from_str(&current_type).unwrap();
+                        node.set_pos(pos);
+
+                        // 更新節點
+                        self.script.nodes.insert(node_id.clone(), node);
+                        self.has_unsaved_changes_flag = true;
+                        self.set_status(format!("已更新節點類型為: {}", current_type), false);
+                    }
+                });
+
+                ui.separator();
+
+                // 根據節點類型顯示與編輯特定屬性
+                match self.script.nodes.get_mut(&node_id) {
+                    Some(Node::Dialogue {
+                        dialogues,
+                        actions,
+                        next_node,
+                        pos: _,
+                    }) => {
+                        // 顯示與編輯對話節點
+                        ui.label("對話內容:");
+
+                        // 顯示現有對話
+                        let mut to_remove_idx = None;
+                        for (idx, dialogue) in dialogues.iter_mut().enumerate() {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    // 編輯發言者
+                                    ui.label("發言者:");
+                                    if ui.text_edit_singleline(&mut dialogue.speaker).changed() {
+                                        self.has_unsaved_changes_flag = true;
                                     }
+
+                                    // 刪除按鈕
+                                    if ui.button("刪除").clicked() {
+                                        to_remove_idx = Some(idx);
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 編輯對話文本
+                                if ui.text_edit_multiline(&mut dialogue.text).changed() {
+                                    self.has_unsaved_changes_flag = true;
                                 }
-                                ui.label(format!("下一個節點: {}", next_node));
+                            });
+                        }
+
+                        // 刪除對話
+                        if let Some(idx) = to_remove_idx {
+                            dialogues.remove(idx);
+                        }
+
+                        // 添加新對話按鈕
+                        if ui.button("添加對話").clicked() {
+                            dialogues.push(dialogs_lib::DialogueEntry {
+                                speaker: "".to_string(),
+                                text: "".to_string(),
+                            });
+                            self.has_unsaved_changes_flag = true;
+                        }
+
+                        ui.separator();
+
+                        // 編輯下一個節點
+                        ui.horizontal(|ui| {
+                            ui.label("下一個節點:");
+                            if ui.text_edit_singleline(next_node).changed() {
+                                self.has_unsaved_changes_flag = true;
                             }
-                            Node::Option { options, pos: _ } => {
-                                ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("ID: {}", node_id));
-                                for option in options {
-                                    ui.label(format!("選項: {}", option.text));
-                                    ui.label(format!("下一個節點: {}", option.next_node));
-                                    if let Some(conditions) = &option.conditions {
-                                        ui.label("條件:");
-                                        for cond in conditions {
-                                            ui.label(format!(
-                                                "函數: {}, 參數: {:?}",
-                                                cond.function, cond.params
-                                            ));
+                        });
+
+                        ui.separator();
+
+                        // 顯示與編輯動作
+                        ui.label("動作:");
+                        if let Some(action_list) = actions {
+                            let mut to_remove_action = None;
+                            for (idx, action) in action_list.iter_mut().enumerate() {
+                                ui.group(|ui| {
+                                    ui.horizontal(|ui| {
+                                        // 編輯函數名稱
+                                        ui.label("函數:");
+                                        if ui.text_edit_singleline(&mut action.function).changed() {
+                                            self.has_unsaved_changes_flag = true;
                                         }
-                                    }
-                                    if let Some(actions) = &option.actions {
-                                        ui.label("動作:");
-                                        for action in actions {
-                                            ui.label(format!(
-                                                "函數: {}, 參數: {:?}",
-                                                action.function, action.params
-                                            ));
+
+                                        // 刪除動作按鈕
+                                        if ui.button("刪除").clicked() {
+                                            to_remove_action = Some(idx);
+                                            self.has_unsaved_changes_flag = true;
                                         }
-                                    }
-                                }
+                                    });
+
+                                    // 顯示參數
+                                    ui.label(format!("參數: {:?}", action.params));
+                                });
                             }
-                            Node::Battle { outcomes, pos: _ } => {
-                                ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("ID: {}", node_id));
-                                for outcome in outcomes {
-                                    ui.label(format!("結果: {}", outcome.result));
-                                    ui.label(format!("下一個節點: {}", outcome.next_node));
-                                    if let Some(conditions) = &outcome.conditions {
-                                        ui.label("條件:");
-                                        for cond in conditions {
-                                            ui.label(format!(
-                                                "函數: {}, 參數: {:?}",
-                                                cond.function, cond.params
-                                            ));
-                                        }
-                                    }
-                                    if let Some(actions) = &outcome.actions {
-                                        ui.label("動作:");
-                                        for action in actions {
-                                            ui.label(format!(
-                                                "函數: {}, 參數: {:?}",
-                                                action.function, action.params
-                                            ));
-                                        }
-                                    }
-                                }
+
+                            // 刪除動作
+                            if let Some(idx) = to_remove_action {
+                                action_list.remove(idx);
                             }
-                            Node::Condition { conditions, pos: _ } => {
-                                ui.label(format!("類型: {}", node.to_string()));
-                                ui.label(format!("ID: {}", node_id));
-                                for cond in conditions {
-                                    ui.label(format!(
-                                        "函數: {}, 參數: {:?}",
-                                        cond.function, cond.params
-                                    ));
-                                    ui.label(format!("下一個節點: {}", cond.next_node));
-                                }
+
+                            // 添加新動作按鈕
+                            if ui.button("添加動作").clicked() {
+                                action_list.push(dialogs_lib::Action {
+                                    function: "new_function".to_string(),
+                                    params: BTreeMap::new(),
+                                });
+                                self.has_unsaved_changes_flag = true;
                             }
-                            Node::End { pos: _ } => {
-                                ui.label(format!("節點 ID: {}", node_id));
-                                ui.label(format!("類型: {}", node.to_string()));
+                        } else {
+                            // 如果沒有動作，顯示添加按鈕
+                            if ui.button("添加動作").clicked() {
+                                *actions = Some(vec![dialogs_lib::Action {
+                                    function: "new_function".to_string(),
+                                    params: BTreeMap::new(),
+                                }]);
+                                self.has_unsaved_changes_flag = true;
                             }
                         }
                     }
-                } else {
-                    ui.label("未選中節點");
+                    Some(Node::Option { options, pos: _ }) => {
+                        // 顯示與編輯選項節點
+                        ui.label("選項:");
+
+                        // 顯示現有選項
+                        let mut to_remove_idx = None;
+                        for (idx, option) in options.iter_mut().enumerate() {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("選項 {}:", idx + 1));
+
+                                    // 刪除按鈕
+                                    if ui.button("刪除").clicked() {
+                                        to_remove_idx = Some(idx);
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 編輯選項文本
+                                ui.horizontal(|ui| {
+                                    ui.label("文本:");
+                                    if ui.text_edit_singleline(&mut option.text).changed() {
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 編輯下一個節點
+                                ui.horizontal(|ui| {
+                                    ui.label("下一個節點:");
+                                    if ui.text_edit_singleline(&mut option.next_node).changed() {
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+                            });
+                        }
+
+                        // 刪除選項
+                        if let Some(idx) = to_remove_idx {
+                            options.remove(idx);
+                        }
+
+                        // 添加新選項按鈕
+                        if ui.button("添加選項").clicked() {
+                            options.push(dialogs_lib::OptionEntry {
+                                text: "New option text".to_string(),
+                                next_node: "end".to_string(),
+                                conditions: None,
+                                actions: None,
+                            });
+                            self.has_unsaved_changes_flag = true;
+                        }
+                    }
+                    Some(Node::Battle { outcomes, pos: _ }) => {
+                        // 顯示與編輯戰鬥節點
+                        ui.label("戰鬥結果:");
+
+                        // 顯示現有結果
+                        let mut to_remove_idx = None;
+                        for (idx, outcome) in outcomes.iter_mut().enumerate() {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("結果 {}:", idx + 1));
+
+                                    // 刪除按鈕
+                                    if ui.button("刪除").clicked() {
+                                        to_remove_idx = Some(idx);
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 編輯結果文本
+                                ui.horizontal(|ui| {
+                                    ui.label("結果:");
+                                    if ui.text_edit_singleline(&mut outcome.result).changed() {
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 編輯下一個節點
+                                ui.horizontal(|ui| {
+                                    ui.label("下一個節點:");
+                                    if ui.text_edit_singleline(&mut outcome.next_node).changed() {
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+                            });
+                        }
+
+                        // 刪除結果
+                        if let Some(idx) = to_remove_idx {
+                            outcomes.remove(idx);
+                        }
+
+                        // 添加新結果按鈕
+                        if ui.button("添加戰鬥結果").clicked() {
+                            outcomes.push(dialogs_lib::Outcome {
+                                result: "New outcome".to_string(),
+                                next_node: "end".to_string(),
+                                conditions: None,
+                                actions: None,
+                            });
+                            self.has_unsaved_changes_flag = true;
+                        }
+                    }
+                    Some(Node::Condition { conditions, pos: _ }) => {
+                        // 顯示與編輯條件節點
+                        ui.label("條件:");
+
+                        // 顯示現有條件
+                        let mut to_remove_idx = None;
+                        for (idx, cond) in conditions.iter_mut().enumerate() {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("條件 {}:", idx + 1));
+
+                                    // 刪除按鈕
+                                    if ui.button("刪除").clicked() {
+                                        to_remove_idx = Some(idx);
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 編輯函數名稱
+                                ui.horizontal(|ui| {
+                                    ui.label("函數:");
+                                    if ui.text_edit_singleline(&mut cond.function).changed() {
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+
+                                // 顯示參數
+                                ui.label(format!("參數: {:?}", cond.params));
+
+                                // 編輯下一個節點
+                                ui.horizontal(|ui| {
+                                    ui.label("下一個節點:");
+                                    if ui.text_edit_singleline(&mut cond.next_node).changed() {
+                                        self.has_unsaved_changes_flag = true;
+                                    }
+                                });
+                            });
+                        }
+
+                        // 刪除條件
+                        if let Some(idx) = to_remove_idx {
+                            conditions.remove(idx);
+                        }
+
+                        // 添加新條件按鈕
+                        if ui.button("添加條件").clicked() {
+                            conditions.push(dialogs_lib::ConditionNodeEntry {
+                                function: "new_condition".to_string(),
+                                params: BTreeMap::new(),
+                                next_node: "end".to_string(),
+                            });
+                            self.has_unsaved_changes_flag = true;
+                        }
+                    }
+                    Some(Node::End { pos: _ }) => {
+                        ui.label("結束節點無需編輯任何內容。");
+                    }
+                    None => {
+                        ui.label("節點不存在或已被刪除。");
+                    }
                 }
             });
+    }
 
-        // 顯示狀態訊息
-        self.show_status_message(ctx);
-
-        // 主畫布：顯示節點和連線
+    fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             let node_size = egui::vec2(100.0 * self.camera_zoom, 50.0 * self.camera_zoom);
 
@@ -285,7 +579,8 @@ impl DialogsEditor {
             let mut node_data = Vec::new();
 
             // 收集連線數據
-            for (_, node) in &self.script.nodes {
+            let mut invalid_connection = None;
+            for (node_id, node) in &self.script.nodes {
                 let pos = convert_to_egui_pos(node.pos());
                 let source_pos = self.world_to_screen(pos);
                 let source_center = source_pos + node_size / 2.0;
@@ -311,7 +606,19 @@ impl DialogsEditor {
                         let target_center = target_pos + node_size / 2.0;
 
                         node_connections.push((source_center, target_center));
+                    } else {
+                        invalid_connection = Some((node_id.clone(), next_node_id.to_string()));
                     }
+                }
+            }
+            if let Some((node_id, next_node_id)) = invalid_connection {
+                self.set_status(
+                    format!("非法 next node id: {:?} -> {:?}", node_id, next_node_id),
+                    true,
+                );
+            } else if let Some(message) = &self.status_message {
+                if message.0.starts_with("非法 next node id") {
+                    self.set_status(String::new(), false);
                 }
             }
 
@@ -423,7 +730,8 @@ impl DialogsEditor {
             // 第4階段：更新狀態
             // 更新選中節點
             if let Some(node_id) = clicked_node {
-                self.selected_node = Some(node_id);
+                self.selected_node = Some(node_id.clone());
+                self.temp_node_name = node_id;
             }
 
             // 應用節點移動
@@ -436,5 +744,49 @@ impl DialogsEditor {
                 }
             }
         });
+    }
+}
+
+impl eframe::App for DialogsEditor {
+    fn update(&mut self, ctx: &egui::Context, _: &mut Frame) {
+        // 頂部面板：顯示檔案選單
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                self.show_file_menu(ui);
+
+                egui::menu::menu_button(ui, "節點", |ui| {
+                    if ui.button("添加").clicked() {
+                        self.adding_node = true;
+                        self.temp_node_name = String::new();
+                    }
+                });
+                egui::menu::menu_button(ui, "刪除節點", |ui| {
+                    if ui.button("刪除").clicked() {
+                        if let Some(node_id) = self.selected_node.clone() {
+                            self.script.nodes.remove(&node_id);
+                            self.selected_node = None;
+                            self.has_unsaved_changes_flag = true;
+                            self.set_status(format!("已刪除節點: {}", node_id), false);
+                        } else {
+                            self.set_status(format!("請先選擇一個節點"), true);
+                        }
+                    }
+                });
+            });
+        });
+
+        // 側邊欄：顯示選中節點的詳細內容
+        self.side_panel(ctx);
+
+        // 主畫布：顯示節點和連線
+        self.central_panel(ctx);
+
+        // 顯示狀態訊息
+        self.show_status_message(ctx);
+
+        // 顯示添加節點和編輯節點的視窗
+        if self.adding_node {
+            self.show_add_node_window(ctx);
+        }
     }
 }

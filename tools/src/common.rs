@@ -1,5 +1,5 @@
 use eframe::egui;
-use egui::Ui;
+use egui::{RichText, Ui};
 use rfd::FileDialog;
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs;
@@ -47,42 +47,29 @@ pub trait FileOperator<P: AsRef<Path>> {
 }
 
 pub fn show_file_menu<T: FileOperator<PathBuf> + Default>(ui: &mut Ui, t: &mut T) {
-    egui::menu::bar(ui, |ui| {
-        egui::menu::menu_button(ui, "檔案", |ui| {
-            if ui.button("新增").clicked() {
+    egui::menu::menu_button(ui, "檔案", |ui| {
+        if ui.button("新增").clicked() {
+            *t = T::default();
+            t.set_status("已建立新檔案".to_string(), false);
+            ui.close_menu();
+        }
+
+        if ui.button("開啟...").clicked() {
+            if let Some(path) = FileDialog::new()
+                .add_filter("TOML", &["toml"])
+                .set_directory(".")
+                .pick_file()
+            {
                 *t = T::default();
-                t.set_status("已建立新檔案".to_string(), false);
-                ui.close_menu();
+                t.load_file(path);
             }
+            ui.close_menu();
+        }
 
-            if ui.button("開啟...").clicked() {
-                if let Some(path) = FileDialog::new()
-                    .add_filter("TOML", &["toml"])
-                    .set_directory(".")
-                    .pick_file()
-                {
-                    *t = T::default();
-                    t.load_file(path);
-                }
-                ui.close_menu();
-            }
-
-            if ui.button("儲存").clicked() {
-                if let Some(path) = t.current_file_path() {
-                    t.save_file(path);
-                } else {
-                    if let Some(path) = FileDialog::new()
-                        .add_filter("TOML", &["toml"])
-                        .set_directory(".")
-                        .save_file()
-                    {
-                        t.save_file(path);
-                    }
-                }
-                ui.close_menu();
-            }
-
-            if ui.button("另存為...").clicked() {
+        if ui.button("儲存").clicked() {
+            if let Some(path) = t.current_file_path() {
+                t.save_file(path);
+            } else {
                 if let Some(path) = FileDialog::new()
                     .add_filter("TOML", &["toml"])
                     .set_directory(".")
@@ -90,8 +77,31 @@ pub fn show_file_menu<T: FileOperator<PathBuf> + Default>(ui: &mut Ui, t: &mut T
                 {
                     t.save_file(path);
                 }
-                ui.close_menu();
             }
-        });
+            ui.close_menu();
+        }
+
+        if ui.button("另存為...").clicked() {
+            if let Some(path) = FileDialog::new()
+                .add_filter("TOML", &["toml"])
+                .set_directory(".")
+                .save_file()
+            {
+                t.save_file(path);
+            }
+            ui.close_menu();
+        }
+    });
+}
+
+pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
+    let color = if is_error {
+        egui::Color32::RED
+    } else {
+        egui::Color32::GREEN
+    };
+
+    egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
+        ui.label(RichText::new(message).color(color));
     });
 }

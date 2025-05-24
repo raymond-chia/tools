@@ -20,9 +20,9 @@ next_node = "dialogue_5"
 function = "modify_item_quantity"
 
 [nodes.battle_1.outcomes.actions.params]
+item_id = "map_001"
 operation = "+"
 value = 2
-item_id = "map_001"
 
 [[nodes.battle_1.outcomes]]
 result = "defeat"
@@ -36,17 +36,17 @@ next_node = "dialogue_6"
 function = "check_item_quantity"
 
 [nodes.battle_1.outcomes.conditions.params]
-value = 1
-operator = "="
 item_id = "escape_orb"
+operator = "="
+value = 1
 
 [[nodes.battle_1.outcomes.actions]]
 function = "modify_item_quantity"
 
 [nodes.battle_1.outcomes.actions.params]
-value = 1
 item_id = "escape_orb"
 operation = "-"
+value = 1
 
 [nodes.condition_1]
 type = "condition"
@@ -69,8 +69,8 @@ function = "check_item_quantity"
 next_node = "dialogue_8"
 
 [nodes.condition_1.conditions.params]
-operator = ">="
 item_id = "map_001"
+operator = ">="
 value = 2
 
 [[nodes.condition_1.conditions]]
@@ -248,16 +248,16 @@ next_node = "dialogue_4"
 function = "check_item_quantity"
 
 [nodes.option_1.options.conditions.params]
+item_id = "map_001"
 operator = ">"
 value = 0
-item_id = "map_001"
 
 [[nodes.option_1.options.actions]]
 function = "modify_item_quantity"
 
 [nodes.option_1.options.actions.params]
-operation = "-"
 item_id = "map_001"
+operation = "-"
 value = 1
 
 [nodes.option_2]
@@ -279,8 +279,8 @@ next_node = "dialogue_1"
 function = "check_item_quantity"
 
 [nodes.option_2.options.conditions.params]
-operator = ">="
 item_id = "village_pass"
+operator = ">="
 value = 1
 
 [[nodes.option_2.options.actions]]

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use strum_macros::{Display, EnumString};
+use std::collections::{BTreeMap, HashMap};
+use strum_macros::{Display, EnumIter, EnumString};
 use toml;
 
 // TOML 結構體定義
@@ -10,7 +10,7 @@ pub struct Script {
     pub nodes: HashMap<String, Node>,
 }
 
-#[derive(Debug, Deserialize, Serialize, EnumString, Display, Clone)]
+#[derive(Debug, Deserialize, Serialize, EnumString, Display, EnumIter, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Node {
     Dialogue {
@@ -36,7 +36,7 @@ pub enum Node {
     },
 }
 
-#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone, Copy)]
 pub struct Pos {
     pub x: f32,
     pub y: f32,
@@ -51,7 +51,9 @@ pub struct DialogueEntry {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Action {
     pub function: String,
-    pub params: HashMap<String, toml::Value>,
+    // sort params when serializing to TOML
+    // params is not big enough to use HashMap
+    pub params: BTreeMap<String, toml::Value>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -73,14 +75,18 @@ pub struct Outcome {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConditionNodeEntry {
     pub function: String,
-    pub params: HashMap<String, toml::Value>,
+    // sort params when serializing to TOML
+    // params is not big enough to use HashMap
+    pub params: BTreeMap<String, toml::Value>,
     pub next_node: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConditionCheckEntry {
     pub function: String,
-    pub params: HashMap<String, toml::Value>,
+    // sort params when serializing to TOML
+    // params is not big enough to use HashMap
+    pub params: BTreeMap<String, toml::Value>,
 }
 
 // 輔助方法：從 Node 獲取 pos

@@ -1,6 +1,6 @@
-use crate::common::{FileOperator, from_file, show_file_menu, to_file};
+use crate::common::{FileOperator, from_file, show_file_menu, show_status_message, to_file};
 use eframe::{Frame, egui};
-use egui::{Button, DragValue, RichText, ScrollArea, Separator, Ui};
+use egui::{Button, DragValue, ScrollArea, Separator, Ui};
 use serde::{Deserialize, Serialize};
 use skills_lib::{Effect, Shape, Skill, Tag, TargetType};
 use std::collections::{BTreeMap, HashMap};
@@ -254,8 +254,10 @@ impl SkillsEditor {
         self.status_message = Some((message, is_error));
     }
 
-    fn show_file_menu(&mut self, ui: &mut Ui) {
-        show_file_menu(ui, self);
+    fn show_status_message(&mut self, ctx: &egui::Context) {
+        if let Some((message, is_error)) = &self.status_message {
+            show_status_message(ctx, message, *is_error);
+        }
     }
 
     fn create_skill(&mut self) {
@@ -872,20 +874,6 @@ impl SkillsEditor {
         self.show_confirmation_dialog = open;
     }
 
-    fn show_status_message(&mut self, ctx: &egui::Context) {
-        if let Some((message, is_error)) = &self.status_message {
-            let color = if *is_error {
-                egui::Color32::RED
-            } else {
-                egui::Color32::GREEN
-            };
-
-            egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
-                ui.label(RichText::new(message).color(color));
-            });
-        }
-    }
-
     fn show_unsaved_changes_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_unsaved_changes_dialog {
             return;
@@ -925,9 +913,11 @@ impl SkillsEditor {
 }
 
 impl eframe::App for SkillsEditor {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut Frame) {
+    fn update(&mut self, ctx: &egui::Context, _: &mut Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            self.show_file_menu(ui);
+            egui::menu::bar(ui, |ui| {
+                show_file_menu(ui, self);
+            });
         });
 
         egui::SidePanel::left("skills_list_panel")
