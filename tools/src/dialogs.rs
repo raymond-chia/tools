@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
+const LEFT_SIDE_PANEL_WIDTH: f32 = 400.0; // 側邊面板的寬度
+
 pub struct DialogsEditor {
     script: Script,
     has_unsaved_changes_flag: bool,         // 追蹤是否有未保存的變動
@@ -108,8 +110,8 @@ impl DialogsEditor {
         match to_file(&path, &sorted) {
             Ok(_) => {
                 self.current_file_path = Some(path);
-                self.set_status(format!("成功儲存檔案"), false);
                 self.has_unsaved_changes_flag = false;
+                self.set_status(format!("成功儲存檔案"), false);
             }
             Err(err) => {
                 self.set_status(format!("儲存檔案失敗: {}", err), true);
@@ -165,7 +167,8 @@ impl DialogsEditor {
                         }
                         // 建立新節點
                         let pos = ctx.screen_rect().center();
-                        let pos = self.camera_offset + egui::vec2(pos.x, pos.y) / self.camera_zoom;
+                        let pos = self.camera_offset
+                            + egui::vec2(pos.x - LEFT_SIDE_PANEL_WIDTH, pos.y) / self.camera_zoom;
                         let pos = Pos { x: pos.x, y: pos.y };
                         let node = Node::End { pos };
 
@@ -186,8 +189,7 @@ impl DialogsEditor {
 
     fn side_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("details_panel")
-            .resizable(true)
-            .min_width(400.0)
+            .exact_width(LEFT_SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
                 // 顯示詳細資訊
                 ui.heading("節點詳情");
