@@ -10,7 +10,7 @@ pub struct Script {
     pub nodes: HashMap<String, Node>,
 }
 
-#[derive(Debug, Deserialize, Serialize, EnumString, Display)]
+#[derive(Debug, Deserialize, Serialize, EnumString, Display, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Node {
     Dialogue {
@@ -36,25 +36,25 @@ pub enum Node {
     },
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Pos {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DialogueEntry {
     pub speaker: String,
     pub text: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Action {
     pub function: String,
     pub params: HashMap<String, toml::Value>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct OptionEntry {
     pub text: String,
     pub next_node: String,
@@ -62,7 +62,7 @@ pub struct OptionEntry {
     pub actions: Option<Vec<Action>>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Outcome {
     pub result: String,
     pub next_node: String,
@@ -70,14 +70,14 @@ pub struct Outcome {
     pub actions: Option<Vec<Action>>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConditionNodeEntry {
     pub function: String,
     pub params: HashMap<String, toml::Value>,
     pub next_node: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ConditionCheckEntry {
     pub function: String,
     pub params: HashMap<String, toml::Value>,

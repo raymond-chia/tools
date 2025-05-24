@@ -1,6 +1,7 @@
 use crate::common::{FileOperator, from_file, show_file_menu, to_file};
 use dialogs_lib::{Node, Pos, Script};
 use eframe::{Frame, egui};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 pub struct DialogsEditor {
@@ -82,7 +83,20 @@ impl DialogsEditor {
 
     // 儲存到檔案
     fn save_file(&mut self, path: PathBuf) {
-        match to_file(&path, &self.script) {
+        // 將節點轉換為有序的 BTreeMap 並按鍵（node_id）排序
+        let nodes = self.script.nodes.clone().into_iter().collect();
+        #[derive(Debug, Deserialize, Serialize, Default)]
+        struct SortedScript {
+            function_signatures: Vec<String>,
+            nodes: std::collections::BTreeMap<String, Node>,
+        }
+        let sorted = SortedScript {
+            function_signatures: self.script.function_signatures.clone(),
+            nodes,
+        };
+
+        // 使用排序後的 Script 物件進行儲存
+        match to_file(&path, &sorted) {
             Ok(_) => {
                 self.current_file_path = Some(path);
                 self.set_status(format!("成功儲存檔案"), false);
