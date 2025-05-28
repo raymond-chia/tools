@@ -25,3 +25,4 @@ dist-ssr
 
 
 target/
+shared-lib/test-data/ignore-*

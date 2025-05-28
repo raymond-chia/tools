@@ -1,7 +1,9 @@
+mod chess;
 mod common;
 mod dialogs;
 mod skills;
 
+use chess::ChessEditor;
 use dialogs::DialogsEditor;
 use eframe::{Frame, egui};
 use egui::{FontData, FontDefinitions, FontFamily, Ui};
@@ -12,6 +14,7 @@ use skills::SkillsEditor;
 enum EditorMode {
     Skills,
     Dialogs,
+    Chess,
 }
 
 /// 主應用程序狀態
@@ -19,6 +22,7 @@ struct EditorApp {
     editor_mode: EditorMode,
     skills_editor: SkillsEditor,
     dialogs_editor: DialogsEditor,
+    chess_editor: ChessEditor,
     pending_mode: Option<EditorMode>,
     show_mode_switch_confirmation: bool,
 }
@@ -72,6 +76,7 @@ impl EditorApp {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::default(),
             dialogs_editor: DialogsEditor::default(),
+            chess_editor: ChessEditor::default(),
             pending_mode: None,
             show_mode_switch_confirmation: false,
         }
@@ -82,6 +87,7 @@ impl EditorApp {
             for (mode, label) in [
                 (EditorMode::Skills, "技能編輯器"),
                 (EditorMode::Dialogs, "劇情編輯器"),
+                (EditorMode::Chess, "戰棋編輯器"),
             ] {
                 if ui
                     .selectable_label(self.editor_mode == mode, label)
@@ -90,6 +96,7 @@ impl EditorApp {
                     let has_unsaved_changes = match self.editor_mode {
                         EditorMode::Skills => self.skills_editor.has_unsaved_changes(),
                         EditorMode::Dialogs => self.dialogs_editor.has_unsaved_changes(),
+                        EditorMode::Chess => self.chess_editor.has_unsaved_changes(),
                     };
                     if has_unsaved_changes {
                         self.show_mode_switch_confirmation = true;
@@ -112,10 +119,12 @@ impl EditorApp {
         let current_mode = match self.editor_mode {
             EditorMode::Skills => "技能編輯器",
             EditorMode::Dialogs => "劇情編輯器",
+            EditorMode::Chess => "戰棋編輯器",
         };
         let target_mode = match self.pending_mode {
             Some(EditorMode::Skills) => "技能編輯器",
             Some(EditorMode::Dialogs) => "劇情編輯器",
+            Some(EditorMode::Chess) => "戰棋編輯器",
             None => "其他編輯器",
         };
 
@@ -167,6 +176,9 @@ impl eframe::App for EditorApp {
             }
             EditorMode::Dialogs => {
                 self.dialogs_editor.update(ctx, frame);
+            }
+            EditorMode::Chess => {
+                self.chess_editor.update(ctx, frame);
             }
         }
 

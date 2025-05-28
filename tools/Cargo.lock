@@ -628,6 +628,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "chess-lib"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+]
+
+[[package]]
 name = "clipboard-win"
 version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3078,6 +3087,7 @@ checksum = "bfb942dfe1d8e29a7ee7fcbde5bd2b9a25fb89aa70caea2eba3bee836ff41076"
 name = "tools"
 version = "0.1.0"
 dependencies = [
+ "chess-lib",
  "dialogs-lib",
  "eframe",
  "egui",

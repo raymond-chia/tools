@@ -11,6 +11,7 @@ rfd = "0.15.3"
 serde = "1.0"
 skills-lib = { path = "../shared-lib/skills-lib" }
 dialogs-lib = { path = "../shared-lib/dialogs-lib" }
+chess-lib = { path = "../shared-lib/chess-lib" }
 toml = "0.8.22"
 winapi = "0.3.9"
 strum = "0.27.1"
