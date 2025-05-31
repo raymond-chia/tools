@@ -1,4 +1,6 @@
-use crate::common::{FileOperator, from_file, show_file_menu, show_status_message, to_file};
+use crate::common::{
+    Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file,
+};
 use dialogs_lib::{Node, Pos, Script};
 use eframe::{Frame, egui};
 use egui::ScrollArea;
@@ -16,8 +18,7 @@ pub struct DialogsEditor {
     current_file_path: Option<PathBuf>,     // 目前檔案路徑
     status_message: Option<(String, bool)>, // 狀態訊息 (訊息, 是否為錯誤)
     //
-    camera_offset: egui::Vec2, // 攝影機平移量
-    camera_zoom: f32,          // 攝影機縮放比例
+    camera: Camera2D,
     //
     adding_node: bool, // 是否正在添加節點
     selected_node: Option<String>,
@@ -31,8 +32,7 @@ impl Default for DialogsEditor {
             has_unsaved_changes_flag: false,
             current_file_path: None,
             status_message: None,
-            camera_offset: egui::vec2(0.0, 0.0),
-            camera_zoom: 1.0,
+            camera: Camera2D::default(),
             adding_node: false,
             selected_node: None,
             temp_node_name: String::new(),
@@ -130,16 +130,6 @@ impl DialogsEditor {
         return show_file_menu(ui, self);
     }
 
-    // 將節點的世界坐標轉為螢幕坐標
-    fn world_to_screen(&self, world_pos: egui::Pos2) -> egui::Pos2 {
-        (world_pos - self.camera_offset) * self.camera_zoom
-    }
-
-    // 將螢幕坐標轉為世界坐標
-    fn screen_to_world(&self, screen_pos: egui::Pos2) -> egui::Pos2 {
-        screen_pos / self.camera_zoom + self.camera_offset
-    }
-
     // 顯示狀態訊息
     fn show_status_message(&mut self, ctx: &egui::Context) {
         if let Some((message, is_error)) = &self.status_message {
@@ -168,8 +158,8 @@ impl DialogsEditor {
                         }
                         // 建立新節點
                         let pos = ctx.screen_rect().center();
-                        let pos = self.camera_offset
-                            + egui::vec2(pos.x - LEFT_SIDE_PANEL_WIDTH, pos.y) / self.camera_zoom;
+                        let pos = self.camera.offset
+                            + egui::vec2(pos.x - LEFT_SIDE_PANEL_WIDTH, pos.y) / self.camera.zoom;
                         let pos = Pos { x: pos.x, y: pos.y };
                         let node = Node::End { pos };
 
@@ -565,28 +555,10 @@ impl DialogsEditor {
 
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let node_size = egui::vec2(100.0 * self.camera_zoom, 50.0 * self.camera_zoom);
+            let node_size = egui::vec2(100.0 * self.camera.zoom, 50.0 * self.camera.zoom);
 
-            // 處理攝影機移動（右鍵拖曳）
-            if ui.input(|i| i.pointer.secondary_down()) {
-                self.camera_offset -= ui.input(|i| i.pointer.delta()) / self.camera_zoom;
-            }
-
-            // 處理縮放（滾輪）- 只在中央面板才縮放
-            if ui.input(|i| i.raw_scroll_delta.y) != 0.0 {
-                // 只有在滑鼠在中央面板時才處理縮放
-                if let Some(mouse_pos) = ui.input(|i| i.pointer.latest_pos()) {
-                    // 確認滑鼠位置在中央面板內
-                    if ui.rect_contains_pointer(ui.max_rect()) {
-                        self.camera_zoom *= 1.0 + ui.input(|i| i.raw_scroll_delta.y) * 0.001;
-                        self.camera_zoom = self.camera_zoom.clamp(0.1, 2.0); // 限制縮放範圍
-
-                        // 調整 offset 以保持縮放中心
-                        let world_mouse = self.screen_to_world(mouse_pos);
-                        self.camera_offset = world_mouse - (mouse_pos / self.camera_zoom);
-                    }
-                }
-            }
+            // 處理攝影機移動與縮放
+            self.camera.handle_pan_zoom(ui);
 
             // 第1階段：收集所有節點資訊，準備繪製和交互
             // 預先計算節點的位置和矩形區域
@@ -597,7 +569,7 @@ impl DialogsEditor {
             let mut invalid_connection = None;
             for (node_id, node) in &self.script.nodes {
                 let pos = convert_to_egui_pos(&node.pos());
-                let source_pos = self.world_to_screen(pos);
+                let source_pos = self.camera.world_to_screen(pos);
                 let source_center = source_pos + node_size / 2.0;
 
                 let next_nodes: Vec<&str> = match node {
@@ -617,7 +589,7 @@ impl DialogsEditor {
                 for next_node_id in next_nodes {
                     if let Some(node) = self.script.nodes.get(next_node_id) {
                         let pos = convert_to_egui_pos(&node.pos());
-                        let target_pos = self.world_to_screen(pos);
+                        let target_pos = self.camera.world_to_screen(pos);
                         let target_center = target_pos + node_size / 2.0;
 
                         node_connections.push((source_center, target_center));
@@ -640,7 +612,7 @@ impl DialogsEditor {
             // 收集節點資訊
             for (node_id, node) in &self.script.nodes {
                 let pos = convert_to_egui_pos(&node.pos());
-                let screen_pos = self.world_to_screen(pos);
+                let screen_pos = self.camera.world_to_screen(pos);
                 let node_rect = egui::Rect::from_min_size(screen_pos, node_size);
                 let is_selected = self.selected_node.as_ref() == Some(node_id);
                 let node_type = self.script.nodes.get(node_id).unwrap().to_string();
@@ -658,7 +630,7 @@ impl DialogsEditor {
                 // 確保只有在左鍵按下的情況下才能拖曳
                 if response.dragged() && ui.input(|i| i.pointer.primary_down()) {
                     let delta = response.drag_delta();
-                    let world_delta = delta / self.camera_zoom;
+                    let world_delta = delta / self.camera.zoom;
                     node_actions.push((node_id.clone(), world_delta));
                 }
 
@@ -737,7 +709,7 @@ impl DialogsEditor {
                     label_pos,
                     egui::Align2::CENTER_CENTER,
                     format!("<{}>\n{}", node_type, node_id),
-                    egui::FontId::proportional(14.0 * self.camera_zoom),
+                    egui::FontId::proportional(14.0 * self.camera.zoom),
                     egui::Color32::WHITE,
                 );
             }

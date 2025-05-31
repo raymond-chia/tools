@@ -1,4 +1,6 @@
-use crate::common::{FileOperator, from_file, show_file_menu, show_status_message, to_file};
+use crate::common::{
+    Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file,
+};
 use chess_lib::{
     BattleObjectiveType, Battlefield, BattlefieldObject, Cell, Pos, Team, Terrain, Unit,
 };
@@ -258,8 +260,8 @@ pub struct ChessEditor {
     // 目標編輯
     selected_objective: Option<String>,
 
-    // 顯示設置
-    cell_size: f32,
+    // 視野狀態
+    camera: Camera2D,
 
     // 地形塗刷狀態
     last_painted_pos: Option<Pos>,
@@ -300,7 +302,7 @@ impl Default for ChessEditor {
 
             selected_objective: None,
 
-            cell_size: 40.0,
+            camera: Camera2D::default(),
 
             last_painted_pos: None,
 
@@ -801,17 +803,7 @@ impl ChessEditor {
         let selected_terrain = self.selected_terrain;
         let selected_object = self.selected_object;
         let new_unit_type = self.new_unit_type.clone();
-        let cell_size = self.cell_size;
-
-        // 處理滑鼠滾輪事件調整格子大小
-        let scroll_delta = ui.ctx().input(|i| i.raw_scroll_delta.y);
-        if scroll_delta.abs() > 0.0 {
-            // 根據滾輪滾動的方向調整格子大小
-            let new_size = (self.cell_size - scroll_delta * 0.1).clamp(20.0, 60.0);
-            if (new_size - self.cell_size).abs() > 0.1 {
-                self.cell_size = new_size;
-            }
-        }
+        let cell_size = 40.0;
 
         // 首先獲取戰場信息
         let battlefield_option =
@@ -830,9 +822,6 @@ impl ChessEditor {
         if let Some((width, height, grid, deployable_positions)) = battlefield_option {
             ui.heading(format!("編輯戰場: {}", battlefield_id));
 
-            // 顯示當前格子大小
-            ui.label(format!("格子大小: {:.1} (滑鼠滾輪可調整)", cell_size));
-
             // 顯示網格和交互區域
             let (rect, _) = ui.allocate_exact_size(
                 Vec2::new(width as f32 * cell_size, height as f32 * cell_size),
@@ -841,6 +830,9 @@ impl ChessEditor {
 
             if rect.width() > 0.0 && rect.height() > 0.0 {
                 let painter = ui.painter();
+
+                // 處理視野拖曳與縮放
+                self.camera.handle_pan_zoom(ui);
 
                 // 處理網格交互
                 if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
