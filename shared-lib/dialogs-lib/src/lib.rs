@@ -1,13 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use strum_macros::{Display, EnumIter, EnumString};
-use toml;
 
-// TOML 結構體定義
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct Script {
+    #[serde(default)]
     pub function_signatures: Vec<String>,
+    #[serde(default)]
     pub nodes: HashMap<String, Node>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default, Clone, Copy)]
+pub struct Pos {
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Debug, Deserialize, Serialize, EnumString, Display, EnumIter, Clone)]
@@ -25,7 +31,7 @@ pub enum Node {
     },
     Battle {
         pos: Pos,
-        outcomes: Vec<Outcome>,
+        results: Vec<BattleResult>,
     },
     Condition {
         pos: Pos,
@@ -34,12 +40,6 @@ pub enum Node {
     End {
         pos: Pos,
     },
-}
-
-#[derive(Debug, Deserialize, Serialize, Default, Clone, Copy)]
-pub struct Pos {
-    pub x: f32,
-    pub y: f32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -65,7 +65,7 @@ pub struct OptionEntry {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Outcome {
+pub struct BattleResult {
     pub result: String,
     pub next_node: String,
     pub conditions: Option<Vec<ConditionCheckEntry>>,
@@ -91,13 +91,13 @@ pub struct ConditionCheckEntry {
 
 // 輔助方法：從 Node 獲取 pos
 impl Node {
-    pub fn pos(&self) -> &Pos {
+    pub fn pos(&self) -> Pos {
         match self {
-            Node::Dialogue { pos, .. } => pos,
-            Node::Option { pos, .. } => pos,
-            Node::Battle { pos, .. } => pos,
-            Node::Condition { pos, .. } => pos,
-            Node::End { pos } => pos,
+            Node::Dialogue { pos, .. } => *pos,
+            Node::Option { pos, .. } => *pos,
+            Node::Battle { pos, .. } => *pos,
+            Node::Condition { pos, .. } => *pos,
+            Node::End { pos } => *pos,
         }
     }
 

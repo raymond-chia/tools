@@ -3092,6 +3092,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_extras",
+ "rand 0.8.5",
  "rfd",
  "serde",
  "skills-lib",

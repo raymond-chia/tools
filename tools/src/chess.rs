@@ -1,9 +1,10 @@
 use crate::common::{FileOperator, from_file, show_file_menu, show_status_message, to_file};
 use chess_lib::{
-    BattleObjectiveType, Battlefield, BattlefieldObject, Cell, Position, Team, Terrain,
+    BattleObjectiveType, Battlefield, BattlefieldObject, Cell, Pos, Team, Terrain, Unit,
 };
 use eframe::{Frame, egui};
 use egui::{Button, Color32, Rect, Stroke, Vec2};
+use rand::{Rng, distributions::Alphanumeric};
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -61,58 +62,15 @@ impl BattlefieldObjectExt for BattlefieldObject {
 
 // ===== 擴展 Battlefield 功能 =====
 
-trait BattlefieldExt {
-    /// 設置指定位置的地形
-    fn set_terrain(&mut self, pos: &Position, terrain: Terrain) -> bool;
-
-    /// 設置指定位置的物件
-    fn set_object(&mut self, pos: &Position, object: Option<BattlefieldObject>) -> bool;
-
-    /// 設置指定位置的單位
-    fn set_unit(&mut self, pos: &Position, unit_type: Option<String>) -> bool;
-
-    /// 設置指定位置是否可部署
-    fn set_deployable(&mut self, pos: &Position, deployable: bool) -> bool;
-
-    /// 檢查指定位置是否可部署
-    fn is_deployable(&self, pos: &Position) -> bool;
-
-    /// 調整戰場大小
+trait BattlefieldEditorExt {
+    fn set_deployable(&mut self, pos: &Pos, deployable: bool) -> bool;
     fn resize(&mut self, new_width: usize, new_height: usize);
-
-    /// 添加隊伍
     fn add_team(&mut self, team_id: &str) -> bool;
-
-    /// 移除隊伍
     fn remove_team(&mut self, team_id: &str) -> bool;
 }
 
-impl BattlefieldExt for Battlefield {
-    fn set_terrain(&mut self, pos: &Position, terrain: Terrain) -> bool {
-        if !self.is_valid_position(pos) {
-            return false;
-        }
-        self.grid[pos.y][pos.x].terrain = terrain;
-        true
-    }
-
-    fn set_object(&mut self, pos: &Position, object: Option<BattlefieldObject>) -> bool {
-        if !self.is_valid_position(pos) {
-            return false;
-        }
-        self.grid[pos.y][pos.x].object = object;
-        true
-    }
-
-    fn set_unit(&mut self, pos: &Position, unit_type: Option<String>) -> bool {
-        if !self.is_valid_position(pos) {
-            return false;
-        }
-        self.grid[pos.y][pos.x].unit_type = unit_type;
-        true
-    }
-
-    fn set_deployable(&mut self, pos: &Position, deployable: bool) -> bool {
+impl BattlefieldEditorExt for Battlefield {
+    fn set_deployable(&mut self, pos: &Pos, deployable: bool) -> bool {
         if !self.is_valid_position(pos) {
             return false;
         }
@@ -124,10 +82,6 @@ impl BattlefieldExt for Battlefield {
         }
 
         true
-    }
-
-    fn is_deployable(&self, pos: &Position) -> bool {
-        self.deployable_positions.contains(pos)
     }
 
     fn resize(&mut self, new_width: usize, new_height: usize) {
@@ -167,20 +121,26 @@ impl BattlefieldExt for Battlefield {
 
     fn add_team(&mut self, team_id: &str) -> bool {
         // 檢查是否已存在同ID的隊伍
-        if self.teams.iter().any(|team| team.id == team_id) {
+        if self.teams.contains_key(team_id) {
             return false;
         }
 
-        self.teams.insert(Team {
-            id: team_id.to_string(),
-            color: (0, 100, 255),
-        })
+        self.teams.insert(
+            team_id.to_string(),
+            Team {
+                id: team_id.to_string(),
+                color: chess_lib::Color {
+                    r: 0,
+                    g: 100,
+                    b: 255,
+                },
+            },
+        );
+        true
     }
 
     fn remove_team(&mut self, team_id: &str) -> bool {
-        let initial_len = self.teams.len();
-        self.teams.retain(|team| team.id != team_id);
-        initial_len != self.teams.len()
+        self.teams.remove(team_id).is_some()
     }
 }
 
@@ -387,6 +347,21 @@ impl FileOperator<PathBuf> for ChessEditor {
 }
 
 impl ChessEditor {
+    /// 產生在 battlefield 下唯一的 unit id
+    fn generate_unique_unit_id(battlefield: &Battlefield, unit_type: &str) -> String {
+        let mut rng = rand::thread_rng();
+        loop {
+            let rand_str: String = (&mut rng)
+                .sample_iter(&Alphanumeric)
+                .take(6)
+                .map(char::from)
+                .collect();
+            let id = format!("{unit_type}-{rand_str}");
+            if !battlefield.unit_id_to_team.contains_key(&id) {
+                return id;
+            }
+        }
+    }
     /// 檢查是否有未保存的變動
     pub fn has_unsaved_changes(&self) -> bool {
         self.has_unsaved_changes_flag
@@ -626,16 +601,13 @@ impl ChessEditor {
                 self.battlefield_data
                     .battlefields
                     .get(battlefield_id)
-                    .map(|bf| bf.teams.iter().cloned().collect::<Vec<_>>())
+                    .map(|bf| bf.teams.keys().cloned().collect::<Vec<_>>())
             });
 
         ui.add_space(5.0);
 
         match teams {
-            Some(teams) if !teams.is_empty() => {
-                let mut team_ids: Vec<String> = teams.into_iter().map(|t| t.id).collect();
-                team_ids.sort();
-
+            Some(team_ids) if !team_ids.is_empty() => {
                 ui.horizontal(|ui| {
                     ui.label("所屬隊伍:");
                     egui::ComboBox::from_id_salt("unit_team_select")
@@ -703,7 +675,7 @@ impl ChessEditor {
             self.battlefield_data
                 .battlefields
                 .get(id)
-                .map(|bf| bf.teams.iter().cloned().collect::<Vec<_>>())
+                .map(|bf| bf.teams.values().cloned().collect::<Vec<_>>())
         });
         let new_team_id = self.new_team_id.clone();
 
@@ -734,18 +706,20 @@ impl ChessEditor {
 
                     // 顏色選擇器
                     let mut color =
-                        egui::Color32::from_rgb(team.color.0, team.color.1, team.color.2);
+                        egui::Color32::from_rgb(team.color.r, team.color.g, team.color.b);
                     if ui.color_edit_button_srgba(&mut color).changed() {
                         if let Some(battlefield) =
                             self.battlefield_data.battlefields.get_mut(&battlefield_id)
                         {
-                            // 先移除舊 team，再插入新 team（BTreeSet 無法直接修改元素）
+                            // 直接覆蓋 team
                             let mut new_team = team.clone();
-                            new_team.color = (color.r(), color.g(), color.b());
-                            if battlefield.teams.remove(&team) {
-                                battlefield.teams.insert(new_team);
-                                self.has_unsaved_changes_flag = true;
-                            }
+                            new_team.color = chess_lib::Color {
+                                r: color.r(),
+                                g: color.g(),
+                                b: color.b(),
+                            };
+                            battlefield.teams.insert(new_team.id.clone(), new_team);
+                            self.has_unsaved_changes_flag = true;
                         }
                     }
 
@@ -853,14 +827,14 @@ impl ChessEditor {
                         let grid_y = ((pointer_pos.y - rect.min.y) / cell_size) as usize;
 
                         if grid_x < width && grid_y < height {
-                            let pos = Position {
+                            let pos = Pos {
                                 x: grid_x,
                                 y: grid_y,
                             };
 
                             // 處理鼠標點擊
                             if ui.ctx().input(|i| i.pointer.primary_clicked()) {
-                                let mut battlefield = self
+                                let battlefield = self
                                     .battlefield_data
                                     .battlefields
                                     .get_mut(&battlefield_id)
@@ -883,30 +857,20 @@ impl ChessEditor {
                                         }
                                     }
                                     EditMode::Unit => {
-                                        let unit_type = if new_unit_type.is_empty() {
-                                            None
+                                        let unit = if !new_unit_type.is_empty() {
+                                            Some(Unit {
+                                                id: Self::generate_unique_unit_id(
+                                                    battlefield,
+                                                    &new_unit_type,
+                                                ),
+                                                unit_type: new_unit_type.clone(),
+                                                team_id: self.selected_team_id.clone(),
+                                            })
                                         } else {
-                                            Some(new_unit_type.clone())
+                                            None
                                         };
 
-                                        // 先取得原本的 unit_type
-                                        let prev_unit_type =
-                                            battlefield.grid[pos.y][pos.x].unit_type.clone();
-
-                                        // 若移除單位，先移除對應隊伍綁定
-                                        if unit_type.is_none() {
-                                            if let Some(ref ut) = prev_unit_type {
-                                                battlefield.remove_unit_team(ut);
-                                            }
-                                        }
-
-                                        // 設定單位種類
-                                        if battlefield.set_unit(&pos, unit_type.clone()) {
-                                            // 設定單位所屬隊伍
-                                            if let Some(ref ut) = unit_type {
-                                                battlefield
-                                                    .set_unit_team(ut, &self.selected_team_id);
-                                            }
+                                        if battlefield.set_unit_and_team(&pos, unit) {
                                             self.has_unsaved_changes_flag = true;
                                         }
                                     }
@@ -923,7 +887,7 @@ impl ChessEditor {
                 for y in 0..height {
                     for x in 0..width {
                         let cell = &grid[y][x];
-                        let pos = Position { x, y };
+                        let pos = Pos { x, y };
 
                         let cell_rect = Rect::from_min_size(
                             egui::pos2(
@@ -961,20 +925,31 @@ impl ChessEditor {
                         }
 
                         // 繪製單位
-                        if let Some(unit_type) = &cell.unit_type {
-                            // 根據 unit_type 查 team_id，再查 team.color
-                            let team_color = self
+                        if let Some(unit_id) = &cell.unit_id {
+                            // 根據 unit_id 查 team_id，再查 team.color
+                            let (team_color, unit_type) = self
                                 .battlefield_data
                                 .battlefields
                                 .get(&battlefield_id)
-                                .and_then(|bf| {
-                                    bf.get_unit_team(unit_type).and_then(|team_id| {
-                                        bf.teams.iter().find(|t| t.id == team_id).map(|t| {
-                                            Color32::from_rgb(t.color.0, t.color.1, t.color.2)
+                                .map(|bf| {
+                                    let team_color = bf
+                                        .get_unit_team(unit_id)
+                                        .and_then(|team_id| {
+                                            bf.teams.get(team_id).map(|t| {
+                                                Color32::from_rgb(t.color.r, t.color.g, t.color.b)
+                                            })
                                         })
-                                    })
+                                        .unwrap_or(Color32::GRAY);
+
+                                    let unit_type = bf
+                                        .unit_id_to_team
+                                        .get(unit_id)
+                                        .map(|unit| unit.unit_type.clone())
+                                        .unwrap_or_else(|| "?".to_string());
+
+                                    (team_color, unit_type)
                                 })
-                                .unwrap_or(Color32::GRAY);
+                                .unwrap_or((Color32::GRAY, "?".to_string()));
 
                             painter.circle_filled(cell_rect.center(), cell_size * 0.3, team_color);
 

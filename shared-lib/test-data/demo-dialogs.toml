@@ -12,38 +12,38 @@ type = "battle"
 x = 500.39996337890625
 y = 250.4000244140625
 
-[[nodes.battle_1.outcomes]]
+[[nodes.battle_1.results]]
 result = "victory"
 next_node = "dialogue_5"
 
-[[nodes.battle_1.outcomes.actions]]
+[[nodes.battle_1.results.actions]]
 function = "modify_item_quantity"
 
-[nodes.battle_1.outcomes.actions.params]
+[nodes.battle_1.results.actions.params]
 item_id = "map_001"
 operation = "+"
 value = 2
 
-[[nodes.battle_1.outcomes]]
+[[nodes.battle_1.results]]
 result = "defeat"
 next_node = "game_over"
 
-[[nodes.battle_1.outcomes]]
+[[nodes.battle_1.results]]
 result = "escape"
 next_node = "dialogue_6"
 
-[[nodes.battle_1.outcomes.conditions]]
+[[nodes.battle_1.results.conditions]]
 function = "check_item_quantity"
 
-[nodes.battle_1.outcomes.conditions.params]
+[nodes.battle_1.results.conditions.params]
 item_id = "escape_orb"
 operator = "="
 value = 1
 
-[[nodes.battle_1.outcomes.actions]]
+[[nodes.battle_1.results.actions]]
 function = "modify_item_quantity"
 
-[nodes.battle_1.outcomes.actions.params]
+[nodes.battle_1.results.actions.params]
 item_id = "escape_orb"
 operation = "-"
 value = 1

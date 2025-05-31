@@ -1,7 +1,5 @@
-# Tauri + Vanilla
-
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
-
-## Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+- pixel art 要點: https://www.youtube.com/watch?v=Z8earctNBxg
+- 諸多免費圖片素材
+  - https://itch.io/c/4458804/side-scroller-fantasy-character-pixel-sprites
+- 不錯的免費角色基底
+  - https://verygo1.itch.io/pixel-rpg-character-asset-pack-004

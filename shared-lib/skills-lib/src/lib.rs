@@ -1,6 +1,23 @@
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
+/// 技能資料結構
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct Skill {
+    #[serde(default)]
+    pub tags: Vec<Tag>,
+    #[serde(default)]
+    pub range: (usize, usize),
+    #[serde(default)]
+    pub cost: u16,
+    #[serde(default)]
+    pub hit_rate: Option<u16>,
+    #[serde(default)]
+    pub crit_rate: Option<u16>,
+    #[serde(default)]
+    pub effects: Vec<Effect>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display, EnumIter, PartialEq)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -62,23 +79,6 @@ pub enum Effect {
         shape: Shape,
         duration: u16,
     },
-}
-
-/// 技能資料結構
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct Skill {
-    #[serde(default)]
-    pub tags: Vec<Tag>,
-    #[serde(default)]
-    pub range: (usize, usize),
-    #[serde(default)]
-    pub cost: u16,
-    #[serde(default)]
-    pub hit_rate: Option<u16>,
-    #[serde(default)]
-    pub crit_rate: Option<u16>,
-    #[serde(default)]
-    pub effects: Vec<Effect>,
 }
 
 /// 實作 Skill 的預設值

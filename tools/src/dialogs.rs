@@ -242,7 +242,7 @@ impl DialogsEditor {
                         return;
                     };
                     let node_type = node.to_string();
-                    let pos = node.pos().clone();
+                    let pos = node.pos();
                     ui.label(format!("當前類型: {}", node_type.clone()));
                     ui.horizontal(|ui| {
                         ui.label("更改節點類型為：");
@@ -445,13 +445,13 @@ impl DialogsEditor {
                                 self.has_unsaved_changes_flag = true;
                             }
                         }
-                        Some(Node::Battle { outcomes, pos: _ }) => {
+                        Some(Node::Battle { results, pos: _ }) => {
                             // 顯示與編輯戰鬥節點
                             ui.label("戰鬥結果:");
 
                             // 顯示現有結果
                             let mut to_remove_idx = None;
-                            for (idx, outcome) in outcomes.iter_mut().enumerate() {
+                            for (idx, result) in results.iter_mut().enumerate() {
                                 ui.group(|ui| {
                                     ui.horizontal(|ui| {
                                         ui.label(format!("結果 {}:", idx + 1));
@@ -466,7 +466,7 @@ impl DialogsEditor {
                                     // 編輯結果文本
                                     ui.horizontal(|ui| {
                                         ui.label("結果:");
-                                        if ui.text_edit_singleline(&mut outcome.result).changed() {
+                                        if ui.text_edit_singleline(&mut result.result).changed() {
                                             self.has_unsaved_changes_flag = true;
                                         }
                                     });
@@ -474,7 +474,7 @@ impl DialogsEditor {
                                     // 編輯下一個節點
                                     ui.horizontal(|ui| {
                                         ui.label("下一個節點:");
-                                        if ui.text_edit_singleline(&mut outcome.next_node).changed()
+                                        if ui.text_edit_singleline(&mut result.next_node).changed()
                                         {
                                             self.has_unsaved_changes_flag = true;
                                         }
@@ -484,13 +484,13 @@ impl DialogsEditor {
 
                             // 刪除結果
                             if let Some(idx) = to_remove_idx {
-                                outcomes.remove(idx);
+                                results.remove(idx);
                             }
 
                             // 添加新結果按鈕
                             if ui.button("添加戰鬥結果").clicked() {
-                                outcomes.push(dialogs_lib::Outcome {
-                                    result: "New outcome".to_string(),
+                                results.push(dialogs_lib::BattleResult {
+                                    result: "New result".to_string(),
                                     next_node: "end".to_string(),
                                     conditions: None,
                                     actions: None,
@@ -596,7 +596,7 @@ impl DialogsEditor {
             // 收集連線數據
             let mut invalid_connection = None;
             for (node_id, node) in &self.script.nodes {
-                let pos = convert_to_egui_pos(node.pos());
+                let pos = convert_to_egui_pos(&node.pos());
                 let source_pos = self.world_to_screen(pos);
                 let source_center = source_pos + node_size / 2.0;
 
@@ -605,8 +605,8 @@ impl DialogsEditor {
                     Node::Option { options, .. } => {
                         options.iter().map(|o| o.next_node.as_ref()).collect()
                     }
-                    Node::Battle { outcomes, .. } => {
-                        outcomes.iter().map(|o| o.next_node.as_ref()).collect()
+                    Node::Battle { results, .. } => {
+                        results.iter().map(|o| o.next_node.as_ref()).collect()
                     }
                     Node::Condition { conditions, .. } => {
                         conditions.iter().map(|c| c.next_node.as_ref()).collect()
@@ -616,7 +616,7 @@ impl DialogsEditor {
 
                 for next_node_id in next_nodes {
                     if let Some(node) = self.script.nodes.get(next_node_id) {
-                        let pos = convert_to_egui_pos(node.pos());
+                        let pos = convert_to_egui_pos(&node.pos());
                         let target_pos = self.world_to_screen(pos);
                         let target_center = target_pos + node_size / 2.0;
 
@@ -639,7 +639,7 @@ impl DialogsEditor {
 
             // 收集節點資訊
             for (node_id, node) in &self.script.nodes {
-                let pos = convert_to_egui_pos(node.pos());
+                let pos = convert_to_egui_pos(&node.pos());
                 let screen_pos = self.world_to_screen(pos);
                 let node_rect = egui::Rect::from_min_size(screen_pos, node_size);
                 let is_selected = self.selected_node.as_ref() == Some(node_id);
@@ -752,7 +752,7 @@ impl DialogsEditor {
             // 應用節點移動
             for (node_id, world_delta) in node_actions {
                 if let Some(node) = self.script.nodes.get_mut(&node_id) {
-                    let pos = convert_to_egui_pos(node.pos()) + world_delta;
+                    let pos = convert_to_egui_pos(&node.pos()) + world_delta;
                     let pos = convert_to_pos(&pos);
                     node.set_pos(pos);
                     self.has_unsaved_changes_flag = true;
