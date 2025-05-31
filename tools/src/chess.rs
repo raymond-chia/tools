@@ -799,11 +799,7 @@ impl ChessEditor {
         }
 
         let battlefield_id = self.selected_battlefield.clone().unwrap();
-        let edit_mode = self.edit_mode;
-        let selected_terrain = self.selected_terrain;
-        let selected_object = self.selected_object;
-        let new_unit_type = self.new_unit_type.clone();
-        let cell_size = 40.0;
+        let cell_size = 40.0 * self.camera.zoom;
 
         // 首先獲取戰場信息
         let battlefield_option =
@@ -838,127 +834,19 @@ impl ChessEditor {
                 if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
                     if rect.contains(pointer_pos) {
                         // 將鼠標位置轉換為網格坐標
-                        let grid_x = ((pointer_pos.x - rect.min.x) / cell_size) as usize;
-                        let grid_y = ((pointer_pos.y - rect.min.y) / cell_size) as usize;
+                        let x = ((pointer_pos.x - rect.min.x) / cell_size) as usize;
+                        let y = ((pointer_pos.y - rect.min.y) / cell_size) as usize;
 
-                        if grid_x < width && grid_y < height {
-                            let pos = Pos {
-                                x: grid_x,
-                                y: grid_y,
-                            };
+                        if x < width && y < height {
+                            let pos = Pos { x, y };
 
                             // 處理鼠標點擊或右鍵拖曳
                             let input = ui.ctx().input(|i| i.clone());
-                            let battlefield = self
-                                .battlefield_data
-                                .battlefields
-                                .get_mut(&battlefield_id)
-                                .unwrap();
-                            match edit_mode {
-                                EditMode::Terrain => {
-                                    // 左鍵拖曳塗刷
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            if battlefield.set_terrain(&pos, selected_terrain) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        // 支援左鍵單點
-                                        if input.pointer.primary_clicked() {
-                                            if battlefield.set_terrain(&pos, selected_terrain) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Object => {
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            if battlefield.set_object(&pos, selected_object) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        if input.pointer.primary_clicked() {
-                                            if battlefield.set_object(&pos, selected_object) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Deployment => {
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            let is_deployable = battlefield.is_deployable(&pos);
-                                            if battlefield.set_deployable(&pos, !is_deployable) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        if input.pointer.primary_clicked() {
-                                            let is_deployable = battlefield.is_deployable(&pos);
-                                            if battlefield.set_deployable(&pos, !is_deployable) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Unit => {
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            let unit = if !new_unit_type.is_empty() {
-                                                Some(Unit {
-                                                    id: Self::generate_unique_unit_id(
-                                                        battlefield,
-                                                        &new_unit_type,
-                                                    ),
-                                                    unit_type: new_unit_type.clone(),
-                                                    team_id: self.selected_team_id.clone(),
-                                                })
-                                            } else {
-                                                None
-                                            };
 
-                                            if battlefield.set_unit_and_team(&pos, unit) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        if input.pointer.primary_clicked() {
-                                            let unit = if !new_unit_type.is_empty() {
-                                                Some(Unit {
-                                                    id: Self::generate_unique_unit_id(
-                                                        battlefield,
-                                                        &new_unit_type,
-                                                    ),
-                                                    unit_type: new_unit_type.clone(),
-                                                    team_id: self.selected_team_id.clone(),
-                                                })
-                                            } else {
-                                                None
-                                            };
-
-                                            if battlefield.set_unit_and_team(&pos, unit) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Objective => {
-                                    // 目標編輯暫時不實現，可以後續擴展
-                                }
-                                EditMode::Simulation => {
-                                    // 不處理
-                                }
+                            if input.pointer.primary_clicked() || input.pointer.primary_down() {
+                                self.paint(&battlefield_id, pos);
+                            } else {
+                                self.last_painted_pos = None;
                             }
                         }
                     }
@@ -971,10 +859,10 @@ impl ChessEditor {
                         let pos = Pos { x, y };
 
                         let cell_rect = Rect::from_min_size(
-                            egui::pos2(
+                            self.camera.world_to_screen(egui::pos2(
                                 rect.min.x + x as f32 * cell_size,
                                 rect.min.y + y as f32 * cell_size,
-                            ),
+                            )),
                             egui::vec2(cell_size, cell_size),
                         );
 
@@ -1046,33 +934,27 @@ impl ChessEditor {
                     }
                 }
 
-                // 繪製水平和垂直線，使用矩形填充而不是線段來避免問題
+                // 繪製水平和垂直線，經過 camera.world_to_screen 轉換
                 let grid_color = Color32::from_gray(100);
 
-                // 繪製水平線 (用細長矩形代替)
+                // 繪製水平線
                 for y in 0..=height {
                     let y_pos = rect.min.y + y as f32 * cell_size;
-                    painter.rect_filled(
-                        Rect::from_min_max(
-                            egui::pos2(rect.min.x, y_pos),
-                            egui::pos2(rect.min.x + width as f32 * cell_size, y_pos + 1.0),
-                        ),
-                        0.0,
-                        grid_color,
-                    );
+                    let start = self.camera.world_to_screen(egui::pos2(rect.min.x, y_pos));
+                    let end = self
+                        .camera
+                        .world_to_screen(egui::pos2(rect.min.x + width as f32 * cell_size, y_pos));
+                    painter.line_segment([start, end], Stroke::new(1.0, grid_color));
                 }
 
-                // 繪製垂直線 (用細長矩形代替)
+                // 繪製垂直線
                 for x in 0..=width {
                     let x_pos = rect.min.x + x as f32 * cell_size;
-                    painter.rect_filled(
-                        Rect::from_min_max(
-                            egui::pos2(x_pos, rect.min.y),
-                            egui::pos2(x_pos + 1.0, rect.min.y + height as f32 * cell_size),
-                        ),
-                        0.0,
-                        grid_color,
-                    );
+                    let start = self.camera.world_to_screen(egui::pos2(x_pos, rect.min.y));
+                    let end = self
+                        .camera
+                        .world_to_screen(egui::pos2(x_pos, rect.min.y + height as f32 * cell_size));
+                    painter.line_segment([start, end], Stroke::new(1.0, grid_color));
                 }
 
                 // 將指針位置轉換為網格坐標
@@ -1221,6 +1103,67 @@ impl ChessEditor {
         }
 
         self.show_resize_dialog = open;
+    }
+
+    fn paint(&mut self, battlefield_id: &str, pos: Pos) {
+        let edit_mode = self.edit_mode;
+        let selected_terrain = self.selected_terrain;
+        let selected_object = self.selected_object;
+        let new_unit_type = self.new_unit_type.clone();
+
+        let battlefield = self
+            .battlefield_data
+            .battlefields
+            .get_mut(battlefield_id)
+            .unwrap();
+        match edit_mode {
+            EditMode::Terrain => {
+                if self.last_painted_pos != Some(pos) {
+                    if battlefield.set_terrain(&pos, selected_terrain) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Object => {
+                if self.last_painted_pos != Some(pos) {
+                    if battlefield.set_object(&pos, selected_object) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Deployment => {
+                if self.last_painted_pos != Some(pos) {
+                    let is_deployable = battlefield.is_deployable(&pos);
+                    if battlefield.set_deployable(&pos, !is_deployable) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Unit => {
+                if self.last_painted_pos != Some(pos) {
+                    let unit = if !new_unit_type.is_empty() {
+                        Some(Unit {
+                            id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
+                            unit_type: new_unit_type.clone(),
+                            team_id: self.selected_team_id.clone(),
+                        })
+                    } else {
+                        None
+                    };
+
+                    if battlefield.set_unit_and_team(&pos, unit) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Objective | EditMode::Simulation => {
+                // 不處理
+            }
+        }
     }
 }
 
