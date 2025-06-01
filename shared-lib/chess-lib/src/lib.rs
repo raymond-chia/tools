@@ -249,11 +249,4 @@ impl Battlefield {
         }
         true
     }
-
-    /// 獲取單位所屬隊伍
-    pub fn get_unit_team(&self, unit_id: &str) -> Option<&str> {
-        self.unit_id_to_team
-            .get(unit_id)
-            .map(|u| u.team_id.as_str())
-    }
 }

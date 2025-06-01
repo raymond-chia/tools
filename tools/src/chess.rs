@@ -5,7 +5,7 @@ use chess_lib::{
     BattleObjectiveType, Battlefield, BattlefieldObject, Cell, Pos, Team, Terrain, Unit,
 };
 use eframe::{Frame, egui};
-use egui::{Button, Color32, Rect, Stroke, Vec2};
+use egui::{Button, Color32, Rect, Stroke};
 use rand::{Rng, distributions::Alphanumeric};
 use std::collections::HashMap;
 use std::io;
@@ -786,324 +786,294 @@ impl ChessEditor {
     /// 顯示戰場編輯區域
     fn show_battlefield_editor(&mut self, ui: &mut egui::Ui) {
         if self.selected_battlefield.is_none() {
-            ui.heading("戰場編輯器");
-            ui.label("選擇或創建一個戰場開始編輯");
+            self.handle_no_battlefield_selected(ui);
             return;
         }
 
-        match self.edit_mode {
-            EditMode::Simulation => {
-                self.show_simulation_tools(ui);
-            }
-            _ => {}
+        if self.edit_mode == EditMode::Simulation {
+            self.handle_simulation_mode(ui);
+            return;
         }
 
-        let battlefield_id = self.selected_battlefield.clone().unwrap();
-        let edit_mode = self.edit_mode;
-        let selected_terrain = self.selected_terrain;
-        let selected_object = self.selected_object;
-        let new_unit_type = self.new_unit_type.clone();
-        let cell_size = 40.0;
-
-        // 首先獲取戰場信息
-        let battlefield_option =
-            self.battlefield_data
-                .battlefields
-                .get(&battlefield_id)
-                .map(|bf| {
-                    (
-                        bf.width(),
-                        bf.height(),
-                        bf.grid.clone(),
-                        bf.deployable_positions.clone(),
-                    )
-                });
-
-        if let Some((width, height, grid, deployable_positions)) = battlefield_option {
-            ui.heading(format!("編輯戰場: {}", battlefield_id));
-
-            // 顯示網格和交互區域
-            let (rect, _) = ui.allocate_exact_size(
-                Vec2::new(width as f32 * cell_size, height as f32 * cell_size),
-                egui::Sense::click_and_drag(),
-            );
-
-            if rect.width() > 0.0 && rect.height() > 0.0 {
-                let painter = ui.painter();
-
-                // 處理視野拖曳與縮放
-                self.camera.handle_pan_zoom(ui);
-
-                // 處理網格交互
-                if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
-                    if rect.contains(pointer_pos) {
-                        // 將鼠標位置轉換為網格坐標
-                        let grid_x = ((pointer_pos.x - rect.min.x) / cell_size) as usize;
-                        let grid_y = ((pointer_pos.y - rect.min.y) / cell_size) as usize;
-
-                        if grid_x < width && grid_y < height {
-                            let pos = Pos {
-                                x: grid_x,
-                                y: grid_y,
-                            };
-
-                            // 處理鼠標點擊或右鍵拖曳
-                            let input = ui.ctx().input(|i| i.clone());
-                            let battlefield = self
-                                .battlefield_data
-                                .battlefields
-                                .get_mut(&battlefield_id)
-                                .unwrap();
-                            match edit_mode {
-                                EditMode::Terrain => {
-                                    // 左鍵拖曳塗刷
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            if battlefield.set_terrain(&pos, selected_terrain) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        // 支援左鍵單點
-                                        if input.pointer.primary_clicked() {
-                                            if battlefield.set_terrain(&pos, selected_terrain) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Object => {
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            if battlefield.set_object(&pos, selected_object) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        if input.pointer.primary_clicked() {
-                                            if battlefield.set_object(&pos, selected_object) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Deployment => {
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            let is_deployable = battlefield.is_deployable(&pos);
-                                            if battlefield.set_deployable(&pos, !is_deployable) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        if input.pointer.primary_clicked() {
-                                            let is_deployable = battlefield.is_deployable(&pos);
-                                            if battlefield.set_deployable(&pos, !is_deployable) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Unit => {
-                                    if input.pointer.primary_down() {
-                                        if self.last_painted_pos != Some(pos) {
-                                            let unit = if !new_unit_type.is_empty() {
-                                                Some(Unit {
-                                                    id: Self::generate_unique_unit_id(
-                                                        battlefield,
-                                                        &new_unit_type,
-                                                    ),
-                                                    unit_type: new_unit_type.clone(),
-                                                    team_id: self.selected_team_id.clone(),
-                                                })
-                                            } else {
-                                                None
-                                            };
-
-                                            if battlefield.set_unit_and_team(&pos, unit) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                            self.last_painted_pos = Some(pos);
-                                        }
-                                    } else {
-                                        self.last_painted_pos = None;
-                                        if input.pointer.primary_clicked() {
-                                            let unit = if !new_unit_type.is_empty() {
-                                                Some(Unit {
-                                                    id: Self::generate_unique_unit_id(
-                                                        battlefield,
-                                                        &new_unit_type,
-                                                    ),
-                                                    unit_type: new_unit_type.clone(),
-                                                    team_id: self.selected_team_id.clone(),
-                                                })
-                                            } else {
-                                                None
-                                            };
-
-                                            if battlefield.set_unit_and_team(&pos, unit) {
-                                                self.has_unsaved_changes_flag = true;
-                                            }
-                                        }
-                                    }
-                                }
-                                EditMode::Objective => {
-                                    // 目標編輯暫時不實現，可以後續擴展
-                                }
-                                EditMode::Simulation => {
-                                    // 不處理
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 繪製網格
-                for y in 0..height {
-                    for x in 0..width {
-                        let cell = &grid[y][x];
-                        let pos = Pos { x, y };
-
-                        let cell_rect = Rect::from_min_size(
-                            egui::pos2(
-                                rect.min.x + x as f32 * cell_size,
-                                rect.min.y + y as f32 * cell_size,
-                            ),
-                            egui::vec2(cell_size, cell_size),
-                        );
-
-                        // 繪製地形
-                        painter.rect_filled(cell_rect, 0.0, cell.terrain.color());
-
-                        // 繪製物件
-                        if let Some(object) = &cell.object {
-                            match object {
-                                BattlefieldObject::Wall => {
-                                    painter.rect_filled(
-                                        cell_rect.shrink(cell_size * 0.2),
-                                        0.0,
-                                        Color32::DARK_GRAY,
-                                    );
-                                }
-                            }
-                        }
-
-                        // 繪製部署區域標記
-                        if deployable_positions.contains(&pos) {
-                            // 用填充矩形的方式繪製部署區域標記
-                            let inner_rect = cell_rect.shrink(cell_size * 0.3);
-                            painter.rect_filled(
-                                inner_rect,
-                                2.0,
-                                Color32::from_rgba_premultiplied(0, 255, 0, 60),
-                            );
-                        }
-
-                        // 繪製單位
-                        if let Some(unit_id) = &cell.unit_id {
-                            // 根據 unit_id 查 team_id，再查 team.color
-                            let (team_color, unit_type) = self
-                                .battlefield_data
-                                .battlefields
-                                .get(&battlefield_id)
-                                .map(|bf| {
-                                    let team_color = bf
-                                        .get_unit_team(unit_id)
-                                        .and_then(|team_id| {
-                                            bf.teams.get(team_id).map(|t| {
-                                                Color32::from_rgb(t.color.r, t.color.g, t.color.b)
-                                            })
-                                        })
-                                        .unwrap_or(Color32::GRAY);
-
-                                    let unit_type = bf
-                                        .unit_id_to_team
-                                        .get(unit_id)
-                                        .map(|unit| unit.unit_type.clone())
-                                        .unwrap_or_else(|| "?".to_string());
-
-                                    (team_color, unit_type)
-                                })
-                                .unwrap_or((Color32::GRAY, "?".to_string()));
-
-                            painter.circle_filled(cell_rect.center(), cell_size * 0.3, team_color);
-
-                            // 顯示單位種類
-                            painter.text(
-                                cell_rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                unit_type,
-                                egui::FontId::proportional(14.0),
-                                Color32::WHITE,
-                            );
-                        }
-                    }
-                }
-
-                // 繪製水平和垂直線，使用矩形填充而不是線段來避免問題
-                let grid_color = Color32::from_gray(100);
-
-                // 繪製水平線 (用細長矩形代替)
-                for y in 0..=height {
-                    let y_pos = rect.min.y + y as f32 * cell_size;
-                    painter.rect_filled(
-                        Rect::from_min_max(
-                            egui::pos2(rect.min.x, y_pos),
-                            egui::pos2(rect.min.x + width as f32 * cell_size, y_pos + 1.0),
-                        ),
-                        0.0,
-                        grid_color,
-                    );
-                }
-
-                // 繪製垂直線 (用細長矩形代替)
-                for x in 0..=width {
-                    let x_pos = rect.min.x + x as f32 * cell_size;
-                    painter.rect_filled(
-                        Rect::from_min_max(
-                            egui::pos2(x_pos, rect.min.y),
-                            egui::pos2(x_pos + 1.0, rect.min.y + height as f32 * cell_size),
-                        ),
-                        0.0,
-                        grid_color,
-                    );
-                }
-
-                // 將指針位置轉換為網格坐標
-                if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
-                    if rect.contains(pointer_pos) {
-                        let grid_x = ((pointer_pos.x - rect.min.x) / cell_size) as usize;
-                        let grid_y = ((pointer_pos.y - rect.min.y) / cell_size) as usize;
-
-                        if grid_x < width && grid_y < height {
-                            // 高亮顯示當前單元格
-                            let cell_rect = Rect::from_min_size(
-                                egui::pos2(
-                                    rect.min.x + grid_x as f32 * cell_size,
-                                    rect.min.y + grid_y as f32 * cell_size,
-                                ),
-                                egui::vec2(cell_size, cell_size),
-                            );
-
-                            // 簡單畫一個半透明矩形表示選中
-                            painter.rect_filled(
-                                cell_rect,
-                                0.0,
-                                Color32::from_rgba_premultiplied(255, 255, 0, 40),
-                            );
-                        }
-                    }
-                }
-            }
+        if let Some((width, height, grid, deployable_positions)) =
+            self.get_battlefield_render_data()
+        {
+            self.draw_battlefield_area(ui, width, height, &grid, &deployable_positions);
         } else {
             ui.heading("戰場編輯器");
             ui.label("選中的戰場不存在");
+        }
+    }
+
+    fn handle_no_battlefield_selected(&self, ui: &mut egui::Ui) {
+        ui.heading("戰場編輯器");
+        ui.label("選擇或創建一個戰場開始編輯");
+    }
+
+    fn handle_simulation_mode(&mut self, ui: &mut egui::Ui) {
+        self.show_simulation_tools(ui);
+    }
+
+    fn get_battlefield_render_data(
+        &self,
+    ) -> Option<(
+        usize,
+        usize,
+        Vec<Vec<Cell>>,
+        std::collections::BTreeSet<Pos>,
+    )> {
+        let battlefield_id = self.selected_battlefield.as_ref().unwrap();
+        self.battlefield_data
+            .battlefields
+            .get(battlefield_id)
+            .map(|bf| {
+                (
+                    bf.width(),
+                    bf.height(),
+                    bf.grid.clone(),
+                    bf.deployable_positions.clone(),
+                )
+            })
+    }
+
+    fn draw_battlefield_area(
+        &mut self,
+        ui: &mut egui::Ui,
+        width: usize,
+        height: usize,
+        grid: &Vec<Vec<Cell>>,
+        deployable_positions: &std::collections::BTreeSet<Pos>,
+    ) {
+        let battlefield_id = self.selected_battlefield.clone().unwrap();
+        let cell_size = 40.0 * self.camera.zoom;
+
+        ui.heading(format!("編輯戰場: {}", &battlefield_id));
+
+        // 顯示網格和交互區域
+        let (rect, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+
+        if rect.width() <= 0.0 || rect.height() <= 0.0 {
+            return;
+        }
+
+        // 處理相機縮放和平移
+        self.camera.handle_pan_zoom(ui);
+
+        self.handle_cell_operation(&battlefield_id, ui, rect, width, height, cell_size);
+
+        let painter = ui.painter();
+
+        self.draw_cells(
+            &battlefield_id,
+            &painter,
+            rect,
+            width,
+            height,
+            grid,
+            deployable_positions,
+            cell_size,
+        );
+
+        self.draw_grid_lines(&painter, rect, width, height, cell_size);
+
+        self.highlight_hovered_cell(&painter, ui, rect, width, height, cell_size);
+    }
+
+    fn handle_cell_operation(
+        &mut self,
+        battlefield_id: &str,
+        ui: &mut egui::Ui,
+        rect: Rect,
+        width: usize,
+        height: usize,
+        cell_size: f32,
+    ) {
+        // 處理網格交互
+        if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
+            if rect.contains(pointer_pos) {
+                // 將鼠標位置轉換為網格座標
+                // 先將螢幕座標轉為世界座標
+                let world_pos = self.camera.screen_to_world(pointer_pos);
+                // 再計算網格索引
+                let x = ((world_pos.x - rect.min.x) / cell_size) as usize;
+                let y = ((world_pos.y - rect.min.y) / cell_size) as usize;
+
+                if x >= width || y >= height {
+                    return;
+                }
+
+                let pos = Pos { x, y };
+
+                // 處理鼠標點擊或拖曳
+                let input = ui.ctx().input(|i| i.clone());
+                if input.pointer.primary_clicked() || input.pointer.primary_down() {
+                    self.set_cell(battlefield_id, pos);
+                } else {
+                    self.last_painted_pos = None;
+                }
+            }
+        }
+    }
+
+    fn draw_cells(
+        &self,
+        battlefield_id: &str,
+        painter: &egui::Painter,
+        rect: Rect,
+        width: usize,
+        height: usize,
+        grid: &Vec<Vec<Cell>>,
+        deployable_positions: &std::collections::BTreeSet<Pos>,
+        cell_size: f32,
+    ) {
+        // 繪製網格
+        for y in 0..height {
+            for x in 0..width {
+                let cell = &grid[y][x];
+                let pos = Pos { x, y };
+
+                let cell_rect = Rect::from_min_size(
+                    self.camera.world_to_screen(egui::pos2(
+                        rect.min.x + x as f32 * cell_size,
+                        rect.min.y + y as f32 * cell_size,
+                    )),
+                    egui::vec2(cell_size, cell_size),
+                );
+
+                // 繪製地形
+                painter.rect_filled(cell_rect, 0.0, cell.terrain.color());
+
+                // 繪製物件
+                if let Some(object) = &cell.object {
+                    match object {
+                        BattlefieldObject::Wall => {
+                            painter.rect_filled(
+                                cell_rect.shrink(cell_size * 0.2),
+                                0.0,
+                                Color32::DARK_GRAY,
+                            );
+                        }
+                    }
+                }
+
+                // 繪製部署區域
+                if deployable_positions.contains(&pos) {
+                    let inner_rect = cell_rect.shrink(cell_size * 0.3);
+                    painter.rect_filled(
+                        inner_rect,
+                        2.0,
+                        Color32::from_rgba_premultiplied(0, 255, 0, 60),
+                    );
+                }
+
+                // 繪製單位
+                if let Some(unit_id) = &cell.unit_id {
+                    let (team_color, unit_type) = self
+                        .battlefield_data
+                        .battlefields
+                        .get(battlefield_id)
+                        .map(|bf| {
+                            return bf
+                                .unit_id_to_team
+                                .get(unit_id)
+                                .map(|unit| {
+                                    bf.teams
+                                        .get(&unit.team_id)
+                                        .map(|team| {
+                                            (
+                                                Color32::from_rgb(
+                                                    team.color.r,
+                                                    team.color.g,
+                                                    team.color.b,
+                                                ),
+                                                unit.unit_type.clone(),
+                                            )
+                                        })
+                                        .unwrap_or((Color32::GRAY, "?".to_string()))
+                                })
+                                .unwrap_or((Color32::GRAY, "?".to_string()));
+                        })
+                        .unwrap_or((Color32::GRAY, "?".to_string()));
+
+                    painter.circle_filled(cell_rect.center(), cell_size * 0.3, team_color);
+
+                    // 單位種類
+                    painter.text(
+                        cell_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        unit_type,
+                        egui::FontId::proportional(14.0),
+                        Color32::WHITE,
+                    );
+                }
+            }
+        }
+    }
+
+    fn draw_grid_lines(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        width: usize,
+        height: usize,
+        cell_size: f32,
+    ) {
+        let grid_color = Color32::from_gray(100);
+
+        for y in 0..=height {
+            let y_pos = rect.min.y + y as f32 * cell_size;
+            let start = self.camera.world_to_screen(egui::pos2(rect.min.x, y_pos));
+            let end = self
+                .camera
+                .world_to_screen(egui::pos2(rect.min.x + width as f32 * cell_size, y_pos));
+            painter.line_segment([start, end], Stroke::new(1.0, grid_color));
+        }
+
+        for x in 0..=width {
+            let x_pos = rect.min.x + x as f32 * cell_size;
+            let start = self.camera.world_to_screen(egui::pos2(x_pos, rect.min.y));
+            let end = self
+                .camera
+                .world_to_screen(egui::pos2(x_pos, rect.min.y + height as f32 * cell_size));
+            painter.line_segment([start, end], Stroke::new(1.0, grid_color));
+        }
+    }
+
+    fn highlight_hovered_cell(
+        &self,
+        painter: &egui::Painter,
+        ui: &egui::Ui,
+        rect: Rect,
+        width: usize,
+        height: usize,
+        cell_size: f32,
+    ) {
+        if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
+            if rect.contains(pointer_pos) {
+                // 先將螢幕座標轉為世界座標
+                let world_pos = self.camera.screen_to_world(pointer_pos);
+                // 再計算網格索引
+                let grid_x = ((world_pos.x - rect.min.x) / cell_size) as usize;
+                let grid_y = ((world_pos.y - rect.min.y) / cell_size) as usize;
+
+                if grid_x >= width || grid_y >= height {
+                    return;
+                }
+
+                let cell_rect = Rect::from_min_size(
+                    self.camera.world_to_screen(egui::pos2(
+                        rect.min.x + grid_x as f32 * cell_size,
+                        rect.min.y + grid_y as f32 * cell_size,
+                    )),
+                    egui::vec2(cell_size, cell_size),
+                );
+
+                painter.rect_filled(
+                    cell_rect,
+                    0.0,
+                    Color32::from_rgba_premultiplied(255, 255, 0, 40),
+                );
+            }
         }
     }
 
@@ -1221,6 +1191,67 @@ impl ChessEditor {
         }
 
         self.show_resize_dialog = open;
+    }
+
+    fn set_cell(&mut self, battlefield_id: &str, pos: Pos) {
+        let edit_mode = self.edit_mode;
+        let selected_terrain = self.selected_terrain;
+        let selected_object = self.selected_object;
+        let new_unit_type = self.new_unit_type.clone();
+
+        let battlefield = self
+            .battlefield_data
+            .battlefields
+            .get_mut(battlefield_id)
+            .unwrap();
+        match edit_mode {
+            EditMode::Terrain => {
+                if self.last_painted_pos != Some(pos) {
+                    if battlefield.set_terrain(&pos, selected_terrain) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Object => {
+                if self.last_painted_pos != Some(pos) {
+                    if battlefield.set_object(&pos, selected_object) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Deployment => {
+                if self.last_painted_pos != Some(pos) {
+                    let is_deployable = battlefield.is_deployable(&pos);
+                    if battlefield.set_deployable(&pos, !is_deployable) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Unit => {
+                if self.last_painted_pos != Some(pos) {
+                    let unit = if !new_unit_type.is_empty() {
+                        Some(Unit {
+                            id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
+                            unit_type: new_unit_type.clone(),
+                            team_id: self.selected_team_id.clone(),
+                        })
+                    } else {
+                        None
+                    };
+
+                    if battlefield.set_unit_and_team(&pos, unit) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    self.last_painted_pos = Some(pos);
+                }
+            }
+            EditMode::Objective | EditMode::Simulation => {
+                // 不處理
+            }
+        }
     }
 }
 
