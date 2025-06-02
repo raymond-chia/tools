@@ -2,7 +2,8 @@ use crate::common::{
     Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file,
 };
 use chess_lib::{
-    BattleObjectiveType, Battlefield, BattlefieldObject, Cell, Pos, Team, Terrain, Unit,
+    BattleObjectiveType, Battlefield, BattlefieldObject, Cell, PLAYER_TEAM, Pos, Team, Terrain,
+    Unit,
 };
 use eframe::{Frame, egui};
 use egui::{Button, Color32, Rect, Stroke};
@@ -266,6 +267,12 @@ pub struct ChessEditor {
     // 地形塗刷狀態
     last_painted_pos: Option<Pos>,
 
+    // 模擬戰鬥選中單位 (格子座標)
+    simulation_selected_unit: Option<Pos>,
+
+    // 模擬戰鬥狀態
+    simulation_battle: Option<chess_lib::Battle>,
+
     // 對話框
     show_confirmation_dialog: bool,
     confirmation_action: ConfirmationAction,
@@ -297,14 +304,16 @@ impl Default for ChessEditor {
             new_team_id: String::new(),
             team_action: TeamAction::None,
 
-            // 預設隊伍為 "player"
-            selected_team_id: "player".to_string(),
+            selected_team_id: PLAYER_TEAM.to_string(),
 
             selected_objective: None,
 
             camera: Camera2D::default(),
 
             last_painted_pos: None,
+
+            simulation_selected_unit: None,
+            simulation_battle: None,
 
             show_confirmation_dialog: false,
             confirmation_action: ConfirmationAction::None,
@@ -516,7 +525,7 @@ impl ChessEditor {
         ui.heading("模擬戰鬥");
         ui.label("這裡是模擬戰鬥頁面。可在此實作戰鬥模擬功能。");
         ui.add_space(10.0);
-        ui.label("（點選左側其他 tab 可返回編輯模式）");
+        ui.label("（點選右側其他 tab 可返回編輯模式）");
     }
 
     /// 顯示地形編輯工具
@@ -741,7 +750,7 @@ impl ChessEditor {
                         }
                     }
 
-                    if team.id != "player" && ui.button("刪除").clicked() {
+                    if team.id != PLAYER_TEAM && ui.button("刪除").clicked() {
                         // 同樣，記錄操作以便稍後執行
                         self.team_action =
                             TeamAction::RemoveTeam(battlefield_id.clone(), team.id.clone());
@@ -812,6 +821,32 @@ impl ChessEditor {
 
     fn handle_simulation_mode(&mut self, ui: &mut egui::Ui) {
         self.show_simulation_tools(ui);
+
+        // 初始化 simulation_battle
+        if self.simulation_battle.is_none() {
+            if let Some(battlefield_id) = &self.selected_battlefield {
+                if let Some(bf) = self.battlefield_data.battlefields.get(battlefield_id) {
+                    let unit_ids: Vec<String> = bf.unit_id_to_team.keys().cloned().collect();
+                    let mut battle = chess_lib::Battle::new();
+                    let msg = battle.start(unit_ids);
+                    if let Err(msg) = msg {
+                        self.set_status(msg, true);
+                        return;
+                    }
+                    self.simulation_battle = Some(battle);
+                }
+            }
+        }
+
+        // 顯示戰場
+        if let Some((width, height, grid, deployable_positions)) =
+            self.get_battlefield_render_data()
+        {
+            self.draw_battlefield_area(ui, width, height, &grid, &deployable_positions);
+        } else {
+            ui.heading("戰場編輯器");
+            ui.label("選中的戰場不存在");
+        }
     }
 
     fn get_battlefield_render_data(
@@ -907,7 +942,12 @@ impl ChessEditor {
                 // 處理鼠標點擊或拖曳
                 let input = ui.ctx().input(|i| i.clone());
                 if input.pointer.primary_clicked() || input.pointer.primary_down() {
-                    self.set_cell(battlefield_id, pos);
+                    // Simulation 模式下單位選取與移動
+                    if self.edit_mode == EditMode::Simulation && input.pointer.primary_clicked() {
+                        self.handle_simulation_unit_interaction(battlefield_id, pos);
+                    } else {
+                        self.set_cell(battlefield_id, pos);
+                    }
                 } else {
                     self.last_painted_pos = None;
                 }
@@ -1251,6 +1291,32 @@ impl ChessEditor {
             EditMode::Objective | EditMode::Simulation => {
                 // 不處理
             }
+        }
+    }
+
+    /// 單位選取與移動的互動邏輯（呼叫 battle.rs 通用邏輯）
+    fn handle_simulation_unit_interaction(&mut self, battlefield_id: &str, pos: Pos) {
+        let battlefield = self
+            .battlefield_data
+            .battlefields
+            .get_mut(battlefield_id)
+            .unwrap();
+        let move_range = 3;
+        if let Some(battle) = self.simulation_battle.as_mut() {
+            let msg = battle.unit_select_and_move_interaction(
+                battlefield,
+                self.simulation_selected_unit,
+                pos,
+                move_range,
+            );
+            // 根據訊息內容決定是否要清除 simulation_selected_unit
+            if msg.starts_with("選取單位：") {
+                self.simulation_selected_unit = Some(pos);
+            } else if msg == "移動成功" || msg == "本次移動消耗了兩倍移動力" || msg == "移動失敗"
+            {
+                self.simulation_selected_unit = None;
+            }
+            self.set_status(msg, false);
         }
     }
 }
