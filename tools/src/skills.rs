@@ -115,7 +115,7 @@ impl SkillsData {
                         }
                     }
                     Shape::Cone(radius, angle) => {
-                        if *radius < 2 && *angle < 90.0 {
+                        if *radius < 2 && *angle < 90 {
                             return Err(
                                 "範圍技能的效果形狀半徑不能小於 2 同時角度又小於 90".to_string()
                             );
@@ -743,7 +743,7 @@ impl SkillsEditor {
                     .clicked()
                 {
                     if !matches!(shape, Shape::Cone(_, _)) {
-                        *shape = Shape::Cone(3, 45.0);
+                        *shape = Shape::Cone(3, 45);
                         changed = true;
                     }
                 }

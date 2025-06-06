@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use strum_macros::{Display, EnumIter, EnumString};
 
+type DEGREE = u16;
+
 /// 技能資料結構
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Skill {
@@ -63,7 +65,7 @@ pub enum Shape {
     Circle(usize),
     Rectangle(usize, usize),
     Line(usize),
-    Cone(usize, f32),
+    Cone(usize, DEGREE),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]

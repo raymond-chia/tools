@@ -1,5 +1,5 @@
+use crate::PLAYER_TEAM;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use strum_macros::EnumIter;
 
@@ -17,25 +17,25 @@ pub struct Battlefield {
     #[serde(default)]
     pub deployable_positions: BTreeSet<Pos>, // 可部署的位置集合
     #[serde(default)]
-    pub unit_id_to_team: BTreeMap<String, Unit>, // 單位ID到單位資訊的映射
+    pub unit_id_to_unit: BTreeMap<String, Unit>, // 單位ID到單位資訊的映射
 }
 
 /// 位置
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Pos {
     pub x: usize,
     pub y: usize,
 }
 
-impl PartialOrd for Pos {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 impl Ord for Pos {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         (self.x, self.y).cmp(&(other.x, other.y))
+    }
+}
+
+impl PartialOrd for Pos {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -95,18 +95,6 @@ pub struct Color {
 pub struct Team {
     pub id: String,   // 隊伍ID，如 "player", "enemy1" 等
     pub color: Color, // 隊伍顏色
-}
-
-// 以 id 排序
-impl Ord for Team {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.id.cmp(&other.id)
-    }
-}
-impl PartialOrd for Team {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }
 
 /// 戰鬥目標類型
@@ -174,9 +162,9 @@ impl Battlefield {
             teams: {
                 let mut map = BTreeMap::new();
                 map.insert(
-                    "player".to_string(),
+                    PLAYER_TEAM.to_string(),
                     Team {
-                        id: "player".to_string(),
+                        id: PLAYER_TEAM.to_string(),
                         color: Color {
                             r: 0,
                             g: 100,
@@ -188,7 +176,7 @@ impl Battlefield {
             },
             objectives: BattleObjectiveType::default(),
             deployable_positions: BTreeSet::new(),
-            unit_id_to_team: BTreeMap::new(),
+            unit_id_to_unit: BTreeMap::new(),
         }
     }
 
@@ -203,18 +191,18 @@ impl Battlefield {
     }
 
     /// 檢查位置是否在戰場範圍內
-    pub fn is_valid_position(&self, pos: &Pos) -> bool {
-        let Pos { x, y } = *pos;
+    pub fn is_valid_position(&self, pos: Pos) -> bool {
+        let Pos { x, y } = pos;
         y < self.height() && x < self.width()
     }
 
     /// 檢查指定位置是否可部署
-    pub fn is_deployable(&self, pos: &Pos) -> bool {
-        self.deployable_positions.contains(pos)
+    pub fn is_deployable(&self, pos: Pos) -> bool {
+        self.deployable_positions.contains(&pos)
     }
 
     /// 設置指定位置的地形
-    pub fn set_terrain(&mut self, pos: &Pos, terrain: Terrain) -> bool {
+    pub fn set_terrain(&mut self, pos: Pos, terrain: Terrain) -> bool {
         if !self.is_valid_position(pos) {
             return false;
         }
@@ -223,7 +211,7 @@ impl Battlefield {
     }
 
     /// 設置指定位置的物件
-    pub fn set_object(&mut self, pos: &Pos, object: Option<BattlefieldObject>) -> bool {
+    pub fn set_object(&mut self, pos: Pos, object: Option<BattlefieldObject>) -> bool {
         if !self.is_valid_position(pos) {
             return false;
         }
@@ -232,20 +220,20 @@ impl Battlefield {
     }
 
     /// 設置指定位置的單位與隊伍
-    pub fn set_unit_and_team(&mut self, pos: &Pos, unit: Option<Unit>) -> bool {
+    pub fn set_unit(&mut self, pos: Pos, unit: Option<Unit>) -> bool {
         if !self.is_valid_position(pos) {
             return false;
         }
-        let original_unit_id = self.grid[pos.y][pos.x].unit_id.clone();
-        self.grid[pos.y][pos.x].unit_id = unit.as_ref().map(|u| u.id.clone());
+        if let Some(prev_uid) = &self.grid[pos.y][pos.x].unit_id {
+            self.unit_id_to_unit.remove(prev_uid);
+        }
         match unit {
             Some(unit_info) => {
-                self.unit_id_to_team.insert(unit_info.id.clone(), unit_info);
+                self.grid[pos.y][pos.x].unit_id = Some(unit_info.id.clone());
+                self.unit_id_to_unit.insert(unit_info.id.clone(), unit_info);
             }
             None => {
-                if let Some(prev_uid) = &original_unit_id {
-                    self.unit_id_to_team.remove(prev_uid);
-                }
+                self.grid[pos.y][pos.x].unit_id = None;
             }
         }
         true

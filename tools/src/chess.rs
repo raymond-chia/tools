@@ -66,22 +66,22 @@ impl BattlefieldObjectExt for BattlefieldObject {
 // ===== 擴展 Battlefield 功能 =====
 
 trait BattlefieldEditorExt {
-    fn set_deployable(&mut self, pos: &Pos, deployable: bool) -> bool;
+    fn set_deployable(&mut self, pos: Pos, deployable: bool) -> bool;
     fn resize(&mut self, new_width: usize, new_height: usize);
     fn add_team(&mut self, team_id: &str) -> bool;
     fn remove_team(&mut self, team_id: &str) -> bool;
 }
 
 impl BattlefieldEditorExt for Battlefield {
-    fn set_deployable(&mut self, pos: &Pos, deployable: bool) -> bool {
+    fn set_deployable(&mut self, pos: Pos, deployable: bool) -> bool {
         if !self.is_valid_position(pos) {
             return false;
         }
 
         if deployable {
-            self.deployable_positions.insert(*pos);
+            self.deployable_positions.insert(pos);
         } else {
-            self.deployable_positions.remove(pos);
+            self.deployable_positions.remove(&pos);
         }
 
         true
@@ -375,7 +375,7 @@ impl ChessEditor {
                 .map(char::from)
                 .collect();
             let id = format!("{unit_type}-{rand_str}");
-            if !battlefield.unit_id_to_team.contains_key(&id) {
+            if !battlefield.unit_id_to_unit.contains_key(&id) {
                 return id;
             }
         }
@@ -523,9 +523,6 @@ impl ChessEditor {
     /// 顯示模擬戰鬥頁面
     fn show_simulation_tools(&mut self, ui: &mut egui::Ui) {
         ui.heading("模擬戰鬥");
-        ui.label("這裡是模擬戰鬥頁面。可在此實作戰鬥模擬功能。");
-        ui.add_space(10.0);
-        ui.label("（點選右側其他 tab 可返回編輯模式）");
     }
 
     /// 顯示地形編輯工具
@@ -826,13 +823,15 @@ impl ChessEditor {
         if self.simulation_battle.is_none() {
             if let Some(battlefield_id) = &self.selected_battlefield {
                 if let Some(bf) = self.battlefield_data.battlefields.get(battlefield_id) {
-                    let unit_ids: Vec<String> = bf.unit_id_to_team.keys().cloned().collect();
-                    let mut battle = chess_lib::Battle::new();
-                    let msg = battle.start(unit_ids);
-                    if let Err(msg) = msg {
-                        self.set_status(msg, true);
-                        return;
-                    }
+                    let unit_ids: Vec<String> = bf.unit_id_to_unit.keys().cloned().collect();
+                    let result = chess_lib::Battle::default().start(unit_ids);
+                    let battle = match result {
+                        Ok(battle) => battle,
+                        Err(msg) => {
+                            self.set_status(msg, true);
+                            return;
+                        }
+                    };
                     self.simulation_battle = Some(battle);
                 }
             }
@@ -881,8 +880,6 @@ impl ChessEditor {
     ) {
         let battlefield_id = self.selected_battlefield.clone().unwrap();
         let cell_size = 40.0 * self.camera.zoom;
-
-        ui.heading(format!("編輯戰場: {}", &battlefield_id));
 
         // 顯示網格和交互區域
         let (rect, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -1014,7 +1011,7 @@ impl ChessEditor {
                         .get(battlefield_id)
                         .map(|bf| {
                             return bf
-                                .unit_id_to_team
+                                .unit_id_to_unit
                                 .get(unit_id)
                                 .map(|unit| {
                                     bf.teams
@@ -1247,7 +1244,7 @@ impl ChessEditor {
         match edit_mode {
             EditMode::Terrain => {
                 if self.last_painted_pos != Some(pos) {
-                    if battlefield.set_terrain(&pos, selected_terrain) {
+                    if battlefield.set_terrain(pos, selected_terrain) {
                         self.has_unsaved_changes_flag = true;
                     }
                     self.last_painted_pos = Some(pos);
@@ -1255,7 +1252,7 @@ impl ChessEditor {
             }
             EditMode::Object => {
                 if self.last_painted_pos != Some(pos) {
-                    if battlefield.set_object(&pos, selected_object) {
+                    if battlefield.set_object(pos, selected_object) {
                         self.has_unsaved_changes_flag = true;
                     }
                     self.last_painted_pos = Some(pos);
@@ -1263,8 +1260,8 @@ impl ChessEditor {
             }
             EditMode::Deployment => {
                 if self.last_painted_pos != Some(pos) {
-                    let is_deployable = battlefield.is_deployable(&pos);
-                    if battlefield.set_deployable(&pos, !is_deployable) {
+                    let is_deployable = battlefield.is_deployable(pos);
+                    if battlefield.set_deployable(pos, !is_deployable) {
                         self.has_unsaved_changes_flag = true;
                     }
                     self.last_painted_pos = Some(pos);
@@ -1282,7 +1279,7 @@ impl ChessEditor {
                         None
                     };
 
-                    if battlefield.set_unit_and_team(&pos, unit) {
+                    if battlefield.set_unit(pos, unit) {
                         self.has_unsaved_changes_flag = true;
                     }
                     self.last_painted_pos = Some(pos);
@@ -1303,20 +1300,31 @@ impl ChessEditor {
             .unwrap();
         let move_range = 3;
         if let Some(battle) = self.simulation_battle.as_mut() {
-            let msg = battle.unit_select_and_move_interaction(
+            let result = battle.click_battlefield(
                 battlefield,
                 self.simulation_selected_unit,
                 pos,
                 move_range,
             );
             // 根據訊息內容決定是否要清除 simulation_selected_unit
-            if msg.starts_with("選取單位：") {
-                self.simulation_selected_unit = Some(pos);
-            } else if msg == "移動成功" || msg == "本次移動消耗了兩倍移動力" || msg == "移動失敗"
-            {
-                self.simulation_selected_unit = None;
+            match result {
+                Ok(chess_lib::ValidResult::PickMinion) => {
+                    self.set_status("選取手下".to_string(), false);
+                    self.simulation_selected_unit = Some(pos);
+                }
+                Ok(chess_lib::ValidResult::FirstMovement) => {
+                    // 第一階段移動成功，保持選取
+                    self.set_status("一階段移動".to_string(), false);
+                }
+                Ok(chess_lib::ValidResult::SecondMovement) => {
+                    // 第二階段移動成功，清除選取
+                    self.set_status("二階段移動".to_string(), false);
+                }
+                Err(err) => {
+                    self.set_status(err.to_string(), true);
+                    self.simulation_selected_unit = None;
+                }
             }
-            self.set_status(msg, false);
         }
     }
 }
