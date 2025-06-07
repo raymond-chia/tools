@@ -528,6 +528,19 @@ impl ChessEditor {
     /// 顯示模擬戰鬥頁面
     fn show_simulation_tools(&mut self, ui: &mut egui::Ui) {
         ui.heading("模擬戰鬥");
+        if let Some(battle) = self.simulation_battle.as_ref() {
+            ui.label(format!("目前行動單位: {}", battle.active_unit_id));
+            if ui.button("下一單位").clicked() {
+                if let Some(battle) = self.simulation_battle.as_mut() {
+                    let prev_round = battle.round;
+                    battle.end_turn();
+                    self.simulation_selected_unit = None;
+                    if battle.round > prev_round {
+                        self.set_status("已進入下一輪".to_string(), false);
+                    }
+                }
+            }
+        }
     }
 
     /// 顯示地形編輯工具
@@ -822,8 +835,6 @@ impl ChessEditor {
     }
 
     fn handle_simulation_mode(&mut self, ui: &mut egui::Ui) {
-        self.show_simulation_tools(ui);
-
         // 初始化 simulation_battle
         if self.simulation_battle.is_none() {
             if let Some(battlefield_id) = &self.selected_battlefield {
