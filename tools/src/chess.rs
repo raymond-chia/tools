@@ -267,11 +267,9 @@ pub struct ChessEditor {
     // 地形塗刷狀態
     last_painted_pos: Option<Pos>,
 
-    // 模擬戰鬥選中單位 (格子座標)
     simulation_selected_unit: Option<Pos>,
-
-    // 模擬戰鬥狀態
     simulation_battle: Option<chess_lib::Battle>,
+    simulation_battlefield: Option<Battlefield>,
 
     // 對話框
     show_confirmation_dialog: bool,
@@ -314,6 +312,7 @@ impl Default for ChessEditor {
 
             simulation_selected_unit: None,
             simulation_battle: None,
+            simulation_battlefield: None,
 
             show_confirmation_dialog: false,
             confirmation_action: ConfirmationAction::None,
@@ -501,6 +500,12 @@ impl ChessEditor {
                     .selectable_label(self.edit_mode == mode, mode.name())
                     .clicked()
                 {
+                    // 若從 Simulation 切換到其他模式，清空 simulation_battlefield/battle
+                    if self.edit_mode == EditMode::Simulation && mode != EditMode::Simulation {
+                        self.simulation_battlefield = None;
+                        self.simulation_battle = None;
+                        self.simulation_selected_unit = None;
+                    }
                     self.edit_mode = mode;
                 }
             }
@@ -822,18 +827,21 @@ impl ChessEditor {
         // 初始化 simulation_battle
         if self.simulation_battle.is_none() {
             if let Some(battlefield_id) = &self.selected_battlefield {
-                if let Some(bf) = self.battlefield_data.battlefields.get(battlefield_id) {
-                    let unit_ids: Vec<String> = bf.unit_id_to_unit.keys().cloned().collect();
-                    let result = chess_lib::Battle::default().start(unit_ids);
-                    let battle = match result {
-                        Ok(battle) => battle,
-                        Err(msg) => {
-                            self.set_status(msg, true);
-                            return;
-                        }
-                    };
-                    self.simulation_battle = Some(battle);
-                }
+                let Some(bf) = self.battlefield_data.battlefields.get(battlefield_id) else {
+                    self.set_status("選中的戰場不存在".to_string(), true);
+                    return;
+                };
+                let unit_ids: Vec<String> = bf.unit_id_to_unit.keys().cloned().collect();
+                let result = chess_lib::Battle::default().start(unit_ids);
+                let battle = match result {
+                    Ok(battle) => battle,
+                    Err(msg) => {
+                        self.set_status(msg, true);
+                        return;
+                    }
+                };
+                self.simulation_battlefield = Some(bf.clone());
+                self.simulation_battle = Some(battle);
             }
         }
 
@@ -856,18 +864,20 @@ impl ChessEditor {
         Vec<Vec<Cell>>,
         std::collections::BTreeSet<Pos>,
     )> {
-        let battlefield_id = self.selected_battlefield.as_ref().unwrap();
-        self.battlefield_data
-            .battlefields
-            .get(battlefield_id)
-            .map(|bf| {
-                (
-                    bf.width(),
-                    bf.height(),
-                    bf.grid.clone(),
-                    bf.deployable_positions.clone(),
-                )
-            })
+        let battlefield = if self.edit_mode == EditMode::Simulation {
+            self.simulation_battlefield.as_ref()
+        } else {
+            let battlefield_id = self.selected_battlefield.as_ref().unwrap();
+            self.battlefield_data.battlefields.get(battlefield_id)
+        };
+        battlefield.map(|bf| {
+            (
+                bf.width(),
+                bf.height(),
+                bf.grid.clone(),
+                bf.deployable_positions.clone(),
+            )
+        })
     }
 
     fn draw_battlefield_area(
@@ -941,7 +951,7 @@ impl ChessEditor {
                 if input.pointer.primary_clicked() || input.pointer.primary_down() {
                     // Simulation 模式下單位選取與移動
                     if self.edit_mode == EditMode::Simulation && input.pointer.primary_clicked() {
-                        self.handle_simulation_unit_interaction(battlefield_id, pos);
+                        self.handle_simulation_unit_interaction(pos);
                     } else {
                         self.set_cell(battlefield_id, pos);
                     }
@@ -1292,14 +1302,12 @@ impl ChessEditor {
     }
 
     /// 單位選取與移動的互動邏輯（呼叫 battle.rs 通用邏輯）
-    fn handle_simulation_unit_interaction(&mut self, battlefield_id: &str, pos: Pos) {
-        let battlefield = self
-            .battlefield_data
-            .battlefields
-            .get_mut(battlefield_id)
-            .unwrap();
+    fn handle_simulation_unit_interaction(&mut self, pos: Pos) {
         let move_range = 3;
-        if let Some(battle) = self.simulation_battle.as_mut() {
+        if let (Some(battle), Some(battlefield)) = (
+            self.simulation_battle.as_mut(),
+            self.simulation_battlefield.as_mut(),
+        ) {
             let result = battle.click_battlefield(
                 battlefield,
                 self.simulation_selected_unit,
