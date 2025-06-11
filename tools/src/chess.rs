@@ -159,6 +159,20 @@ impl BattlefieldData {
         Ok(Self { battlefields })
     }
 
+    /// 修改戰場 id
+    fn rename_battlefield(&mut self, old_id: &str, new_id: &str) -> Result<(), String> {
+        if !self.battlefields.contains_key(old_id) {
+            return Err("找不到指定的戰場".to_string());
+        }
+        if self.battlefields.contains_key(new_id) {
+            return Err("新戰場 ID 已存在".to_string());
+        }
+        let mut battlefield = self.battlefields.remove(old_id).unwrap();
+        battlefield.id = new_id.to_string();
+        self.battlefields.insert(new_id.to_string(), battlefield);
+        Ok(())
+    }
+
     fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
         to_file(path, &self.battlefields)
     }
@@ -241,6 +255,8 @@ pub struct ChessEditor {
 
     // 編輯器狀態
     selected_battlefield: Option<String>,
+    editing_battlefield_id: Option<String>, // 雙擊進入編輯狀態的 id
+    editing_battlefield_id_value: String,   // 編輯框內容
     new_battlefield_id: String,
     new_battlefield_width: usize,
     new_battlefield_height: usize,
@@ -290,6 +306,8 @@ impl Default for ChessEditor {
             status_message: None,
 
             selected_battlefield: None,
+            editing_battlefield_id: None,
+            editing_battlefield_id_value: String::new(),
             new_battlefield_id: String::new(),
             new_battlefield_width: 10,
             new_battlefield_height: 10,
@@ -441,24 +459,57 @@ impl ChessEditor {
 
         egui::ScrollArea::vertical().show(ui, |ui| {
             // 收集所有戰場 ID 並按字母順序排序
-            let mut battlefield_ids: Vec<_> = self.battlefield_data.battlefields.keys().collect();
+            let mut battlefield_ids = self
+                .battlefield_data
+                .battlefields
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>();
             battlefield_ids.sort();
 
             // 顯示排序後的戰場列表
             for battlefield_id in battlefield_ids {
-                let selected = self.selected_battlefield.as_ref() == Some(battlefield_id);
+                let selected =
+                    self.selected_battlefield.as_deref() == Some(battlefield_id.as_str());
 
-                let button = Button::new(battlefield_id)
-                    .fill(if selected {
-                        ui.style().visuals.selection.bg_fill
-                    } else {
-                        ui.style().visuals.widgets.noninteractive.bg_fill
-                    })
-                    .min_size(egui::vec2(ui.available_width(), 0.0));
-
-                if ui.add(button).clicked() {
-                    // 點擊就直接切換戰場
-                    self.selected_battlefield = Some(battlefield_id.clone());
+                // 雙擊進入編輯狀態
+                if self.editing_battlefield_id.as_deref() == Some(battlefield_id.as_str()) {
+                    // 編輯狀態
+                    let response = ui.text_edit_singleline(&mut self.editing_battlefield_id_value);
+                    if response.lost_focus() && ui.input(|i| !i.pointer.any_down()) {
+                        let new_id = self.editing_battlefield_id_value.trim();
+                        let old_id = &battlefield_id;
+                        if !new_id.is_empty() && new_id != old_id {
+                            match self.battlefield_data.rename_battlefield(old_id, new_id) {
+                                Ok(_) => {
+                                    self.selected_battlefield = Some(new_id.to_string());
+                                    self.has_unsaved_changes_flag = true;
+                                    self.set_status("成功修改戰場 ID".to_string(), false);
+                                }
+                                Err(err) => {
+                                    self.set_status(err, true);
+                                }
+                            }
+                        }
+                        self.editing_battlefield_id = None;
+                    }
+                } else {
+                    // 顯示按鈕，支援雙擊
+                    let button = Button::new(battlefield_id.as_str())
+                        .fill(if selected {
+                            ui.style().visuals.selection.bg_fill
+                        } else {
+                            ui.style().visuals.widgets.noninteractive.bg_fill
+                        })
+                        .min_size(egui::vec2(ui.available_width(), 0.0));
+                    let response = ui.add(button);
+                    if response.clicked() {
+                        self.selected_battlefield = Some(battlefield_id.clone());
+                    }
+                    if response.double_clicked() {
+                        self.editing_battlefield_id = Some(battlefield_id.clone());
+                        self.editing_battlefield_id_value = battlefield_id.clone();
+                    }
                 }
             }
         });
@@ -466,7 +517,7 @@ impl ChessEditor {
         ui.separator();
 
         // 操作按鈕
-        if self.selected_battlefield.is_some() {
+        if let Some(selected_id) = self.selected_battlefield.clone() {
             ui.horizontal(|ui| {
                 if ui.button("刪除戰場").clicked() {
                     let battlefield_id = self.selected_battlefield.clone().unwrap();
