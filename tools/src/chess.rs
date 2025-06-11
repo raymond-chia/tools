@@ -268,11 +268,11 @@ pub struct ChessEditor {
     new_unit_type: String,
 
     // 隊伍管理
+    selected_team_id: String,
+    editing_team_id: Option<(String, String)>, // (battlefield_id, team_id)
+    editing_team_id_value: String,
     new_team_id: String,
     team_action: TeamAction,
-
-    // 單位編輯 - 新增選擇隊伍
-    selected_team_id: String,
 
     // 目標編輯
     selected_objective: Option<String>,
@@ -317,10 +317,11 @@ impl Default for ChessEditor {
             selected_object: None,
             new_unit_type: String::new(),
 
+            selected_team_id: PLAYER_TEAM.to_string(),
+            editing_team_id: None,
+            editing_team_id_value: String::new(),
             new_team_id: String::new(),
             team_action: TeamAction::None,
-
-            selected_team_id: PLAYER_TEAM.to_string(),
 
             selected_objective: None,
 
@@ -777,9 +778,7 @@ impl ChessEditor {
             // 顯示新增隊伍界面
             ui.horizontal(|ui| {
                 ui.label("新增隊伍 ID:");
-                let mut team_id = new_team_id.clone();
-                ui.text_edit_singleline(&mut team_id);
-                self.new_team_id = team_id;
+                ui.text_edit_singleline(&mut self.new_team_id);
 
                 if ui.button("新增").clicked() && !self.new_team_id.is_empty() {
                     // 這裡只記錄操作，實際執行放在update函數中
@@ -795,7 +794,47 @@ impl ChessEditor {
 
             for team in teams {
                 ui.horizontal(|ui| {
-                    ui.label(&team.id);
+                    // 雙擊隊伍 id 進入編輯狀態
+                    if self.editing_team_id.as_ref()
+                        == Some(&(battlefield_id.clone(), team.id.clone()))
+                    {
+                        let response = ui.text_edit_singleline(&mut self.editing_team_id_value);
+                        if response.lost_focus() && ui.input(|i| !i.pointer.any_down()) {
+                            let new_id = self.editing_team_id_value.trim();
+                            let old_id = &team.id;
+                            if !new_id.is_empty() && new_id != old_id {
+                                if let Some(battlefield) =
+                                    self.battlefield_data.battlefields.get_mut(&battlefield_id)
+                                {
+                                    if !battlefield.teams.contains_key(new_id) {
+                                        if let Some(mut t) = battlefield.teams.remove(old_id) {
+                                            t.id = new_id.to_string();
+                                            battlefield.teams.insert(new_id.to_string(), t);
+                                            // 同步更新所有單位的 team_id
+                                            for unit in battlefield.unit_id_to_unit.values_mut() {
+                                                if unit.team_id == *old_id {
+                                                    unit.team_id = new_id.to_string();
+                                                }
+                                            }
+                                            // 同步更新目前選擇的隊伍（新增單位時預設隊伍）
+                                            if self.selected_team_id == *old_id {
+                                                self.selected_team_id = new_id.to_string();
+                                            }
+                                            self.has_unsaved_changes_flag = true;
+                                        }
+                                    }
+                                }
+                            }
+                            self.editing_team_id = None;
+                        }
+                    } else {
+                        let label = egui::Label::new(&team.id).sense(egui::Sense::click());
+                        let response = ui.add(label);
+                        if response.double_clicked() {
+                            self.editing_team_id = Some((battlefield_id.clone(), team.id.clone()));
+                            self.editing_team_id_value = team.id.clone();
+                        }
+                    }
 
                     // 顏色選擇器
                     let mut color =
