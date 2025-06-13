@@ -1006,6 +1006,9 @@ impl ChessEditor {
 
         let painter = ui.painter();
 
+        // 收集所有單位種類文字
+        let mut unit_type_texts: Vec<(egui::Pos2, String)> = Vec::new();
+
         self.draw_cells(
             &battlefield_id,
             &painter,
@@ -1015,11 +1018,46 @@ impl ChessEditor {
             grid,
             deployable_positions,
             cell_size,
+            &mut unit_type_texts,
         );
 
         self.draw_grid_lines(&painter, rect, width, height, cell_size);
 
         self.highlight_hovered_cell(&painter, ui, rect, width, height, cell_size);
+
+        // 呼叫獨立函式繪製所有單位種類文字
+        Self::draw_unit_type_texts(&painter, &unit_type_texts);
+    }
+
+    /// 統一繪製所有單位種類文字（加描邊/陰影）
+    fn draw_unit_type_texts(painter: &egui::Painter, unit_type_texts: &[(egui::Pos2, String)]) {
+        for (pos, text) in unit_type_texts {
+            let font = egui::FontId::proportional(14.0);
+            // 黑色陰影/描邊（四個方向）
+            let outline_offsets = [
+                egui::vec2(-1.0, 0.0),
+                egui::vec2(1.0, 0.0),
+                egui::vec2(0.0, -1.0),
+                egui::vec2(0.0, 1.0),
+            ];
+            for offset in &outline_offsets {
+                painter.text(
+                    *pos + *offset,
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    font.clone(),
+                    Color32::BLACK,
+                );
+            }
+            // 主文字（白色）
+            painter.text(
+                *pos,
+                egui::Align2::CENTER_CENTER,
+                text,
+                font,
+                Color32::WHITE,
+            );
+        }
     }
 
     fn handle_cell_operation(
@@ -1073,6 +1111,7 @@ impl ChessEditor {
         grid: &Vec<Vec<Cell>>,
         deployable_positions: &std::collections::BTreeSet<Pos>,
         cell_size: f32,
+        unit_type_texts: &mut Vec<(egui::Pos2, String)>,
     ) {
         // 繪製網格
         for y in 0..height {
@@ -1145,14 +1184,8 @@ impl ChessEditor {
 
                     painter.circle_filled(cell_rect.center(), cell_size * 0.3, team_color);
 
-                    // 單位種類
-                    painter.text(
-                        cell_rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        unit_type,
-                        egui::FontId::proportional(14.0),
-                        Color32::WHITE,
-                    );
+                    // 收集單位種類文字資訊，稍後統一繪製
+                    unit_type_texts.push((cell_rect.center(), unit_type));
                 }
             }
         }
