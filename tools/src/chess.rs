@@ -1012,8 +1012,8 @@ impl ChessEditor {
 
         let painter = ui.painter();
 
-        // 收集所有單位種類文字
-        let mut unit_type_texts: Vec<(egui::Pos2, String)> = Vec::new();
+        // 收集所有格子要繪製的文字
+        let mut cell_texts: Vec<(egui::Pos2, String)> = Vec::new();
 
         self.draw_cells(
             &battlefield_id,
@@ -1024,7 +1024,7 @@ impl ChessEditor {
             grid,
             deployable_positions,
             cell_size,
-            &mut unit_type_texts,
+            &mut cell_texts,
         );
 
         self.draw_grid_lines(&painter, rect, width, height, cell_size);
@@ -1032,12 +1032,12 @@ impl ChessEditor {
         self.highlight_hovered_cell(&painter, ui, rect, width, height, cell_size);
 
         // 呼叫獨立函式繪製所有單位種類文字
-        Self::draw_unit_type_texts(&painter, &unit_type_texts);
+        Self::draw_cell_texts(&painter, &cell_texts);
     }
 
     /// 統一繪製所有單位種類文字（加描邊/陰影）
-    fn draw_unit_type_texts(painter: &egui::Painter, unit_type_texts: &[(egui::Pos2, String)]) {
-        for (pos, text) in unit_type_texts {
+    fn draw_cell_texts(painter: &egui::Painter, cell_texts: &[(egui::Pos2, String)]) {
+        for (pos, text) in cell_texts {
             let font = egui::FontId::proportional(14.0);
             // 黑色陰影/描邊（四個方向）
             let outline_offsets = [
@@ -1117,7 +1117,7 @@ impl ChessEditor {
         grid: &Vec<Vec<Cell>>,
         deployable_positions: &std::collections::BTreeSet<Pos>,
         cell_size: f32,
-        unit_type_texts: &mut Vec<(egui::Pos2, String)>,
+        cell_texts: &mut Vec<(egui::Pos2, String)>,
     ) {
         // 繪製網格
         for y in 0..height {
@@ -1152,13 +1152,7 @@ impl ChessEditor {
                                 0.0,
                                 Color32::from_rgb(200, 180, 120),
                             );
-                            painter.text(
-                                cell_rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                format!("Tent1({})", durability),
-                                egui::FontId::proportional(14.0),
-                                Color32::BLACK,
-                            );
+                            cell_texts.push((cell_rect.center(), format!("Tent1({})", durability)));
                         }
                         BattlefieldObject::Tent9 {
                             durability,
@@ -1169,13 +1163,10 @@ impl ChessEditor {
                                 0.0,
                                 Color32::from_rgb(180, 140, 80),
                             );
-                            painter.text(
+                            cell_texts.push((
                                 cell_rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                format!("T9({},{},{})", rel_pos.x, rel_pos.y, durability),
-                                egui::FontId::proportional(14.0),
-                                Color32::BLACK,
-                            );
+                                format!("Tent9({},{},{})", rel_pos.x, rel_pos.y, durability),
+                            ));
                         }
                     }
                 }
@@ -1222,7 +1213,7 @@ impl ChessEditor {
                     painter.circle_filled(cell_rect.center(), cell_size * 0.3, team_color);
 
                     // 收集單位種類文字資訊，稍後統一繪製
-                    unit_type_texts.push((cell_rect.center(), unit_type));
+                    cell_texts.push((cell_rect.center(), unit_type));
                 }
             }
         }
