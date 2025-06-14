@@ -59,6 +59,8 @@ impl BattlefieldObjectExt for BattlefieldObject {
     fn name(&self) -> &'static str {
         match self {
             BattlefieldObject::Wall => "牆壁",
+            BattlefieldObject::Tent1 { .. } => "帳篷(1格)",
+            BattlefieldObject::Tent9 { .. } => "帳篷(9格)",
         }
     }
 }
@@ -266,6 +268,7 @@ pub struct ChessEditor {
     selected_terrain: Terrain,
     selected_object: Option<BattlefieldObject>,
     new_unit_type: String,
+    durability: i32, // 預設耐久度
 
     // 隊伍管理
     selected_team_id: String,
@@ -316,6 +319,7 @@ impl Default for ChessEditor {
             selected_terrain: Terrain::Plain,
             selected_object: None,
             new_unit_type: String::new(),
+            durability: 10, // 預設耐久度
 
             selected_team_id: PLAYER_TEAM.to_string(),
             editing_team_id: None,
@@ -518,24 +522,21 @@ impl ChessEditor {
         ui.separator();
 
         // 操作按鈕
-        if let Some(selected_id) = self.selected_battlefield.clone() {
+        if let Some(battlefield_id) = self.selected_battlefield.clone() {
             ui.horizontal(|ui| {
                 if ui.button("刪除戰場").clicked() {
-                    let battlefield_id = self.selected_battlefield.clone().unwrap();
                     self.confirmation_action =
-                        ConfirmationAction::DeleteBattlefield(battlefield_id);
+                        ConfirmationAction::DeleteBattlefield(battlefield_id.clone());
                     self.show_confirmation_dialog = true;
                 }
 
                 if ui.button("調整大小").clicked() {
-                    if let Some(battlefield_id) = &self.selected_battlefield {
-                        if let Some(battlefield) =
-                            self.battlefield_data.battlefields.get(battlefield_id)
-                        {
-                            self.resize_width = battlefield.width();
-                            self.resize_height = battlefield.height();
-                            self.show_resize_dialog = true;
-                        }
+                    if let Some(battlefield) =
+                        self.battlefield_data.battlefields.get(&battlefield_id)
+                    {
+                        self.resize_width = battlefield.width();
+                        self.resize_height = battlefield.height();
+                        self.show_resize_dialog = true;
                     }
                 }
             });
@@ -632,6 +633,12 @@ impl ChessEditor {
     /// 顯示物件編輯工具
     fn show_object_tools(&mut self, ui: &mut egui::Ui) {
         ui.heading("物件編輯");
+
+        // 耐久度設定
+        ui.horizontal(|ui| {
+            ui.label("耐久度:");
+            ui.add(egui::DragValue::new(&mut self.durability).range(-1..=999));
+        });
 
         // 顯示"無"選項
         if ui
@@ -771,7 +778,6 @@ impl ChessEditor {
                 .get(id)
                 .map(|bf| bf.teams.values().cloned().collect::<Vec<_>>())
         });
-        let new_team_id = self.new_team_id.clone();
 
         // 2. 在UI中顯示這些信息和控制項
         if let (Some(battlefield_id), Some(teams)) = (battlefield_id_opt, teams_opt) {
@@ -1140,6 +1146,37 @@ impl ChessEditor {
                                 Color32::DARK_GRAY,
                             );
                         }
+                        BattlefieldObject::Tent1 { durability } => {
+                            painter.rect_filled(
+                                cell_rect.shrink(cell_size * 0.15),
+                                0.0,
+                                Color32::from_rgb(200, 180, 120),
+                            );
+                            painter.text(
+                                cell_rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                format!("Tent1({})", durability),
+                                egui::FontId::proportional(14.0),
+                                Color32::BLACK,
+                            );
+                        }
+                        BattlefieldObject::Tent9 {
+                            durability,
+                            rel_pos,
+                        } => {
+                            painter.rect_filled(
+                                cell_rect.shrink(cell_size * 0.05),
+                                0.0,
+                                Color32::from_rgb(180, 140, 80),
+                            );
+                            painter.text(
+                                cell_rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                format!("T9({},{},{})", rel_pos.x, rel_pos.y, durability),
+                                egui::FontId::proportional(14.0),
+                                Color32::BLACK,
+                            );
+                        }
                     }
                 }
 
@@ -1379,6 +1416,7 @@ impl ChessEditor {
         let selected_terrain = self.selected_terrain;
         let selected_object = self.selected_object;
         let new_unit_type = self.new_unit_type.clone();
+        let durability = self.durability;
 
         let battlefield = self
             .battlefield_data
@@ -1396,8 +1434,40 @@ impl ChessEditor {
             }
             EditMode::Object => {
                 if self.last_painted_pos != Some(pos) {
-                    if battlefield.set_object(pos, selected_object) {
-                        self.has_unsaved_changes_flag = true;
+                    match selected_object {
+                        Some(BattlefieldObject::Wall) => {
+                            if battlefield.grid[pos.y][pos.x].object.is_none() {
+                                if battlefield.set_object(pos, selected_object) {
+                                    self.has_unsaved_changes_flag = true;
+                                }
+                            }
+                        }
+                        Some(BattlefieldObject::Tent1 { .. }) => {
+                            if battlefield.grid[pos.y][pos.x].object.is_none() {
+                                if battlefield
+                                    .set_object(pos, Some(BattlefieldObject::Tent1 { durability }))
+                                {
+                                    self.has_unsaved_changes_flag = true;
+                                }
+                            }
+                        }
+                        Some(BattlefieldObject::Tent9 { .. }) => {
+                            // 先檢查 3x3 區塊
+                            match Self::check_tent9(battlefield, pos) {
+                                Ok(()) => {
+                                    Self::place_tent9(battlefield, pos, durability);
+                                    self.has_unsaved_changes_flag = true;
+                                }
+                                Err(msg) => {
+                                    self.set_status(msg, true);
+                                }
+                            }
+                        }
+                        None => {
+                            if battlefield.set_object(pos, None) {
+                                self.has_unsaved_changes_flag = true;
+                            }
+                        }
                     }
                     self.last_painted_pos = Some(pos);
                 }
@@ -1431,6 +1501,48 @@ impl ChessEditor {
             }
             EditMode::Objective | EditMode::Simulation => {
                 // 不處理
+            }
+        }
+    }
+
+    /// 檢查 Tent9 是否可放置於指定位置
+    fn check_tent9(battlefield: &Battlefield, pos: Pos) -> Result<(), String> {
+        for dy in 0..3 {
+            for dx in 0..3 {
+                let px = pos.x as isize + dx - 1;
+                let py = pos.y as isize + dy - 1;
+                if px < 0 || py < 0 {
+                    return Err("帳篷超出邊界".to_string());
+                }
+                let p = Pos {
+                    x: px as usize,
+                    y: py as usize,
+                };
+                if !battlefield.is_valid_position(p) {
+                    return Err("帳篷超出戰場範圍".to_string());
+                }
+                if battlefield.grid[p.y][p.x].object.is_some() {
+                    return Err("帳篷區域已有其他物件".to_string());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// 實際放置 Tent9（假設已通過檢查）
+    fn place_tent9(battlefield: &mut Battlefield, pos: Pos, durability: i32) {
+        for dy in 0..3 {
+            for dx in 0..3 {
+                let px = pos.x + dx - 1;
+                let py = pos.y + dy - 1;
+                let p = Pos { x: px, y: py };
+                battlefield.set_object(
+                    p,
+                    Some(BattlefieldObject::Tent9 {
+                        durability,
+                        rel_pos: Pos { x: dx, y: dy },
+                    }),
+                );
             }
         }
     }
