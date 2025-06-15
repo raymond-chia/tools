@@ -18,6 +18,12 @@ const DEPLOYMENT_CELL_SIZE: f32 = 0.5;
 const OBJECT_CELL_SIZE: f32 = 0.2;
 const UNIT_CELL_SIZE: f32 = 0.3;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObjectDirection {
+    Horizontal,
+    Vertical,
+}
+
 // ===== 擴展 TerrainType 功能 =====
 
 trait TerrainTypeExt {
@@ -63,7 +69,7 @@ impl BattlefieldObjectExt for BattlefieldObject {
     fn name(&self) -> &'static str {
         match self {
             BattlefieldObject::Wall => "牆壁",
-            BattlefieldObject::Tent1 { .. } => "帳篷(1格)",
+            BattlefieldObject::Tent2 { .. } => "帳篷(2格)",
             BattlefieldObject::Tent9 { .. } => "帳篷(9格)",
         }
     }
@@ -272,7 +278,8 @@ pub struct ChessEditor {
     selected_terrain: Terrain,
     selected_object: Option<BattlefieldObject>,
     new_unit_type: String,
-    durability: i32, // 預設耐久度
+    durability: i32,            // 預設耐久度
+    direction: ObjectDirection, // 物件方向
 
     // 隊伍管理
     selected_team_id: String,
@@ -323,7 +330,8 @@ impl Default for ChessEditor {
             selected_terrain: Terrain::Plain,
             selected_object: None,
             new_unit_type: String::new(),
-            durability: 10, // 預設耐久度
+            durability: 10,                         // 預設耐久度
+            direction: ObjectDirection::Horizontal, // 預設方向
 
             selected_team_id: PLAYER_TEAM.to_string(),
             editing_team_id: None,
@@ -642,6 +650,23 @@ impl ChessEditor {
         ui.horizontal(|ui| {
             ui.label("耐久度:");
             ui.add(egui::DragValue::new(&mut self.durability).range(-1..=999));
+        });
+
+        // 方向選擇
+        ui.horizontal(|ui| {
+            ui.label("方向:");
+            if ui
+                .selectable_label(self.direction == ObjectDirection::Horizontal, "水平")
+                .clicked()
+            {
+                self.direction = ObjectDirection::Horizontal;
+            }
+            if ui
+                .selectable_label(self.direction == ObjectDirection::Vertical, "垂直")
+                .clicked()
+            {
+                self.direction = ObjectDirection::Vertical;
+            }
         });
 
         // 顯示"無"選項
@@ -1150,14 +1175,19 @@ impl ChessEditor {
                                 Color32::DARK_GRAY,
                             );
                         }
-                        BattlefieldObject::Tent1 { durability } => {
+                        BattlefieldObject::Tent2 {
+                            durability,
+                            rel_pos,
+                        } => {
                             painter.rect_filled(
                                 cell_rect.shrink(cell_size * OBJECT_CELL_SIZE),
                                 0.0,
                                 Color32::from_rgb(200, 180, 120),
                             );
-                            cell_texts
-                                .push((cell_rect.center(), format!("Tent1\n({})", durability)));
+                            cell_texts.push((
+                                cell_rect.center(),
+                                format!("Tent2\n({},{},{})", rel_pos.x, rel_pos.y, durability),
+                            ));
                         }
                         BattlefieldObject::Tent9 {
                             durability,
@@ -1417,6 +1447,7 @@ impl ChessEditor {
         let selected_object = self.selected_object;
         let new_unit_type = self.new_unit_type.clone();
         let durability = self.durability;
+        let direction = self.direction;
 
         let battlefield = self
             .battlefield_data
@@ -1442,12 +1473,14 @@ impl ChessEditor {
                                 }
                             }
                         }
-                        Some(BattlefieldObject::Tent1 { .. }) => {
-                            if battlefield.grid[pos.y][pos.x].object.is_none() {
-                                if battlefield
-                                    .set_object(pos, Some(BattlefieldObject::Tent1 { durability }))
-                                {
+                        Some(BattlefieldObject::Tent2 { durability, .. }) => {
+                            match Self::check_tent2(battlefield, pos, direction) {
+                                Ok(()) => {
+                                    Self::place_tent2(battlefield, pos, direction, durability);
                                     self.has_unsaved_changes_flag = true;
+                                }
+                                Err(msg) => {
+                                    self.set_status(msg, true);
                                 }
                             }
                         }
@@ -1503,6 +1536,55 @@ impl ChessEditor {
                 // 不處理
             }
         }
+    }
+
+    /// 檢查 Tent2 是否可放置於指定位置
+    fn check_tent2(
+        battlefield: &Battlefield,
+        pos: Pos,
+        dir: ObjectDirection,
+    ) -> Result<(), String> {
+        let (dx, dy) = match dir {
+            ObjectDirection::Horizontal => (1, 0),
+            ObjectDirection::Vertical => (0, 1),
+        };
+        let pos2 = Pos {
+            x: pos.x.saturating_add(dx),
+            y: pos.y.saturating_add(dy),
+        };
+        if !battlefield.is_valid_position(pos2)
+            || battlefield.grid[pos.y][pos.x].object.is_some()
+            || battlefield.grid[pos2.y][pos2.x].object.is_some()
+        {
+            return Err("Tent2 放置失敗：兩格需都在範圍內且無其他物件".to_string());
+        }
+        Ok(())
+    }
+
+    /// 實際放置 Tent2（假設已通過檢查）
+    fn place_tent2(battlefield: &mut Battlefield, pos: Pos, dir: ObjectDirection, durability: i32) {
+        let (dx, dy) = match dir {
+            ObjectDirection::Horizontal => (1, 0),
+            ObjectDirection::Vertical => (0, 1),
+        };
+        let pos2 = Pos {
+            x: pos.x.saturating_add(dx),
+            y: pos.y.saturating_add(dy),
+        };
+        battlefield.set_object(
+            pos,
+            Some(BattlefieldObject::Tent2 {
+                durability,
+                rel_pos: Pos { x: 0, y: 0 },
+            }),
+        );
+        battlefield.set_object(
+            pos2,
+            Some(BattlefieldObject::Tent2 {
+                durability,
+                rel_pos: Pos { x: dx, y: dy },
+            }),
+        );
     }
 
     /// 檢查 Tent9 是否可放置於指定位置
