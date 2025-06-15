@@ -1104,6 +1104,9 @@ impl ChessEditor {
         height: usize,
         cell_size: f32,
     ) {
+        if self.show_confirmation_dialog || self.show_resize_dialog {
+            return;
+        }
         // 處理網格交互
         if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
             if rect.contains(pointer_pos) {
