@@ -14,6 +14,10 @@ use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
+const DEPLOYMENT_CELL_SIZE: f32 = 0.5;
+const OBJECT_CELL_SIZE: f32 = 0.2;
+const UNIT_CELL_SIZE: f32 = 0.3;
+
 // ===== 擴展 TerrainType 功能 =====
 
 trait TerrainTypeExt {
@@ -996,7 +1000,7 @@ impl ChessEditor {
         deployable_positions: &std::collections::BTreeSet<Pos>,
     ) {
         let battlefield_id = self.selected_battlefield.clone().unwrap();
-        let cell_size = 40.0 * self.camera.zoom;
+        let cell_size = 40.0;
 
         // 顯示網格和交互區域
         let (rect, _) = ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
@@ -1130,7 +1134,7 @@ impl ChessEditor {
                         rect.min.x + x as f32 * cell_size,
                         rect.min.y + y as f32 * cell_size,
                     )),
-                    egui::vec2(cell_size, cell_size),
+                    egui::vec2(cell_size, cell_size) * self.camera.zoom,
                 );
 
                 // 繪製地形
@@ -1141,31 +1145,32 @@ impl ChessEditor {
                     match object {
                         BattlefieldObject::Wall => {
                             painter.rect_filled(
-                                cell_rect.shrink(cell_size * 0.2),
+                                cell_rect.shrink(cell_size * OBJECT_CELL_SIZE),
                                 0.0,
                                 Color32::DARK_GRAY,
                             );
                         }
                         BattlefieldObject::Tent1 { durability } => {
                             painter.rect_filled(
-                                cell_rect.shrink(cell_size * 0.15),
+                                cell_rect.shrink(cell_size * OBJECT_CELL_SIZE),
                                 0.0,
                                 Color32::from_rgb(200, 180, 120),
                             );
-                            cell_texts.push((cell_rect.center(), format!("Tent1({})", durability)));
+                            cell_texts
+                                .push((cell_rect.center(), format!("Tent1\n({})", durability)));
                         }
                         BattlefieldObject::Tent9 {
                             durability,
                             rel_pos,
                         } => {
                             painter.rect_filled(
-                                cell_rect.shrink(cell_size * 0.05),
+                                cell_rect.shrink(cell_size * OBJECT_CELL_SIZE),
                                 0.0,
                                 Color32::from_rgb(180, 140, 80),
                             );
                             cell_texts.push((
                                 cell_rect.center(),
-                                format!("Tent9({},{},{})", rel_pos.x, rel_pos.y, durability),
+                                format!("Tent9\n({},{},{})", rel_pos.x, rel_pos.y, durability),
                             ));
                         }
                     }
@@ -1173,7 +1178,7 @@ impl ChessEditor {
 
                 // 繪製部署區域
                 if deployable_positions.contains(&pos) {
-                    let inner_rect = cell_rect.shrink(cell_size * 0.3);
+                    let inner_rect = cell_rect.shrink(cell_size * DEPLOYMENT_CELL_SIZE);
                     painter.rect_filled(
                         inner_rect,
                         2.0,
@@ -1210,7 +1215,11 @@ impl ChessEditor {
                         })
                         .unwrap_or((Color32::GRAY, "?".to_string()));
 
-                    painter.circle_filled(cell_rect.center(), cell_size * 0.3, team_color);
+                    painter.circle_filled(
+                        cell_rect.center(),
+                        cell_size * UNIT_CELL_SIZE,
+                        team_color,
+                    );
 
                     // 收集單位種類文字資訊，稍後統一繪製
                     cell_texts.push((cell_rect.center(), unit_type));
@@ -1274,7 +1283,7 @@ impl ChessEditor {
                         rect.min.x + grid_x as f32 * cell_size,
                         rect.min.y + grid_y as f32 * cell_size,
                     )),
-                    egui::vec2(cell_size, cell_size),
+                    egui::vec2(cell_size, cell_size) * self.camera.zoom,
                 );
 
                 painter.rect_filled(
