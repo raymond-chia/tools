@@ -70,7 +70,7 @@ impl BattlefieldObjectExt for BattlefieldObject {
         match self {
             BattlefieldObject::Wall => "牆壁",
             BattlefieldObject::Tent2 { .. } => "帳篷(2格)",
-            BattlefieldObject::Tent9 { .. } => "帳篷(9格)",
+            BattlefieldObject::Tent15 { .. } => "帳篷(15格)",
         }
     }
 }
@@ -1186,10 +1186,10 @@ impl ChessEditor {
                             );
                             cell_texts.push((
                                 cell_rect.center(),
-                                format!("Tent2\n({},{},{})", rel_pos.x, rel_pos.y, durability),
+                                format!("Tent2\n({},{})\n({})", rel_pos.x, rel_pos.y, durability),
                             ));
                         }
-                        BattlefieldObject::Tent9 {
+                        BattlefieldObject::Tent15 {
                             durability,
                             rel_pos,
                         } => {
@@ -1200,7 +1200,7 @@ impl ChessEditor {
                             );
                             cell_texts.push((
                                 cell_rect.center(),
-                                format!("Tent9\n({},{},{})", rel_pos.x, rel_pos.y, durability),
+                                format!("Tent15\n({},{})\n({})", rel_pos.x, rel_pos.y, durability),
                             ));
                         }
                     }
@@ -1473,7 +1473,7 @@ impl ChessEditor {
                                 }
                             }
                         }
-                        Some(BattlefieldObject::Tent2 { durability, .. }) => {
+                        Some(BattlefieldObject::Tent2 { .. }) => {
                             match Self::check_tent2(battlefield, pos, direction) {
                                 Ok(()) => {
                                     Self::place_tent2(battlefield, pos, direction, durability);
@@ -1484,11 +1484,11 @@ impl ChessEditor {
                                 }
                             }
                         }
-                        Some(BattlefieldObject::Tent9 { .. }) => {
-                            // 先檢查 3x3 區塊
-                            match Self::check_tent9(battlefield, pos) {
+                        Some(BattlefieldObject::Tent15 { .. }) => {
+                            // 先檢查 3x5 或 5x3 區塊
+                            match Self::check_tent15(battlefield, pos, direction) {
                                 Ok(()) => {
-                                    Self::place_tent9(battlefield, pos, durability);
+                                    Self::place_tent15(battlefield, pos, direction, durability);
                                     self.has_unsaved_changes_flag = true;
                                 }
                                 Err(msg) => {
@@ -1538,97 +1538,6 @@ impl ChessEditor {
         }
     }
 
-    /// 檢查 Tent2 是否可放置於指定位置
-    fn check_tent2(
-        battlefield: &Battlefield,
-        pos: Pos,
-        dir: ObjectDirection,
-    ) -> Result<(), String> {
-        let (dx, dy) = match dir {
-            ObjectDirection::Horizontal => (1, 0),
-            ObjectDirection::Vertical => (0, 1),
-        };
-        let pos2 = Pos {
-            x: pos.x.saturating_add(dx),
-            y: pos.y.saturating_add(dy),
-        };
-        if !battlefield.is_valid_position(pos2)
-            || battlefield.grid[pos.y][pos.x].object.is_some()
-            || battlefield.grid[pos2.y][pos2.x].object.is_some()
-        {
-            return Err("Tent2 放置失敗：兩格需都在範圍內且無其他物件".to_string());
-        }
-        Ok(())
-    }
-
-    /// 實際放置 Tent2（假設已通過檢查）
-    fn place_tent2(battlefield: &mut Battlefield, pos: Pos, dir: ObjectDirection, durability: i32) {
-        let (dx, dy) = match dir {
-            ObjectDirection::Horizontal => (1, 0),
-            ObjectDirection::Vertical => (0, 1),
-        };
-        let pos2 = Pos {
-            x: pos.x.saturating_add(dx),
-            y: pos.y.saturating_add(dy),
-        };
-        battlefield.set_object(
-            pos,
-            Some(BattlefieldObject::Tent2 {
-                durability,
-                rel_pos: Pos { x: 0, y: 0 },
-            }),
-        );
-        battlefield.set_object(
-            pos2,
-            Some(BattlefieldObject::Tent2 {
-                durability,
-                rel_pos: Pos { x: dx, y: dy },
-            }),
-        );
-    }
-
-    /// 檢查 Tent9 是否可放置於指定位置
-    fn check_tent9(battlefield: &Battlefield, pos: Pos) -> Result<(), String> {
-        for dy in 0..3 {
-            for dx in 0..3 {
-                let px = pos.x as isize + dx - 1;
-                let py = pos.y as isize + dy - 1;
-                if px < 0 || py < 0 {
-                    return Err("帳篷超出邊界".to_string());
-                }
-                let p = Pos {
-                    x: px as usize,
-                    y: py as usize,
-                };
-                if !battlefield.is_valid_position(p) {
-                    return Err("帳篷超出戰場範圍".to_string());
-                }
-                if battlefield.grid[p.y][p.x].object.is_some() {
-                    return Err("帳篷區域已有其他物件".to_string());
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// 實際放置 Tent9（假設已通過檢查）
-    fn place_tent9(battlefield: &mut Battlefield, pos: Pos, durability: i32) {
-        for dy in 0..3 {
-            for dx in 0..3 {
-                let px = pos.x + dx - 1;
-                let py = pos.y + dy - 1;
-                let p = Pos { x: px, y: py };
-                battlefield.set_object(
-                    p,
-                    Some(BattlefieldObject::Tent9 {
-                        durability,
-                        rel_pos: Pos { x: dx, y: dy },
-                    }),
-                );
-            }
-        }
-    }
-
     /// 單位選取與移動的互動邏輯（呼叫 battle.rs 通用邏輯）
     fn handle_simulation_unit_interaction(&mut self, pos: Pos) {
         let move_range = 3;
@@ -1662,6 +1571,102 @@ impl ChessEditor {
                 }
             }
         }
+    }
+}
+
+// 擺放物件
+impl ChessEditor {
+    fn check_battlefield_object(
+        battlefield: &Battlefield,
+        pos: Pos,
+        (w, h): (usize, usize),
+    ) -> Result<(), String> {
+        for dy in 0..h {
+            for dx in 0..w {
+                let px = pos.x + dx;
+                let py = pos.y + dy;
+                let p = Pos { x: px, y: py };
+                if !battlefield.is_valid_position(p) {
+                    return Err("超出戰場範圍".to_string());
+                }
+                if battlefield.grid[p.y][p.x].object.is_some() {
+                    return Err("區域已有其他物件".to_string());
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    fn place_battlefield_object(
+        battlefield: &mut Battlefield,
+        pos: Pos,
+        (w, h): (usize, usize),
+        new_object: impl Fn(Pos) -> BattlefieldObject,
+    ) {
+        for dy in 0..h {
+            for dx in 0..w {
+                let px = pos.x + dx;
+                let py = pos.y + dy;
+                let p = Pos { x: px, y: py };
+                let dp = Pos { x: dx, y: dy };
+                battlefield.set_object(p, Some(new_object(dp)));
+            }
+        }
+    }
+
+    /// 檢查 Tent2 是否可放置於指定位置
+    fn check_tent2(
+        battlefield: &Battlefield,
+        pos: Pos,
+        dir: ObjectDirection,
+    ) -> Result<(), String> {
+        let sizes = match dir {
+            ObjectDirection::Horizontal => (2, 1),
+            ObjectDirection::Vertical => (1, 2),
+        };
+        return Self::check_battlefield_object(battlefield, pos, sizes);
+    }
+
+    /// 實際放置 Tent2（假設已通過檢查）
+    fn place_tent2(battlefield: &mut Battlefield, pos: Pos, dir: ObjectDirection, durability: i32) {
+        let sizes = match dir {
+            ObjectDirection::Horizontal => (2, 1),
+            ObjectDirection::Vertical => (1, 2),
+        };
+        Self::place_battlefield_object(battlefield, pos, sizes, |p| BattlefieldObject::Tent2 {
+            durability,
+            rel_pos: p,
+        });
+    }
+
+    /// 檢查 Tent15 是否可放置於指定位置
+    fn check_tent15(
+        battlefield: &Battlefield,
+        pos: Pos,
+        dir: ObjectDirection,
+    ) -> Result<(), String> {
+        let sizes = match dir {
+            ObjectDirection::Horizontal => (5, 3),
+            ObjectDirection::Vertical => (3, 5),
+        };
+        return Self::check_battlefield_object(battlefield, pos, sizes);
+    }
+
+    /// 實際放置 Tent15（假設已通過檢查）
+    fn place_tent15(
+        battlefield: &mut Battlefield,
+        pos: Pos,
+        dir: ObjectDirection,
+        durability: i32,
+    ) {
+        let sizes = match dir {
+            ObjectDirection::Horizontal => (5, 3),
+            ObjectDirection::Vertical => (3, 5),
+        };
+        Self::place_battlefield_object(battlefield, pos, sizes, |p| BattlefieldObject::Tent15 {
+            durability,
+            rel_pos: p,
+        });
     }
 }
 

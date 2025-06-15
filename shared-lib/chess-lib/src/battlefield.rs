@@ -53,9 +53,9 @@ pub enum Terrain {
 /// 戰場物件
 #[derive(Debug, Deserialize, Serialize, EnumIter, Clone, Copy, PartialEq, Eq)]
 pub enum BattlefieldObject {
-    Wall,                                    // 牆壁 (不可通行)
-    Tent2 { durability: i32, rel_pos: Pos }, // 帳篷（2格，rel_pos 為 (0,0) 或 (1,0)/(0,1)）
-    Tent9 { durability: i32, rel_pos: Pos }, // 帳篷（9格，rel_pos 為 0~2,0~2）
+    Wall,                                     // 牆壁 (不可通行)
+    Tent2 { durability: i32, rel_pos: Pos },  // 帳篷（2格，rel_pos 為 (0,0) 或 (1,0)/(0,1)）
+    Tent15 { durability: i32, rel_pos: Pos }, // 帳篷
 }
 
 /// 單位資訊
