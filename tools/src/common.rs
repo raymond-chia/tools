@@ -92,10 +92,14 @@ pub trait FileOperator<P: AsRef<Path>> {
     fn set_status(&mut self, status: String, is_error: bool);
 }
 
-pub fn show_file_menu<T: FileOperator<PathBuf> + Default>(ui: &mut Ui, t: &mut T) {
+pub trait New {
+    fn new() -> Self;
+}
+
+pub fn show_file_menu<T: FileOperator<PathBuf> + New>(ui: &mut Ui, t: &mut T) {
     egui::menu::menu_button(ui, "檔案", |ui| {
         if ui.button("新增").clicked() {
-            *t = T::default();
+            *t = T::new();
             t.set_status("已建立新檔案".to_string(), false);
             ui.close_menu();
         }
@@ -106,7 +110,7 @@ pub fn show_file_menu<T: FileOperator<PathBuf> + Default>(ui: &mut Ui, t: &mut T
                 .set_directory(".")
                 .pick_file()
             {
-                *t = T::default();
+                *t = T::new();
                 t.load_file(path);
             }
             ui.close_menu();

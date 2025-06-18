@@ -1,0 +1,21 @@
+unit_types = [
+    # 刪除
+    "",
+    # wessex
+    "Æþelræd",
+    "Ælfrēd",
+    # mercia
+    "Burhræd",
+    # saxon
+    "saxon_soldier",
+    "saxon_archer",
+    "saxon_priest",
+    # norse
+    "Ívarr",
+    "Hálfdan",
+    "Ubbi",
+    "Bagsecg",
+    "Guðrum",
+    "norse_fighter",
+    "norse_archer",
+]

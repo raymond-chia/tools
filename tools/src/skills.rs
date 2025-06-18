@@ -157,6 +157,12 @@ pub struct SkillsEditor {
     confirmation_action: ConfirmationAction,
 }
 
+impl crate::common::New for SkillsEditor {
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
 #[derive(Debug, Clone)]
 enum ConfirmationAction {
     None,

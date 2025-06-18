@@ -265,6 +265,9 @@ pub struct ChessEditor {
     current_file_path: Option<PathBuf>,
     status_message: Option<(String, bool)>, // message, is_error
 
+    // 單位種類列表
+    unit_types: Vec<String>,
+
     // 編輯器狀態
     selected_battlefield: Option<String>,
     editing_battlefield_id: Option<String>, // 雙擊進入編輯狀態的 id
@@ -309,8 +312,19 @@ pub struct ChessEditor {
     resize_height: usize,
 }
 
-impl Default for ChessEditor {
-    fn default() -> Self {
+impl ChessEditor {
+    pub fn new() -> Self {
+        // 載入 unit_types
+        #[derive(serde::Deserialize)]
+        struct UnitTypeConfig {
+            unit_types: Vec<String>,
+        }
+        let unit_types = if let Ok(config) = from_file::<_, UnitTypeConfig>("unit-types.toml") {
+            config.unit_types
+        } else {
+            Vec::new()
+        };
+        let new_unit_type = unit_types.get(0).cloned().unwrap_or_default();
         Self {
             battlefield_data: BattlefieldData {
                 battlefields: HashMap::new(),
@@ -318,6 +332,8 @@ impl Default for ChessEditor {
             has_unsaved_changes_flag: false,
             current_file_path: None,
             status_message: None,
+
+            unit_types,
 
             selected_battlefield: None,
             editing_battlefield_id: None,
@@ -329,7 +345,7 @@ impl Default for ChessEditor {
             edit_mode: EditMode::Terrain,
             selected_terrain: Terrain::Plain,
             selected_object: None,
-            new_unit_type: String::new(),
+            new_unit_type,
             durability: 10,                         // 預設耐久度
             direction: ObjectDirection::Horizontal, // 預設方向
 
@@ -358,6 +374,12 @@ impl Default for ChessEditor {
     }
 }
 
+impl crate::common::New for ChessEditor {
+    fn new() -> Self {
+        return Self::new();
+    }
+}
+
 impl FileOperator<PathBuf> for ChessEditor {
     fn current_file_path(&self) -> Option<PathBuf> {
         self.current_file_path.clone()
@@ -367,11 +389,8 @@ impl FileOperator<PathBuf> for ChessEditor {
         match BattlefieldData::from_file(&path) {
             Ok(battlefield_data) => {
                 let current_file_path = Some(path);
-                *self = Self {
-                    battlefield_data,
-                    current_file_path,
-                    ..Default::default()
-                };
+                self.battlefield_data = battlefield_data;
+                self.current_file_path = current_file_path;
                 self.set_status(format!("成功載入戰場檔案"), false);
             }
             Err(err) => {
@@ -720,7 +739,13 @@ impl ChessEditor {
 
         ui.horizontal(|ui| {
             ui.label("單位種類:");
-            ui.text_edit_singleline(&mut self.new_unit_type);
+            egui::ComboBox::from_id_salt("unit_type_select")
+                .selected_text(&self.new_unit_type)
+                .show_ui(ui, |ui| {
+                    for unit_type in &self.unit_types {
+                        ui.selectable_value(&mut self.new_unit_type, unit_type.clone(), unit_type);
+                    }
+                });
         });
 
         // 取得目前戰場的隊伍列表
@@ -1519,15 +1544,16 @@ impl ChessEditor {
             }
             EditMode::Unit => {
                 if self.last_painted_pos != Some(pos) {
-                    let unit = if !new_unit_type.is_empty() {
-                        Some(Unit {
-                            id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
-                            unit_type: new_unit_type.clone(),
-                            team_id: self.selected_team_id.clone(),
-                        })
-                    } else {
-                        None
-                    };
+                    let unit =
+                        if !new_unit_type.is_empty() && self.unit_types.contains(&new_unit_type) {
+                            Some(Unit {
+                                id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
+                                unit_type: new_unit_type.clone(),
+                                team_id: self.selected_team_id.clone(),
+                            })
+                        } else {
+                            None
+                        };
 
                     if battlefield.set_unit(pos, unit) {
                         self.has_unsaved_changes_flag = true;

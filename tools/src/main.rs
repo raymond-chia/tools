@@ -76,7 +76,7 @@ impl EditorApp {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::default(),
             dialogs_editor: DialogsEditor::default(),
-            chess_editor: ChessEditor::default(),
+            chess_editor: ChessEditor::new(),
             pending_mode: None,
             show_mode_switch_confirmation: false,
         }

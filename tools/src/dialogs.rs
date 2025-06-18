@@ -25,6 +25,12 @@ pub struct DialogsEditor {
     temp_node_name: String, // 新節點的名稱
 }
 
+impl crate::common::New for DialogsEditor {
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl Default for DialogsEditor {
     fn default() -> Self {
         Self {
