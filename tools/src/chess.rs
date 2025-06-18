@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-const DEPLOYMENT_CELL_SIZE: f32 = 0.5;
+const DEPLOYMENT_CELL_SIZE: f32 = 0.25;
 const OBJECT_CELL_SIZE: f32 = 0.2;
 const UNIT_CELL_SIZE: f32 = 0.3;
 
