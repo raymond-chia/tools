@@ -203,6 +203,14 @@ impl Battlefield {
         self.deployable_positions.contains(&pos)
     }
 
+    pub fn get_cell(&self, pos: Pos) -> &Cell {
+        &self.grid[pos.y][pos.x]
+    }
+
+    pub fn get_cell_mut(&mut self, pos: Pos) -> &mut Cell {
+        &mut self.grid[pos.y][pos.x]
+    }
+
     /// 設置指定位置的地形
     pub fn set_terrain(&mut self, pos: Pos, terrain: Terrain) -> bool {
         if !self.is_valid_position(pos) {
@@ -239,5 +247,21 @@ impl Battlefield {
             }
         }
         true
+    }
+}
+
+impl Battlefield {
+    pub fn movement_cost(&self, pos: Pos) -> usize {
+        match self.grid[pos.y][pos.x].terrain {
+            Terrain::Plain => 10,
+            Terrain::Hill => 15,
+            Terrain::Mountain => 20,
+            Terrain::Forest => 15,
+            Terrain::ShallowWater => 15,
+            Terrain::DeepWater => 99,
+        }
+    }
+    pub fn is_passable(&self, pos: Pos) -> bool {
+        self.movement_cost(pos) < 99 && self.get_cell(pos).unit_id.is_none()
     }
 }

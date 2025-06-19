@@ -1,6 +1,6 @@
 use crate::{
     PLAYER_TEAM,
-    battlefield::{Battlefield, Cell, Pos},
+    battlefield::{Battlefield, Pos},
 };
 use strum_macros::{Display, EnumString};
 
@@ -110,7 +110,7 @@ impl Battle {
             return Err(InvalidResult::InvalidNextPick);
         }
         // 目標格不能有單位
-        if Self::get_cell(battlefield, to).unit_id.is_some() {
+        if battlefield.get_cell(to).unit_id.is_some() {
             return Err(InvalidResult::TargetOccupied);
         }
         // 距離限制（曼哈頓距離）
@@ -140,7 +140,7 @@ impl Battle {
         }
         // 已選取己方單位，點擊目標格
         if let Some(last_pick) = last_pick {
-            let last_picked_unit_id = &Self::get_cell(battlefield, last_pick).unit_id;
+            let last_picked_unit_id = &battlefield.get_cell(last_pick).unit_id;
             if let Some(last_picked_unit_id) = last_picked_unit_id {
                 let last_picked_unit = battlefield.unit_id_to_unit.get(last_picked_unit_id);
                 if let Some(last_picked_unit) = last_picked_unit {
@@ -158,14 +158,6 @@ impl Battle {
 
 // private methods for Battle
 impl Battle {
-    fn get_cell(battlefield: &Battlefield, pos: Pos) -> &Cell {
-        &battlefield.grid[pos.y][pos.x]
-    }
-
-    fn get_cell_mut(battlefield: &mut Battlefield, pos: Pos) -> &mut Cell {
-        &mut battlefield.grid[pos.y][pos.x]
-    }
-
     /// 執行單位移動，會更新 moved_distance
     fn move_unit_on_field(
         &mut self,
@@ -174,13 +166,13 @@ impl Battle {
         to: Pos,
         move_range: usize,
     ) -> Result<ValidResult, InvalidResult> {
-        if Some(&self.active_unit_id) != Self::get_cell(battlefield, from).unit_id.as_ref() {
+        if Some(&self.active_unit_id) != battlefield.get_cell(from).unit_id.as_ref() {
             return Err(InvalidResult::NotActiveUnit);
         }
         let move_type =
             Self::can_unit_move(battlefield, from, to, move_range, self.moved_distance)?;
-        let unit_id = Self::get_cell_mut(battlefield, from).unit_id.take();
-        Self::get_cell_mut(battlefield, to).unit_id = unit_id;
+        let unit_id = battlefield.get_cell_mut(from).unit_id.take();
+        battlefield.get_cell_mut(to).unit_id = unit_id;
         let dist =
             (from.x as isize - to.x as isize).abs() + (from.y as isize - to.y as isize).abs();
         self.moved_distance += dist as usize;
@@ -188,7 +180,7 @@ impl Battle {
     }
 
     fn is_picking_minion(battlefield: &Battlefield, pos: Pos) -> Result<(), InvalidResult> {
-        let cell = Self::get_cell(battlefield, pos);
+        let cell = battlefield.get_cell(pos);
         let Some(unit_id) = &cell.unit_id else {
             return Err(InvalidResult::NotPickingMinion);
         };
