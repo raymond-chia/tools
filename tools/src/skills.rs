@@ -8,6 +8,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 
+const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
+
 /// 技能資料集
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SkillsData {
@@ -159,7 +161,21 @@ pub struct SkillsEditor {
 
 impl crate::common::New for SkillsEditor {
     fn new() -> Self {
-        Self::default()
+        return Self::new();
+    }
+}
+
+impl SkillsEditor {
+    pub fn new() -> Self {
+        let mut result = Self::default();
+        print!("嘗試自動載入寫死的檔案");
+        // 嘗試自動載入寫死的檔案
+        if let Ok(skills_data) = SkillsData::from_file(SKILLS_FILE) {
+            let current_file_path = Some(std::path::PathBuf::from(SKILLS_FILE));
+            result.skills_data = skills_data;
+            result.current_file_path = current_file_path;
+        }
+        return result;
     }
 }
 

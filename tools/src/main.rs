@@ -78,7 +78,7 @@ impl EditorApp {
 
         Self {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
-            skills_editor: SkillsEditor::default(),
+            skills_editor: SkillsEditor::new(),
             unit_editor: UnitEditor::new(),
             dialogs_editor: DialogsEditor::default(),
             chess_editor: ChessEditor::new(),
