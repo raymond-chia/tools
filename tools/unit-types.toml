@@ -20,7 +20,7 @@ skills = ["sword_pierce"]
 
 [[unit_types]]
 name = "saxon_archer_lv1"
-skills = []
+skills = ["bow_shot"]
 
 [[unit_types]]
 name = "saxon_priest_lv1"

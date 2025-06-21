@@ -109,26 +109,28 @@ impl UnitEditor {
         }
         let mut to_copy = None;
         let mut to_delete = None;
-        for (idx, unit) in self.unit_types.iter().enumerate() {
-            let name = &unit.name;
-            let selected = self.selected_unit == Some(name.clone());
-            let button = Button::new(name).fill(if selected {
-                egui::Color32::DARK_GRAY
-            } else {
-                egui::Color32::TRANSPARENT
-            });
-            if ui.add(button).clicked() {
-                self.selected_unit = Some(name.clone());
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (idx, unit) in self.unit_types.iter().enumerate() {
+                let name = &unit.name;
+                let selected = self.selected_unit == Some(name.clone());
+                let button = Button::new(name).fill(if selected {
+                    egui::Color32::DARK_GRAY
+                } else {
+                    egui::Color32::TRANSPARENT
+                });
+                if ui.add(button).clicked() {
+                    self.selected_unit = Some(name.clone());
+                }
+                ui.horizontal(|ui| {
+                    if ui.button("複製").clicked() {
+                        to_copy = Some(idx);
+                    }
+                    if ui.button("刪除").clicked() {
+                        to_delete = Some(idx);
+                    }
+                });
             }
-            ui.horizontal(|ui| {
-                if ui.button("複製").clicked() {
-                    to_copy = Some(idx);
-                }
-                if ui.button("刪除").clicked() {
-                    to_delete = Some(idx);
-                }
-            });
-        }
+        });
         // 新增刪除不會同時發生
         if let Some(idx) = to_copy {
             let mut new_unit = self.unit_types[idx].clone();
