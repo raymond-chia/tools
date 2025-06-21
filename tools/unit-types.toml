@@ -4,19 +4,19 @@ skills = []
 
 [[unit_types]]
 name = "Æþelræd_lv1"
-skills = []
+skills = ["sword_pierce"]
 
 [[unit_types]]
 name = "Ælfrēd_lv1"
-skills = []
+skills = ["sword_pierce"]
 
 [[unit_types]]
 name = "Burhræd_lv1"
-skills = []
+skills = ["sword_pierce"]
 
 [[unit_types]]
 name = "saxon_soldier_lv1"
-skills = []
+skills = ["sword_pierce"]
 
 [[unit_types]]
 name = "saxon_archer_lv1"

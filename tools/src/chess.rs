@@ -9,7 +9,7 @@ use chess_lib::{
 use eframe::{Frame, egui};
 use egui::{Button, Color32, Rect, Stroke};
 use rand::{Rng, distributions::Alphanumeric};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
@@ -269,7 +269,7 @@ pub struct ChessEditor {
     status_message: Option<(String, bool)>, // message, is_error
 
     // 單位種類列表
-    unit_types: BTreeSet<UnitType>,
+    unit_types: Vec<UnitType>,
 
     // 編輯器狀態
     selected_battlefield: Option<String>,
