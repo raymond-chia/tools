@@ -80,7 +80,7 @@ impl EditorApp {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::new(),
             unit_editor: UnitEditor::new(),
-            dialogs_editor: DialogsEditor::default(),
+            dialogs_editor: DialogsEditor::new(),
             chess_editor: ChessEditor::new(),
             pending_mode: None,
             show_mode_switch_confirmation: false,

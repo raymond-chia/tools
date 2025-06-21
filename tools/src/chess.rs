@@ -16,6 +16,7 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 const UNIT_TYPES: &str = "unit-types.toml";
+const BATTLEFIELDS_FILE: &str = "../shared-lib/test-data/ignore-fields.toml";
 
 const DEPLOYMENT_CELL_SIZE: f32 = 0.25;
 const OBJECT_CELL_SIZE: f32 = 0.2;
@@ -163,7 +164,7 @@ impl BattlefieldEditorExt for Battlefield {
 }
 
 /// 戰場數據集
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct BattlefieldData {
     battlefields: HashMap<String, Battlefield>,
 }
@@ -315,14 +316,9 @@ pub struct ChessEditor {
     resize_height: usize,
 }
 
-impl ChessEditor {
-    pub fn new() -> Self {
-        let unit_types = load_unit_types(UNIT_TYPES).unwrap();
-        let new_unit_type = unit_types
-            .first()
-            .map(|u| u.name.clone())
-            .unwrap_or_default();
-        Self {
+impl Default for ChessEditor {
+    fn default() -> Self {
+        return Self {
             battlefield_data: BattlefieldData {
                 battlefields: HashMap::new(),
             },
@@ -330,7 +326,7 @@ impl ChessEditor {
             current_file_path: None,
             status_message: None,
 
-            unit_types,
+            unit_types: Vec::new(),
 
             selected_battlefield: None,
             editing_battlefield_id: None,
@@ -342,7 +338,7 @@ impl ChessEditor {
             edit_mode: EditMode::Terrain,
             selected_terrain: Terrain::Plain,
             selected_object: None,
-            new_unit_type,
+            new_unit_type: String::new(),
             durability: 10,                         // 預設耐久度
             direction: ObjectDirection::Horizontal, // 預設方向
 
@@ -367,7 +363,29 @@ impl ChessEditor {
             show_resize_dialog: false,
             resize_width: 10,
             resize_height: 10,
-        }
+        };
+    }
+}
+
+impl ChessEditor {
+    pub fn new() -> Self {
+        let unit_types = load_unit_types(UNIT_TYPES).unwrap();
+        let new_unit_type = unit_types
+            .first()
+            .map(|u| u.name.clone())
+            .unwrap_or_default();
+        let (battlefield_data, current_file_path) =
+            match BattlefieldData::from_file(BATTLEFIELDS_FILE) {
+                Ok(battlefield_data) => (battlefield_data, Some(PathBuf::from(BATTLEFIELDS_FILE))),
+                Err(_) => (BattlefieldData::default(), None),
+            };
+        return Self {
+            battlefield_data,
+            current_file_path,
+            unit_types,
+            new_unit_type,
+            ..Default::default()
+        };
     }
 }
 

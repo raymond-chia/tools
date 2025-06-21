@@ -11,7 +11,7 @@ use strum::IntoEnumIterator;
 const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 
 /// 技能資料集
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SkillsData {
     #[serde(flatten)]
     pub skills: HashMap<String, Skill>,
@@ -167,14 +167,19 @@ impl crate::common::New for SkillsEditor {
 
 impl SkillsEditor {
     pub fn new() -> Self {
-        let mut result = Self::default();
         // 嘗試自動載入寫死的檔案
-        if let Ok(skills_data) = SkillsData::from_file(SKILLS_FILE) {
-            let current_file_path = Some(std::path::PathBuf::from(SKILLS_FILE));
-            result.skills_data = skills_data;
-            result.current_file_path = current_file_path;
-        }
-        return result;
+        let (skills_data, current_file_path) = match SkillsData::from_file(SKILLS_FILE) {
+            Ok(skills_data) => {
+                let current_file_path = Some(std::path::PathBuf::from(SKILLS_FILE));
+                (skills_data, current_file_path)
+            }
+            Err(_) => (SkillsData::default(), None),
+        };
+        return Self {
+            skills_data,
+            current_file_path,
+            ..Default::default()
+        };
     }
 }
 

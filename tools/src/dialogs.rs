@@ -10,8 +10,11 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
+const DIALOGS_FILE: &str = "../shared-lib/test-data/demo-dialogs.toml";
+
 const LEFT_SIDE_PANEL_WIDTH: f32 = 400.0; // 側邊面板的寬度
 
+#[derive(Debug, Default)]
 pub struct DialogsEditor {
     script: Script,
     has_unsaved_changes_flag: bool,         // 追蹤是否有未保存的變動
@@ -27,21 +30,20 @@ pub struct DialogsEditor {
 
 impl crate::common::New for DialogsEditor {
     fn new() -> Self {
-        Self::default()
+        Self::new()
     }
 }
 
-impl Default for DialogsEditor {
-    fn default() -> Self {
+impl DialogsEditor {
+    pub fn new() -> Self {
+        let (script, current_file_path) = match from_file(DIALOGS_FILE) {
+            Ok(s) => (s, Some(PathBuf::from(DIALOGS_FILE))),
+            Err(_) => (Script::default(), None),
+        };
         Self {
-            script: Script::default(),
-            has_unsaved_changes_flag: false,
-            current_file_path: None,
-            status_message: None,
-            camera: Camera2D::default(),
-            adding_node: false,
-            selected_node: None,
-            temp_node_name: String::new(),
+            script,
+            current_file_path,
+            ..Default::default()
         }
     }
 }
