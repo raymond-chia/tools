@@ -6,7 +6,7 @@ use egui::{Button, Ui};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io};
 
-const UNIT_TEMPLATES_FILE: &str = "unit-types.toml";
+const UNIT_TEMPLATES_FILE: &str = "../shared-lib/test-data/ignore-unit-templates.toml";
 const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]

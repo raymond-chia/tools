@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-const UNIT_TEMPLATES: &str = "unit-types.toml";
+const UNIT_TEMPLATES_FILE: &str = "../shared-lib/test-data/ignore-unit-templates.toml";
 const BATTLEFIELDS_FILE: &str = "../shared-lib/test-data/ignore-fields.toml";
 
 const DEPLOYMENT_CELL_SIZE: f32 = 0.25;
@@ -369,7 +369,7 @@ impl Default for ChessEditor {
 
 impl ChessEditor {
     pub fn new() -> Self {
-        let unit_templates = load_unit_templates(UNIT_TEMPLATES).unwrap();
+        let unit_templates = load_unit_templates(UNIT_TEMPLATES_FILE).unwrap();
         let new_unit_type = unit_templates
             .first()
             .map(|u| u.name.clone())
