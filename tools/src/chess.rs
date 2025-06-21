@@ -1,6 +1,6 @@
 use crate::{
     common::{Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file},
-    unit::{UnitType, load_unit_types},
+    unit::{UnitTemplate, load_unit_templates},
 };
 use chess_lib::{
     BattleObjectiveType, Battlefield, BattlefieldObject, Cell, PLAYER_TEAM, Pos, Team, Terrain,
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-const UNIT_TYPES: &str = "unit-types.toml";
+const UNIT_TEMPLATES: &str = "unit-types.toml";
 const BATTLEFIELDS_FILE: &str = "../shared-lib/test-data/ignore-fields.toml";
 
 const DEPLOYMENT_CELL_SIZE: f32 = 0.25;
@@ -270,7 +270,7 @@ pub struct ChessEditor {
     status_message: Option<(String, bool)>, // message, is_error
 
     // 單位種類列表
-    unit_types: Vec<UnitType>,
+    unit_templates: Vec<UnitTemplate>,
 
     // 編輯器狀態
     selected_battlefield: Option<String>,
@@ -326,7 +326,7 @@ impl Default for ChessEditor {
             current_file_path: None,
             status_message: None,
 
-            unit_types: Vec::new(),
+            unit_templates: Vec::new(),
 
             selected_battlefield: None,
             editing_battlefield_id: None,
@@ -369,23 +369,31 @@ impl Default for ChessEditor {
 
 impl ChessEditor {
     pub fn new() -> Self {
-        let unit_types = load_unit_types(UNIT_TYPES).unwrap();
-        let new_unit_type = unit_types
+        let unit_templates = load_unit_templates(UNIT_TEMPLATES).unwrap();
+        let new_unit_type = unit_templates
             .first()
             .map(|u| u.name.clone())
             .unwrap_or_default();
-        let (battlefield_data, current_file_path) =
+        let (battlefield_data, current_file_path, err) =
             match BattlefieldData::from_file(BATTLEFIELDS_FILE) {
-                Ok(battlefield_data) => (battlefield_data, Some(PathBuf::from(BATTLEFIELDS_FILE))),
-                Err(_) => (BattlefieldData::default(), None),
+                Ok(battlefield_data) => (
+                    battlefield_data,
+                    Some(PathBuf::from(BATTLEFIELDS_FILE)),
+                    None,
+                ),
+                Err(err) => (BattlefieldData::default(), None, Some(err)),
             };
-        return Self {
+        let mut result = Self {
             battlefield_data,
             current_file_path,
-            unit_types,
+            unit_templates,
             new_unit_type,
             ..Default::default()
         };
+        if let Some(err) = err {
+            result.set_status(err.to_string(), true);
+        }
+        return result;
     }
 }
 
@@ -757,7 +765,7 @@ impl ChessEditor {
             egui::ComboBox::from_id_salt("unit_type_select")
                 .selected_text(&self.new_unit_type)
                 .show_ui(ui, |ui| {
-                    for unit_type in &self.unit_types {
+                    for unit_type in &self.unit_templates {
                         ui.selectable_value(
                             &mut self.new_unit_type,
                             unit_type.name.clone(),
@@ -1564,7 +1572,7 @@ impl ChessEditor {
             EditMode::Unit => {
                 if self.last_painted_pos != Some(pos) {
                     let unit = if !new_unit_type.is_empty()
-                        && self.unit_types.iter().any(|u| u.name == new_unit_type)
+                        && self.unit_templates.iter().any(|u| u.name == new_unit_type)
                     {
                         Some(Unit {
                             id: Self::generate_unique_unit_id(battlefield, &new_unit_type),

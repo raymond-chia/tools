@@ -64,7 +64,6 @@ pub struct Unit {
     pub id: String,
     pub unit_type: String,
     pub team_id: String,
-    pub skills: Vec<String>,
 }
 
 /// 格子

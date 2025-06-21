@@ -6,18 +6,18 @@ use egui::{Button, Ui};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io};
 
-const UNIT_TYPES_FILE: &str = "unit-types.toml";
+const UNIT_TEMPLATES_FILE: &str = "unit-types.toml";
 const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UnitType {
+pub struct UnitTemplate {
     pub name: String,
     pub skills: BTreeSet<String>,
 }
 
 #[derive(Default)]
 pub struct UnitEditor {
-    unit_types: Vec<UnitType>,
+    unit_template: Vec<UnitTemplate>,
     skills: Vec<String>,
     selected_unit: Option<String>,
     selected_skill: String,
@@ -25,12 +25,12 @@ pub struct UnitEditor {
     status_message: Option<(String, bool)>,
 }
 
-pub fn load_unit_types(path: &str) -> io::Result<Vec<UnitType>> {
+pub fn load_unit_templates(path: &str) -> io::Result<Vec<UnitTemplate>> {
     #[derive(serde::Deserialize)]
-    struct UnitTypeConfig {
-        unit_types: Vec<UnitType>,
+    struct UnitTemplatesConfig {
+        unit_templates: Vec<UnitTemplate>,
     }
-    return from_file::<_, UnitTypeConfig>(path).map(|config| config.unit_types);
+    return from_file::<_, UnitTemplatesConfig>(path).map(|config| config.unit_templates);
 }
 
 impl UnitEditor {
@@ -41,12 +41,12 @@ impl UnitEditor {
     }
 
     pub fn reload(&mut self) {
-        // 重新載入 unit_types
-        match load_unit_types(UNIT_TYPES_FILE) {
-            Ok(unit_types) => {
-                self.unit_types = unit_types;
+        // 重新載入 unit_templates
+        match load_unit_templates(UNIT_TEMPLATES_FILE) {
+            Ok(unit_templates) => {
+                self.unit_template = unit_templates;
                 if let Some(selected) = &self.selected_unit {
-                    if !self.unit_types.iter().any(|u| &u.name == selected) {
+                    if !self.unit_template.iter().any(|u| &u.name == selected) {
                         // 如果選中的單位不存在，則清除選中狀態
                         self.selected_unit = None;
                     }
@@ -76,7 +76,7 @@ impl UnitEditor {
                 return;
             }
         }
-        self.set_status("已重新載入 unit_types 與 skills".to_string(), false);
+        self.set_status("已重新載入 unit_templates 與 skills".to_string(), false);
     }
 
     pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -93,24 +93,24 @@ impl UnitEditor {
 
     fn show_unit_list(&mut self, ui: &mut Ui) {
         ui.vertical(|ui| {
-            if ui.button("重新載入 unit_types & skills").clicked() {
+            if ui.button("重新載入 unit_templates & skills").clicked() {
                 self.reload();
             }
             ui.heading("單位列表");
         });
         if ui.button("新增單位").clicked() {
-            let new_unit = UnitType {
+            let new_unit = UnitTemplate {
                 name: String::new(),
                 skills: BTreeSet::new(),
             };
-            self.unit_types.push(new_unit.clone());
+            self.unit_template.push(new_unit.clone());
             self.selected_unit = Some(new_unit.name.clone());
             self.has_unsaved_changes = true;
         }
         let mut to_copy = None;
         let mut to_delete = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (idx, unit) in self.unit_types.iter().enumerate() {
+            for (idx, unit) in self.unit_template.iter().enumerate() {
                 let name = &unit.name;
                 let selected = self.selected_unit == Some(name.clone());
                 let button = Button::new(name).fill(if selected {
@@ -133,16 +133,16 @@ impl UnitEditor {
         });
         // 新增刪除不會同時發生
         if let Some(idx) = to_copy {
-            let mut new_unit = self.unit_types[idx].clone();
+            let mut new_unit = self.unit_template[idx].clone();
             new_unit.name.push_str("_copy");
             let new_unit_name = new_unit.name.clone();
-            self.unit_types.insert(idx + 1, new_unit);
+            self.unit_template.insert(idx + 1, new_unit);
             self.selected_unit = Some(new_unit_name);
             self.has_unsaved_changes = true;
         }
         // 新增刪除不會同時發生
         if let Some(idx) = to_delete {
-            self.unit_types.remove(idx);
+            self.unit_template.remove(idx);
             self.selected_unit = None;
             self.has_unsaved_changes = true;
         }
@@ -152,11 +152,11 @@ impl UnitEditor {
         let Some(orig_name) = self.selected_unit.clone() else {
             return;
         };
-        let idx = self.unit_types.iter().position(|u| u.name == orig_name);
+        let idx = self.unit_template.iter().position(|u| u.name == orig_name);
         let Some(idx) = idx else {
             return;
         };
-        let mut unit = self.unit_types[idx].clone();
+        let mut unit = self.unit_template[idx].clone();
         ui.heading("單位編輯");
         ui.label("名稱（含等級）：");
         ui.text_edit_singleline(&mut unit.name);
@@ -190,14 +190,14 @@ impl UnitEditor {
 
         // 判斷名稱是否有變更
         let name_changed = unit.name != orig_name;
-        if name_changed && !self.unit_types.iter().any(|u| u.name == unit.name) {
+        if name_changed && !self.unit_template.iter().any(|u| u.name == unit.name) {
             self.selected_unit = Some(unit.name.clone());
-            self.unit_types[idx] = unit;
+            self.unit_template[idx] = unit;
         } else if !name_changed {
-            self.unit_types[idx] = unit;
+            self.unit_template[idx] = unit;
         }
         if ui.button("儲存").clicked() {
-            if let Err(e) = self.save_unit_types(UNIT_TYPES_FILE) {
+            if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
                 self.set_status(format!("儲存失敗: {}", e), true);
             } else {
                 self.set_status("儲存成功".to_string(), false);
@@ -206,13 +206,13 @@ impl UnitEditor {
         }
     }
 
-    fn save_unit_types(&self, path: &str) -> Result<(), io::Error> {
+    fn save_unit_templates(&self, path: &str) -> Result<(), io::Error> {
         #[derive(serde::Serialize)]
-        struct UnitTypeConfig<'a> {
-            unit_types: &'a Vec<UnitType>,
+        struct UnitTemplatesConfig<'a> {
+            unit_templates: &'a Vec<UnitTemplate>,
         }
-        let config = UnitTypeConfig {
-            unit_types: &self.unit_types,
+        let config = UnitTemplatesConfig {
+            unit_templates: &self.unit_template,
         };
         return to_file(path, &config);
     }

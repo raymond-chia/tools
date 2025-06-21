@@ -36,15 +36,19 @@ impl crate::common::New for DialogsEditor {
 
 impl DialogsEditor {
     pub fn new() -> Self {
-        let (script, current_file_path) = match from_file(DIALOGS_FILE) {
-            Ok(s) => (s, Some(PathBuf::from(DIALOGS_FILE))),
-            Err(_) => (Script::default(), None),
+        let (script, current_file_path, err) = match from_file(DIALOGS_FILE) {
+            Ok(s) => (s, Some(PathBuf::from(DIALOGS_FILE)), None),
+            Err(err) => (Script::default(), None, Some(err)),
         };
-        Self {
+        let mut result = Self {
             script,
             current_file_path,
             ..Default::default()
+        };
+        if let Some(err) = err {
+            result.set_status(err.to_string(), true);
         }
+        return result;
     }
 }
 

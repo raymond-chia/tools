@@ -168,18 +168,22 @@ impl crate::common::New for SkillsEditor {
 impl SkillsEditor {
     pub fn new() -> Self {
         // 嘗試自動載入寫死的檔案
-        let (skills_data, current_file_path) = match SkillsData::from_file(SKILLS_FILE) {
+        let (skills_data, current_file_path, err) = match SkillsData::from_file(SKILLS_FILE) {
             Ok(skills_data) => {
                 let current_file_path = Some(std::path::PathBuf::from(SKILLS_FILE));
-                (skills_data, current_file_path)
+                (skills_data, current_file_path, None)
             }
-            Err(_) => (SkillsData::default(), None),
+            Err(err) => (SkillsData::default(), None, Some(err)),
         };
-        return Self {
+        let mut result = Self {
             skills_data,
             current_file_path,
             ..Default::default()
         };
+        if let Some(err) = err {
+            result.set_status(err.to_string(), true);
+        }
+        return result;
     }
 }
 
