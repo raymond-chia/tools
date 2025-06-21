@@ -1,5 +1,6 @@
-use crate::common::{
-    Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file,
+use crate::{
+    common::{Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file},
+    unit::{UnitType, load_unit_types},
 };
 use chess_lib::{
     BattleObjectiveType, Battlefield, BattlefieldObject, Cell, PLAYER_TEAM, Pos, Team, Terrain,
@@ -8,11 +9,13 @@ use chess_lib::{
 use eframe::{Frame, egui};
 use egui::{Button, Color32, Rect, Stroke};
 use rand::{Rng, distributions::Alphanumeric};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+
+const UNIT_TYPES: &str = "unit-types.toml";
 
 const DEPLOYMENT_CELL_SIZE: f32 = 0.25;
 const OBJECT_CELL_SIZE: f32 = 0.2;
@@ -266,7 +269,7 @@ pub struct ChessEditor {
     status_message: Option<(String, bool)>, // message, is_error
 
     // 單位種類列表
-    unit_types: Vec<String>,
+    unit_types: BTreeSet<UnitType>,
 
     // 編輯器狀態
     selected_battlefield: Option<String>,
@@ -314,17 +317,11 @@ pub struct ChessEditor {
 
 impl ChessEditor {
     pub fn new() -> Self {
-        // 載入 unit_types
-        #[derive(serde::Deserialize)]
-        struct UnitTypeConfig {
-            unit_types: Vec<String>,
-        }
-        let unit_types = if let Ok(config) = from_file::<_, UnitTypeConfig>("unit-types.toml") {
-            config.unit_types
-        } else {
-            Vec::new()
-        };
-        let new_unit_type = unit_types.get(0).cloned().unwrap_or_default();
+        let unit_types = load_unit_types(UNIT_TYPES).unwrap();
+        let new_unit_type = unit_types
+            .first()
+            .map(|u| u.name.clone())
+            .unwrap_or_default();
         Self {
             battlefield_data: BattlefieldData {
                 battlefields: HashMap::new(),
@@ -743,7 +740,11 @@ impl ChessEditor {
                 .selected_text(&self.new_unit_type)
                 .show_ui(ui, |ui| {
                     for unit_type in &self.unit_types {
-                        ui.selectable_value(&mut self.new_unit_type, unit_type.clone(), unit_type);
+                        ui.selectable_value(
+                            &mut self.new_unit_type,
+                            unit_type.name.clone(),
+                            &unit_type.name,
+                        );
                     }
                 });
         });
@@ -1544,16 +1545,18 @@ impl ChessEditor {
             }
             EditMode::Unit => {
                 if self.last_painted_pos != Some(pos) {
-                    let unit =
-                        if !new_unit_type.is_empty() && self.unit_types.contains(&new_unit_type) {
-                            Some(Unit {
-                                id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
-                                unit_type: new_unit_type.clone(),
-                                team_id: self.selected_team_id.clone(),
-                            })
-                        } else {
-                            None
-                        };
+                    let unit = if !new_unit_type.is_empty()
+                        && self.unit_types.iter().any(|u| u.name == new_unit_type)
+                    {
+                        Some(Unit {
+                            id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
+                            unit_type: new_unit_type.clone(),
+                            team_id: self.selected_team_id.clone(),
+                            ..Default::default()
+                        })
+                    } else {
+                        None
+                    };
 
                     if battlefield.set_unit(pos, unit) {
                         self.has_unsaved_changes_flag = true;

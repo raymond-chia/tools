@@ -59,11 +59,12 @@ pub enum BattlefieldObject {
 }
 
 /// 單位資訊
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Unit {
     pub id: String,
     pub unit_type: String,
     pub team_id: String,
+    pub skills: Vec<String>,
 }
 
 /// 格子
@@ -162,8 +163,8 @@ impl Battlefield {
             id: id.to_string(),
             grid,
             teams: {
-                let mut map = BTreeMap::new();
-                map.insert(
+                let mut teams = BTreeMap::new();
+                teams.insert(
                     PLAYER_TEAM.to_string(),
                     Team {
                         id: PLAYER_TEAM.to_string(),
@@ -174,7 +175,7 @@ impl Battlefield {
                         }, // 預設藍色
                     },
                 );
-                map
+                teams
             },
             objectives: BattleObjectiveType::default(),
             deployable_positions: BTreeSet::new(),

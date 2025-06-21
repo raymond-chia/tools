@@ -10,13 +10,13 @@ use strum::IntoEnumIterator;
 
 /// 技能資料集
 #[derive(Debug, Clone, Deserialize, Serialize)]
-struct SkillsData {
+pub struct SkillsData {
     #[serde(flatten)]
-    skills: HashMap<String, Skill>,
+    pub skills: HashMap<String, Skill>,
 }
 
 impl SkillsData {
-    fn from_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+    pub fn from_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let skills = from_file(path)?;
         return Ok(Self { skills });
     }

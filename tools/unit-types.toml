@@ -1,21 +1,55 @@
-unit_types = [
-    # 刪除
-    "",
-    # wessex
-    "Æþelræd",
-    "Ælfrēd",
-    # mercia
-    "Burhræd",
-    # saxon
-    "saxon_soldier",
-    "saxon_archer",
-    "saxon_priest",
-    # norse
-    "Ívarr",
-    "Hálfdan",
-    "Ubbi",
-    "Bagsecg",
-    "Guðrum",
-    "norse_fighter",
-    "norse_archer",
-]
+[[unit_types]]
+name = ""
+skills = []
+
+[[unit_types]]
+name = "Æþelræd_lv1"
+skills = []
+
+[[unit_types]]
+name = "Ælfrēd_lv1"
+skills = []
+
+[[unit_types]]
+name = "Burhræd_lv1"
+skills = []
+
+[[unit_types]]
+name = "saxon_soldier_lv1"
+skills = []
+
+[[unit_types]]
+name = "saxon_archer_lv1"
+skills = []
+
+[[unit_types]]
+name = "saxon_priest_lv1"
+skills = []
+
+[[unit_types]]
+name = "Ívarr_lv1"
+skills = []
+
+[[unit_types]]
+name = "Hálfdan_lv1"
+skills = []
+
+[[unit_types]]
+name = "Ubbi_lv1"
+skills = []
+
+[[unit_types]]
+name = "Bagsecg_lv1"
+skills = []
+
+[[unit_types]]
+name = "Guðrum_lv1"
+skills = []
+
+[[unit_types]]
+name = "norse_fighter_lv1"
+skills = []
+
+[[unit_types]]
+name = "norse_archer_lv1"
+skills = []

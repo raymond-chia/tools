@@ -2,17 +2,20 @@ mod chess;
 mod common;
 mod dialogs;
 mod skills;
+mod unit;
 
 use chess::ChessEditor;
 use dialogs::DialogsEditor;
 use eframe::{Frame, egui};
 use egui::{FontData, FontDefinitions, FontFamily, Ui};
 use skills::SkillsEditor;
+use unit::UnitEditor;
 
 /// 編輯器模式
 #[derive(Clone, PartialEq)]
 enum EditorMode {
     Skills,
+    Unit,
     Dialogs,
     Chess,
 }
@@ -21,6 +24,7 @@ enum EditorMode {
 struct EditorApp {
     editor_mode: EditorMode,
     skills_editor: SkillsEditor,
+    unit_editor: UnitEditor,
     dialogs_editor: DialogsEditor,
     chess_editor: ChessEditor,
     pending_mode: Option<EditorMode>,
@@ -75,6 +79,7 @@ impl EditorApp {
         Self {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::default(),
+            unit_editor: UnitEditor::new(),
             dialogs_editor: DialogsEditor::default(),
             chess_editor: ChessEditor::new(),
             pending_mode: None,
@@ -86,6 +91,7 @@ impl EditorApp {
         ui.horizontal(|ui| {
             for (mode, label) in [
                 (EditorMode::Skills, "技能編輯器"),
+                (EditorMode::Unit, "單位編輯器"),
                 (EditorMode::Dialogs, "劇情編輯器"),
                 (EditorMode::Chess, "戰棋編輯器"),
             ] {
@@ -95,6 +101,7 @@ impl EditorApp {
                 {
                     let has_unsaved_changes = match self.editor_mode {
                         EditorMode::Skills => self.skills_editor.has_unsaved_changes(),
+                        EditorMode::Unit => self.unit_editor.has_unsaved_changes(),
                         EditorMode::Dialogs => self.dialogs_editor.has_unsaved_changes(),
                         EditorMode::Chess => self.chess_editor.has_unsaved_changes(),
                     };
@@ -118,11 +125,13 @@ impl EditorApp {
         let title = "未保存的變動";
         let current_mode = match self.editor_mode {
             EditorMode::Skills => "技能編輯器",
+            EditorMode::Unit => "單位編輯器",
             EditorMode::Dialogs => "劇情編輯器",
             EditorMode::Chess => "戰棋編輯器",
         };
         let target_mode = match self.pending_mode {
             Some(EditorMode::Skills) => "技能編輯器",
+            Some(EditorMode::Unit) => "單位編輯器",
             Some(EditorMode::Dialogs) => "劇情編輯器",
             Some(EditorMode::Chess) => "戰棋編輯器",
             None => "其他編輯器",
@@ -173,6 +182,9 @@ impl eframe::App for EditorApp {
         match self.editor_mode {
             EditorMode::Skills => {
                 self.skills_editor.update(ctx, frame);
+            }
+            EditorMode::Unit => {
+                self.unit_editor.update(ctx, frame);
             }
             EditorMode::Dialogs => {
                 self.dialogs_editor.update(ctx, frame);
