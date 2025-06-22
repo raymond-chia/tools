@@ -304,6 +304,7 @@ pub struct ChessEditor {
     // 地形塗刷狀態
     last_painted_pos: Option<Pos>,
 
+    // 模擬戰
     simulation_selected_unit: Option<Pos>,
     simulation_battle: Option<chess_lib::Battle>,
     simulation_battlefield: Option<Battlefield>,
@@ -607,11 +608,24 @@ impl ChessEditor {
                     .selectable_label(self.edit_mode == mode, mode.name())
                     .clicked()
                 {
-                    // 若從 Simulation 切換到其他模式，清空 simulation_battlefield/battle
+                    // 若從 Simulation 切換到其他模式, 清空 simulation_battlefield/battle
                     if self.edit_mode == EditMode::Simulation && mode != EditMode::Simulation {
                         self.simulation_battlefield = None;
                         self.simulation_battle = None;
                         self.simulation_selected_unit = None;
+                    }
+                    // 若從其他模式切換到 Simulation, 重新載入 unit templates
+                    if self.edit_mode != EditMode::Simulation && mode == EditMode::Simulation {
+                        self.unit_templates = match load_unit_templates(UNIT_TEMPLATES_FILE) {
+                            Ok(templates) => templates,
+                            Err(err) => {
+                                self.set_status(
+                                    format!("Failed to load unit templates: {}", err),
+                                    true,
+                                );
+                                return;
+                            }
+                        };
                     }
                     self.edit_mode = mode;
                 }
@@ -637,6 +651,37 @@ impl ChessEditor {
         ui.heading("模擬戰鬥");
         if let Some(battle) = self.simulation_battle.as_ref() {
             ui.label(format!("目前行動單位: {}", battle.active_unit_id));
+            // 顯示目前行動單位技能（每個技能為按鈕）
+            if let Some(battlefield) = self.simulation_battlefield.as_ref() {
+                if let Some(unit) = battlefield.unit_id_to_unit.get(&battle.active_unit_id) {
+                    if let Some(template) = self
+                        .unit_templates
+                        .iter()
+                        .find(|t| &t.name == &unit.unit_type)
+                    {
+                        let skills: Vec<_> = template.skills.iter().cloned().collect();
+                        if !skills.is_empty() {
+                            ui.horizontal(|ui| {
+                                ui.label("技能:");
+                                for skill in &skills {
+                                    if ui.button(skill).clicked() {
+                                        self.set_status(format!("施放技能：{}", skill), false);
+                                        // 這裡可擴充實際技能施放邏輯
+                                    }
+                                }
+                            });
+                        } else {
+                            ui.label("技能: 無");
+                        }
+                    } else {
+                        self.set_status(
+                            format!("{} not in {:?}", &unit.unit_type, &self.unit_templates),
+                            true,
+                        );
+                        ui.label("技能: 無法取得單位模板");
+                    }
+                }
+            }
             if ui.button("下一單位").clicked() {
                 if let Some(battle) = self.simulation_battle.as_mut() {
                     let prev_round = battle.round;
