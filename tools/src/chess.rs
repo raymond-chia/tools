@@ -3,13 +3,13 @@ use crate::{
     unit::{UnitTemplate, load_unit_templates},
 };
 use chess_lib::{
-    BattleObjectiveType, Battlefield, BattlefieldObject, Cell, PLAYER_TEAM, Pos, Team, Terrain,
-    Unit,
+    Battle, BattleObjectiveType, Battlefield, BattlefieldObject, Cell, PLAYER_TEAM, Pos, Team,
+    Terrain, UnitConfig,
 };
 use eframe::{Frame, egui};
 use egui::{Button, Color32, Rect, Stroke};
 use rand::{Rng, distributions::Alphanumeric};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
@@ -177,13 +177,13 @@ impl BattlefieldData {
 
     /// 修改戰場 id
     fn rename_battlefield(&mut self, old_id: &str, new_id: &str) -> Result<(), String> {
-        if !self.battlefields.contains_key(old_id) {
-            return Err("找不到指定的戰場".to_string());
-        }
         if self.battlefields.contains_key(new_id) {
             return Err("新戰場 ID 已存在".to_string());
         }
-        let mut battlefield = self.battlefields.remove(old_id).unwrap();
+        let mut battlefield = match self.battlefields.remove(old_id) {
+            Some(bf) => bf,
+            None => return Err("找不到指定的戰場".to_string()),
+        };
         battlefield.id = new_id.to_string();
         self.battlefields.insert(new_id.to_string(), battlefield);
         Ok(())
@@ -304,17 +304,17 @@ pub struct ChessEditor {
     // 地形塗刷狀態
     last_painted_pos: Option<Pos>,
 
-    // 模擬戰
-    simulation_selected_unit: Option<Pos>,
-    simulation_battle: Option<chess_lib::Battle>,
-    simulation_battlefield: Option<Battlefield>,
-
     // 對話框
     show_confirmation_dialog: bool,
     confirmation_action: ConfirmationAction,
     show_resize_dialog: bool,
     resize_width: usize,
     resize_height: usize,
+
+    // 模擬戰
+    simulation_selected_unit: Option<Pos>,
+    simulation_battle: Option<Battle>,
+    simulation_battlefield: Option<Battlefield>,
 }
 
 impl Default for ChessEditor {
@@ -355,22 +355,29 @@ impl Default for ChessEditor {
 
             last_painted_pos: None,
 
-            simulation_selected_unit: None,
-            simulation_battle: None,
-            simulation_battlefield: None,
-
             show_confirmation_dialog: false,
             confirmation_action: ConfirmationAction::None,
             show_resize_dialog: false,
             resize_width: 10,
             resize_height: 10,
+
+            simulation_selected_unit: None,
+            simulation_battle: None,
+            simulation_battlefield: None,
         };
     }
 }
 
 impl ChessEditor {
     pub fn new() -> Self {
-        let unit_templates = load_unit_templates(UNIT_TEMPLATES_FILE).unwrap();
+        let unit_templates = match load_unit_templates(UNIT_TEMPLATES_FILE) {
+            Ok(templates) => templates,
+            Err(err) => {
+                let mut result = Self::default();
+                result.set_status(format!("載入單位模板失敗: {}", err), true);
+                return result;
+            }
+        };
         let new_unit_type = unit_templates
             .first()
             .map(|u| u.name.clone())
@@ -733,13 +740,23 @@ impl ChessEditor {
     fn show_object_tools(&mut self, ui: &mut egui::Ui) {
         ui.heading("物件編輯");
 
-        // 耐久度設定
+        self.show_object_durability_selector(ui);
+        self.show_object_direction_selector(ui);
+        self.show_object_type_selector(ui);
+        ui.add_space(10.0);
+        ui.label("點擊網格放置物件");
+    }
+
+    /// 顯示物件耐久度設定
+    fn show_object_durability_selector(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("耐久度:");
             ui.add(egui::DragValue::new(&mut self.durability).range(-1..=999));
         });
+    }
 
-        // 方向選擇
+    /// 顯示物件方向選擇
+    fn show_object_direction_selector(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("方向:");
             if ui
@@ -755,7 +772,10 @@ impl ChessEditor {
                 self.direction = ObjectDirection::Vertical;
             }
         });
+    }
 
+    /// 顯示物件種類選擇
+    fn show_object_type_selector(&mut self, ui: &mut egui::Ui) {
         // 顯示"無"選項
         if ui
             .selectable_label(self.selected_object.is_none(), "無")
@@ -775,9 +795,6 @@ impl ChessEditor {
                 self.selected_object = Some(object);
             }
         }
-
-        ui.add_space(10.0);
-        ui.label("點擊網格放置物件");
     }
 
     /// 顯示部署區域設定工具
@@ -805,6 +822,14 @@ impl ChessEditor {
     fn show_unit_tools(&mut self, ui: &mut egui::Ui) {
         ui.heading("單位編輯");
 
+        self.show_unit_type_selector(ui);
+        self.show_unit_team_selector(ui);
+        ui.label("點擊網格放置/移除單位");
+        ui.label("(清空種類後點擊可移除單位)");
+    }
+
+    /// 顯示單位種類選擇
+    fn show_unit_type_selector(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("單位種類:");
             egui::ComboBox::from_id_salt("unit_type_select")
@@ -819,7 +844,10 @@ impl ChessEditor {
                     }
                 });
         });
+    }
 
+    /// 顯示單位隊伍選擇
+    fn show_unit_team_selector(&mut self, ui: &mut egui::Ui) {
         // 取得目前戰場的隊伍列表
         let teams = self
             .selected_battlefield
@@ -854,9 +882,6 @@ impl ChessEditor {
                 ui.label("請先新增隊伍，才能設定單位所屬隊伍");
             }
         }
-
-        ui.label("點擊網格放置/移除單位");
-        ui.label("(清空種類後點擊可移除單位)");
     }
 
     /// 顯示目標設定工具
@@ -1065,7 +1090,7 @@ impl ChessEditor {
                     return;
                 };
                 let unit_ids: Vec<String> = bf.unit_id_to_unit.keys().cloned().collect();
-                let result = chess_lib::Battle::default().start(unit_ids);
+                let result = Battle::default().start(unit_ids);
                 let battle = match result {
                     Ok(battle) => battle,
                     Err(msg) => {
@@ -1100,7 +1125,10 @@ impl ChessEditor {
         let battlefield = if self.edit_mode == EditMode::Simulation {
             self.simulation_battlefield.as_ref()
         } else {
-            let battlefield_id = self.selected_battlefield.as_ref().unwrap();
+            let battlefield_id = match self.selected_battlefield.as_ref() {
+                Some(id) => id,
+                None => return None,
+            };
             self.battlefield_data.battlefields.get(battlefield_id)
         };
         battlefield.map(|bf| {
@@ -1248,6 +1276,9 @@ impl ChessEditor {
         cell_size: f32,
         cell_texts: &mut Vec<(egui::Pos2, String)>,
     ) {
+        // highlight 移動範圍
+        let (sim_first_range, sim_second_range) = self.get_simulation_move_highlight();
+
         // 繪製網格
         for y in 0..height {
             for x in 0..width {
@@ -1264,6 +1295,21 @@ impl ChessEditor {
 
                 // 繪製地形
                 painter.rect_filled(cell_rect, 0.0, cell.terrain.color());
+
+                // highlight 移動範圍
+                if sim_first_range.contains(&pos) {
+                    painter.rect_filled(
+                        cell_rect.shrink(cell_size * 0.05),
+                        0.0,
+                        Color32::from_rgba_premultiplied(0, 0, 0x4B, 80), // 藍
+                    );
+                } else if sim_second_range.contains(&pos) {
+                    painter.rect_filled(
+                        cell_rect.shrink(cell_size * 0.05),
+                        0.0,
+                        Color32::from_rgba_premultiplied(0x40, 0, 0x40, 80), // 紫
+                    );
+                }
 
                 // 繪製物件
                 if let Some(object) = &cell.object {
@@ -1549,11 +1595,11 @@ impl ChessEditor {
         let durability = self.durability;
         let direction = self.direction;
 
-        let battlefield = self
-            .battlefield_data
-            .battlefields
-            .get_mut(battlefield_id)
-            .unwrap();
+        let battlefield = self.battlefield_data.battlefields.get_mut(battlefield_id);
+        let Some(battlefield) = battlefield else {
+            return;
+        };
+
         match edit_mode {
             EditMode::Terrain => {
                 if self.last_painted_pos != Some(pos) {
@@ -1619,7 +1665,7 @@ impl ChessEditor {
                     let unit = if !new_unit_type.is_empty()
                         && self.unit_templates.iter().any(|u| u.name == new_unit_type)
                     {
-                        Some(Unit {
+                        Some(UnitConfig {
                             id: Self::generate_unique_unit_id(battlefield, &new_unit_type),
                             unit_type: new_unit_type.clone(),
                             team_id: self.selected_team_id.clone(),
@@ -1640,39 +1686,116 @@ impl ChessEditor {
             }
         }
     }
+}
+
+// 模擬戰互動邏輯
+impl ChessEditor {
+    /// 取得目前 active unit 的位置（有 cache 機制）
+    fn get_active_unit_pos(&self) -> Option<Pos> {
+        let battle = match self.simulation_battle.as_ref() {
+            Some(b) => b,
+            None => return None,
+        };
+        let battlefield = match self.simulation_battlefield.as_ref() {
+            Some(bf) => bf,
+            None => return None,
+        };
+        let active_unit_id = &battle.active_unit_id;
+        // cache 會造成 mut self 擴散, 先不使用 cache
+        // 沒有 cache 或 cache stale，重新查找
+        let pos = battlefield.grid.iter().enumerate().find_map(|(y, row)| {
+            row.iter().enumerate().find_map(|(x, cell)| {
+                if cell.unit_id.as_ref() == Some(active_unit_id) {
+                    Some(Pos { x, y })
+                } else {
+                    None
+                }
+            })
+        });
+        pos
+    }
+
+    fn get_unit_move_point<'a>(
+        unit_templates: &'a [UnitTemplate],
+        battle: &Battle,
+        battlefield: &Battlefield,
+    ) -> usize {
+        let active_unit_id = &battle.active_unit_id;
+        let move_points = battlefield
+            .unit_id_to_unit
+            .get(active_unit_id)
+            .and_then(|u| {
+                let unit_type = &u.unit_type;
+                unit_templates
+                    .iter()
+                    .find(|t| &t.name == unit_type)
+                    .map(|t| t.move_points)
+            })
+            .unwrap_or(0);
+        return move_points;
+    }
 
     /// 單位選取與移動的互動邏輯（呼叫 battle.rs 通用邏輯）
+    /// 處理模擬戰單位互動（選取與移動）
     fn handle_simulation_unit_interaction(&mut self, pos: Pos) {
-        let move_range = 3;
-        if let (Some(battle), Some(battlefield)) = (
+        // 先取得 battle 與 battlefield 實例
+        let (Some(battle), Some(battlefield)) = (
             self.simulation_battle.as_mut(),
             self.simulation_battlefield.as_mut(),
-        ) {
-            let result = battle.click_battlefield(
-                battlefield,
-                self.simulation_selected_unit,
-                pos,
-                move_range,
-            );
-            // 根據訊息內容決定是否要清除 simulation_selected_unit
-            match result {
-                Ok(chess_lib::ValidResult::PickMinion) => {
-                    self.set_status("選取手下".to_string(), false);
-                    self.simulation_selected_unit = Some(pos);
-                }
-                Ok(chess_lib::ValidResult::FirstMovement) => {
-                    // 第一階段移動成功，保持選取
-                    self.set_status("一階段移動".to_string(), false);
-                }
-                Ok(chess_lib::ValidResult::SecondMovement) => {
-                    // 第二階段移動成功，清除選取
-                    self.set_status("二階段移動".to_string(), false);
-                }
-                Err(err) => {
-                    self.set_status(err.to_string(), true);
-                    self.simulation_selected_unit = None;
-                }
+        ) else {
+            return;
+        };
+        let move_points = Self::get_unit_move_point(&self.unit_templates, battle, battlefield);
+        let result =
+            battle.click_battlefield(battlefield, self.simulation_selected_unit, pos, move_points);
+        // 根據訊息內容決定是否要清除 simulation_selected_unit
+        match result {
+            Ok(chess_lib::ValidResult::PickMinion) => {
+                self.set_status("選取單位".to_string(), false);
+                self.simulation_selected_unit = Some(pos);
             }
+            Ok(chess_lib::ValidResult::FirstMovement) => {
+                // 第一階段移動成功，保持選取
+                self.set_status("一階段移動".to_string(), false);
+            }
+            Ok(chess_lib::ValidResult::SecondMovement) => {
+                // 第二階段移動成功，清除選取
+                self.set_status("二階段移動".to_string(), false);
+            }
+            Err(err) => {
+                self.set_status(err.to_string(), true);
+                self.simulation_selected_unit = None;
+            }
+        }
+    }
+
+    /// 取得模擬戰未選技能時的 highlight 移動範圍 (first, second)
+    fn get_simulation_move_highlight(&self) -> (HashSet<Pos>, HashSet<Pos>) {
+        if self.edit_mode != EditMode::Simulation
+            || self.simulation_battle.is_none()
+            || self.simulation_battlefield.is_none()
+        {
+            return (Default::default(), Default::default());
+        }
+        let unit_pos = self.get_active_unit_pos();
+        let battle = self.simulation_battle.as_ref().unwrap();
+        let battlefield = self.simulation_battlefield.as_ref().unwrap();
+        if let Some(start) = unit_pos {
+            let active_unit_id = &battle.active_unit_id;
+            let move_points = Self::get_unit_move_point(&self.unit_templates, battle, battlefield);
+            let active_team = battlefield
+                .unit_id_to_unit
+                .get(active_unit_id)
+                .map(|u| u.team_id.as_str())
+                .unwrap_or_else(|| PLAYER_TEAM);
+            return battlefield.bfs_move_ranges(
+                start,
+                active_team,
+                move_points,
+                battle.moved_distance,
+            );
+        } else {
+            (Default::default(), Default::default())
         }
     }
 }

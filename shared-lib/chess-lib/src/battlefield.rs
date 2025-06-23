@@ -1,6 +1,6 @@
 use crate::PLAYER_TEAM;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use strum_macros::EnumIter;
 
 /// 戰場
@@ -17,7 +17,7 @@ pub struct Battlefield {
     #[serde(default)]
     pub deployable_positions: BTreeSet<Pos>, // 可部署的位置集合
     #[serde(default)]
-    pub unit_id_to_unit: BTreeMap<String, Unit>, // 單位ID到單位資訊的映射
+    pub unit_id_to_unit: BTreeMap<String, UnitConfig>, // 單位ID到單位資訊的映射
 }
 
 /// 位置
@@ -60,10 +60,17 @@ pub enum BattlefieldObject {
 
 /// 單位資訊
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
-pub struct Unit {
+pub struct UnitConfig {
     pub id: String,
     pub unit_type: String,
     pub team_id: String,
+}
+
+/// 戰場上的單位
+#[derive(Debug, Clone)]
+pub struct Unit {
+    pub config: UnitConfig, // 單位設定資料
+    pub move_points: u32,   // 單位移動力
 }
 
 /// 格子
@@ -195,12 +202,53 @@ impl Battlefield {
     /// 檢查位置是否在戰場範圍內
     pub fn is_valid_position(&self, pos: Pos) -> bool {
         let Pos { x, y } = pos;
-        y < self.height() && x < self.width()
+        x < self.width() && y < self.height()
     }
 
     /// 檢查指定位置是否可部署
     pub fn is_deployable(&self, pos: Pos) -> bool {
         self.deployable_positions.contains(&pos)
+    }
+
+    pub fn is_passable(&self, active_team: &str, pos: Pos) -> bool {
+        if !self.is_valid_position(pos) {
+            return false;
+        }
+        // 不可通行的地形
+        if self.movement_cost(pos) >= 99 {
+            return false;
+        }
+        let cell = self.get_cell(pos);
+        // 友方單位不阻擋
+        // 其他單位阻擋
+        if let Some(unit_id) = &cell.unit_id {
+            let unit = self.unit_id_to_unit.get(unit_id).expect("unit not found");
+            if unit.team_id != active_team {
+                return false;
+            }
+        }
+        // 不可通行的物件
+        if let Some(obj) = &cell.object {
+            match obj {
+                BattlefieldObject::Wall
+                | BattlefieldObject::Tent2 { .. }
+                | BattlefieldObject::Tent15 { .. } => {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    pub fn movement_cost(&self, pos: Pos) -> usize {
+        match self.get_cell(pos).terrain {
+            Terrain::Plain => 10,
+            Terrain::Hill => 15,
+            Terrain::Mountain => 20,
+            Terrain::Forest => 15,
+            Terrain::ShallowWater => 15,
+            Terrain::DeepWater => 99,
+        }
     }
 
     pub fn get_cell(&self, pos: Pos) -> &Cell {
@@ -216,7 +264,7 @@ impl Battlefield {
         if !self.is_valid_position(pos) {
             return false;
         }
-        self.grid[pos.y][pos.x].terrain = terrain;
+        self.get_cell_mut(pos).terrain = terrain;
         true
     }
 
@@ -225,25 +273,25 @@ impl Battlefield {
         if !self.is_valid_position(pos) {
             return false;
         }
-        self.grid[pos.y][pos.x].object = object;
+        self.get_cell_mut(pos).object = object;
         true
     }
 
     /// 設置指定位置的單位與隊伍
-    pub fn set_unit(&mut self, pos: Pos, unit: Option<Unit>) -> bool {
+    pub fn set_unit(&mut self, pos: Pos, unit: Option<UnitConfig>) -> bool {
         if !self.is_valid_position(pos) {
             return false;
         }
-        if let Some(prev_uid) = &self.grid[pos.y][pos.x].unit_id {
-            self.unit_id_to_unit.remove(prev_uid);
+        if let Some(prev_uid) = self.get_cell(pos).unit_id.clone() {
+            self.unit_id_to_unit.remove(&prev_uid);
         }
         match unit {
-            Some(unit_info) => {
-                self.grid[pos.y][pos.x].unit_id = Some(unit_info.id.clone());
-                self.unit_id_to_unit.insert(unit_info.id.clone(), unit_info);
+            Some(unit) => {
+                self.get_cell_mut(pos).unit_id = Some(unit.id.clone());
+                self.unit_id_to_unit.insert(unit.id.clone(), unit);
             }
             None => {
-                self.grid[pos.y][pos.x].unit_id = None;
+                self.get_cell_mut(pos).unit_id = None;
             }
         }
         true
@@ -251,17 +299,64 @@ impl Battlefield {
 }
 
 impl Battlefield {
-    pub fn movement_cost(&self, pos: Pos) -> usize {
-        match self.grid[pos.y][pos.x].terrain {
-            Terrain::Plain => 10,
-            Terrain::Hill => 15,
-            Terrain::Mountain => 20,
-            Terrain::Forest => 15,
-            Terrain::ShallowWater => 15,
-            Terrain::DeepWater => 99,
+    /// https://github.com/TheAlgorithms/Rust/blob/master/src/graph/breadth_first_search.rs
+    ///
+    /// 計算一階段與二階段移動範圍
+    /// - start: 起點
+    /// - move_range: 單次移動力
+    /// - active_team: 行動單位隊伍
+    /// 回傳 (一階段, 二階段)
+    pub fn bfs_move_ranges(
+        &self,
+        start: Pos,
+        active_team: &str,
+        move_points: usize,
+        moved_distance: usize,
+    ) -> (HashSet<Pos>, HashSet<Pos>) {
+        let mut visited = HashSet::new();
+        let mut first = HashSet::new();
+        let mut second = HashSet::new();
+        let mut queue = VecDeque::new();
+
+        visited.insert(start);
+        queue.push_back((start, moved_distance));
+        while let Some((pos, used_points)) = queue.pop_front() {
+            let cell = self.get_cell(pos);
+            let cost = self.movement_cost(pos);
+            if start == pos {
+                // 起點不算在內
+            } else if used_points <= move_points {
+                // 不能停在友方單位
+                if cell.unit_id.is_none() {
+                    first.insert(pos);
+                }
+            } else if used_points <= move_points * 2 {
+                // 不能停在友方單位
+                if cell.unit_id.is_none() {
+                    second.insert(pos);
+                }
+            } else {
+                continue;
+            }
+            // 四方向
+            for (dx, dy) in &[(0, 1), (1, 0), (-1, 0), (0, -1)] {
+                let nx = pos.x as isize + dx;
+                let ny = pos.y as isize + dy;
+                if nx < 0 || ny < 0 {
+                    continue; // 越界檢查
+                }
+                let next_pos = Pos {
+                    x: nx as usize,
+                    y: ny as usize,
+                };
+                if !self.is_passable(active_team, next_pos) {
+                    continue;
+                }
+                if visited.insert(next_pos) {
+                    queue.push_back((next_pos, used_points + cost));
+                }
+            }
         }
-    }
-    pub fn is_passable(&self, pos: Pos) -> bool {
-        self.movement_cost(pos) < 99 && self.get_cell(pos).unit_id.is_none()
+        (first, second)
     }
 }

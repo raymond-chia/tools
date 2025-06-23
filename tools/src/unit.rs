@@ -12,7 +12,18 @@ const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnitTemplate {
     pub name: String,
+    pub move_points: usize,
     pub skills: BTreeSet<String>,
+}
+
+impl Default for UnitTemplate {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            move_points: 30,
+            skills: BTreeSet::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -99,10 +110,7 @@ impl UnitEditor {
             ui.heading("單位列表");
         });
         if ui.button("新增單位").clicked() {
-            let new_unit = UnitTemplate {
-                name: String::new(),
-                skills: BTreeSet::new(),
-            };
+            let new_unit = UnitTemplate::default();
             self.unit_template.push(new_unit.clone());
             self.selected_unit = Some(new_unit.name.clone());
             self.has_unsaved_changes = true;
