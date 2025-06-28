@@ -1,10 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 mod algo;
+mod board;
+mod unit;
 
-pub use algo::*;
+pub use algo::dijkstra;
+pub use board::*;
+pub use unit::*;
 
 pub type UnitID = u64;
+pub type UnitType = String;
 pub type TeamID = String;
 pub type MovementCost = usize;
 
