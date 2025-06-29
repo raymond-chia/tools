@@ -7,12 +7,13 @@ use strum::IntoEnumIterator;
 
 const BOARDS_FILE: &str = "../shared-lib/test-data/ignore-boards.toml";
 
+const TILE_SIZE: f32 = 32.0;
+
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
     boards: BTreeMap<BoardID, BoardConfig>,
     selected_board: Option<BoardID>,
     brush: BrushMode,
-    selected_team: Option<TeamID>,
     selected_tile: Option<Pos>,
     selected_terrain: Terrain,
     has_unsaved_changes: bool,
@@ -139,13 +140,13 @@ impl BoardsEditor {
             return;
         };
         let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
-        let tile_size = 32.0;
+
         for (y, row) in board.tiles.iter_mut().enumerate() {
             ui.horizontal(|ui| {
                 for (x, tile) in row.iter_mut().enumerate() {
                     let pos = Pos { x, y };
                     let mut btn = Button::new(format!("{}", tile_symbol(tile)))
-                        .min_size(egui::Vec2::splat(tile_size));
+                        .min_size(egui::Vec2::splat(TILE_SIZE));
                     if Some(pos) == self.selected_tile {
                         btn = btn.fill(egui::Color32::LIGHT_BLUE);
                     }
