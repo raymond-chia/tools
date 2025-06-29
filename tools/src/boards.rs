@@ -1,6 +1,6 @@
 use crate::common::*;
 use chess_lib::*;
-use egui::{Button, Ui};
+use egui::*;
 use std::collections::BTreeMap;
 use std::io;
 use strum::IntoEnumIterator;
@@ -14,14 +14,13 @@ pub struct BoardsEditor {
     boards: BTreeMap<BoardID, BoardConfig>,
     selected_board: Option<BoardID>,
     brush: BrushMode,
-    selected_tile: Option<Pos>,
     selected_terrain: Terrain,
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
 }
 
 #[derive(Debug, Default, PartialEq)]
-pub enum BrushMode {
+enum BrushMode {
     #[default]
     None,
     Terrain,
@@ -37,7 +36,7 @@ impl BoardsEditor {
         editor
     }
 
-    pub fn reload(&mut self) {
+    fn reload(&mut self) {
         match load_boards(BOARDS_FILE) {
             Ok(boards) => {
                 self.boards = boards;
@@ -55,16 +54,16 @@ impl BoardsEditor {
         self.set_status("已重新載入戰場".to_string(), false);
     }
 
-    pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("board_list_panel")
+    pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        SidePanel::left("board_list_panel")
             .default_width(180.0)
             .show(ctx, |ui| {
                 self.show_board_list(ui);
             });
-        egui::CentralPanel::default().show(ctx, |ui| {
+        CentralPanel::default().show(ctx, |ui| {
             self.show_board_editor(ui);
         });
-        egui::SidePanel::right("right_panel")
+        SidePanel::right("right_panel")
             .default_width(320.0)
             .show(ctx, |ui| {
                 self.show_right_panel(ui);
@@ -107,7 +106,7 @@ impl BoardsEditor {
                         edited_id = Some((board_id.clone(), id_buf.clone()));
                     }
                 } else {
-                    let button = Button::new(board_id).fill(egui::Color32::TRANSPARENT);
+                    let button = Button::new(board_id).fill(Color32::TRANSPARENT);
                     if ui.add(button).clicked() {
                         self.selected_board = Some(board_id.clone());
                     }
@@ -141,17 +140,34 @@ impl BoardsEditor {
         };
         let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
 
-        for (y, row) in board.tiles.iter_mut().enumerate() {
+        for row in board.tiles.iter_mut() {
             ui.horizontal(|ui| {
-                for (x, tile) in row.iter_mut().enumerate() {
-                    let pos = Pos { x, y };
-                    let mut btn = Button::new(format!("{}", tile_symbol(tile)))
-                        .min_size(egui::Vec2::splat(TILE_SIZE));
-                    if Some(pos) == self.selected_tile {
-                        btn = btn.fill(egui::Color32::LIGHT_BLUE);
+                for tile in row.iter_mut() {
+                    let (_, rect) = ui.allocate_space(vec2(TILE_SIZE, TILE_SIZE));
+                    let painter = ui.painter();
+
+                    // 畫 tile 邊框
+                    painter.rect_filled(rect.shrink(3.0), 2.0, Color32::BLACK);
+                    // 畫 tile 背景
+                    painter.rect_filled(rect, 2.0, Color32::DARK_GRAY);
+                    // 畫 tile 符號
+                    painter.text(
+                        rect.center(),
+                        Align2::CENTER_CENTER,
+                        tile_symbol(tile),
+                        FontId::proportional(20.0),
+                        Color32::BLACK,
+                    );
+
+                    let Some(pointer_pos) = ui.ctx().pointer_hover_pos() else {
+                        continue;
+                    };
+                    if !rect.contains(pointer_pos) || !ui.ctx().input(|i| i.pointer.primary_down())
+                    {
+                        continue;
                     }
-                    if ui.add(btn).clicked() {
-                        self.selected_tile = Some(pos);
+                    if self.brush == BrushMode::Terrain {
+                        paint_terrain(tile, self.selected_terrain);
                     }
                 }
             });
@@ -162,7 +178,7 @@ impl BoardsEditor {
         ui.heading("編輯工具與資訊");
         ui.horizontal_wrapped(|ui| {
             for (mode, label) in [
-                (BrushMode::None, "無筆刷"),
+                (BrushMode::None, "戰場設定"),
                 (BrushMode::Terrain, "地形筆刷"),
                 (BrushMode::Object, "物件筆刷"),
                 (BrushMode::Unit, "單位筆刷"),
@@ -198,16 +214,10 @@ impl BoardsEditor {
         let mut cols = board.tiles.get(0).map(|row| row.len()).unwrap_or(0);
         let mut changed = false;
         ui.label("棋盤格子數");
-        if ui
-            .add(egui::DragValue::new(&mut rows).prefix("行: "))
-            .changed()
-        {
+        if ui.add(DragValue::new(&mut rows).prefix("行: ")).changed() {
             changed = true;
         }
-        if ui
-            .add(egui::DragValue::new(&mut cols).prefix("列: "))
-            .changed()
-        {
+        if ui.add(DragValue::new(&mut cols).prefix("列: ")).changed() {
             changed = true;
         }
 
@@ -235,7 +245,6 @@ impl BoardsEditor {
     }
 
     fn show_terrain_brush(&mut self, ui: &mut Ui) {
-        ui.label("地形筆刷");
         // 顯示可選擇的地形類型
         for terrain in Terrain::iter() {
             if ui
@@ -247,13 +256,13 @@ impl BoardsEditor {
         }
     }
 
-    fn show_status_message(&mut self, ctx: &egui::Context) {
+    fn show_status_message(&mut self, ctx: &Context) {
         if let Some((message, is_error)) = &self.status_message {
             show_status_message(ctx, message, *is_error);
         }
     }
 
-    pub fn set_status(&mut self, msg: String, is_error: bool) {
+    fn set_status(&mut self, msg: String, is_error: bool) {
         self.status_message = Some((msg, is_error));
     }
 
@@ -262,18 +271,26 @@ impl BoardsEditor {
     }
 }
 
-pub fn load_boards(path: &str) -> io::Result<BTreeMap<BoardID, BoardConfig>> {
+fn load_boards(path: &str) -> io::Result<BTreeMap<BoardID, BoardConfig>> {
     from_file(path)
 }
 
-pub fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Result<()> {
+fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Result<()> {
     to_file(path, boards)
+}
+
+fn paint_terrain(tile: &mut Tile, terrain: Terrain) -> bool {
+    if tile.terrain != terrain {
+        tile.terrain = terrain;
+        return true;
+    }
+    return false;
 }
 
 // 顯示地形符號（可依需求調整）
 fn tile_symbol(tile: &Tile) -> &'static str {
     match tile.terrain {
-        Terrain::Plain => "．",
+        Terrain::Plain => "",
         Terrain::Hill => "△",
         Terrain::Mountain => "▲",
         Terrain::Forest => "♣",
