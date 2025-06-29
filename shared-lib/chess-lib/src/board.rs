@@ -2,8 +2,9 @@ use crate::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub enum Terrain {
+    #[default]
     Plain,
     Hill,
     Mountain,
@@ -19,7 +20,7 @@ pub enum Object {
     Tent15 { rel: Pos, duration: u32 },
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Tile {
     pub terrain: Terrain,
     pub object: Option<Object>,

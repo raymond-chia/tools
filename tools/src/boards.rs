@@ -17,19 +17,14 @@ pub struct BoardsEditor {
     status_message: Option<(String, bool)>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub enum BrushMode {
+    #[default]
     None,
     Terrain,
     Object,
     Unit,
     Team,
-}
-
-impl Default for BrushMode {
-    fn default() -> Self {
-        BrushMode::None
-    }
 }
 
 impl BoardsEditor {
@@ -95,8 +90,10 @@ impl BoardsEditor {
                 self.selected_board = Some(new_board_id);
                 self.has_unsaved_changes = true;
             }
+
+            ui.separator();
+
             let mut to_delete = None;
-            // 需允許編輯 board_id
             let mut edited_id: Option<(String, String)> = None;
             for (board_id, _) in &self.boards {
                 let selected = self.selected_board.as_ref() == Some(board_id);
@@ -173,6 +170,63 @@ impl BoardsEditor {
                 }
             }
         });
+
+        match self.brush {
+            BrushMode::None => {
+                self.show_board_settings(ui);
+            }
+            BrushMode::Terrain => {}
+            BrushMode::Object => {}
+            BrushMode::Unit => {}
+            BrushMode::Team => {}
+        }
+    }
+
+    fn show_board_settings(&mut self, ui: &mut Ui) {
+        // 棋盤格子數調整
+        let Some(board_id) = &self.selected_board else {
+            ui.label("請先選擇戰場");
+            return;
+        };
+        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        let mut rows = board.tiles.len();
+        let mut cols = board.tiles.get(0).map(|row| row.len()).unwrap_or(0);
+        let mut changed = false;
+        ui.label("棋盤格子數");
+        if ui
+            .add(egui::DragValue::new(&mut rows).prefix("行: "))
+            .changed()
+        {
+            changed = true;
+        }
+        if ui
+            .add(egui::DragValue::new(&mut cols).prefix("列: "))
+            .changed()
+        {
+            changed = true;
+        }
+
+        if changed {
+            // 取得預設 Tile
+            let default_tile = Tile::default();
+            // 調整行數
+            if rows > board.tiles.len() {
+                for _ in board.tiles.len()..rows {
+                    board.tiles.push(vec![default_tile.clone(); cols.max(1)]);
+                }
+            } else if rows < board.tiles.len() {
+                board.tiles.truncate(rows);
+            }
+            // 調整每一行的列數
+            for row in &mut board.tiles {
+                if cols > row.len() {
+                    row.extend(std::iter::repeat(default_tile.clone()).take(cols - row.len()));
+                } else if cols < row.len() {
+                    row.truncate(cols);
+                }
+            }
+            self.has_unsaved_changes = true;
+        }
     }
 
     fn show_status_message(&mut self, ctx: &egui::Context) {
