@@ -3,6 +3,7 @@ use chess_lib::*;
 use egui::{Button, Ui};
 use std::collections::BTreeMap;
 use std::io;
+use strum::IntoEnumIterator;
 
 const BOARDS_FILE: &str = "../shared-lib/test-data/ignore-boards.toml";
 
@@ -13,6 +14,7 @@ pub struct BoardsEditor {
     brush: BrushMode,
     selected_team: Option<TeamID>,
     selected_tile: Option<Pos>,
+    selected_terrain: Terrain,
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
 }
@@ -175,7 +177,9 @@ impl BoardsEditor {
             BrushMode::None => {
                 self.show_board_settings(ui);
             }
-            BrushMode::Terrain => {}
+            BrushMode::Terrain => {
+                self.show_terrain_brush(ui);
+            }
             BrushMode::Object => {}
             BrushMode::Unit => {}
             BrushMode::Team => {}
@@ -226,6 +230,19 @@ impl BoardsEditor {
                 }
             }
             self.has_unsaved_changes = true;
+        }
+    }
+
+    fn show_terrain_brush(&mut self, ui: &mut Ui) {
+        ui.label("地形筆刷");
+        // 顯示可選擇的地形類型
+        for terrain in Terrain::iter() {
+            if ui
+                .selectable_label(self.selected_terrain == terrain, terrain.to_string())
+                .clicked()
+            {
+                self.selected_terrain = terrain;
+            }
         }
     }
 
