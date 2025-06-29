@@ -532,7 +532,7 @@ impl SkillsEditor {
                     {
                         skill.tags.retain(|t| !active.contains(t));
                         if !skill.tags.contains(tag) {
-                            skill.tags.push(tag.clone());
+                            skill.tags.insert(tag.clone());
                         }
                         changed = true;
                     }
@@ -555,7 +555,7 @@ impl SkillsEditor {
                     {
                         skill.tags.retain(|t| !area.contains(t));
                         if !skill.tags.contains(tag) {
-                            skill.tags.push(tag.clone());
+                            skill.tags.insert(tag.clone());
                         }
                         changed = true;
                     }
@@ -580,7 +580,7 @@ impl SkillsEditor {
                     {
                         skill.tags.retain(|t| !range.contains(t));
                         if !skill.tags.contains(tag) {
-                            skill.tags.push(tag.clone());
+                            skill.tags.insert(tag.clone());
                         }
                         changed = true;
                     }
@@ -600,7 +600,7 @@ impl SkillsEditor {
 
                     if ui.checkbox(&mut checked, tag_str).changed() {
                         if checked && !has_tag {
-                            skill.tags.push(tag.clone());
+                            skill.tags.insert(tag.clone());
                         } else if !checked && has_tag {
                             skill.tags.retain(|t| t != &tag);
                         }

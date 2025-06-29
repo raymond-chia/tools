@@ -1,30 +1,10 @@
-use crate::{
-    common::{from_file, show_status_message, to_file},
-    skills::SkillsData,
-};
+use crate::{common::*, skills::SkillsData};
+use chess_lib::UnitTemplate;
 use egui::{Button, Ui};
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, io};
+use std::io;
 
 const UNIT_TEMPLATES_FILE: &str = "../shared-lib/test-data/ignore-unit-templates.toml";
 const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct UnitTemplate {
-    pub name: String,
-    pub move_points: usize,
-    pub skills: BTreeSet<String>,
-}
-
-impl Default for UnitTemplate {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            move_points: 30,
-            skills: BTreeSet::new(),
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct UnitsEditor {

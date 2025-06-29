@@ -9,7 +9,7 @@ pub trait Board {
 }
 
 // https://github.com/TheAlgorithms/Rust/blob/master/src/graph/dijkstra.rs
-pub fn dijkstra(graph: impl Board, start: Pos) -> HashMap<Pos, (MovementCost, Pos)> {
+pub fn dijkstra(graph: &impl Board, start: Pos) -> HashMap<Pos, (MovementCost, Pos)> {
     let mut ans = HashMap::new();
     let mut prio = BTreeSet::new();
 
@@ -48,5 +48,5 @@ pub fn dijkstra(graph: impl Board, start: Pos) -> HashMap<Pos, (MovementCost, Po
         }
     }
 
-    return ans;
+    ans
 }

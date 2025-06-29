@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use strum_macros::{Display, EnumIter, EnumString};
 
 type DEGREE = u16;
 
 /// 技能資料結構
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
 pub struct Skill {
     #[serde(default)]
-    pub tags: Vec<Tag>,
+    pub tags: BTreeSet<Tag>,
     #[serde(default)]
     pub range: (usize, usize),
     #[serde(default)]
@@ -20,7 +21,19 @@ pub struct Skill {
     pub effects: Vec<Effect>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, EnumString, Display, EnumIter, PartialEq)]
+#[derive(
+    Debug,
+    Clone,
+    Deserialize,
+    Serialize,
+    EnumString,
+    Display,
+    EnumIter,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Tag {
@@ -81,18 +94,4 @@ pub enum Effect {
         shape: Shape,
         duration: u16,
     },
-}
-
-/// 實作 Skill 的預設值
-impl Default for Skill {
-    fn default() -> Self {
-        Self {
-            tags: vec![],
-            range: (0, 0),
-            cost: 0,
-            hit_rate: None,
-            crit_rate: None,
-            effects: vec![],
-        }
-    }
 }
