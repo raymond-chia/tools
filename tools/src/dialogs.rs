@@ -761,14 +761,14 @@ impl eframe::App for DialogsEditor {
                 });
                 egui::menu::menu_button(ui, "刪除節點", |ui| {
                     if ui.button("刪除").clicked() {
-                        if let Some(node_id) = self.selected_node.clone() {
-                            self.script.nodes.remove(&node_id);
-                            self.selected_node = None;
-                            self.has_unsaved_changes_flag = true;
-                            self.set_status(format!("已刪除節點: {}", node_id), false);
-                        } else {
+                        let Some(node_id) = self.selected_node.clone() else {
                             self.set_status(format!("請先選擇一個節點"), true);
-                        }
+                            return;
+                        };
+                        self.script.nodes.remove(&node_id);
+                        self.selected_node = None;
+                        self.has_unsaved_changes_flag = true;
+                        self.set_status(format!("已刪除節點: {}", node_id), false);
                     }
                 });
             });

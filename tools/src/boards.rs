@@ -135,27 +135,26 @@ impl BoardsEditor {
 
     fn show_board_editor(&mut self, ui: &mut Ui) {
         // 棋盤視覺化編輯區
-        if let Some(board_id) = &self.selected_board {
-            if let Some(board) = self.boards.get_mut(board_id) {
-                let tile_size = 32.0;
-                for (y, row) in board.tiles.iter_mut().enumerate() {
-                    ui.horizontal(|ui| {
-                        for (x, tile) in row.iter_mut().enumerate() {
-                            let pos = Pos { x, y };
-                            let mut btn = Button::new(format!("{}", tile_symbol(tile)))
-                                .min_size(egui::Vec2::splat(tile_size));
-                            if Some(pos) == self.selected_tile {
-                                btn = btn.fill(egui::Color32::LIGHT_BLUE);
-                            }
-                            if ui.add(btn).clicked() {
-                                self.selected_tile = Some(pos);
-                            }
-                        }
-                    });
-                }
-            }
-        } else {
+        let Some(board_id) = &self.selected_board else {
             ui.label("請先選擇戰場");
+            return;
+        };
+        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        let tile_size = 32.0;
+        for (y, row) in board.tiles.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                for (x, tile) in row.iter_mut().enumerate() {
+                    let pos = Pos { x, y };
+                    let mut btn = Button::new(format!("{}", tile_symbol(tile)))
+                        .min_size(egui::Vec2::splat(tile_size));
+                    if Some(pos) == self.selected_tile {
+                        btn = btn.fill(egui::Color32::LIGHT_BLUE);
+                    }
+                    if ui.add(btn).clicked() {
+                        self.selected_tile = Some(pos);
+                    }
+                }
+            });
         }
     }
 
