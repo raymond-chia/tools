@@ -96,21 +96,34 @@ impl BoardsEditor {
                 self.has_unsaved_changes = true;
             }
             let mut to_delete = None;
+            // 需允許編輯 board_id
+            let mut edited_id: Option<(String, String)> = None;
             for (board_id, _) in &self.boards {
                 let selected = self.selected_board.as_ref() == Some(board_id);
-                let button = Button::new(board_id).fill(if selected {
-                    egui::Color32::DARK_GRAY
+                if selected {
+                    let mut id_buf = board_id.clone();
+                    let resp = ui.text_edit_singleline(&mut id_buf);
+                    if resp.changed() && !id_buf.is_empty() && !self.boards.contains_key(&id_buf) {
+                        edited_id = Some((board_id.clone(), id_buf.clone()));
+                    }
                 } else {
-                    egui::Color32::TRANSPARENT
-                });
-                if ui.add(button).clicked() {
-                    self.selected_board = Some(board_id.clone());
+                    let button = Button::new(board_id).fill(egui::Color32::TRANSPARENT);
+                    if ui.add(button).clicked() {
+                        self.selected_board = Some(board_id.clone());
+                    }
                 }
                 ui.horizontal(|ui| {
                     if ui.button("刪除").clicked() {
                         to_delete = Some(board_id.clone());
                     }
                 });
+            }
+            if let Some((old_id, new_id)) = edited_id {
+                if let Some(board) = self.boards.remove(&old_id) {
+                    self.boards.insert(new_id.clone(), board);
+                    self.selected_board = Some(new_id);
+                    self.has_unsaved_changes = true;
+                }
             }
             if let Some(board_id) = to_delete {
                 self.boards.remove(&board_id);
