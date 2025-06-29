@@ -1,20 +1,22 @@
-mod chess;
+mod boards;
 mod common;
 mod dialogs;
 mod skills;
-mod unit;
+mod units;
 
+use boards::BoardsEditor;
 use dialogs::DialogsEditor;
 use eframe::{Frame, egui};
 use egui::{FontData, FontDefinitions, FontFamily, Ui};
 use skills::SkillsEditor;
-use unit::UnitEditor;
+use units::UnitsEditor;
 
 /// 編輯器模式
 #[derive(Clone, PartialEq)]
 enum EditorMode {
     Skills,
-    Unit,
+    Units,
+    Boards,
     Dialogs,
 }
 
@@ -22,7 +24,8 @@ enum EditorMode {
 struct EditorApp {
     editor_mode: EditorMode,
     skills_editor: SkillsEditor,
-    unit_editor: UnitEditor,
+    units_editor: UnitsEditor,
+    boards_editor: BoardsEditor,
     dialogs_editor: DialogsEditor,
     pending_mode: Option<EditorMode>,
     show_mode_switch_confirmation: bool,
@@ -76,7 +79,8 @@ impl EditorApp {
         Self {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::new(),
-            unit_editor: UnitEditor::new(),
+            units_editor: UnitsEditor::new(),
+            boards_editor: BoardsEditor::new(),
             dialogs_editor: DialogsEditor::new(),
             pending_mode: None,
             show_mode_switch_confirmation: false,
@@ -87,7 +91,8 @@ impl EditorApp {
         ui.horizontal(|ui| {
             for (mode, label) in [
                 (EditorMode::Skills, "技能編輯器"),
-                (EditorMode::Unit, "單位編輯器"),
+                (EditorMode::Units, "單位編輯器"),
+                (EditorMode::Boards, "戰場編輯器"),
                 (EditorMode::Dialogs, "劇情編輯器"),
             ] {
                 if ui
@@ -96,7 +101,8 @@ impl EditorApp {
                 {
                     let has_unsaved_changes = match self.editor_mode {
                         EditorMode::Skills => self.skills_editor.has_unsaved_changes(),
-                        EditorMode::Unit => self.unit_editor.has_unsaved_changes(),
+                        EditorMode::Units => self.units_editor.has_unsaved_changes(),
+                        EditorMode::Boards => self.boards_editor.has_unsaved_changes(),
                         EditorMode::Dialogs => self.dialogs_editor.has_unsaved_changes(),
                     };
                     if has_unsaved_changes {
@@ -119,12 +125,14 @@ impl EditorApp {
         let title = "未保存的變動";
         let current_mode = match self.editor_mode {
             EditorMode::Skills => "技能編輯器",
-            EditorMode::Unit => "單位編輯器",
+            EditorMode::Units => "單位編輯器",
+            EditorMode::Boards => "戰場編輯器",
             EditorMode::Dialogs => "劇情編輯器",
         };
         let target_mode = match self.pending_mode {
             Some(EditorMode::Skills) => "技能編輯器",
-            Some(EditorMode::Unit) => "單位編輯器",
+            Some(EditorMode::Units) => "單位編輯器",
+            Some(EditorMode::Boards) => "戰場編輯器",
             Some(EditorMode::Dialogs) => "劇情編輯器",
             None => "其他編輯器",
         };
@@ -175,8 +183,11 @@ impl eframe::App for EditorApp {
             EditorMode::Skills => {
                 self.skills_editor.update(ctx, frame);
             }
-            EditorMode::Unit => {
-                self.unit_editor.update(ctx, frame);
+            EditorMode::Units => {
+                self.units_editor.update(ctx, frame);
+            }
+            EditorMode::Boards => {
+                self.boards_editor.update(ctx, frame);
             }
             EditorMode::Dialogs => {
                 self.dialogs_editor.update(ctx, frame);

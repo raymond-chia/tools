@@ -8,6 +8,7 @@ pub use algo::dijkstra;
 pub use board::*;
 pub use unit::*;
 
+pub type BoardID = String;
 pub type UnitID = u64;
 pub type UnitType = String;
 pub type TeamID = String;

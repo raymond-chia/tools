@@ -27,7 +27,7 @@ impl Default for UnitTemplate {
 }
 
 #[derive(Default)]
-pub struct UnitEditor {
+pub struct UnitsEditor {
     unit_template: Vec<UnitTemplate>,
     skills: Vec<String>,
     selected_unit: Option<String>,
@@ -44,7 +44,7 @@ pub fn load_unit_templates(path: &str) -> io::Result<Vec<UnitTemplate>> {
     return from_file::<_, UnitTemplatesConfig>(path).map(|config| config.unit_templates);
 }
 
-impl UnitEditor {
+impl UnitsEditor {
     pub fn new() -> Self {
         let mut editor = Self::default();
         editor.reload();
