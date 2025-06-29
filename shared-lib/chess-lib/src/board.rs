@@ -14,7 +14,7 @@ pub enum Terrain {
     DeepWater,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
 pub enum Object {
     Wall,
     Tent2 { rel: Pos, duration: u32 },

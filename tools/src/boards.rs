@@ -7,7 +7,7 @@ use strum::IntoEnumIterator;
 
 const BOARDS_FILE: &str = "../shared-lib/test-data/ignore-boards.toml";
 
-const TILE_SIZE: f32 = 32.0;
+const TILE_SIZE: f32 = 40.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -15,11 +15,12 @@ pub struct BoardsEditor {
     selected_board: Option<BoardID>,
     brush: BrushMode,
     selected_terrain: Terrain,
+    selected_object: Option<Object>,
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 enum BrushMode {
     #[default]
     None,
@@ -148,14 +149,14 @@ impl BoardsEditor {
 
                     // 畫 tile 邊框
                     painter.rect_filled(rect.shrink(3.0), 2.0, Color32::BLACK);
-                    // 畫 tile 背景
-                    painter.rect_filled(rect, 2.0, Color32::DARK_GRAY);
-                    // 畫 tile 符號
+                    // 畫 tile 地形
+                    painter.rect_filled(rect, 2.0, terrain_color(tile));
+                    // 畫 tile object
                     painter.text(
                         rect.center(),
                         Align2::CENTER_CENTER,
-                        tile_symbol(tile),
-                        FontId::proportional(20.0),
+                        object_symbol(tile),
+                        FontId::proportional(16.0),
                         Color32::BLACK,
                     );
 
@@ -166,8 +167,20 @@ impl BoardsEditor {
                     {
                         continue;
                     }
-                    if self.brush == BrushMode::Terrain {
-                        paint_terrain(tile, self.selected_terrain);
+                    match self.brush {
+                        BrushMode::Terrain => {
+                            paint_terrain(tile, self.selected_terrain);
+                        }
+                        BrushMode::Object => {
+                            paint_object(tile, self.selected_object.clone());
+                        }
+                        BrushMode::Unit => {
+                            // 物件筆刷未實作
+                        }
+                        BrushMode::Team => {
+                            // 隊伍編輯未實作
+                        }
+                        BrushMode::None => {}
                     }
                 }
             });
@@ -197,7 +210,9 @@ impl BoardsEditor {
             BrushMode::Terrain => {
                 self.show_terrain_brush(ui);
             }
-            BrushMode::Object => {}
+            BrushMode::Object => {
+                self.show_object_brush(ui);
+            }
             BrushMode::Unit => {}
             BrushMode::Team => {}
         }
@@ -256,6 +271,21 @@ impl BoardsEditor {
         }
     }
 
+    fn show_object_brush(&mut self, ui: &mut Ui) {
+        // 顯示可選擇的物件類型
+        for object in Object::iter() {
+            if ui
+                .selectable_label(
+                    self.selected_object.as_ref() == Some(&object),
+                    object.to_string(),
+                )
+                .clicked()
+            {
+                self.selected_object = Some(object);
+            }
+        }
+    }
+
     fn show_status_message(&mut self, ctx: &Context) {
         if let Some((message, is_error)) = &self.status_message {
             show_status_message(ctx, message, *is_error);
@@ -280,21 +310,31 @@ fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Resul
 }
 
 fn paint_terrain(tile: &mut Tile, terrain: Terrain) -> bool {
-    if tile.terrain != terrain {
-        tile.terrain = terrain;
-        return true;
-    }
-    return false;
+    tile.terrain = terrain;
+    return true;
 }
 
-// 顯示地形符號（可依需求調整）
-fn tile_symbol(tile: &Tile) -> &'static str {
+fn paint_object(tile: &mut Tile, object: Option<Object>) -> bool {
+    tile.object = object;
+    return true;
+}
+
+fn terrain_color(tile: &Tile) -> Color32 {
     match tile.terrain {
-        Terrain::Plain => "",
-        Terrain::Hill => "△",
-        Terrain::Mountain => "▲",
-        Terrain::Forest => "♣",
-        Terrain::ShallowWater => "≈",
-        Terrain::DeepWater => "≋",
+        Terrain::Plain => Color32::from_rgb(200, 200, 170),
+        Terrain::Hill => Color32::from_rgb(180, 170, 120),
+        Terrain::Mountain => Color32::from_rgb(120, 120, 120),
+        Terrain::Forest => Color32::from_rgb(60, 120, 60),
+        Terrain::ShallowWater => Color32::from_rgb(100, 180, 220),
+        Terrain::DeepWater => Color32::from_rgb(30, 60, 120),
+    }
+}
+
+fn object_symbol(tile: &Tile) -> &'static str {
+    match &tile.object {
+        Some(Object::Wall) => "█",
+        Some(Object::Tent2 { .. }) => "⛺ 2",
+        Some(Object::Tent15 { .. }) => "⛺15",
+        None => "",
     }
 }
