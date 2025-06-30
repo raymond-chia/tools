@@ -1,6 +1,4 @@
-use crate::common::{
-    Camera2D, FileOperator, from_file, show_file_menu, show_status_message, to_file,
-};
+use crate::common::*;
 use dialogs_lib::{Node, Pos, Script};
 use eframe::{Frame, egui};
 use egui::ScrollArea;
@@ -109,11 +107,12 @@ impl DialogsEditor {
             });
         });
 
+        // 側邊欄：顯示選中節點的詳細內容
+        // 先產生 right panel, 以免 central panel 偵測到 right panel 滑鼠
+        self.right_panel(ctx);
+
         // 主畫布：顯示節點和連線
         self.central_panel(ctx);
-
-        // 側邊欄：顯示選中節點的詳細內容
-        self.right_panel(ctx);
 
         // 顯示狀態訊息
         self.show_status_message(ctx);

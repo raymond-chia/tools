@@ -7,7 +7,7 @@ use strum::IntoEnumIterator;
 
 const BOARDS_FILE: &str = "../shared-lib/test-data/ignore-boards.toml";
 
-const TILE_SIZE: f32 = 40.0;
+const TILE_SIZE: f32 = 56.0;
 const TILE_OBJECT_SIZE: f32 = 16.0;
 
 #[derive(Debug, Default)]
@@ -19,6 +19,7 @@ pub struct BoardsEditor {
     selected_object: Option<Object>,
     selected_object_duration: u32,
     selected_orientation: Orientation,
+    camera: Camera2D,
     // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
@@ -65,14 +66,15 @@ impl BoardsEditor {
             .show(ctx, |ui| {
                 self.show_board_list(ui);
             });
-        CentralPanel::default().show(ctx, |ui| {
-            self.show_board_editor(ui);
-        });
         SidePanel::right("right_panel")
             .default_width(320.0)
             .show(ctx, |ui| {
                 self.show_right_panel(ui);
             });
+        // 最後產生 central panel, 以免偵測滑鼠的時候偵測到 right panel
+        CentralPanel::default().show(ctx, |ui| {
+            self.show_board_editor(ui);
+        });
         self.show_status_message(ctx);
     }
 
@@ -138,6 +140,9 @@ impl BoardsEditor {
     }
 
     fn show_board_editor(&mut self, ui: &mut Ui) {
+        // 處理攝影機平移與縮放
+        self.camera.handle_pan_zoom(ui);
+
         // 棋盤視覺化編輯區
         let Some(board_id) = &self.selected_board else {
             ui.label("請先選擇戰場");
@@ -146,44 +151,56 @@ impl BoardsEditor {
         let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
 
         // 先繪製格子內容
-        let mut painted = Vec::new();
+        let painter = ui.painter();
         for (row_idx, row) in board.tiles.iter_mut().enumerate() {
-            ui.horizontal(|ui| {
-                for (col_idx, tile) in row.iter_mut().enumerate() {
-                    let (_, rect) = ui.allocate_space(vec2(TILE_SIZE, TILE_SIZE));
-                    let painter = ui.painter();
+            for (col_idx, tile) in row.iter_mut().enumerate() {
+                // 計算世界座標
+                let world_pos = Pos2::new(col_idx as f32 * TILE_SIZE, row_idx as f32 * TILE_SIZE);
+                let screen_pos = self.camera.world_to_screen(world_pos);
+                let rect =
+                    Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * self.camera.zoom);
 
-                    // 畫 tile 邊框
-                    painter.rect_filled(rect.shrink(3.0), 2.0, Color32::BLACK);
-                    // 畫 tile 地形
-                    painter.rect_filled(rect, 2.0, terrain_color(tile));
-                    // 畫 tile object
-                    painter.text(
-                        rect.center(),
-                        Align2::CENTER_CENTER,
-                        object_symbol(tile),
-                        FontId::proportional(TILE_OBJECT_SIZE),
-                        Color32::WHITE,
-                    );
+                // 畫 tile 邊框
+                painter.rect_filled(rect, 2.0, Color32::BLACK);
+                // 畫 tile 地形
+                painter.rect_filled(
+                    rect.shrink(3.0 * self.camera.zoom),
+                    2.0,
+                    terrain_color(tile),
+                );
+                // 畫 tile object
+                painter.text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    object_symbol(tile),
+                    FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
+                    Color32::WHITE,
+                );
+            }
+        }
 
-                    let Some(pointer_pos) = ui.ctx().pointer_hover_pos() else {
-                        continue;
-                    };
-                    if !rect.contains(pointer_pos) || !ui.ctx().input(|i| i.pointer.primary_down())
-                    {
-                        continue;
-                    }
-                    painted.push(Pos {
-                        x: col_idx,
-                        y: row_idx,
-                    });
-                }
+        let mut painted = None;
+        // 僅當滑鼠在 central panel 內才偵測 hover
+        if !ui.rect_contains_pointer(ui.max_rect()) {
+            return;
+        }
+        if let Some(pointer_pos) = ui.ctx().pointer_hover_pos() {
+            // 反推回世界座標
+            let world_pointer = self.camera.screen_to_world(pointer_pos);
+            let tile_x = (world_pointer.x / TILE_SIZE).floor() as usize;
+            let tile_y = (world_pointer.y / TILE_SIZE).floor() as usize;
+            if !ui.ctx().input(|i| i.pointer.primary_down()) {
+                return;
+            }
+            painted = Some(Pos {
+                x: tile_x,
+                y: tile_y,
             });
         }
 
         // 修改格子
         let mut err_msg = String::new();
-        for pos in painted {
+        if let Some(pos) = painted {
             match self.brush {
                 BrushMode::Terrain => {
                     paint_terrain(board, pos, self.selected_terrain);
@@ -354,7 +371,7 @@ fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Resul
 fn paint_terrain(board: &mut BoardConfig, pos: Pos, terrain: Terrain) -> bool {
     board
         .get_tile_mut(pos)
-        .expect("painting in race condition")
+        .unwrap_or_else(|| panic!("painting in race condition. in {pos:?}"))
         .terrain = terrain;
     return true;
 }
@@ -393,8 +410,8 @@ fn paint_object(
             // 牆壁或無物件，直接設定
             board
                 .get_tile_mut(pos)
-                .expect("painting in race condition")
-                .object = object;
+                .unwrap_or_else(|| panic!("painting in race condition. {object:?} in {pos:?}"))
+                .object = object.clone();
             Ok(())
         }
     }
