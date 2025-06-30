@@ -14,11 +14,26 @@ pub enum Terrain {
     DeepWater,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, Display, EnumIter, PartialEq)]
+pub enum Orientation {
+    #[default]
+    Horizontal,
+    Vertical,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
 pub enum Object {
     Wall,
-    Tent2 { rel: Pos, duration: u32 },
-    Tent15 { rel: Pos, duration: u32 },
+    Tent2 {
+        orientation: Orientation,
+        rel: Pos,
+        duration: u32,
+    },
+    Tent15 {
+        orientation: Orientation,
+        rel: Pos,
+        duration: u32,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]

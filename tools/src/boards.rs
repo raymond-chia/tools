@@ -17,6 +17,9 @@ pub struct BoardsEditor {
     brush: BrushMode,
     selected_terrain: Terrain,
     selected_object: Option<Object>,
+    selected_object_duration: u32,
+    selected_orientation: Orientation,
+    // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
 }
@@ -186,7 +189,13 @@ impl BoardsEditor {
                     paint_terrain(board, pos, self.selected_terrain);
                 }
                 BrushMode::Object => {
-                    if let Err(e) = paint_object(board, pos, self.selected_object.clone()) {
+                    if let Err(e) = paint_object(
+                        board,
+                        pos,
+                        self.selected_object.clone(),
+                        self.selected_orientation,
+                        self.selected_object_duration,
+                    ) {
                         err_msg = format!("Error painting object: {}", e);
                     }
                 }
@@ -286,6 +295,20 @@ impl BoardsEditor {
     }
 
     fn show_object_brush(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label("放置方向:");
+            for orientation in Orientation::iter() {
+                if ui
+                    .selectable_label(
+                        self.selected_orientation == orientation,
+                        orientation.to_string(),
+                    )
+                    .clicked()
+                {
+                    self.selected_orientation = orientation;
+                }
+            }
+        });
         if ui
             .selectable_label(self.selected_object.is_none(), "清除")
             .clicked()
@@ -336,41 +359,34 @@ fn paint_terrain(board: &mut BoardConfig, pos: Pos, terrain: Terrain) -> bool {
     return true;
 }
 
-fn paint_object(board: &mut BoardConfig, pos: Pos, object: Option<Object>) -> Result<(), String> {
+fn paint_object(
+    board: &mut BoardConfig,
+    pos: Pos,
+    object: Option<Object>,
+    orientation: Orientation,
+    duration: u32,
+) -> Result<(), String> {
     match object {
-        Some(Object::Tent2 { rel: _, duration }) => {
-            let positions = vec![
-                pos,
-                Pos {
-                    x: pos.x + 1,
-                    y: pos.y,
-                },
-            ];
-            let main_pos = pos;
-            paint_multiple_object(board, positions.clone(), |tile, p| {
-                let rel = Pos {
-                    x: p.x - main_pos.x,
-                    y: p.y - main_pos.y,
-                };
-                tile.object = Some(Object::Tent2 { rel, duration });
+        Some(Object::Tent2 { .. }) => {
+            let (w, h) = match orientation {
+                Orientation::Horizontal => (2, 1),
+                Orientation::Vertical => (1, 2),
+            };
+            paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 {
+                orientation,
+                rel,
+                duration,
             })
         }
-        Some(Object::Tent15 { rel: _, duration }) => {
-            let mut positions = Vec::new();
-            for x in 0..5 {
-                for y in 0..3 {
-                    let x = pos.x + x;
-                    let y = pos.y + y;
-                    positions.push(Pos { x, y });
-                }
-            }
-            let main_pos = pos;
-            paint_multiple_object(board, positions.clone(), |tile, p| {
-                let rel = Pos {
-                    x: p.x - main_pos.x,
-                    y: p.y - main_pos.y,
-                };
-                tile.object = Some(Object::Tent15 { rel, duration });
+        Some(Object::Tent15 { .. }) => {
+            let (w, h) = match orientation {
+                Orientation::Horizontal => (5, 3),
+                Orientation::Vertical => (3, 5),
+            };
+            paint_multiple_object(board, pos, (w, h), |rel| Object::Tent15 {
+                orientation,
+                rel,
+                duration,
             })
         }
         None | Some(Object::Wall) => {
@@ -384,11 +400,28 @@ fn paint_object(board: &mut BoardConfig, pos: Pos, object: Option<Object>) -> Re
     }
 }
 
-fn paint_multiple_object(
+fn paint_multiple_object<F>(
     board: &mut BoardConfig,
-    positions: Vec<Pos>,
-    set_object: impl Fn(&mut Tile, Pos),
-) -> Result<(), String> {
+    main_pos: Pos,
+    size: (usize, usize),
+    make_object: F,
+) -> Result<(), String>
+where
+    F: Fn(Pos) -> Object,
+{
+    // 整理要放到哪些格子
+    let (w, h) = size;
+    let mut positions = Vec::new();
+    for dx in 0..w {
+        for dy in 0..h {
+            positions.push(Pos {
+                x: main_pos.x + dx,
+                y: main_pos.y + dy,
+            });
+        }
+    }
+
+    // 檢查
     for &pos in &positions {
         let Some(tile) = board.get_tile(pos) else {
             return Err("some tiles are out of bounds".to_string());
@@ -397,9 +430,15 @@ fn paint_multiple_object(
             return Err("some tiles already have objects".to_string());
         }
     }
+
+    // 放置物件
     for &pos in &positions {
         let tile = board.get_tile_mut(pos).expect("just checked");
-        set_object(tile, pos);
+        let rel = Pos {
+            x: pos.x - main_pos.x,
+            y: pos.y - main_pos.y,
+        };
+        tile.object = Some(make_object(rel));
     }
     Ok(())
 }
@@ -418,8 +457,14 @@ fn terrain_color(tile: &Tile) -> Color32 {
 fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
         Some(Object::Wall) => "█",
-        Some(Object::Tent2 { .. }) => "⛺ 2",
-        Some(Object::Tent15 { .. }) => "⛺15",
+        Some(Object::Tent2 { orientation, .. }) => match orientation {
+            Orientation::Horizontal => "⛺→2",
+            Orientation::Vertical => "⛺↓2",
+        },
+        Some(Object::Tent15 { orientation, .. }) => match orientation {
+            Orientation::Horizontal => "⛺→15",
+            Orientation::Vertical => "⛺↓15",
+        },
         None => "",
     }
 }
