@@ -275,7 +275,6 @@ impl BoardsEditor {
     }
 
     fn show_terrain_brush(&mut self, ui: &mut Ui) {
-        // 顯示可選擇的地形類型
         for terrain in Terrain::iter() {
             if ui
                 .selectable_label(self.selected_terrain == terrain, terrain.to_string())
@@ -287,7 +286,12 @@ impl BoardsEditor {
     }
 
     fn show_object_brush(&mut self, ui: &mut Ui) {
-        // 顯示可選擇的物件類型
+        if ui
+            .selectable_label(self.selected_object.is_none(), "清除")
+            .clicked()
+        {
+            self.selected_object = None;
+        }
         for object in Object::iter() {
             if ui
                 .selectable_label(
