@@ -8,6 +8,7 @@ const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 
 #[derive(Default)]
 pub struct UnitsEditor {
+    // 需要指定順序
     unit_template: Vec<UnitTemplate>,
     skills: Vec<String>,
     selected_unit: Option<String>,
@@ -127,9 +128,7 @@ impl UnitsEditor {
             self.unit_template.insert(idx + 1, new_unit);
             self.selected_unit = Some(new_unit_name);
             self.has_unsaved_changes = true;
-        }
-        // 新增刪除不會同時發生
-        if let Some(idx) = to_delete {
+        } else if let Some(idx) = to_delete {
             self.unit_template.remove(idx);
             self.selected_unit = None;
             self.has_unsaved_changes = true;
@@ -205,10 +204,6 @@ impl UnitsEditor {
         return to_file(path, &config);
     }
 
-    pub fn has_unsaved_changes(&self) -> bool {
-        self.has_unsaved_changes
-    }
-
     pub fn set_status(&mut self, msg: String, is_error: bool) {
         self.status_message = Some((msg, is_error));
     }
@@ -217,5 +212,9 @@ impl UnitsEditor {
         if let Some((message, is_error)) = &self.status_message {
             show_status_message(ctx, message, *is_error);
         }
+    }
+
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.has_unsaved_changes
     }
 }
