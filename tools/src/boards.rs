@@ -8,6 +8,7 @@ use strum::IntoEnumIterator;
 const BOARDS_FILE: &str = "../shared-lib/test-data/ignore-boards.toml";
 
 const TILE_SIZE: f32 = 40.0;
+const TILE_OBJECT_SIZE: f32 = 16.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -141,9 +142,11 @@ impl BoardsEditor {
         };
         let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
 
-        for row in board.tiles.iter_mut() {
+        // 先繪製格子內容
+        let mut painted = Vec::new();
+        for (row_idx, row) in board.tiles.iter_mut().enumerate() {
             ui.horizontal(|ui| {
-                for tile in row.iter_mut() {
+                for (col_idx, tile) in row.iter_mut().enumerate() {
                     let (_, rect) = ui.allocate_space(vec2(TILE_SIZE, TILE_SIZE));
                     let painter = ui.painter();
 
@@ -156,7 +159,7 @@ impl BoardsEditor {
                         rect.center(),
                         Align2::CENTER_CENTER,
                         object_symbol(tile),
-                        FontId::proportional(16.0),
+                        FontId::proportional(TILE_OBJECT_SIZE),
                         Color32::BLACK,
                     );
 
@@ -167,24 +170,36 @@ impl BoardsEditor {
                     {
                         continue;
                     }
-                    match self.brush {
-                        BrushMode::Terrain => {
-                            paint_terrain(tile, self.selected_terrain);
-                        }
-                        BrushMode::Object => {
-                            paint_object(tile, self.selected_object.clone());
-                        }
-                        BrushMode::Unit => {
-                            // 物件筆刷未實作
-                        }
-                        BrushMode::Team => {
-                            // 隊伍編輯未實作
-                        }
-                        BrushMode::None => {}
-                    }
+                    painted.push(Pos {
+                        x: col_idx,
+                        y: row_idx,
+                    });
                 }
             });
         }
+
+        // 修改格子
+        let mut err_msg = String::new();
+        for pos in painted {
+            match self.brush {
+                BrushMode::Terrain => {
+                    paint_terrain(board, pos, self.selected_terrain);
+                }
+                BrushMode::Object => {
+                    if let Err(e) = paint_object(board, pos, self.selected_object.clone()) {
+                        err_msg = format!("Error painting object: {}", e);
+                    }
+                }
+                BrushMode::Unit => {
+                    // 物件筆刷未實作
+                }
+                BrushMode::Team => {
+                    // 隊伍編輯未實作
+                }
+                BrushMode::None => {}
+            }
+        }
+        self.set_status(err_msg, true);
     }
 
     fn show_right_panel(&mut self, ui: &mut Ui) {
@@ -309,14 +324,80 @@ fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Resul
     to_file(path, boards)
 }
 
-fn paint_terrain(tile: &mut Tile, terrain: Terrain) -> bool {
-    tile.terrain = terrain;
+fn paint_terrain(board: &mut BoardConfig, pos: Pos, terrain: Terrain) -> bool {
+    board
+        .get_tile_mut(pos)
+        .expect("painting in race condition")
+        .terrain = terrain;
     return true;
 }
 
-fn paint_object(tile: &mut Tile, object: Option<Object>) -> bool {
-    tile.object = object;
-    return true;
+fn paint_object(board: &mut BoardConfig, pos: Pos, object: Option<Object>) -> Result<(), String> {
+    match object {
+        Some(Object::Tent2 { rel: _, duration }) => {
+            let positions = vec![
+                pos,
+                Pos {
+                    x: pos.x + 1,
+                    y: pos.y,
+                },
+            ];
+            let main_pos = pos;
+            paint_multiple_object(board, positions.clone(), |tile, p| {
+                let rel = Pos {
+                    x: p.x - main_pos.x,
+                    y: p.y - main_pos.y,
+                };
+                tile.object = Some(Object::Tent2 { rel, duration });
+            })
+        }
+        Some(Object::Tent15 { rel: _, duration }) => {
+            let mut positions = Vec::new();
+            for x in 0..5 {
+                for y in 0..3 {
+                    let x = pos.x + x;
+                    let y = pos.y + y;
+                    positions.push(Pos { x, y });
+                }
+            }
+            let main_pos = pos;
+            paint_multiple_object(board, positions.clone(), |tile, p| {
+                let rel = Pos {
+                    x: p.x - main_pos.x,
+                    y: p.y - main_pos.y,
+                };
+                tile.object = Some(Object::Tent15 { rel, duration });
+            })
+        }
+        None | Some(Object::Wall) => {
+            // 牆壁或無物件，直接設定
+            board
+                .get_tile_mut(pos)
+                .expect("painting in race condition")
+                .object = object;
+            Ok(())
+        }
+    }
+}
+
+fn paint_multiple_object(
+    board: &mut BoardConfig,
+    positions: Vec<Pos>,
+    set_object: impl Fn(&mut Tile, Pos),
+) -> Result<(), String> {
+    for &pos in &positions {
+        let Some(tile) = board.get_tile(pos) else {
+            return Err("some tiles are out of bounds".to_string());
+        };
+        if tile.object.is_some() {
+            return Err("some tiles already have objects".to_string());
+        }
+    }
+    for &pos in &positions {
+        let tile = board.get_tile_mut(pos).expect("just checked");
+        set_object(tile, pos);
+    }
+    Ok(())
 }
 
 fn terrain_color(tile: &Tile) -> Color32 {
@@ -332,7 +413,7 @@ fn terrain_color(tile: &Tile) -> Color32 {
 
 fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
-        Some(Object::Wall) => "█",
+        Some(Object::Wall) => "▯",
         Some(Object::Tent2 { .. }) => "⛺ 2",
         Some(Object::Tent15 { .. }) => "⛺15",
         None => "",

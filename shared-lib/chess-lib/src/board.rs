@@ -75,3 +75,33 @@ impl Board {
         })
     }
 }
+
+// $x:expr: 匹配一個運算式
+// $t:ty: 匹配型別
+// $id:ident: 匹配識別字
+macro_rules! impl_board {
+    ($t:ty) => {
+        impl $t {
+            pub fn width(&self) -> usize {
+                self.tiles.first().map_or(0, |row| row.len())
+            }
+
+            pub fn height(&self) -> usize {
+                self.tiles.len()
+            }
+
+            pub fn get_tile(&self, pos: Pos) -> Option<&Tile> {
+                let Pos { x, y } = pos;
+                self.tiles.get(y)?.get(x)
+            }
+
+            pub fn get_tile_mut(&mut self, pos: Pos) -> Option<&mut Tile> {
+                let Pos { x, y } = pos;
+                self.tiles.get_mut(y)?.get_mut(x)
+            }
+        }
+    };
+}
+
+impl_board!(BoardConfig);
+impl_board!(Board);
