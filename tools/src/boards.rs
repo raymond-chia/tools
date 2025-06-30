@@ -160,7 +160,7 @@ impl BoardsEditor {
                         Align2::CENTER_CENTER,
                         object_symbol(tile),
                         FontId::proportional(TILE_OBJECT_SIZE),
-                        Color32::BLACK,
+                        Color32::WHITE,
                     );
 
                     let Some(pointer_pos) = ui.ctx().pointer_hover_pos() else {
@@ -406,18 +406,18 @@ fn paint_multiple_object(
 
 fn terrain_color(tile: &Tile) -> Color32 {
     match tile.terrain {
-        Terrain::Plain => Color32::from_rgb(200, 200, 170),
-        Terrain::Hill => Color32::from_rgb(180, 170, 120),
-        Terrain::Mountain => Color32::from_rgb(120, 120, 120),
-        Terrain::Forest => Color32::from_rgb(60, 120, 60),
-        Terrain::ShallowWater => Color32::from_rgb(100, 180, 220),
-        Terrain::DeepWater => Color32::from_rgb(30, 60, 120),
+        Terrain::Plain => Color32::DARK_GREEN,
+        Terrain::Hill => Color32::from_rgb(90, 60, 30),
+        Terrain::Mountain => Color32::from_rgb(60, 30, 0),
+        Terrain::Forest => Color32::from_rgb(0, 60, 0),
+        Terrain::ShallowWater => Color32::from_rgb(60, 60, 199),
+        Terrain::DeepWater => Color32::DARK_BLUE,
     }
 }
 
 fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
-        Some(Object::Wall) => "▯",
+        Some(Object::Wall) => "█",
         Some(Object::Tent2 { .. }) => "⛺ 2",
         Some(Object::Tent15 { .. }) => "⛺15",
         None => "",
