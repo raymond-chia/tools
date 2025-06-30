@@ -158,14 +158,16 @@ impl EditorApp {
 
         // 在閉包外處理按鈕事件
         if confirm_clicked && self.pending_mode.is_some() {
-            self.editor_mode = self.pending_mode.clone().unwrap();
+            self.editor_mode = self
+                .pending_mode
+                .take()
+                .expect("pending mode in race condition");
             open = false;
-            self.pending_mode = None;
         }
 
         if cancel_clicked {
-            open = false;
             self.pending_mode = None;
+            open = false;
         }
 
         self.show_mode_switch_confirmation = open;

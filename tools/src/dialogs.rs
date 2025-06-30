@@ -82,115 +82,233 @@ impl FileOperator<PathBuf> for DialogsEditor {
 }
 
 impl DialogsEditor {
-    // 檢查是否有未保存的變動
-    pub fn has_unsaved_changes(&self) -> bool {
-        self.has_unsaved_changes_flag
-    }
+    pub fn update(&mut self, ctx: &egui::Context, _: &mut Frame) {
+        // 頂部面板：顯示檔案選單
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                self.show_file_menu(ui);
 
-    // 從檔案載入對話腳本
-    fn load_file(&mut self, path: PathBuf) {
-        match from_file(&path) {
-            Ok(script) => {
-                let current_file_path = Some(path);
-                *self = Self {
-                    script,
-                    current_file_path,
-                    ..Default::default()
-                };
-                self.set_status(format!("成功載入檔案"), false);
-            }
-            Err(err) => {
-                self.set_status(format!("載入檔案失敗: {}", err), true);
-            }
-        }
-    }
-
-    // 儲存到檔案
-    fn save_file(&mut self, path: PathBuf) {
-        // 將節點轉換為有序的 BTreeMap 並按鍵（node_id）排序
-        let nodes = self.script.nodes.clone().into_iter().collect();
-        #[derive(Debug, Deserialize, Serialize, Default)]
-        struct SortedScript {
-            function_signatures: Vec<String>,
-            nodes: BTreeMap<String, Node>,
-        }
-        let sorted = SortedScript {
-            function_signatures: self.script.function_signatures.clone(),
-            nodes,
-        };
-
-        // 使用排序後的 Script 物件進行儲存
-        match to_file(&path, &sorted) {
-            Ok(_) => {
-                self.current_file_path = Some(path);
-                self.has_unsaved_changes_flag = false;
-                self.set_status(format!("成功儲存檔案"), false);
-            }
-            Err(err) => {
-                self.set_status(format!("儲存檔案失敗: {}", err), true);
-            }
-        }
-    }
-
-    // 設定狀態訊息
-    fn set_status(&mut self, message: String, is_error: bool) {
-        self.status_message = Some((message, is_error));
-    }
-
-    // 顯示檔案選單
-    fn show_file_menu(&mut self, ui: &mut egui::Ui) {
-        return show_file_menu(ui, self);
-    }
-
-    // 顯示狀態訊息
-    fn show_status_message(&mut self, ctx: &egui::Context) {
-        if let Some((message, is_error)) = &self.status_message {
-            show_status_message(ctx, message, *is_error);
-        }
-    }
-
-    // 顯示添加節點的視窗
-    fn show_add_node_window(&mut self, ctx: &egui::Context) {
-        egui::Window::new("添加新節點")
-            .collapsible(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.label("請輸入新節點的名稱：");
-                ui.text_edit_singleline(&mut self.temp_node_name);
-
-                ui.horizontal(|ui| {
-                    if ui.button("確認").clicked() {
-                        if self.temp_node_name.is_empty() {
-                            self.set_status(format!("節點名稱不能為空"), true);
-                            return;
-                        }
-                        if self.script.nodes.contains_key(&self.temp_node_name) {
-                            self.set_status(format!("節點名稱已存在"), true);
-                            return;
-                        }
-                        // 建立新節點
-                        let pos = ctx.screen_rect().center();
-                        let pos = self.camera.offset
-                            + egui::vec2(pos.x - LEFT_SIDE_PANEL_WIDTH, pos.y) / self.camera.zoom;
-                        let pos = Pos { x: pos.x, y: pos.y };
-                        let node = Node::End { pos };
-
-                        self.script.nodes.insert(self.temp_node_name.clone(), node);
-                        self.selected_node = Some(self.temp_node_name.clone());
-                        self.adding_node = false;
-                        self.has_unsaved_changes_flag = true;
-                        self.set_status(format!("已添加新節點"), false);
-                    }
-
-                    if ui.button("取消").clicked() {
-                        self.adding_node = false;
+                egui::menu::menu_button(ui, "節點", |ui| {
+                    if ui.button("添加").clicked() {
+                        self.adding_node = true;
                         self.temp_node_name = String::new();
                     }
                 });
+                egui::menu::menu_button(ui, "刪除節點", |ui| {
+                    if ui.button("刪除").clicked() {
+                        let Some(node_id) = self.selected_node.clone() else {
+                            self.set_status(format!("請先選擇一個節點"), true);
+                            return;
+                        };
+                        self.script.nodes.remove(&node_id);
+                        self.selected_node = None;
+                        self.has_unsaved_changes_flag = true;
+                        self.set_status(format!("已刪除節點: {}", node_id), false);
+                    }
+                });
             });
+        });
+
+        // 主畫布：顯示節點和連線
+        self.central_panel(ctx);
+
+        // 側邊欄：顯示選中節點的詳細內容
+        self.right_panel(ctx);
+
+        // 顯示狀態訊息
+        self.show_status_message(ctx);
+
+        // 顯示添加節點和編輯節點的視窗
+        if self.adding_node {
+            self.show_add_node_window(ctx);
+        }
     }
 
-    fn side_panel(&mut self, ctx: &egui::Context) {
+    fn central_panel(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let node_size = egui::vec2(100.0 * self.camera.zoom, 50.0 * self.camera.zoom);
+
+            // 處理攝影機移動與縮放
+            self.camera.handle_pan_zoom(ui);
+
+            // 第1階段：收集所有節點資訊，準備繪製和交互
+            // 預先計算節點的位置和矩形區域
+            let mut node_connections = Vec::new();
+            let mut node_data = Vec::new();
+
+            // 收集連線數據
+            let mut invalid_connection = None;
+            for (node_id, node) in &self.script.nodes {
+                let pos = convert_to_egui_pos(&node.pos());
+                let source_pos = self.camera.world_to_screen(pos);
+                let source_center = source_pos + node_size / 2.0;
+
+                let next_nodes: Vec<&str> = match node {
+                    Node::Dialogue { next_node, .. } => vec![next_node],
+                    Node::Option { options, .. } => {
+                        options.iter().map(|o| o.next_node.as_ref()).collect()
+                    }
+                    Node::Battle { results, .. } => {
+                        results.iter().map(|o| o.next_node.as_ref()).collect()
+                    }
+                    Node::Condition { conditions, .. } => {
+                        conditions.iter().map(|c| c.next_node.as_ref()).collect()
+                    }
+                    Node::End { .. } => Vec::new(),
+                };
+
+                for next_node_id in next_nodes {
+                    let Some(node) = self.script.nodes.get(next_node_id) else {
+                        invalid_connection = Some((node_id.clone(), next_node_id.to_string()));
+                        continue;
+                    };
+                    let pos = convert_to_egui_pos(&node.pos());
+                    let target_pos = self.camera.world_to_screen(pos);
+                    let target_center = target_pos + node_size / 2.0;
+                    node_connections.push((source_center, target_center));
+                }
+            }
+            if let Some((node_id, next_node_id)) = invalid_connection {
+                self.set_status(
+                    format!("非法 next node id: {:?} -> {:?}", node_id, next_node_id),
+                    true,
+                );
+            } else if let Some(message) = &self.status_message {
+                if message.0.starts_with("非法 next node id") {
+                    self.set_status(String::new(), false);
+                }
+            }
+
+            // 收集節點資訊
+            for (node_id, node) in &self.script.nodes {
+                let pos = convert_to_egui_pos(&node.pos());
+                let screen_pos = self.camera.world_to_screen(pos);
+                let node_rect = egui::Rect::from_min_size(screen_pos, node_size);
+                let is_selected = self.selected_node.as_ref() == Some(node_id);
+                let node_type = self
+                    .script
+                    .nodes
+                    .get(node_id)
+                    .expect("nodes in race condition")
+                    .to_string();
+
+                node_data.push((node_id.clone(), node_rect, is_selected, node_type));
+            }
+
+            // 第2階段：處理用戶交互
+            let mut node_action = None;
+            let mut clicked_node = None;
+
+            for (node_id, node_rect, _, _) in &node_data {
+                let response = ui.allocate_rect(*node_rect, egui::Sense::click_and_drag());
+
+                // 確保只有在左鍵按下的情況下才能拖曳
+                if response.dragged() && ui.input(|i| i.pointer.primary_down()) {
+                    let delta = response.drag_delta();
+                    let world_delta = delta / self.camera.zoom;
+                    node_action = Some((node_id.clone(), world_delta));
+                }
+
+                if response.clicked() {
+                    clicked_node = Some(node_id.clone());
+                }
+            }
+
+            // 第3階段：繪製所有元素
+            let painter = ui.painter();
+
+            // 繪製連線
+            for (start, end) in node_connections {
+                painter.line_segment(
+                    [start, end],
+                    egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
+                );
+
+                // 計算箭頭
+                let direction = (end - start).normalized();
+                let arrow_size = 10.0; // 箭頭大小
+
+                // 箭頭尖端位置（比終點略短一點）
+                let arrow_tip = start + (end - start) / 2.0;
+
+                // 計算箭頭的兩個翼點
+                let perpendicular = egui::vec2(-direction.y, direction.x) * arrow_size;
+                let left_wing = arrow_tip - direction * arrow_size + perpendicular;
+                let right_wing = arrow_tip - direction * arrow_size - perpendicular;
+
+                // 繪製箭頭（填充三角形）
+                let points = vec![arrow_tip, left_wing, right_wing, arrow_tip];
+                for i in 0..points.len() - 1 {
+                    painter.line_segment(
+                        [points[i], points[i + 1]],
+                        egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
+                    );
+                }
+            }
+
+            // 繪製節點
+            for (node_id, node_rect, is_selected, node_type) in &node_data {
+                let color = if *is_selected {
+                    egui::Color32::DARK_RED
+                } else {
+                    egui::Color32::DARK_GREEN
+                };
+
+                // 繪製節點背景
+                painter.rect_filled(*node_rect, 0.0, color);
+
+                // 繪製邊框
+                let min = node_rect.min;
+                let max = node_rect.max;
+                painter.line_segment(
+                    [egui::pos2(min.x, min.y), egui::pos2(max.x, min.y)],
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
+                );
+                painter.line_segment(
+                    [egui::pos2(max.x, min.y), egui::pos2(max.x, max.y)],
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
+                );
+                painter.line_segment(
+                    [egui::pos2(max.x, max.y), egui::pos2(min.x, max.y)],
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
+                );
+                painter.line_segment(
+                    [egui::pos2(min.x, max.y), egui::pos2(min.x, min.y)],
+                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
+                );
+
+                // 繪製節點文字
+                let label_pos = node_rect.min + node_size / 2.0;
+
+                painter.text(
+                    label_pos,
+                    egui::Align2::CENTER_CENTER,
+                    format!("<{}>\n{}", node_type, node_id),
+                    egui::FontId::proportional(14.0 * self.camera.zoom),
+                    egui::Color32::WHITE,
+                );
+            }
+
+            // 第4階段：更新狀態
+            // 更新選中節點
+            if let Some(node_id) = clicked_node {
+                self.selected_node = Some(node_id.clone());
+                self.temp_node_name = node_id;
+            }
+
+            // 應用節點移動
+            if let Some((node_id, world_delta)) = node_action {
+                if let Some(node) = self.script.nodes.get_mut(&node_id) {
+                    let pos = convert_to_egui_pos(&node.pos()) + world_delta;
+                    let pos = convert_to_pos(&pos);
+                    node.set_pos(pos);
+                    self.has_unsaved_changes_flag = true;
+                }
+            }
+        });
+    }
+
+    fn right_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("details_panel")
             .min_width(LEFT_SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
@@ -254,7 +372,7 @@ impl DialogsEditor {
                         egui::ComboBox::from_id_salt("node_type_selector")
                             .selected_text(node_type.clone())
                             .show_ui(ui, |ui| {
-                                Node::iter().for_each(|node_type| {
+                                for node_type in Node::iter() {
                                     let node_type = node_type.to_string();
                                     changed_type |= ui
                                         .selectable_value(
@@ -263,7 +381,7 @@ impl DialogsEditor {
                                             node_type,
                                         )
                                         .clicked();
-                                });
+                                }
                             });
 
                         if changed_type {
@@ -565,227 +683,111 @@ impl DialogsEditor {
             });
     }
 
-    fn central_panel(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let node_size = egui::vec2(100.0 * self.camera.zoom, 50.0 * self.camera.zoom);
+    // 顯示添加節點的視窗
+    fn show_add_node_window(&mut self, ctx: &egui::Context) {
+        egui::Window::new("添加新節點")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label("請輸入新節點的名稱：");
+                ui.text_edit_singleline(&mut self.temp_node_name);
 
-            // 處理攝影機移動與縮放
-            self.camera.handle_pan_zoom(ui);
+                ui.horizontal(|ui| {
+                    if ui.button("確認").clicked() {
+                        if self.temp_node_name.is_empty() {
+                            self.set_status(format!("節點名稱不能為空"), true);
+                            return;
+                        }
+                        if self.script.nodes.contains_key(&self.temp_node_name) {
+                            self.set_status(format!("節點名稱已存在"), true);
+                            return;
+                        }
+                        // 建立新節點
+                        let pos = ctx.screen_rect().center();
+                        let pos = self.camera.offset
+                            + egui::vec2(pos.x - LEFT_SIDE_PANEL_WIDTH, pos.y) / self.camera.zoom;
+                        let pos = Pos { x: pos.x, y: pos.y };
+                        let node = Node::End { pos };
 
-            // 第1階段：收集所有節點資訊，準備繪製和交互
-            // 預先計算節點的位置和矩形區域
-            let mut node_connections = Vec::new();
-            let mut node_data = Vec::new();
-
-            // 收集連線數據
-            let mut invalid_connection = None;
-            for (node_id, node) in &self.script.nodes {
-                let pos = convert_to_egui_pos(&node.pos());
-                let source_pos = self.camera.world_to_screen(pos);
-                let source_center = source_pos + node_size / 2.0;
-
-                let next_nodes: Vec<&str> = match node {
-                    Node::Dialogue { next_node, .. } => vec![next_node],
-                    Node::Option { options, .. } => {
-                        options.iter().map(|o| o.next_node.as_ref()).collect()
+                        self.script.nodes.insert(self.temp_node_name.clone(), node);
+                        self.selected_node = Some(self.temp_node_name.clone());
+                        self.adding_node = false;
+                        self.has_unsaved_changes_flag = true;
+                        self.set_status(format!("已添加新節點"), false);
                     }
-                    Node::Battle { results, .. } => {
-                        results.iter().map(|o| o.next_node.as_ref()).collect()
-                    }
-                    Node::Condition { conditions, .. } => {
-                        conditions.iter().map(|c| c.next_node.as_ref()).collect()
-                    }
-                    Node::End { .. } => Vec::new(),
-                };
 
-                for next_node_id in next_nodes {
-                    if let Some(node) = self.script.nodes.get(next_node_id) {
-                        let pos = convert_to_egui_pos(&node.pos());
-                        let target_pos = self.camera.world_to_screen(pos);
-                        let target_center = target_pos + node_size / 2.0;
-
-                        node_connections.push((source_center, target_center));
-                    } else {
-                        invalid_connection = Some((node_id.clone(), next_node_id.to_string()));
-                    }
-                }
-            }
-            if let Some((node_id, next_node_id)) = invalid_connection {
-                self.set_status(
-                    format!("非法 next node id: {:?} -> {:?}", node_id, next_node_id),
-                    true,
-                );
-            } else if let Some(message) = &self.status_message {
-                if message.0.starts_with("非法 next node id") {
-                    self.set_status(String::new(), false);
-                }
-            }
-
-            // 收集節點資訊
-            for (node_id, node) in &self.script.nodes {
-                let pos = convert_to_egui_pos(&node.pos());
-                let screen_pos = self.camera.world_to_screen(pos);
-                let node_rect = egui::Rect::from_min_size(screen_pos, node_size);
-                let is_selected = self.selected_node.as_ref() == Some(node_id);
-                let node_type = self.script.nodes.get(node_id).unwrap().to_string();
-
-                node_data.push((node_id.clone(), node_rect, is_selected, node_type));
-            }
-
-            // 第2階段：處理用戶交互
-            let mut node_actions = Vec::new();
-            let mut clicked_node = None;
-
-            for (node_id, node_rect, _, _) in &node_data {
-                let response = ui.allocate_rect(*node_rect, egui::Sense::click_and_drag());
-
-                // 確保只有在左鍵按下的情況下才能拖曳
-                if response.dragged() && ui.input(|i| i.pointer.primary_down()) {
-                    let delta = response.drag_delta();
-                    let world_delta = delta / self.camera.zoom;
-                    node_actions.push((node_id.clone(), world_delta));
-                }
-
-                if response.clicked() {
-                    clicked_node = Some(node_id.clone());
-                }
-            }
-
-            // 第3階段：繪製所有元素
-            let painter = ui.painter();
-
-            // 繪製連線
-            for (start, end) in node_connections {
-                painter.line_segment(
-                    [start, end],
-                    egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
-                );
-
-                // 計算箭頭
-                let direction = (end - start).normalized();
-                let arrow_size = 10.0; // 箭頭大小
-
-                // 箭頭尖端位置（比終點略短一點）
-                let arrow_tip = start + (end - start) / 2.0;
-
-                // 計算箭頭的兩個翼點
-                let perpendicular = egui::vec2(-direction.y, direction.x) * arrow_size;
-                let left_wing = arrow_tip - direction * arrow_size + perpendicular;
-                let right_wing = arrow_tip - direction * arrow_size - perpendicular;
-
-                // 繪製箭頭（填充三角形）
-                let points = vec![arrow_tip, left_wing, right_wing, arrow_tip];
-                for i in 0..points.len() - 1 {
-                    painter.line_segment(
-                        [points[i], points[i + 1]],
-                        egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
-                    );
-                }
-            }
-
-            // 繪製節點
-            for (node_id, node_rect, is_selected, node_type) in &node_data {
-                let color = if *is_selected {
-                    egui::Color32::DARK_RED
-                } else {
-                    egui::Color32::DARK_GREEN
-                };
-
-                // 繪製節點背景
-                painter.rect_filled(*node_rect, 0.0, color);
-
-                // 繪製邊框
-                let min = node_rect.min;
-                let max = node_rect.max;
-                painter.line_segment(
-                    [egui::pos2(min.x, min.y), egui::pos2(max.x, min.y)],
-                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
-                );
-                painter.line_segment(
-                    [egui::pos2(max.x, min.y), egui::pos2(max.x, max.y)],
-                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
-                );
-                painter.line_segment(
-                    [egui::pos2(max.x, max.y), egui::pos2(min.x, max.y)],
-                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
-                );
-                painter.line_segment(
-                    [egui::pos2(min.x, max.y), egui::pos2(min.x, min.y)],
-                    egui::Stroke::new(1.0, egui::Color32::LIGHT_GRAY),
-                );
-
-                // 繪製節點文字
-                let label_pos = node_rect.min + node_size / 2.0;
-
-                painter.text(
-                    label_pos,
-                    egui::Align2::CENTER_CENTER,
-                    format!("<{}>\n{}", node_type, node_id),
-                    egui::FontId::proportional(14.0 * self.camera.zoom),
-                    egui::Color32::WHITE,
-                );
-            }
-
-            // 第4階段：更新狀態
-            // 更新選中節點
-            if let Some(node_id) = clicked_node {
-                self.selected_node = Some(node_id.clone());
-                self.temp_node_name = node_id;
-            }
-
-            // 應用節點移動
-            for (node_id, world_delta) in node_actions {
-                if let Some(node) = self.script.nodes.get_mut(&node_id) {
-                    let pos = convert_to_egui_pos(&node.pos()) + world_delta;
-                    let pos = convert_to_pos(&pos);
-                    node.set_pos(pos);
-                    self.has_unsaved_changes_flag = true;
-                }
-            }
-        });
-    }
-}
-
-impl eframe::App for DialogsEditor {
-    fn update(&mut self, ctx: &egui::Context, _: &mut Frame) {
-        // 頂部面板：顯示檔案選單
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                self.show_file_menu(ui);
-
-                egui::menu::menu_button(ui, "節點", |ui| {
-                    if ui.button("添加").clicked() {
-                        self.adding_node = true;
+                    if ui.button("取消").clicked() {
+                        self.adding_node = false;
                         self.temp_node_name = String::new();
                     }
                 });
-                egui::menu::menu_button(ui, "刪除節點", |ui| {
-                    if ui.button("刪除").clicked() {
-                        let Some(node_id) = self.selected_node.clone() else {
-                            self.set_status(format!("請先選擇一個節點"), true);
-                            return;
-                        };
-                        self.script.nodes.remove(&node_id);
-                        self.selected_node = None;
-                        self.has_unsaved_changes_flag = true;
-                        self.set_status(format!("已刪除節點: {}", node_id), false);
-                    }
-                });
             });
-        });
+    }
 
-        // 側邊欄：顯示選中節點的詳細內容
-        self.side_panel(ctx);
+    // 顯示檔案選單
+    fn show_file_menu(&mut self, ui: &mut egui::Ui) {
+        return show_file_menu(ui, self);
+    }
 
-        // 主畫布：顯示節點和連線
-        self.central_panel(ctx);
-
-        // 顯示狀態訊息
-        self.show_status_message(ctx);
-
-        // 顯示添加節點和編輯節點的視窗
-        if self.adding_node {
-            self.show_add_node_window(ctx);
+    // 從檔案載入對話腳本
+    fn load_file(&mut self, path: PathBuf) {
+        match from_file(&path) {
+            Ok(script) => {
+                let current_file_path = Some(path);
+                *self = Self {
+                    script,
+                    current_file_path,
+                    ..Default::default()
+                };
+                self.set_status(format!("成功載入檔案"), false);
+            }
+            Err(err) => {
+                self.set_status(format!("載入檔案失敗: {}", err), true);
+            }
         }
+    }
+
+    // 儲存到檔案
+    fn save_file(&mut self, path: PathBuf) {
+        // 將節點轉換為有序的 BTreeMap 並按鍵（node_id）排序
+        let nodes = self.script.nodes.clone().into_iter().collect();
+        #[derive(Debug, Deserialize, Serialize, Default)]
+        struct SortedScript {
+            function_signatures: Vec<String>,
+            nodes: BTreeMap<String, Node>,
+        }
+        let sorted = SortedScript {
+            function_signatures: self.script.function_signatures.clone(),
+            nodes,
+        };
+
+        // 使用排序後的 Script 物件進行儲存
+        match to_file(&path, &sorted) {
+            Ok(_) => {
+                self.current_file_path = Some(path);
+                self.has_unsaved_changes_flag = false;
+                self.set_status(format!("成功儲存檔案"), false);
+            }
+            Err(err) => {
+                self.set_status(format!("儲存檔案失敗: {}", err), true);
+            }
+        }
+    }
+
+    // 設定狀態訊息
+    fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
+    // 顯示狀態訊息
+    fn show_status_message(&mut self, ctx: &egui::Context) {
+        if let Some((message, is_error)) = &self.status_message {
+            show_status_message(ctx, message, *is_error);
+        }
+    }
+
+    // 檢查是否有未保存的變動
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.has_unsaved_changes_flag
     }
 }

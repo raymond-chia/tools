@@ -228,75 +228,26 @@ impl FileOperator<PathBuf> for SkillsEditor {
 }
 
 impl SkillsEditor {
-    /// 檢查目前編輯中的技能是否有未保存的變動
-    pub fn has_unsaved_changes(&self) -> bool {
-        self.has_unsaved_changes_flag
-    }
+    pub fn update(&mut self, ctx: &egui::Context, _: &mut Frame) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                show_file_menu(ui, self);
+            });
+        });
 
-    fn load_file(&mut self, path: PathBuf) {
-        match SkillsData::from_file(&path) {
-            Ok(skills_data) => {
-                let current_file_path = Some(path);
-                *self = Self {
-                    skills_data,
-                    current_file_path,
-                    ..Default::default()
-                };
-                self.set_status(format!("成功載入檔案"), false);
-            }
-            Err(err) => {
-                self.set_status(format!("載入檔案失敗: {}", err), true);
-            }
-        }
-    }
+        egui::SidePanel::left("skills_list_panel")
+            .default_width(200.0)
+            .show(ctx, |ui| {
+                self.show_skills_list(ui);
+            });
 
-    fn save_file(&mut self, path: PathBuf) {
-        for (skill_id, skill) in self.skills_data.skills.iter() {
-            if let Err(err) = SkillsData::validate(skill) {
-                self.set_status(format!("技能 {} 驗證失敗: {}", skill_id, err), true);
-                return;
-            }
-        }
-        match self.skills_data.save_to_file(&path) {
-            Ok(_) => {
-                self.current_file_path = Some(path);
-                self.has_unsaved_changes_flag = false;
-                self.set_status(format!("成功儲存檔案"), false);
-            }
-            Err(err) => {
-                self.set_status(format!("儲存檔案失敗: {}", err), true);
-            }
-        }
-    }
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.show_skill_editor(ui);
+        });
 
-    fn set_status(&mut self, message: String, is_error: bool) {
-        self.status_message = Some((message, is_error));
-    }
-
-    fn show_status_message(&mut self, ctx: &egui::Context) {
-        if let Some((message, is_error)) = &self.status_message {
-            show_status_message(ctx, message, *is_error);
-        }
-    }
-
-    fn create_skill(&mut self) {
-        if self.new_skill_id.is_empty() {
-            self.set_status("技能 ID 不能為空".to_string(), true);
-            return;
-        }
-
-        match self.skills_data.create_skill(&self.new_skill_id) {
-            Ok(_) => {
-                // 建立後直接選中這個技能
-                self.selected_skill = Some(self.new_skill_id.clone());
-                self.new_skill_id.clear();
-                self.has_unsaved_changes_flag = true; // 標記為已修改
-                self.set_status(format!("成功建立技能"), false);
-            }
-            Err(err) => {
-                self.set_status(err, true);
-            }
-        }
+        self.show_add_effect_popup(ctx);
+        self.show_confirmation_dialog(ctx);
+        self.show_status_message(ctx);
     }
 
     fn show_skills_list(&mut self, ui: &mut Ui) {
@@ -341,7 +292,7 @@ impl SkillsEditor {
         // 首先添加標題和按鈕（這些保持在固定位置）
         let mut delete_clicked = false;
         let mut add_effect_clicked = false;
-        let mut delete_effect_indices: Vec<usize> = Vec::new();
+        let mut delete_effect_indices = None;
 
         if let Some(skill_id) = &self.selected_skill {
             ui.heading(format!("編輯技能: {}", skill_id));
@@ -470,7 +421,7 @@ impl SkillsEditor {
                                 });
 
                                 if delete_effect_clicked {
-                                    delete_effect_indices.push(index);
+                                    delete_effect_indices = Some(index);
                                 }
 
                                 ui.indent(format!("effect_{}", index), |ui| {
@@ -503,11 +454,144 @@ impl SkillsEditor {
         }
 
         // 處理刪除效果
-        if !delete_effect_indices.is_empty() && self.selected_skill.is_some() {
-            let skill_id = self.selected_skill.clone().unwrap();
-            let index = *delete_effect_indices.first().unwrap(); // 僅處理第一個
+        if delete_effect_indices.is_some() && self.selected_skill.is_some() {
+            let skill_id = self
+                .selected_skill
+                .clone()
+                .expect("selected skill in race condition");
+            let index = delete_effect_indices
+                .take()
+                .expect("delete effect in race condition");
             self.confirmation_action = ConfirmationAction::DeleteEffect(skill_id, index);
             self.show_confirmation_dialog = true;
+        }
+    }
+
+    fn show_add_effect_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_add_effect_popup {
+            return;
+        }
+
+        let mut open = self.show_add_effect_popup;
+        let mut add_hp_effect = false;
+        let mut add_burn_effect = false;
+
+        egui::Window::new("新增效果")
+            .open(&mut open)
+            .resizable(false)
+            .show(ctx, |ui| {
+                add_hp_effect = ui.button("新增 HP 效果").clicked();
+                add_burn_effect = ui.button("新增燃燒效果").clicked();
+            });
+
+        // 在閉包外處理按鈕事件
+        if add_hp_effect && self.selected_skill.is_some() {
+            let skill_id = self.selected_skill.as_ref().unwrap();
+            if let Some(skill) = self.skills_data.skills.get_mut(skill_id) {
+                skill.effects.push(Effect::Hp {
+                    target_type: TargetType::Any,
+                    shape: Shape::Point,
+                    value: 0,
+                });
+                self.has_unsaved_changes_flag = true; // 標記為已修改
+                open = false;
+            }
+        }
+
+        if add_burn_effect && self.selected_skill.is_some() {
+            let skill_id = self.selected_skill.as_ref().unwrap();
+            if let Some(skill) = self.skills_data.skills.get_mut(skill_id) {
+                skill.effects.push(Effect::Burn {
+                    target_type: TargetType::Any,
+                    shape: Shape::Point,
+                    duration: 3,
+                });
+                self.has_unsaved_changes_flag = true; // 標記為已修改
+                open = false;
+            }
+        }
+
+        self.show_add_effect_popup = open;
+    }
+
+    fn show_confirmation_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_confirmation_dialog {
+            return;
+        }
+
+        let mut open = self.show_confirmation_dialog;
+        let title = "確認";
+        let message = match &self.confirmation_action {
+            ConfirmationAction::None => "確定要執行此操作嗎？",
+            ConfirmationAction::DeleteSkill(_) => "確定要刪除此技能嗎？",
+            ConfirmationAction::DeleteEffect(_, _) => "確定要刪除此效果嗎？",
+        };
+
+        let mut confirm_clicked = false;
+        let mut cancel_clicked = false;
+        let action_clone = self.confirmation_action.clone();
+
+        egui::Window::new(title)
+            .open(&mut open)
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.label(message);
+                ui.horizontal(|ui| {
+                    confirm_clicked = ui.button("確定").clicked();
+                    cancel_clicked = ui.button("取消").clicked();
+                });
+            });
+
+        // 在閉包外處理按鈕事件
+        if confirm_clicked {
+            match action_clone {
+                ConfirmationAction::DeleteSkill(skill_id) => {
+                    if let Err(err) = self.skills_data.delete_skill(&skill_id) {
+                        self.set_status(err, true);
+                    } else {
+                        self.has_unsaved_changes_flag = true; // 標記為已修改
+                        self.set_status("成功刪除技能".to_string(), false);
+                        self.selected_skill = None;
+                    }
+                }
+                ConfirmationAction::DeleteEffect(skill_id, index) => {
+                    if let Some(skill) = self.skills_data.skills.get_mut(&skill_id) {
+                        if index < skill.effects.len() {
+                            skill.effects.remove(index);
+                            self.has_unsaved_changes_flag = true; // 標記為已修改
+                            self.set_status("成功刪除效果".to_string(), false);
+                        }
+                    }
+                }
+                _ => {}
+            }
+            open = false;
+        }
+
+        if cancel_clicked {
+            open = false;
+        }
+
+        self.show_confirmation_dialog = open;
+    }
+
+    fn create_skill(&mut self) {
+        if self.new_skill_id.is_empty() {
+            self.set_status("技能 ID 不能為空".to_string(), true);
+            return;
+        }
+
+        match self.skills_data.create_skill(&self.new_skill_id) {
+            Ok(_) => {
+                // 建立後直接選中這個技能
+                self.selected_skill = Some(self.new_skill_id.clone());
+                self.new_skill_id.clear();
+                self.has_unsaved_changes_flag = true; // 標記為已修改
+                self.set_status(format!("成功建立技能"), false);
+            }
+            Err(err) => {
+                self.set_status(err, true);
+            }
         }
     }
 
@@ -524,20 +608,7 @@ impl SkillsEditor {
                 1 // 默認為 Active
             };
 
-            ui.horizontal(|ui| {
-                active.iter().enumerate().for_each(|(i, tag)| {
-                    if ui
-                        .radio_value(&mut selected, i, format!("{:?}", tag).to_lowercase())
-                        .clicked()
-                    {
-                        skill.tags.retain(|t| !active.contains(t));
-                        if !skill.tags.contains(tag) {
-                            skill.tags.insert(tag.clone());
-                        }
-                        changed = true;
-                    }
-                });
-            });
+            tag_button_group(ui, &active, skill, &mut selected);
         });
 
         ui.group(|ui| {
@@ -547,20 +618,7 @@ impl SkillsEditor {
                 0 // 默認為 Single
             };
 
-            ui.horizontal(|ui| {
-                area.iter().enumerate().for_each(|(i, tag)| {
-                    if ui
-                        .radio_value(&mut selected, i, format!("{:?}", tag).to_lowercase())
-                        .clicked()
-                    {
-                        skill.tags.retain(|t| !area.contains(t));
-                        if !skill.tags.contains(tag) {
-                            skill.tags.insert(tag.clone());
-                        }
-                        changed = true;
-                    }
-                });
-            });
+            tag_button_group(ui, &area, skill, &mut selected);
         });
 
         ui.group(|ui| {
@@ -572,20 +630,7 @@ impl SkillsEditor {
                 1 // 默認為 Melee
             };
 
-            ui.horizontal(|ui| {
-                range.iter().enumerate().for_each(|(i, tag)| {
-                    if ui
-                        .radio_value(&mut selected, i, format!("{:?}", tag).to_lowercase())
-                        .clicked()
-                    {
-                        skill.tags.retain(|t| !range.contains(t));
-                        if !skill.tags.contains(tag) {
-                            skill.tags.insert(tag.clone());
-                        }
-                        changed = true;
-                    }
-                });
-            });
+            tag_button_group(ui, &range, skill, &mut selected);
         });
 
         ui.group(|ui| {
@@ -602,7 +647,7 @@ impl SkillsEditor {
                         if checked && !has_tag {
                             skill.tags.insert(tag.clone());
                         } else if !checked && has_tag {
-                            skill.tags.retain(|t| t != &tag);
+                            skill.tags.remove(&tag);
                         }
                         changed = true;
                     }
@@ -731,6 +776,7 @@ impl SkillsEditor {
             Shape::Cone(_, _) => "錐形".to_string(),
         };
 
+        // 切換
         egui::ComboBox::new("shape_type", "")
             .selected_text(shape_type)
             .show_ui(ui, |ui| {
@@ -779,6 +825,7 @@ impl SkillsEditor {
                 }
             });
 
+        // 各個形狀細節
         ui.horizontal(|ui| match shape {
             Shape::Point => {}
             Shape::Circle(radius) => {
@@ -826,135 +873,73 @@ impl SkillsEditor {
         changed
     }
 
-    fn show_add_effect_popup(&mut self, ctx: &egui::Context) {
-        if !self.show_add_effect_popup {
-            return;
-        }
-
-        let mut open = self.show_add_effect_popup;
-        let mut add_hp_effect = false;
-        let mut add_burn_effect = false;
-
-        egui::Window::new("新增效果")
-            .open(&mut open)
-            .resizable(false)
-            .show(ctx, |ui| {
-                add_hp_effect = ui.button("新增 HP 效果").clicked();
-                add_burn_effect = ui.button("新增燃燒效果").clicked();
-            });
-
-        // 在閉包外處理按鈕事件
-        if add_hp_effect && self.selected_skill.is_some() {
-            let skill_id = self.selected_skill.as_ref().unwrap();
-            if let Some(skill) = self.skills_data.skills.get_mut(skill_id) {
-                skill.effects.push(Effect::Hp {
-                    target_type: TargetType::Any,
-                    shape: Shape::Point,
-                    value: 0,
-                });
-                self.has_unsaved_changes_flag = true; // 標記為已修改
-                open = false;
+    fn save_file(&mut self, path: PathBuf) {
+        for (skill_id, skill) in self.skills_data.skills.iter() {
+            if let Err(err) = SkillsData::validate(skill) {
+                self.set_status(format!("技能 {} 驗證失敗: {}", skill_id, err), true);
+                return;
             }
         }
-
-        if add_burn_effect && self.selected_skill.is_some() {
-            let skill_id = self.selected_skill.as_ref().unwrap();
-            if let Some(skill) = self.skills_data.skills.get_mut(skill_id) {
-                skill.effects.push(Effect::Burn {
-                    target_type: TargetType::Any,
-                    shape: Shape::Point,
-                    duration: 3,
-                });
-                self.has_unsaved_changes_flag = true; // 標記為已修改
-                open = false;
+        match self.skills_data.save_to_file(&path) {
+            Ok(_) => {
+                self.current_file_path = Some(path);
+                self.has_unsaved_changes_flag = false;
+                self.set_status(format!("成功儲存檔案"), false);
+            }
+            Err(err) => {
+                self.set_status(format!("儲存檔案失敗: {}", err), true);
             }
         }
-
-        self.show_add_effect_popup = open;
     }
 
-    fn show_confirmation_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_confirmation_dialog {
-            return;
-        }
-
-        let mut open = self.show_confirmation_dialog;
-        let title = "確認";
-        let message = match &self.confirmation_action {
-            ConfirmationAction::None => "確定要執行此操作嗎？",
-            ConfirmationAction::DeleteSkill(_) => "確定要刪除此技能嗎？",
-            ConfirmationAction::DeleteEffect(_, _) => "確定要刪除此效果嗎？",
-        };
-
-        let mut confirm_clicked = false;
-        let mut cancel_clicked = false;
-        let action_clone = self.confirmation_action.clone();
-
-        egui::Window::new(title)
-            .open(&mut open)
-            .resizable(false)
-            .show(ctx, |ui| {
-                ui.label(message);
-                ui.horizontal(|ui| {
-                    confirm_clicked = ui.button("確定").clicked();
-                    cancel_clicked = ui.button("取消").clicked();
-                });
-            });
-
-        // 在閉包外處理按鈕事件
-        if confirm_clicked {
-            match action_clone {
-                ConfirmationAction::DeleteSkill(skill_id) => {
-                    if let Err(err) = self.skills_data.delete_skill(&skill_id) {
-                        self.set_status(err, true);
-                    } else {
-                        self.has_unsaved_changes_flag = true; // 標記為已修改
-                        self.set_status("成功刪除技能".to_string(), false);
-                        self.selected_skill = None;
-                    }
-                }
-                ConfirmationAction::DeleteEffect(skill_id, index) => {
-                    if let Some(skill) = self.skills_data.skills.get_mut(&skill_id) {
-                        if index < skill.effects.len() {
-                            skill.effects.remove(index);
-                            self.has_unsaved_changes_flag = true; // 標記為已修改
-                            self.set_status("成功刪除效果".to_string(), false);
-                        }
-                    }
-                }
-                _ => {}
+    fn load_file(&mut self, path: PathBuf) {
+        match SkillsData::from_file(&path) {
+            Ok(skills_data) => {
+                let current_file_path = Some(path);
+                *self = Self {
+                    skills_data,
+                    current_file_path,
+                    ..Default::default()
+                };
+                self.set_status(format!("成功載入檔案"), false);
             }
-            open = false;
+            Err(err) => {
+                self.set_status(format!("載入檔案失敗: {}", err), true);
+            }
         }
+    }
 
-        if cancel_clicked {
-            open = false;
+    fn set_status(&mut self, message: String, is_error: bool) {
+        self.status_message = Some((message, is_error));
+    }
+
+    fn show_status_message(&mut self, ctx: &egui::Context) {
+        if let Some((message, is_error)) = &self.status_message {
+            show_status_message(ctx, message, *is_error);
         }
+    }
 
-        self.show_confirmation_dialog = open;
+    /// 檢查目前編輯中的技能是否有未保存的變動
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.has_unsaved_changes_flag
     }
 }
 
-impl eframe::App for SkillsEditor {
-    fn update(&mut self, ctx: &egui::Context, _: &mut Frame) {
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                show_file_menu(ui, self);
-            });
-        });
-
-        egui::SidePanel::left("skills_list_panel")
-            .default_width(200.0)
-            .show(ctx, |ui| {
-                self.show_skills_list(ui);
-            });
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.show_skill_editor(ui);
-        });
-
-        self.show_add_effect_popup(ctx);
-        self.show_confirmation_dialog(ctx);
-        self.show_status_message(ctx);
-    }
+fn tag_button_group(ui: &mut Ui, tags: &[Tag], skill: &mut Skill, selected: &mut usize) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        for (i, tag) in tags.iter().enumerate() {
+            if ui
+                .radio_value(selected, i, format!("{:?}", tag).to_lowercase())
+                .clicked()
+            {
+                for t in tags {
+                    skill.tags.remove(t);
+                }
+                skill.tags.insert(tag.clone());
+                changed = true;
+            }
+        }
+    });
+    changed
 }
