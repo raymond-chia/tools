@@ -192,6 +192,9 @@ impl BoardsEditor {
             if !ui.ctx().input(|i| i.pointer.primary_down()) {
                 return;
             }
+            if tile_x >= board.width() || tile_y >= board.height() {
+                return;
+            }
             painted = Some(Pos {
                 x: tile_x,
                 y: tile_y,
