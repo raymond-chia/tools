@@ -2,6 +2,7 @@ use crate::common::*;
 use chess_lib::*;
 use egui::*;
 use rand::Rng;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::io;
 use strum::IntoEnumIterator;
@@ -313,7 +314,9 @@ impl BoardsEditor {
             BrushMode::Unit => {
                 self.show_unit_brush(ui);
             }
-            BrushMode::Team => {}
+            BrushMode::Team => {
+                self.show_team_settings(ui);
+            }
         }
     }
 
@@ -408,9 +411,7 @@ impl BoardsEditor {
         let Some(board_id) = &self.selected_board else {
             return;
         };
-        let Some(board) = self.boards.get(board_id) else {
-            return;
-        };
+        let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
         let team_ids = board.teams.keys().cloned().collect::<Vec<_>>();
 
         ui.vertical(|ui| {
@@ -457,6 +458,77 @@ impl BoardsEditor {
                 .clicked()
             {
                 self.selected_unit = Some(template.clone());
+            }
+        }
+    }
+
+    fn show_team_settings(&mut self, ui: &mut Ui) {
+        let Some(board_id) = &self.selected_board else {
+            ui.label("請先選擇戰場");
+            return;
+        };
+        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+
+        ui.heading("隊伍設定");
+
+        // 列出所有現有 teams
+        let mut to_delete: Option<String> = None;
+        for (team_id, team_cfg) in board.teams.iter_mut() {
+            ui.horizontal(|ui| {
+                ui.label(format!("TeamID: {}", team_id));
+                // 顏色編輯器
+                let mut color32 =
+                    Color32::from_rgb(team_cfg.color.0, team_cfg.color.1, team_cfg.color.2);
+                if ui.color_edit_button_srgba(&mut color32).changed() {
+                    let rgb = (color32.r(), color32.g(), color32.b());
+                    team_cfg.color = rgb;
+                    self.has_unsaved_changes = true;
+                }
+                if ui.button("刪除").clicked() {
+                    to_delete = Some(team_id.clone());
+                }
+            });
+        }
+        if let Some(team_id) = to_delete {
+            board.teams.remove(&team_id);
+            self.has_unsaved_changes = true;
+        }
+
+        ui.separator();
+        ui.label("新增隊伍");
+
+        // 新增 team 的輸入欄
+        thread_local! {
+            static NEW_TEAM_ID: RefCell<String> = RefCell::new(String::new());
+            static NEW_TEAM_COLOR: RefCell<Color32> = RefCell::new(Color32::LIGHT_GRAY);
+        }
+
+        let mut new_team_id = NEW_TEAM_ID.with(|id| id.borrow().clone());
+        let mut new_team_color = NEW_TEAM_COLOR.with(|c| *c.borrow());
+
+        let id_changed = ui.text_edit_singleline(&mut new_team_id).changed();
+        let color_changed = ui.color_edit_button_srgba(&mut new_team_color).changed();
+
+        if id_changed {
+            NEW_TEAM_ID.with(|id| *id.borrow_mut() = new_team_id.clone());
+        }
+        if color_changed {
+            NEW_TEAM_COLOR.with(|c| *c.borrow_mut() = new_team_color);
+        }
+
+        if ui.button("新增").clicked() {
+            if !new_team_id.is_empty() && !board.teams.contains_key(&new_team_id) {
+                let rgb = (new_team_color.r(), new_team_color.g(), new_team_color.b());
+                board.teams.insert(
+                    new_team_id.clone(),
+                    Team {
+                        id: new_team_id.clone(),
+                        color: (rgb.0, rgb.1, rgb.2),
+                    },
+                );
+                self.has_unsaved_changes = true;
+                NEW_TEAM_ID.with(|id| *id.borrow_mut() = String::new());
+                NEW_TEAM_COLOR.with(|c| *c.borrow_mut() = Color32::LIGHT_GRAY);
             }
         }
     }
