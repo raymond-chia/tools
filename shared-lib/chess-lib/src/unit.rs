@@ -10,12 +10,12 @@ pub struct Team {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UnitTemplate {
-    pub name: String,
+    pub name: UnitTemplateType,
     pub move_points: usize,
     pub skills: BTreeSet<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct UnitMarker {
     pub id: UnitID,
     pub unit_template_type: UnitTemplateType,

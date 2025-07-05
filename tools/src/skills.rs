@@ -1,4 +1,4 @@
-use crate::common::{FileOperator, from_file, show_file_menu, show_status_message, to_file};
+use crate::common::*;
 use eframe::{Frame, egui};
 use egui::{Button, DragValue, ScrollArea, Separator, Ui};
 use serde::{Deserialize, Serialize};
@@ -7,8 +7,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
-
-const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 
 /// 技能資料集
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]

@@ -1,17 +1,14 @@
 use crate::{common::*, skills::SkillsData};
-use chess_lib::UnitTemplate;
+use chess_lib::{UnitTemplate, UnitTemplateType};
 use egui::{Button, Ui};
 use std::io;
-
-const UNIT_TEMPLATES_FILE: &str = "../shared-lib/test-data/ignore-unit-templates.toml";
-const SKILLS_FILE: &str = "../shared-lib/test-data/ignore-skills.toml";
 
 #[derive(Default)]
 pub struct UnitsEditor {
     // 需要指定順序
-    unit_template: Vec<UnitTemplate>,
+    unit_templates: Vec<UnitTemplate>,
     skills: Vec<String>,
-    selected_unit: Option<String>,
+    selected_unit: Option<UnitTemplateType>,
     selected_skill: String,
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
@@ -36,9 +33,9 @@ impl UnitsEditor {
         // 重新載入 unit_templates
         match load_unit_templates(UNIT_TEMPLATES_FILE) {
             Ok(unit_templates) => {
-                self.unit_template = unit_templates;
+                self.unit_templates = unit_templates;
                 if let Some(selected) = &self.selected_unit {
-                    if !self.unit_template.iter().any(|u| &u.name == selected) {
+                    if !self.unit_templates.iter().any(|u| &u.name == selected) {
                         // 如果選中的單位不存在，則清除選中狀態
                         self.selected_unit = None;
                     }
@@ -92,14 +89,14 @@ impl UnitsEditor {
         });
         if ui.button("新增單位").clicked() {
             let new_unit = UnitTemplate::default();
-            self.unit_template.push(new_unit.clone());
+            self.unit_templates.push(new_unit.clone());
             self.selected_unit = Some(new_unit.name.clone());
             self.has_unsaved_changes = true;
         }
         let mut to_copy = None;
         let mut to_delete = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (idx, unit) in self.unit_template.iter().enumerate() {
+            for (idx, unit) in self.unit_templates.iter().enumerate() {
                 let name = &unit.name;
                 let selected = self.selected_unit == Some(name.clone());
                 let button = Button::new(name).fill(if selected {
@@ -122,14 +119,14 @@ impl UnitsEditor {
         });
         // 新增刪除不會同時發生
         if let Some(idx) = to_copy {
-            let mut new_unit = self.unit_template[idx].clone();
+            let mut new_unit = self.unit_templates[idx].clone();
             new_unit.name.push_str("_copy");
             let new_unit_name = new_unit.name.clone();
-            self.unit_template.insert(idx + 1, new_unit);
+            self.unit_templates.insert(idx + 1, new_unit);
             self.selected_unit = Some(new_unit_name);
             self.has_unsaved_changes = true;
         } else if let Some(idx) = to_delete {
-            self.unit_template.remove(idx);
+            self.unit_templates.remove(idx);
             self.selected_unit = None;
             self.has_unsaved_changes = true;
         }
@@ -139,11 +136,11 @@ impl UnitsEditor {
         let Some(orig_name) = self.selected_unit.clone() else {
             return;
         };
-        let idx = self.unit_template.iter().position(|u| u.name == orig_name);
+        let idx = self.unit_templates.iter().position(|u| u.name == orig_name);
         let Some(idx) = idx else {
             return;
         };
-        let mut unit = self.unit_template[idx].clone();
+        let mut unit = self.unit_templates[idx].clone();
         ui.heading("單位編輯");
         ui.label("名稱（含等級）：");
         ui.text_edit_singleline(&mut unit.name);
@@ -177,11 +174,11 @@ impl UnitsEditor {
 
         // 判斷名稱是否有變更
         let name_changed = unit.name != orig_name;
-        if name_changed && !self.unit_template.iter().any(|u| u.name == unit.name) {
+        if name_changed && !self.unit_templates.iter().any(|u| u.name == unit.name) {
             self.selected_unit = Some(unit.name.clone());
-            self.unit_template[idx] = unit;
+            self.unit_templates[idx] = unit;
         } else if !name_changed {
-            self.unit_template[idx] = unit;
+            self.unit_templates[idx] = unit;
         }
         if ui.button("儲存").clicked() {
             if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
@@ -199,7 +196,7 @@ impl UnitsEditor {
             unit_templates: &'a Vec<UnitTemplate>,
         }
         let config = UnitTemplatesConfig {
-            unit_templates: &self.unit_template,
+            unit_templates: &self.unit_templates,
         };
         return to_file(path, &config);
     }

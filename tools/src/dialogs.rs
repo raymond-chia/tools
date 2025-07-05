@@ -8,8 +8,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 
-const DIALOGS_FILE: &str = "../shared-lib/test-data/ignore-dialogs.toml";
-
 const LEFT_SIDE_PANEL_WIDTH: f32 = 400.0; // 側邊面板的寬度
 
 #[derive(Debug, Default)]

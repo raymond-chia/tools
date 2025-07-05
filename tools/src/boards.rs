@@ -1,11 +1,10 @@
 use crate::common::*;
 use chess_lib::*;
 use egui::*;
-use std::collections::BTreeMap;
+use rand::Rng;
+use std::collections::{BTreeMap, HashMap};
 use std::io;
 use strum::IntoEnumIterator;
-
-const BOARDS_FILE: &str = "../shared-lib/test-data/ignore-boards.toml";
 
 const TILE_SIZE: f32 = 56.0;
 const TILE_OBJECT_SIZE: f32 = 16.0;
@@ -19,7 +18,11 @@ pub struct BoardsEditor {
     selected_object: Option<Object>,
     selected_object_duration: u32,
     selected_orientation: Orientation,
+    selected_unit: Option<UnitTemplateType>,
+    selected_team: TeamID,
+    // 其他
     camera: Camera2D,
+    unit_templates: HashMap<UnitTemplateType, UnitTemplate>,
     // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
@@ -54,6 +57,25 @@ impl BoardsEditor {
             }
             Err(err) => {
                 self.set_status(format!("載入戰場失敗: {}", err), true);
+                return;
+            }
+        }
+        // 載入 unit_templates
+        match crate::units::load_unit_templates(UNIT_TEMPLATES_FILE) {
+            Ok(unit_templates) => {
+                self.unit_templates = unit_templates
+                    .into_iter()
+                    .map(|u| (u.name.clone(), u))
+                    .collect();
+                if let Some(selected) = &self.selected_unit {
+                    if !self.unit_templates.contains_key(selected) {
+                        self.selected_unit = None;
+                    }
+                }
+            }
+            Err(err) => {
+                self.unit_templates = HashMap::new();
+                self.set_status(format!("載入單位類型失敗: {}", err), true);
                 return;
             }
         }
@@ -155,7 +177,7 @@ impl BoardsEditor {
         for (row_idx, row) in board.tiles.iter_mut().enumerate() {
             for (col_idx, tile) in row.iter_mut().enumerate() {
                 // 計算世界座標
-                let world_pos = Pos2::new(col_idx as f32 * TILE_SIZE, row_idx as f32 * TILE_SIZE);
+                let world_pos = Pos2::new(col_idx as f32, row_idx as f32) * TILE_SIZE;
                 let screen_pos = self.camera.world_to_screen(world_pos);
                 let rect =
                     Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * self.camera.zoom);
@@ -171,8 +193,25 @@ impl BoardsEditor {
                 // 畫 tile object
                 painter.text(
                     rect.center(),
-                    Align2::CENTER_CENTER,
+                    Align2::CENTER_BOTTOM,
                     object_symbol(tile),
+                    FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
+                    Color32::WHITE,
+                );
+                // 畫 unit
+                let pos = Pos {
+                    x: col_idx,
+                    y: row_idx,
+                };
+                let unit = board
+                    .units
+                    .values()
+                    .find(|u| u.pos == pos)
+                    .map_or("", |u| &u.unit_template_type);
+                painter.text(
+                    rect.center(),
+                    Align2::CENTER_TOP,
+                    unit,
                     FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
                     Color32::WHITE,
                 );
@@ -220,7 +259,20 @@ impl BoardsEditor {
                     }
                 }
                 BrushMode::Unit => {
-                    // 物件筆刷未實作
+                    let marker = if let Some(template_type) = &self.selected_unit {
+                        let mut rng = rand::thread_rng();
+                        Some(UnitMarker {
+                            id: rng.gen_range(0..u64::MAX),
+                            unit_template_type: template_type.clone(),
+                            team: self.selected_team.clone(),
+                            pos,
+                        })
+                    } else {
+                        None
+                    };
+                    if let Err(e) = paint_unit(board, pos, marker) {
+                        err_msg = format!("Error painting unit: {}", e);
+                    }
                 }
                 BrushMode::Team => {
                     // 隊伍編輯未實作
@@ -257,7 +309,9 @@ impl BoardsEditor {
             BrushMode::Object => {
                 self.show_object_brush(ui);
             }
-            BrushMode::Unit => {}
+            BrushMode::Unit => {
+                self.show_unit_brush(ui);
+            }
             BrushMode::Team => {}
         }
     }
@@ -344,6 +398,27 @@ impl BoardsEditor {
                 .clicked()
             {
                 self.selected_object = Some(object);
+            }
+        }
+    }
+
+    fn show_unit_brush(&mut self, ui: &mut Ui) {
+        if ui
+            .selectable_label(self.selected_unit.is_none(), "清除")
+            .clicked()
+        {
+            self.selected_unit = None;
+            return;
+        }
+        for (template, _) in &self.unit_templates {
+            if ui
+                .selectable_label(
+                    self.selected_unit.as_ref().map_or(false, |t| t == template),
+                    template,
+                )
+                .clicked()
+            {
+                self.selected_unit = Some(template.clone());
             }
         }
     }
@@ -459,6 +534,31 @@ where
             y: pos.y - main_pos.y,
         };
         tile.object = Some(make_object(rel));
+    }
+    Ok(())
+}
+
+fn paint_unit(board: &mut BoardConfig, pos: Pos, unit: Option<UnitMarker>) -> Result<(), String> {
+    match unit {
+        Some(unit) => {
+            // 檢查該 pos 是否已有單位
+            if board.units.values().any(|marker| marker.pos == pos) {
+                return Err(format!("該位置已經有單位: {:?}", pos));
+            }
+            board.units.insert(unit.id, unit);
+        }
+        None => {
+            // 只移除第一個在該 pos 的單位
+            if let Some(id) =
+                board.units.iter().find_map(
+                    |(id, marker)| {
+                        if marker.pos == pos { Some(*id) } else { None }
+                    },
+                )
+            {
+                board.units.remove(&id);
+            }
+        }
     }
     Ok(())
 }
