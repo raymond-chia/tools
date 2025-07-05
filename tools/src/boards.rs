@@ -7,7 +7,7 @@ use std::io;
 use strum::IntoEnumIterator;
 
 const TILE_SIZE: f32 = 56.0;
-const TILE_OBJECT_SIZE: f32 = 16.0;
+const TILE_OBJECT_SIZE: f32 = 10.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -193,7 +193,8 @@ impl BoardsEditor {
                 // 畫 tile object
                 painter.text(
                     rect.center(),
-                    Align2::CENTER_BOTTOM,
+                    // 會在格子下半顯示
+                    Align2::CENTER_TOP,
                     object_symbol(tile),
                     FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
                     Color32::WHITE,
@@ -210,8 +211,8 @@ impl BoardsEditor {
                     .map_or("", |u| &u.unit_template_type);
                 painter.text(
                     rect.center(),
-                    Align2::CENTER_TOP,
-                    unit,
+                    Align2::CENTER_CENTER,
+                    unit_symbol(unit),
                     FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
                     Color32::WHITE,
                 );
@@ -403,6 +404,43 @@ impl BoardsEditor {
     }
 
     fn show_unit_brush(&mut self, ui: &mut Ui) {
+        // 先顯示 team 選擇 UI
+        let Some(board_id) = &self.selected_board else {
+            return;
+        };
+        let Some(board) = self.boards.get(board_id) else {
+            return;
+        };
+        let team_ids = board.teams.keys().cloned().collect::<Vec<_>>();
+
+        ui.vertical(|ui| {
+            ui.label("選擇隊伍 TeamID:");
+            // 下拉選單
+            let mut selected_idx = team_ids
+                .iter()
+                .position(|id| id == &self.selected_team)
+                .unwrap_or(0);
+            let combo = egui::ComboBox::from_id_salt("team_select_combo")
+                .selected_text(
+                    team_ids
+                        .get(selected_idx)
+                        .map(|s| s.as_str())
+                        .unwrap_or("請選擇隊伍"),
+                )
+                .show_ui(ui, |ui| {
+                    for (i, id) in team_ids.iter().enumerate() {
+                        ui.selectable_value(&mut selected_idx, i, id);
+                    }
+                });
+            if combo.response.changed() {
+                if let Some(new_id) = team_ids.get(selected_idx) {
+                    self.selected_team = new_id.clone();
+                }
+            }
+        });
+
+        ui.separator();
+
         if ui
             .selectable_label(self.selected_unit.is_none(), "清除")
             .clicked()
@@ -587,4 +625,8 @@ fn object_symbol(tile: &Tile) -> &'static str {
         },
         None => "",
     }
+}
+
+fn unit_symbol(unit: &str) -> String {
+    unit.replace("_", "\n")
 }
