@@ -43,7 +43,7 @@ pub struct Tile {
 }
 
 // config 欄位需要排序
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct BoardConfig {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: BTreeMap<TeamID, Team>,
@@ -52,7 +52,7 @@ pub struct BoardConfig {
     pub units: BTreeMap<UnitID, UnitMarker>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Board {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: HashMap<TeamID, Team>,
@@ -63,7 +63,7 @@ pub struct Board {
 impl Board {
     pub fn from_config(
         config: BoardConfig,
-        unit_templates: &BTreeMap<UnitTemplateType, UnitTemplate>,
+        unit_templates: &HashMap<UnitTemplateType, UnitTemplate>,
     ) -> Result<Self, String> {
         let teams = HashMap::from_iter(config.teams.into_iter().map(|(id, team)| (id, team)));
 

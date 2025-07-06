@@ -2,7 +2,7 @@ use crate::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Team {
     pub id: TeamID,
     pub color: (u8, u8, u8), // RGB color

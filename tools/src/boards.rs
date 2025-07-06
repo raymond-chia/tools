@@ -14,6 +14,7 @@ const TILE_OBJECT_SIZE: f32 = 10.0;
 pub struct BoardsEditor {
     boards: BTreeMap<BoardID, BoardConfig>,
     selected_board: Option<BoardID>,
+    // 修改地圖
     brush: BrushMode,
     selected_terrain: Terrain,
     selected_object: Option<Object>,
@@ -21,6 +22,8 @@ pub struct BoardsEditor {
     selected_orientation: Orientation,
     selected_unit: Option<UnitTemplateType>,
     selected_team: TeamID,
+    // 模擬
+    sim_board: Board,
     // 其他
     camera: Camera2D,
     unit_templates: HashMap<UnitTemplateType, UnitTemplate>,
@@ -37,6 +40,7 @@ enum BrushMode {
     Object,
     Unit,
     Team,
+    Sim,
 }
 
 impl BoardsEditor {
@@ -276,10 +280,7 @@ impl BoardsEditor {
                         err_msg = format!("Error painting unit: {}", e);
                     }
                 }
-                BrushMode::Team => {
-                    // 隊伍編輯未實作
-                }
-                BrushMode::None => {}
+                BrushMode::Team | BrushMode::Sim | BrushMode::None => {}
             }
         }
         self.set_status(err_msg, true);
@@ -294,6 +295,7 @@ impl BoardsEditor {
                 (BrushMode::Object, "物件筆刷"),
                 (BrushMode::Unit, "單位筆刷"),
                 (BrushMode::Team, "隊伍編輯"),
+                (BrushMode::Sim, "模擬"),
             ] {
                 if ui.selectable_label(self.brush == mode, label).clicked() {
                     self.brush = mode;
@@ -316,6 +318,9 @@ impl BoardsEditor {
             }
             BrushMode::Team => {
                 self.show_team_settings(ui);
+            }
+            BrushMode::Sim => {
+                self.sim(ui);
             }
         }
     }
@@ -529,6 +534,26 @@ impl BoardsEditor {
                 self.has_unsaved_changes = true;
                 NEW_TEAM_ID.with(|id| *id.borrow_mut() = String::new());
                 NEW_TEAM_COLOR.with(|c| *c.borrow_mut() = Color32::LIGHT_GRAY);
+            }
+        }
+    }
+
+    fn sim(&mut self, ui: &mut Ui) {
+        // 1. 取得目前選擇的 BoardConfig
+        let Some(board_id) = &self.selected_board else {
+            ui.label("請先選擇戰場");
+            return;
+        };
+        let config = self.boards.get(board_id).expect("選擇的戰場應該存在");
+
+        // 2. 呼叫 Board::from_config
+        match Board::from_config(config.clone(), &self.unit_templates) {
+            Ok(board) => {
+                self.sim_board = board;
+                self.set_status(format!("轉換成功: BoardConfig 已成功轉換為 Board。"), false);
+            }
+            Err(e) => {
+                self.set_status(format!("轉換失敗：{}", e), true);
             }
         }
     }
