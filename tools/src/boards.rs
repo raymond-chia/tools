@@ -339,6 +339,7 @@ impl BoardsEditor {
                 if changed {
                     self.init_sim(ui);
                 }
+                self.show_sim_status(ui);
             }
         }
     }
@@ -576,6 +577,16 @@ impl BoardsEditor {
                 self.set_status(format!("轉換失敗：{}", e), true);
             }
         }
+    }
+
+    fn show_sim_status(&mut self, ui: &mut Ui) {
+        let Some(unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
+            return;
+        };
+        let Some(unit) = self.sim_board.units.get(&unit_id) else {
+            return;
+        };
+        ui.label(format!("當前行動單位種類: {}", unit.unit_template_type));
     }
 
     fn show_status_message(&mut self, ctx: &Context) {
