@@ -49,6 +49,7 @@ pub struct BoardConfig {
     pub teams: BTreeMap<TeamID, Team>,
     // 以上會同步到 Board
     pub deployable: BTreeSet<Pos>,
+    #[serde(with = "unitid_key_map")]
     pub units: BTreeMap<UnitID, UnitMarker>,
 }
 
@@ -120,3 +121,36 @@ macro_rules! impl_board {
 
 impl_board!(BoardConfig);
 impl_board!(Board);
+
+// 讓 BTreeMap<UnitID, UnitMarker> 可以用 string key 序列化
+mod unitid_key_map {
+    use super::*;
+    use serde::{Deserializer, Serializer};
+
+    pub fn serialize<S>(
+        map: &BTreeMap<UnitID, UnitMarker>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let string_map: BTreeMap<String, &UnitMarker> =
+            map.iter().map(|(k, v)| (k.to_string(), v)).collect();
+        string_map.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BTreeMap<UnitID, UnitMarker>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let string_map: BTreeMap<String, UnitMarker> = BTreeMap::deserialize(deserializer)?;
+        string_map
+            .into_iter()
+            .map(|(k, v)| {
+                k.parse()
+                    .map(|num| (num, v))
+                    .map_err(serde::de::Error::custom)
+            })
+            .collect()
+    }
+}

@@ -122,8 +122,9 @@ impl BoardsEditor {
             if ui.button("新增戰場").clicked() {
                 let new_board_id = format!("新戰場{}", self.boards.len() + 1);
                 let new_board = BoardConfig::default();
-                self.boards.insert(new_board_id.clone(), new_board);
-                self.selected_board = Some(new_board_id);
+                self.selected_team = new_board.teams.keys().next().cloned().unwrap_or_default();
+                self.selected_board = Some(new_board_id.clone());
+                self.boards.insert(new_board_id, new_board);
                 self.has_unsaved_changes = true;
             }
 
@@ -142,6 +143,11 @@ impl BoardsEditor {
                 } else {
                     let button = Button::new(board_id).fill(Color32::TRANSPARENT);
                     if ui.add(button).clicked() {
+                        self.selected_team = self
+                            .boards
+                            .get(board_id)
+                            .and_then(|b| b.teams.keys().next().cloned())
+                            .unwrap_or_default();
                         self.selected_board = Some(board_id.clone());
                     }
                 }
@@ -153,8 +159,9 @@ impl BoardsEditor {
             }
             if let Some((old_id, new_id)) = edited_id {
                 if let Some(board) = self.boards.remove(&old_id) {
-                    self.boards.insert(new_id.clone(), board);
-                    self.selected_board = Some(new_id);
+                    self.selected_team = board.teams.keys().next().cloned().unwrap_or_default();
+                    self.selected_board = Some(new_id.clone());
+                    self.boards.insert(new_id, board);
                     self.has_unsaved_changes = true;
                 }
             }
@@ -209,17 +216,21 @@ impl BoardsEditor {
                     x: col_idx,
                     y: row_idx,
                 };
-                let unit = board
+                let (unit_template, team) = board
                     .units
                     .values()
                     .find(|u| u.pos == pos)
-                    .map_or("", |u| &u.unit_template_type);
+                    .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
+                let team_color = board
+                    .teams
+                    .get(team)
+                    .map_or(Color32::WHITE, |team| to_egui_color(team.color));
                 painter.text(
                     rect.center(),
                     Align2::CENTER_CENTER,
-                    unit_symbol(unit),
+                    unit_symbol(unit_template),
                     FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
-                    Color32::WHITE,
+                    team_color,
                 );
             }
         }
@@ -267,8 +278,11 @@ impl BoardsEditor {
                 BrushMode::Unit => {
                     let marker = if let Some(template_type) = &self.selected_unit {
                         let mut rng = rand::thread_rng();
+                        // 數字太大無法存入 toml
+                        // 使用 i64 max 當作 ID 上限
+                        let id = rng.gen_range(0..u64::MAX / 2 - 1);
                         Some(UnitMarker {
-                            id: rng.gen_range(0..u64::MAX),
+                            id,
                             unit_template_type: template_type.clone(),
                             team: self.selected_team.clone(),
                             pos,
@@ -426,7 +440,7 @@ impl BoardsEditor {
                 .iter()
                 .position(|id| id == &self.selected_team)
                 .unwrap_or(0);
-            let combo = egui::ComboBox::from_id_salt("team_select_combo")
+            egui::ComboBox::from_id_salt("team_select_combo")
                 .selected_text(
                     team_ids
                         .get(selected_idx)
@@ -435,14 +449,16 @@ impl BoardsEditor {
                 )
                 .show_ui(ui, |ui| {
                     for (i, id) in team_ids.iter().enumerate() {
-                        ui.selectable_value(&mut selected_idx, i, id);
+                        let response = ui.selectable_value(&mut selected_idx, i, id);
+                        if !response.changed() {
+                            continue;
+                        }
+                        let Some(new_id) = team_ids.get(selected_idx) else {
+                            continue;
+                        };
+                        self.selected_team = new_id.clone();
                     }
                 });
-            if combo.response.changed() {
-                if let Some(new_id) = team_ids.get(selected_idx) {
-                    self.selected_team = new_id.clone();
-                }
-            }
         });
 
         ui.separator();
@@ -482,11 +498,9 @@ impl BoardsEditor {
             ui.horizontal(|ui| {
                 ui.label(format!("TeamID: {}", team_id));
                 // 顏色編輯器
-                let mut color32 =
-                    Color32::from_rgb(team_cfg.color.0, team_cfg.color.1, team_cfg.color.2);
+                let mut color32 = to_egui_color(team_cfg.color);
                 if ui.color_edit_button_srgba(&mut color32).changed() {
-                    let rgb = (color32.r(), color32.g(), color32.b());
-                    team_cfg.color = rgb;
+                    team_cfg.color = to_team_color(color32);
                     self.has_unsaved_changes = true;
                 }
                 if ui.button("刪除").clicked() {
@@ -676,7 +690,9 @@ where
 fn paint_unit(board: &mut BoardConfig, pos: Pos, unit: Option<UnitMarker>) -> Result<(), String> {
     match unit {
         Some(unit) => {
-            // 檢查該 pos 是否已有單位
+            if board.units.contains_key(&unit.id) {
+                return Err(format!("單位 ID 已存在: {:?}", unit.id));
+            }
             if board.units.values().any(|marker| marker.pos == pos) {
                 return Err(format!("該位置已經有單位: {:?}", pos));
             }
@@ -726,4 +742,12 @@ fn object_symbol(tile: &Tile) -> &'static str {
 
 fn unit_symbol(unit: &str) -> String {
     unit.replace("_", "\n")
+}
+
+fn to_team_color(color: Color32) -> (u8, u8, u8) {
+    (color.r(), color.g(), color.b())
+}
+
+fn to_egui_color(rgb: (u8, u8, u8)) -> Color32 {
+    Color32::from_rgb(rgb.0, rgb.1, rgb.2)
 }
