@@ -81,10 +81,12 @@ impl SkillsData {
             return Err("技能的作用範圍 (Caster/Melee/Ranged) 只能擇一".to_string());
         }
 
-        // 單體技能檢查
+        // 檢查單體技能
         if skill.tags.contains(&Tag::Single) {
             match &skill.effects[0] {
-                Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => {
+                Effect::Hp { shape, .. }
+                | Effect::Burn { shape, .. }
+                | Effect::MovePoints { shape, .. } => {
                     if shape != &Shape::Point {
                         return Err("單體技能的效果形狀必須是點".to_string());
                     }
@@ -92,10 +94,12 @@ impl SkillsData {
             }
         }
 
-        // 範圍技能檢查
+        // 檢查範圍技能
         if skill.tags.contains(&Tag::Area) {
             match &skill.effects[0] {
-                Effect::Hp { shape, .. } | Effect::Burn { shape, .. } => match shape {
+                Effect::Hp { shape, .. }
+                | Effect::Burn { shape, .. }
+                | Effect::MovePoints { shape, .. } => match shape {
                     Shape::Point => {
                         return Err("範圍技能的效果形狀不能是點".to_string());
                     }
@@ -125,17 +129,59 @@ impl SkillsData {
             }
         }
 
-        // 施法者技能檢查
+        // 檢查施法者技能
         if skill.tags.contains(&Tag::Caster) {
             if skill.range.0 != 0 || skill.range.1 != 0 {
                 return Err("施法者技能的範圍必須是 (0, 0)".to_string());
             }
             match &skill.effects[0] {
-                Effect::Hp { target_type, .. } | Effect::Burn { target_type, .. } => {
-                    if target_type != &skills_lib::TargetType::Caster {
+                Effect::Hp { target_type, .. }
+                | Effect::Burn { target_type, .. }
+                | Effect::MovePoints { target_type, .. } => {
+                    if target_type != &TargetType::Caster {
                         return Err("施法者技能的目標類型必須是施法者".to_string());
                     }
                 }
+            }
+        }
+
+        // effect 跟 tag 需要一起存在
+        let checklist = [
+            (
+                skill.effects.iter().any(|e| match e {
+                    Effect::Hp { value, .. } => *value < 0,
+                    _ => false,
+                }),
+                Tag::Attack,
+                "攻擊 tag 需要有 HP 效果",
+            ),
+            (
+                skill.effects.iter().any(|e| match e {
+                    Effect::Hp { value, .. } => *value > 0,
+                    _ => false,
+                }),
+                Tag::Heal,
+                "治療 tag 需要有 HP 效果",
+            ),
+        ];
+        for (check, tag, msg) in checklist {
+            if check ^ skill.tags.contains(&tag) {
+                return Err(msg.to_string());
+            }
+        }
+
+        // effect 需要有對應的 tag
+        let checklist = [(
+            skill.effects.iter().any(|e| match e {
+                Effect::Burn { .. } => true,
+                _ => false,
+            }),
+            Tag::Fire,
+            "燃燒 debuff 需要有火焰 tag",
+        )];
+        for (check, tag, msg) in checklist {
+            if check && !skill.tags.contains(&tag) {
+                return Err(msg.to_string());
             }
         }
 
@@ -413,6 +459,9 @@ impl SkillsEditor {
                                         Effect::Burn { .. } => {
                                             ui.label("燃燒效果");
                                         }
+                                        Effect::MovePoints { .. } => {
+                                            ui.label("移動點數效果");
+                                        }
                                     }
 
                                     delete_effect_clicked = ui.button("🗑").clicked();
@@ -469,41 +518,38 @@ impl SkillsEditor {
         if !self.show_add_effect_popup {
             return;
         }
+        if self.selected_skill.is_none() {
+            return;
+        }
 
         let mut open = self.show_add_effect_popup;
-        let mut add_hp_effect = false;
-        let mut add_burn_effect = false;
+        let mut effects = Vec::new();
 
         egui::Window::new("新增效果")
             .open(&mut open)
             .resizable(false)
             .show(ctx, |ui| {
-                add_hp_effect = ui.button("新增 HP 效果").clicked();
-                add_burn_effect = ui.button("新增燃燒效果").clicked();
+                for effect in Effect::iter() {
+                    let flag = match effect {
+                        Effect::Hp { .. } => ui.button("新增 HP 效果").clicked(),
+                        Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
+                        Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
+                    };
+                    effects.push((flag, effect));
+                }
             });
 
         // 在閉包外處理按鈕事件
-        if add_hp_effect && self.selected_skill.is_some() {
-            let skill_id = self.selected_skill.as_ref().unwrap();
-            if let Some(skill) = self.skills_data.skills.get_mut(skill_id) {
-                skill.effects.push(Effect::Hp {
-                    target_type: TargetType::Any,
-                    shape: Shape::Point,
-                    value: 0,
-                });
-                self.has_unsaved_changes_flag = true; // 標記為已修改
-                open = false;
+        for (flag, effect) in effects {
+            if !flag {
+                continue;
             }
-        }
-
-        if add_burn_effect && self.selected_skill.is_some() {
-            let skill_id = self.selected_skill.as_ref().unwrap();
+            let skill_id = self
+                .selected_skill
+                .as_ref()
+                .expect("selected skill in race condition");
             if let Some(skill) = self.skills_data.skills.get_mut(skill_id) {
-                skill.effects.push(Effect::Burn {
-                    target_type: TargetType::Any,
-                    shape: Shape::Point,
-                    duration: 3,
-                });
+                skill.effects.push(effect);
                 self.has_unsaved_changes_flag = true; // 標記為已修改
                 open = false;
             }
@@ -737,7 +783,6 @@ impl SkillsEditor {
                             );
                         });
 
-                    // Check if the value changed and update the original
                     if response.response.changed() {
                         changed = true;
                     }
@@ -755,6 +800,65 @@ impl SkillsEditor {
                 ui.horizontal(|ui| {
                     ui.label("持續回合:");
                     if ui.add(DragValue::new(duration)).changed() {
+                        changed = true;
+                    }
+                });
+            }
+            Effect::MovePoints {
+                target_type,
+                shape,
+                value,
+                duration,
+            } => {
+                // 目標類型
+                ui.horizontal(|ui| {
+                    ui.label("目標類型:");
+                    let response = egui::ComboBox::new("target_type", "")
+                        .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(target_type, TargetType::Caster, "施法者");
+                            ui.selectable_value(target_type, TargetType::Ally, "盟友");
+                            ui.selectable_value(
+                                target_type,
+                                TargetType::AllyExcludeCaster,
+                                "盟友（排除施法者）",
+                            );
+                            ui.selectable_value(target_type, TargetType::Enemy, "敵人");
+                            ui.selectable_value(target_type, TargetType::Any, "任何");
+                            ui.selectable_value(
+                                target_type,
+                                TargetType::AnyExcludeCaster,
+                                "任何（排除施法者）",
+                            );
+                        });
+                    if response.response.changed() {
+                        changed = true;
+                    }
+                });
+
+                // 形狀
+                ui.horizontal(|ui| {
+                    ui.label("形狀:");
+                    if shape_editor(ui, shape) {
+                        changed = true;
+                    }
+                });
+
+                // 數值
+                ui.horizontal(|ui| {
+                    ui.label("移動點數變化值:");
+                    if ui.add(DragValue::new(value)).changed() {
+                        changed = true;
+                    }
+                });
+
+                // 持續回合
+                ui.horizontal(|ui| {
+                    ui.label("持續回合 (-1=永久, 0=立即):");
+                    if ui
+                        .add(DragValue::new(duration).range(-1..=i32::MAX))
+                        .changed()
+                    {
                         changed = true;
                     }
                 });

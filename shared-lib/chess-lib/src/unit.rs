@@ -71,5 +71,20 @@ impl Unit {
 }
 
 pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
-    3
+    let points: i32 = skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::MovePoints { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum();
+    if points < 0 {
+        0
+    } else {
+        points as MovementCost
+    }
 }

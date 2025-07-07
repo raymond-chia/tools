@@ -13,12 +13,26 @@ impl<'a> AlgoBoard for MovableBoardView<'a> {
         self.board.get_tile(pos).is_some()
     }
 
-    fn is_passable(&self, _active_unit_pos: Pos, pos: Pos, total: MovementCost) -> bool {
+    fn is_passable(&self, active_unit_pos: Pos, pos: Pos, total: MovementCost) -> bool {
+        // 不能超越兩倍移動力
         if total > self.move_points * 2 - self.moved_distance {
             return false;
         }
-        // 起點可重疊，其餘不可有單位
-        !self.board.pos_to_unit.contains_key(&pos)
+        // 不能穿越敵軍
+        let Some(unit_id) = self.board.pos_to_unit.get(&active_unit_pos) else {
+            // 不合理
+            return false;
+        };
+        let Some(active_team) = self.board.units.get(unit_id).map(|unit| &unit.team) else {
+            // 不合理
+            return false;
+        };
+        let Some(unit_id) = self.board.pos_to_unit.get(&pos) else {
+            // 沒有單位在目標位置
+            return true;
+        };
+        let target_team = self.board.units.get(unit_id).map_or("", |unit| &unit.team);
+        active_team == target_team
     }
 
     fn get_cost(&self, pos: Pos) -> MovementCost {

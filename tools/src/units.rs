@@ -81,12 +81,19 @@ impl UnitsEditor {
     }
 
     fn show_unit_list(&mut self, ui: &mut Ui) {
-        ui.vertical(|ui| {
-            if ui.button("重新載入 unit_templates & skills").clicked() {
-                self.reload();
+        if ui.button("重新載入").clicked() {
+            self.reload();
+        }
+        if ui.button("儲存").clicked() {
+            if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
+                self.set_status(format!("儲存失敗: {e}"), true);
+            } else {
+                self.set_status("儲存成功".to_string(), false);
+                self.has_unsaved_changes = false;
             }
-            ui.heading("單位列表");
-        });
+        }
+
+        ui.heading("單位列表");
         if ui.button("新增單位").clicked() {
             let new_unit = UnitTemplate::default();
             self.unit_templates.push(new_unit.clone());
@@ -179,14 +186,6 @@ impl UnitsEditor {
             self.unit_templates[idx] = unit;
         } else if !name_changed {
             self.unit_templates[idx] = unit;
-        }
-        if ui.button("儲存").clicked() {
-            if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
-                self.set_status(format!("儲存失敗: {}", e), true);
-            } else {
-                self.set_status("儲存成功".to_string(), false);
-                self.has_unsaved_changes = false;
-            }
         }
     }
 
