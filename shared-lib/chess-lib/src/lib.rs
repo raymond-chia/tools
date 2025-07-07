@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 mod action;
-mod algo;
+mod battle;
 mod board;
 mod unit;
 
 pub use action::*;
-pub use algo::dijkstra;
+pub use battle::*;
 pub use board::*;
 pub use unit::*;
 

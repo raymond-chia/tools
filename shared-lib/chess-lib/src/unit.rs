@@ -26,6 +26,7 @@ pub struct UnitMarker {
 #[derive(Debug)]
 pub struct Unit {
     pub id: UnitID,
+    pub unit_template_type: UnitTemplateType,
     pub team: TeamID,
     pub moved: MovementCost,
     pub move_points: MovementCost,
@@ -46,6 +47,7 @@ impl Unit {
     pub fn from_template(marker: &UnitMarker, template: &UnitTemplate) -> Self {
         Unit {
             id: marker.id,
+            unit_template_type: marker.unit_template_type.clone(),
             team: marker.team.clone(),
             moved: 0,
             move_points: template.move_points,

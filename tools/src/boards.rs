@@ -24,6 +24,7 @@ pub struct BoardsEditor {
     selected_team: TeamID,
     // 模擬
     sim_board: Board,
+    sim_battle: Battle,
     // 其他
     camera: Camera2D,
     unit_templates: HashMap<UnitTemplateType, UnitTemplate>,
@@ -100,7 +101,11 @@ impl BoardsEditor {
             });
         // 最後產生 central panel, 以免偵測滑鼠的時候偵測到 right panel
         CentralPanel::default().show(ctx, |ui| {
-            self.show_board_editor(ui);
+            if self.brush != BrushMode::Sim {
+                self.show_board_editor(ui);
+            } else {
+                self.sim(ui);
+            }
         });
         self.show_status_message(ctx);
     }
@@ -174,134 +179,128 @@ impl BoardsEditor {
     }
 
     fn show_board_editor(&mut self, ui: &mut Ui) {
-        // 處理攝影機平移與縮放
-        self.camera.handle_pan_zoom(ui);
-
         // 棋盤視覺化編輯區
         let Some(board_id) = &self.selected_board else {
             ui.label("請先選擇戰場");
             return;
         };
-        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
+        show_tiles(ui, &mut self.camera, &board.tiles, |pos| {
+            let Some((unit_template, team)) = board
+                .units
+                .values()
+                .find(|u| u.pos == pos)
+                .map(|u| (&u.unit_template_type, &u.team))
+            else {
+                return Err("該位置沒有單位".into());
+            };
+            let team_color = board
+                .teams
+                .get(team)
+                .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+            Ok((unit_symbol(unit_template), team_color))
+        });
 
-        // 先繪製格子內容
-        let painter = ui.painter();
-        for (row_idx, row) in board.tiles.iter_mut().enumerate() {
-            for (col_idx, tile) in row.iter_mut().enumerate() {
-                // 計算世界座標
-                let world_pos = Pos2::new(col_idx as f32, row_idx as f32) * TILE_SIZE;
-                let screen_pos = self.camera.world_to_screen(world_pos);
-                let rect =
-                    Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * self.camera.zoom);
-
-                // 畫 tile 邊框
-                painter.rect_filled(rect, 2.0, Color32::BLACK);
-                // 畫 tile 地形
-                painter.rect_filled(
-                    rect.shrink(3.0 * self.camera.zoom),
-                    2.0,
-                    terrain_color(tile),
-                );
-                // 畫 tile object
-                painter.text(
-                    rect.center(),
-                    // 會在格子下半顯示
-                    Align2::CENTER_TOP,
-                    object_symbol(tile),
-                    FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
-                    Color32::WHITE,
-                );
-                // 畫 unit
-                let pos = Pos {
-                    x: col_idx,
-                    y: row_idx,
-                };
-                let (unit_template, team) = board
-                    .units
-                    .values()
-                    .find(|u| u.pos == pos)
-                    .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
-                let team_color = board
-                    .teams
-                    .get(team)
-                    .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-                painter.text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    unit_symbol(unit_template),
-                    FontId::proportional(TILE_OBJECT_SIZE * self.camera.zoom),
-                    team_color,
-                );
-            }
-        }
-
-        let mut painted = None;
-        // 僅當滑鼠在 central panel 內才偵測 hover
-        if !ui.rect_contains_pointer(ui.max_rect()) {
+        let Ok(painted) = cursor_to_pos(&self.camera, ui) else {
             return;
-        }
-        if let Some(pointer_pos) = ui.ctx().pointer_hover_pos() {
-            // 反推回世界座標
-            let world_pointer = self.camera.screen_to_world(pointer_pos);
-            let tile_x = (world_pointer.x / TILE_SIZE).floor() as usize;
-            let tile_y = (world_pointer.y / TILE_SIZE).floor() as usize;
-            if !ui.ctx().input(|i| i.pointer.primary_down()) {
-                return;
-            }
-            if tile_x >= board.width() || tile_y >= board.height() {
-                return;
-            }
-            painted = Some(Pos {
-                x: tile_x,
-                y: tile_y,
-            });
+        };
+        // 僅處理座標在棋盤內
+        if board.get_tile(painted).is_none() {
+            return;
         }
 
         // 修改格子
+        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
         let mut err_msg = String::new();
-        if let Some(pos) = painted {
-            match self.brush {
-                BrushMode::Terrain => {
-                    paint_terrain(board, pos, self.selected_terrain);
-                }
-                BrushMode::Object => {
-                    if let Err(e) = paint_object(
-                        board,
-                        pos,
-                        self.selected_object.clone(),
-                        self.selected_orientation,
-                        self.selected_object_duration,
-                    ) {
-                        err_msg = format!("Error painting object: {}", e);
-                    }
-                }
-                BrushMode::Unit => {
-                    let marker = if let Some(template_type) = &self.selected_unit {
-                        let mut rng = rand::thread_rng();
-                        // 數字太大無法存入 toml
-                        // 使用 i64 max 當作 ID 上限
-                        let id = rng.gen_range(0..u64::MAX / 2 - 1);
-                        Some(UnitMarker {
-                            id,
-                            unit_template_type: template_type.clone(),
-                            team: self.selected_team.clone(),
-                            pos,
-                        })
-                    } else {
-                        None
-                    };
-                    if let Err(e) = paint_unit(board, pos, marker) {
-                        err_msg = format!("Error painting unit: {}", e);
-                    }
-                }
-                BrushMode::Team | BrushMode::Sim | BrushMode::None => {}
+        match self.brush {
+            BrushMode::Terrain => {
+                paint_terrain(board, painted, self.selected_terrain);
             }
+            BrushMode::Object => {
+                if let Err(e) = paint_object(
+                    board,
+                    painted,
+                    self.selected_object.clone(),
+                    self.selected_orientation,
+                    self.selected_object_duration,
+                ) {
+                    err_msg = format!("Error painting object: {}", e);
+                }
+            }
+            BrushMode::Unit => {
+                let marker = if let Some(template_type) = &self.selected_unit {
+                    let mut rng = rand::thread_rng();
+                    // 數字太大無法存入 toml
+                    // 使用 i64 max 當作 ID 上限
+                    let id = rng.gen_range(0..u64::MAX / 2 - 1);
+                    Some(UnitMarker {
+                        id,
+                        unit_template_type: template_type.clone(),
+                        team: self.selected_team.clone(),
+                        pos: painted,
+                    })
+                } else {
+                    None
+                };
+                if let Err(e) = paint_unit(board, painted, marker) {
+                    err_msg = format!("Error painting unit: {}", e);
+                }
+            }
+            BrushMode::Team | BrushMode::Sim | BrushMode::None => {}
         }
         self.set_status(err_msg, true);
     }
 
+    fn sim(&mut self, ui: &mut Ui) {
+        show_tiles(ui, &mut self.camera, &self.sim_board.tiles, |pos| {
+            // 畫 unit
+            let Some(unit_id) = self.sim_board.pos_to_unit.get(&pos) else {
+                return Err("該位置沒有單位".into());
+            };
+            let (unit_template, team) = self
+                .sim_board
+                .units
+                .get(unit_id)
+                .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
+            let team_color = self
+                .sim_board
+                .teams
+                .get(team)
+                .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+            Ok((unit_symbol(unit_template), team_color))
+        });
+
+        let Ok(target) = cursor_to_pos(&self.camera, ui) else {
+            return;
+        };
+        // 僅處理座標在棋盤內
+        if self.sim_board.get_tile(target).is_none() {
+            return;
+        }
+
+        // 取得當前回合角色，並移動
+        let Some(unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
+            return;
+        };
+        let Some(_) = self.sim_board.units.get(&unit_id) else {
+            return;
+        };
+        let old_pos = self
+            .sim_board
+            .pos_to_unit
+            .iter()
+            .find_map(|(pos, &id)| if id == unit_id { Some(*pos) } else { None });
+        let Some(old_pos) = old_pos else {
+            return;
+        };
+        if let Err(e) = move_unit(&mut self.sim_board, old_pos, target) {
+            self.set_status(format!("Error moving unit: {}", e), true);
+        }
+    }
+
     fn show_right_panel(&mut self, ui: &mut Ui) {
         ui.heading("編輯工具與資訊");
+        let mut changed = false;
         ui.horizontal_wrapped(|ui| {
             for (mode, label) in [
                 (BrushMode::None, "戰場設定"),
@@ -312,6 +311,9 @@ impl BoardsEditor {
                 (BrushMode::Sim, "模擬"),
             ] {
                 if ui.selectable_label(self.brush == mode, label).clicked() {
+                    if self.brush != mode {
+                        changed = true;
+                    }
                     self.brush = mode;
                 }
             }
@@ -334,7 +336,9 @@ impl BoardsEditor {
                 self.show_team_settings(ui);
             }
             BrushMode::Sim => {
-                self.sim(ui);
+                if changed {
+                    self.init_sim(ui);
+                }
             }
         }
     }
@@ -552,7 +556,7 @@ impl BoardsEditor {
         }
     }
 
-    fn sim(&mut self, ui: &mut Ui) {
+    fn init_sim(&mut self, ui: &mut Ui) {
         // 1. 取得目前選擇的 BoardConfig
         let Some(board_id) = &self.selected_board else {
             ui.label("請先選擇戰場");
@@ -563,7 +567,9 @@ impl BoardsEditor {
         // 2. 呼叫 Board::from_config
         match Board::from_config(config.clone(), &self.unit_templates) {
             Ok(board) => {
+                let turn_order = board.units.keys().cloned().collect();
                 self.sim_board = board;
+                self.sim_battle = Battle::new(turn_order);
                 self.set_status(format!("轉換成功: BoardConfig 已成功轉換為 Board。"), false);
             }
             Err(e) => {
@@ -593,6 +599,80 @@ fn load_boards(path: &str) -> io::Result<BTreeMap<BoardID, BoardConfig>> {
 
 fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Result<()> {
     to_file(path, boards)
+}
+
+// 避免 mut editor 出現太多次，只使用 editor 的 member
+fn show_tiles(
+    ui: &mut Ui,
+    camera: &mut Camera2D,
+    tiles: &Vec<Vec<Tile>>,
+    show_unit: impl Fn(Pos) -> Result<(String, Color32), String>,
+) {
+    // 處理攝影機平移與縮放
+    camera.handle_pan_zoom(ui);
+
+    // 先繪製格子內容
+    let painter = ui.painter();
+    for (row_idx, row) in tiles.iter().enumerate() {
+        for (col_idx, tile) in row.iter().enumerate() {
+            // 計算世界座標
+            let world_pos = Pos2::new(col_idx as f32, row_idx as f32) * TILE_SIZE;
+            let screen_pos = camera.world_to_screen(world_pos);
+            let rect = Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * camera.zoom);
+
+            // 畫 tile 邊框
+            painter.rect_filled(rect, 2.0, Color32::BLACK);
+            // 畫 tile 地形
+            painter.rect_filled(rect.shrink(3.0 * camera.zoom), 2.0, terrain_color(tile));
+            // 畫 tile object
+            painter.text(
+                rect.center(),
+                // 會在格子下半顯示
+                Align2::CENTER_TOP,
+                object_symbol(tile),
+                FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+                Color32::WHITE,
+            );
+            // 畫 unit
+            let pos = Pos {
+                x: col_idx,
+                y: row_idx,
+            };
+            let Ok((unit_template, team_color)) = show_unit(pos) else {
+                continue;
+            };
+            painter.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                unit_symbol(&unit_template),
+                FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+                team_color,
+            );
+        }
+    }
+}
+
+fn cursor_to_pos(camera: &Camera2D, ui: &mut Ui) -> Result<Pos, String> {
+    // 僅當滑鼠在面板內才偵測 hover
+    if !ui.rect_contains_pointer(ui.max_rect()) {
+        return Err("滑鼠不在面板內".into());
+    }
+    let Some(pointer_pos) = ui.ctx().pointer_hover_pos() else {
+        return Err("無法獲取滑鼠位置".into());
+    };
+    // 僅處理點擊
+    if !ui.ctx().input(|i| i.pointer.primary_down()) {
+        return Err("未點擊".into());
+    }
+    // 反推回世界座標
+    let world_pointer = camera.screen_to_world(pointer_pos);
+    let tile_x = (world_pointer.x / TILE_SIZE).floor() as usize;
+    let tile_y = (world_pointer.y / TILE_SIZE).floor() as usize;
+    let painted = Pos {
+        x: tile_x,
+        y: tile_y,
+    };
+    Ok(painted)
 }
 
 fn paint_terrain(board: &mut BoardConfig, pos: Pos, terrain: Terrain) -> bool {
