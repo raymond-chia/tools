@@ -1,5 +1,6 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
+use skills_lib::*;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use strum_macros::{Display, EnumIter};
 
@@ -65,20 +66,19 @@ impl Board {
     pub fn from_config(
         config: BoardConfig,
         unit_templates: &HashMap<UnitTemplateType, UnitTemplate>,
+        skills: &BTreeMap<SkillID, Skill>,
     ) -> Result<Self, String> {
         let teams = HashMap::from_iter(config.teams.into_iter().map(|(id, team)| (id, team)));
 
         let mut units = HashMap::new();
         let mut pos_to_unit = HashMap::new();
         for (unit_id, unit_config) in config.units {
-            let unit = Unit::from_template(
-                &unit_config,
-                unit_templates
-                    .get(&unit_config.unit_template_type)
-                    .ok_or_else(|| {
-                        format!("missing unit template: {}", &unit_config.unit_template_type)
-                    })?,
-            );
+            let template = unit_templates
+                .get(&unit_config.unit_template_type)
+                .ok_or_else(|| {
+                    format!("missing unit template: {}", &unit_config.unit_template_type)
+                })?;
+            let unit = Unit::from_template(&unit_config, template, skills)?;
             pos_to_unit.insert(unit_config.pos, unit_id);
             units.insert(unit_id, unit);
         }
@@ -121,6 +121,17 @@ macro_rules! impl_board {
 
 impl_board!(BoardConfig);
 impl_board!(Board);
+
+pub fn movement_cost(t: Terrain) -> MovementCost {
+    match t {
+        Terrain::Plain => 10,
+        Terrain::Hill => 13,
+        Terrain::Mountain => 20,
+        Terrain::Forest => 13,
+        Terrain::ShallowWater => 17,
+        Terrain::DeepWater => MAX_MOVEMENT_COST,
+    }
+}
 
 // 讓 BTreeMap<UnitID, UnitMarker> 可以用 string key 序列化
 mod unitid_key_map {

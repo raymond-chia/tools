@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use strum_macros::{Display, EnumIter, EnumString};
 
-type DEGREE = u16;
+pub type DEGREE = u16;
+pub type SkillID = String;
 
 /// 技能資料結構
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]

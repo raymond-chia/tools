@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap};
 
 pub trait Board {
     fn is_valid(&self, pos: Pos) -> bool;
-    fn is_passable(&self, active_unit_pos: Pos, pos: Pos) -> bool;
+    fn is_passable(&self, active_unit_pos: Pos, pos: Pos, total: MovementCost) -> bool;
     fn get_cost(&self, pos: Pos) -> MovementCost;
     fn get_neighbors(&self, pos: Pos) -> Vec<Pos>;
 }
@@ -19,10 +19,10 @@ pub fn dijkstra(graph: &impl Board, start: Pos) -> HashMap<Pos, (MovementCost, P
         if !graph.is_valid(new) {
             continue;
         }
-        if !graph.is_passable(start, new) {
+        let weight = graph.get_cost(new);
+        if !graph.is_passable(start, new, weight) {
             continue;
         }
-        let weight = graph.get_cost(new);
         ans.insert(new, (weight, start));
         prio.insert((weight, new));
     }
@@ -32,10 +32,10 @@ pub fn dijkstra(graph: &impl Board, start: Pos) -> HashMap<Pos, (MovementCost, P
             if !graph.is_valid(next) {
                 continue;
             }
-            if !graph.is_passable(start, next) {
+            let new_weight = path_weight + graph.get_cost(next);
+            if !graph.is_passable(start, next, new_weight) {
                 continue;
             }
-            let new_weight = path_weight + graph.get_cost(next);
             match ans.get(&next) {
                 Some((dist_next, _)) if new_weight >= *dist_next => {}
                 _ => {

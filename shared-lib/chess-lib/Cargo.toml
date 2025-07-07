@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+skills-lib = { path = "../../shared-lib/skills-lib" }
+
 serde = { version = "1.0", features = ["derive"] }
 strum = "0.27.1"
 strum_macros = "0.27.1"

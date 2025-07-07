@@ -1,6 +1,7 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use skills_lib::*;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Team {
@@ -11,7 +12,6 @@ pub struct Team {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UnitTemplate {
     pub name: UnitTemplateType,
-    pub move_points: usize,
     pub skills: BTreeSet<String>,
 }
 
@@ -37,21 +37,39 @@ impl Default for UnitTemplate {
     fn default() -> Self {
         Self {
             name: String::new(),
-            move_points: 30,
             skills: BTreeSet::new(),
         }
     }
 }
 
 impl Unit {
-    pub fn from_template(marker: &UnitMarker, template: &UnitTemplate) -> Self {
-        Unit {
+    pub fn from_template(
+        marker: &UnitMarker,
+        template: &UnitTemplate,
+        skills: &BTreeMap<SkillID, Skill>,
+    ) -> Result<Self, String> {
+        let skills: Result<_, _> = template
+            .skills
+            .iter()
+            .map(|id| {
+                skills
+                    .get(id)
+                    .map(|s| (id, s))
+                    .ok_or_else(|| format!("Skill {id} not found"))
+            })
+            .collect();
+        let skills = skills?;
+        Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
             team: marker.team.clone(),
             moved: 0,
-            move_points: template.move_points,
+            move_points: skills_to_move_points(&skills),
             skills: template.skills.clone(),
-        }
+        })
     }
+}
+
+pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
+    3
 }

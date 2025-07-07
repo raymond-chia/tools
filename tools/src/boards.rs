@@ -2,6 +2,7 @@ use crate::common::*;
 use chess_lib::*;
 use egui::*;
 use rand::Rng;
+use skills_lib::*;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::io;
@@ -9,6 +10,8 @@ use strum::IntoEnumIterator;
 
 const TILE_SIZE: f32 = 56.0;
 const TILE_OBJECT_SIZE: f32 = 10.0;
+const TILE_SHRINK_SIZE: f32 = TILE_SIZE / 40.0;
+const TILE_MOVEMENT_SHRINK_SIZE: f32 = TILE_SIZE / 20.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -28,6 +31,7 @@ pub struct BoardsEditor {
     // 其他
     camera: Camera2D,
     unit_templates: HashMap<UnitTemplateType, UnitTemplate>,
+    skills: BTreeMap<SkillID, Skill>,
     // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
@@ -82,6 +86,16 @@ impl BoardsEditor {
             Err(err) => {
                 self.unit_templates = HashMap::new();
                 self.set_status(format!("載入單位類型失敗: {}", err), true);
+                return;
+            }
+        }
+        match from_file::<_, BTreeMap<SkillID, Skill>>(SKILLS_FILE) {
+            Ok(skills) => {
+                self.skills = skills;
+            }
+            Err(err) => {
+                self.skills = BTreeMap::new();
+                self.set_status(format!("載入技能失敗: {}", err), true);
                 return;
             }
         }
@@ -185,21 +199,33 @@ impl BoardsEditor {
             return;
         };
         let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
-        show_tiles(ui, &mut self.camera, &board.tiles, |pos| {
-            let Some((unit_template, team)) = board
-                .units
-                .values()
-                .find(|u| u.pos == pos)
-                .map(|u| (&u.unit_template_type, &u.team))
-            else {
-                return Err("該位置沒有單位".into());
-            };
-            let team_color = board
-                .teams
-                .get(team)
-                .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-            Ok((unit_symbol(unit_template), team_color))
-        });
+        show_tiles(
+            ui,
+            &mut self.camera,
+            &board.tiles,
+            |painter, camera, pos, rect| {
+                let Some((unit_template, team)) = board
+                    .units
+                    .values()
+                    .find(|u| u.pos == pos)
+                    .map(|u| (&u.unit_template_type, &u.team))
+                else {
+                    return Err("該位置沒有單位".into());
+                };
+                let team_color = board
+                    .teams
+                    .get(team)
+                    .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+                painter.text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    unit_symbol(&unit_template),
+                    FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+                    team_color,
+                );
+                Ok(())
+            },
+        );
 
         let Ok(painted) = cursor_to_pos(&self.camera, ui) else {
             return;
@@ -252,33 +278,7 @@ impl BoardsEditor {
     }
 
     fn sim(&mut self, ui: &mut Ui) {
-        show_tiles(ui, &mut self.camera, &self.sim_board.tiles, |pos| {
-            // 畫 unit
-            let Some(unit_id) = self.sim_board.pos_to_unit.get(&pos) else {
-                return Err("該位置沒有單位".into());
-            };
-            let (unit_template, team) = self
-                .sim_board
-                .units
-                .get(unit_id)
-                .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
-            let team_color = self
-                .sim_board
-                .teams
-                .get(team)
-                .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-            Ok((unit_symbol(unit_template), team_color))
-        });
-
-        let Ok(target) = cursor_to_pos(&self.camera, ui) else {
-            return;
-        };
-        // 僅處理座標在棋盤內
-        if self.sim_board.get_tile(target).is_none() {
-            return;
-        }
-
-        // 取得當前回合角色，並移動
+        // 取得當前回合角色，與可移動範圍
         let Some(unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
             return;
         };
@@ -293,6 +293,53 @@ impl BoardsEditor {
         let Some(old_pos) = old_pos else {
             return;
         };
+        let movable = movable_area(&self.sim_board, old_pos);
+
+        show_tiles(
+            ui,
+            &mut self.camera,
+            &self.sim_board.tiles,
+            |painter, camera, pos, rect| {
+                if movable.contains_key(&pos) {
+                    painter.rect_filled(
+                        rect.shrink(TILE_MOVEMENT_SHRINK_SIZE * camera.zoom),
+                        2.0,
+                        Color32::BLUE,
+                    );
+                }
+                // 畫 unit
+                let Some(unit_id) = self.sim_board.pos_to_unit.get(&pos) else {
+                    return Err("該位置沒有單位".into());
+                };
+                let (unit_template, team) = self
+                    .sim_board
+                    .units
+                    .get(unit_id)
+                    .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
+                let team_color = self
+                    .sim_board
+                    .teams
+                    .get(team)
+                    .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+                painter.text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    unit_symbol(&unit_template),
+                    FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+                    team_color,
+                );
+                Ok(())
+            },
+        );
+
+        let Ok(target) = cursor_to_pos(&self.camera, ui) else {
+            return;
+        };
+        // 僅處理座標在棋盤內
+        if self.sim_board.get_tile(target).is_none() {
+            return;
+        }
+
         if let Err(e) = move_unit(&mut self.sim_board, old_pos, target) {
             self.set_status(format!("Error moving unit: {}", e), true);
         }
@@ -566,7 +613,7 @@ impl BoardsEditor {
         let config = self.boards.get(board_id).expect("選擇的戰場應該存在");
 
         // 2. 呼叫 Board::from_config
-        match Board::from_config(config.clone(), &self.unit_templates) {
+        match Board::from_config(config.clone(), &self.unit_templates, &self.skills) {
             Ok(board) => {
                 let turn_order = board.units.keys().cloned().collect();
                 self.sim_board = board;
@@ -617,7 +664,7 @@ fn show_tiles(
     ui: &mut Ui,
     camera: &mut Camera2D,
     tiles: &Vec<Vec<Tile>>,
-    show_unit: impl Fn(Pos) -> Result<(String, Color32), String>,
+    show_others: impl Fn(&Painter, &Camera2D, Pos, Rect) -> Result<(), String>,
 ) {
     // 處理攝影機平移與縮放
     camera.handle_pan_zoom(ui);
@@ -634,7 +681,17 @@ fn show_tiles(
             // 畫 tile 邊框
             painter.rect_filled(rect, 2.0, Color32::BLACK);
             // 畫 tile 地形
-            painter.rect_filled(rect.shrink(3.0 * camera.zoom), 2.0, terrain_color(tile));
+            painter.rect_filled(
+                rect.shrink(TILE_SHRINK_SIZE * camera.zoom),
+                2.0,
+                terrain_color(tile),
+            );
+            // 畫 unit
+            let pos = Pos {
+                x: col_idx,
+                y: row_idx,
+            };
+            let _ = show_others(painter, camera, pos, rect);
             // 畫 tile object
             painter.text(
                 rect.center(),
@@ -643,21 +700,6 @@ fn show_tiles(
                 object_symbol(tile),
                 FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
                 Color32::WHITE,
-            );
-            // 畫 unit
-            let pos = Pos {
-                x: col_idx,
-                y: row_idx,
-            };
-            let Ok((unit_template, team_color)) = show_unit(pos) else {
-                continue;
-            };
-            painter.text(
-                rect.center(),
-                Align2::CENTER_CENTER,
-                unit_symbol(&unit_template),
-                FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
-                team_color,
             );
         }
     }

@@ -2,7 +2,7 @@ use crate::common::*;
 use eframe::{Frame, egui};
 use egui::{Button, DragValue, ScrollArea, Separator, Ui};
 use serde::{Deserialize, Serialize};
-use skills_lib::{Effect, Shape, Skill, Tag, TargetType};
+use skills_lib::*;
 use std::collections::{BTreeMap, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
