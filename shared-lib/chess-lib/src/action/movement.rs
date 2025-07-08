@@ -78,18 +78,46 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
 }
 
 /// 將 from 位置的單位移動到 to 位置
-pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), String> {
+pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
+    if from == to {
+        return Ok(()); // 不需要移動
+    }
+    // to 應該在棋盤上
+    let Some(tile) = board.get_tile(to) else {
+        return Err(Error::NoTileOnPos(to));
+    };
+    let terrain = tile.terrain;
     // 檢查 from 位置有無單位
     let unit_id = match board.pos_to_unit.get(&from) {
         Some(id) => *id,
-        None => return Err(format!("from 位置 {:?} 沒有單位", from)),
+        None => return Err(Error::NoUnitOnPos(from)),
+    };
+    let Some(active_unit) = board.units.get(&unit_id) else {
+        return Err(Error::NoUnitOnPos(from));
     };
     // 檢查 to 位置是否已有單位
-    if board.pos_to_unit.contains_key(&to) {
-        return Err(format!("to 位置 {:?} 已有單位", to));
+    let result = if let Some(unit_id) = board.pos_to_unit.get(&to) {
+        let Some(target_unit) = board.units.get(unit_id) else {
+            return Err(Error::NoUnitOnPos(to));
+        };
+        if active_unit.team != target_unit.team {
+            return Err(Error::HostileUnitOnPos(to));
+        }
+        Err(Error::AlliedUnitOnPos(to))
+    } else {
+        Ok(())
+    };
+    let Some(active_unit) = board.units.get_mut(&unit_id) else {
+        return Err(Error::NoUnitOnPos(from));
+    };
+    let cost = movement_cost(terrain);
+    if active_unit.moved + cost > active_unit.move_points * 2 {
+        return Err(Error::NotEnoughPoints);
     }
-    // 更新 pos_to_unit 映射
-    board.pos_to_unit.remove(&from);
-    board.pos_to_unit.insert(to, unit_id);
-    Ok(())
+    active_unit.moved += cost;
+    if result.is_ok() {
+        board.pos_to_unit.remove(&from);
+        board.pos_to_unit.insert(to, unit_id);
+    }
+    result
 }

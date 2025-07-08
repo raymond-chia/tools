@@ -70,7 +70,7 @@ impl Unit {
     }
 }
 
-pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
+fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
     let points: i32 = skills
         .iter()
         .flat_map(|(_, skill)| &skill.effects)

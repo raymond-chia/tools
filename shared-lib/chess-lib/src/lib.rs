@@ -19,6 +19,15 @@ pub type MovementCost = usize;
 pub const PLAYER_TEAM: &str = "player";
 pub const MAX_MOVEMENT_COST: MovementCost = 999;
 
+#[derive(Debug)]
+pub enum Error {
+    NotEnoughPoints,
+    NoUnitOnPos(Pos),
+    AlliedUnitOnPos(Pos),
+    HostileUnitOnPos(Pos),
+    NoTileOnPos(Pos),
+}
+
 #[derive(
     Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash,
 )]

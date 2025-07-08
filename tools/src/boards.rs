@@ -341,7 +341,7 @@ impl BoardsEditor {
         }
 
         if let Err(e) = move_unit(&mut self.sim_board, old_pos, target) {
-            self.set_status(format!("Error moving unit: {}", e), true);
+            self.set_status(format!("Error moving unit: {e:?}"), true);
         }
     }
 
