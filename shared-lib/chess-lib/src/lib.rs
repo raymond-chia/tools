@@ -21,10 +21,15 @@ pub const MAX_MOVEMENT_COST: MovementCost = 999;
 
 #[derive(Debug)]
 pub enum Error {
+    InvalidParameter,
+
     NotEnoughPoints,
+    NotReachable(Pos),
+
     NoUnitOnPos(Pos),
     AlliedUnitOnPos(Pos),
     HostileUnitOnPos(Pos),
+
     NoTileOnPos(Pos),
 }
 

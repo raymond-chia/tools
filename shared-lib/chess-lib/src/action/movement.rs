@@ -77,6 +77,16 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
     result
 }
 
+pub fn move_unit_with_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Error> {
+    let latest = path.get(0).ok_or(Error::InvalidParameter)?;
+    let mut latest = *latest;
+    for next in path {
+        move_unit(board, latest, next)?;
+        latest = next;
+    }
+    Ok(())
+}
+
 /// 將 from 位置的單位移動到 to 位置
 pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
     if from == to {
@@ -120,4 +130,23 @@ pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
         board.pos_to_unit.insert(to, unit_id);
     }
     result
+}
+
+pub fn reconstruct_path(
+    map: &HashMap<Pos, (MovementCost, Pos)>,
+    from: Pos,
+    to: Pos,
+) -> Result<Vec<Pos>, Error> {
+    let mut path = Vec::new();
+    let mut current = to;
+    while current != from {
+        let Some((_, prev)) = map.get(&current) else {
+            return Err(Error::NotReachable(to));
+        };
+        path.push(current);
+        current = *prev;
+    }
+    path.push(from);
+    path.reverse();
+    Ok(path)
 }
