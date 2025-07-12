@@ -262,17 +262,19 @@ impl BoardsEditor {
 
     fn sim(&mut self, ui: &mut Ui) {
         // 取得當前回合角色，與可移動範圍
-        let Some(unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
+        let Some(active_unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
             return;
         };
-        let Some(_) = self.sim_board.units.get(&unit_id) else {
+        let Some(_) = self.sim_board.units.get(&active_unit_id) else {
             return;
         };
-        let old_pos = self
-            .sim_board
-            .pos_to_unit
-            .iter()
-            .find_map(|(pos, &id)| if id == unit_id { Some(*pos) } else { None });
+        let old_pos = self.sim_board.pos_to_unit.iter().find_map(|(pos, &id)| {
+            if id == active_unit_id {
+                Some(*pos)
+            } else {
+                None
+            }
+        });
         let Some(old_pos) = old_pos else {
             return;
         };
@@ -299,7 +301,7 @@ impl BoardsEditor {
             ui,
             &mut self.camera,
             &self.sim_board.tiles,
-            show_sim_others(&self.sim_board, &movable, &unit_id, &path, &target),
+            show_sim_others(&self.sim_board, &movable, &active_unit_id, &path),
         );
 
         // 滑鼠點擊時才移動
@@ -706,49 +708,19 @@ fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, 
 fn show_sim_others(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
-    unit_id: &UnitID,
+    active_unit_id: &UnitID,
     path: &Option<Vec<Pos>>,
-    target: &Option<Pos>,
 ) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
     move |painter, camera, pos, rect| {
         // 可移動範圍
         let show_movement = || {
-            if board.pos_to_unit.contains_key(&pos) {
-                // 該位置有單位佔據，不能移動到該位置
-                return;
-            }
-
-            let Some((cost, _)) = movable.get(&pos) else {
-                // 該位置不在 movable
+            let color = movement_preview_color(board, movable, active_unit_id, path, pos);
+            let Ok(color) = color else {
+                // 無法取得顏色，可能是因為不在可移動範圍
                 return;
             };
+            let color = Color32::from_rgba_premultiplied(color.0, color.1, color.2, color.3);
 
-            let (move_points, moved) = board
-                .units
-                .get(&unit_id)
-                .map(|u| (u.move_points, u.moved))
-                .unwrap_or((0, 0));
-            let is_first = *cost + moved <= move_points;
-            // 顯示可移動範圍
-            let color = if is_first {
-                Color32::from_rgb(50, 100, 255)
-            } else {
-                Color32::from_rgb(50, 50, 255)
-            };
-            // 顯示移動路徑
-            let color = if let (Some(_), Some(path)) = (target, path) {
-                if path.contains(&pos) {
-                    if is_first {
-                        Color32::from_rgb(125, 0, 125) // 淺紫
-                    } else {
-                        Color32::from_rgb(100, 0, 100) // 深紫
-                    }
-                } else {
-                    color
-                }
-            } else {
-                color
-            };
             painter.rect_filled(
                 rect.shrink(TILE_MOVEMENT_SHRINK_SIZE * camera.zoom),
                 2.0,
@@ -948,10 +920,10 @@ fn unit_symbol(unit: &str) -> String {
     unit.replace("_", "\n")
 }
 
-fn to_team_color(color: Color32) -> (u8, u8, u8) {
+fn to_team_color(color: Color32) -> RGB {
     (color.r(), color.g(), color.b())
 }
 
-fn to_egui_color(rgb: (u8, u8, u8)) -> Color32 {
+fn to_egui_color(rgb: RGB) -> Color32 {
     Color32::from_rgb(rgb.0, rgb.1, rgb.2)
 }

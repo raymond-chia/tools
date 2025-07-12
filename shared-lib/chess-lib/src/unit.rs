@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Team {
     pub id: TeamID,
-    pub color: (u8, u8, u8), // RGB color
+    pub color: RGB,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

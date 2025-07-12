@@ -77,6 +77,25 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
     result
 }
 
+pub fn reconstruct_path(
+    map: &HashMap<Pos, (MovementCost, Pos)>,
+    from: Pos,
+    to: Pos,
+) -> Result<Vec<Pos>, Error> {
+    let mut path = Vec::new();
+    let mut current = to;
+    while current != from {
+        let Some((_, prev)) = map.get(&current) else {
+            return Err(Error::NotReachable(to));
+        };
+        path.push(current);
+        current = *prev;
+    }
+    path.push(from);
+    path.reverse();
+    Ok(path)
+}
+
 pub fn move_unit_with_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Error> {
     let actor = path.get(0).ok_or(Error::InvalidParameter)?;
     let mut actor = *actor;
@@ -138,21 +157,45 @@ pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
     result
 }
 
-pub fn reconstruct_path(
-    map: &HashMap<Pos, (MovementCost, Pos)>,
-    from: Pos,
-    to: Pos,
-) -> Result<Vec<Pos>, Error> {
-    let mut path = Vec::new();
-    let mut current = to;
-    while current != from {
-        let Some((_, prev)) = map.get(&current) else {
-            return Err(Error::NotReachable(to));
-        };
-        path.push(current);
-        current = *prev;
+pub fn movement_preview_color(
+    board: &Board,
+    movable: &HashMap<Pos, (MovementCost, Pos)>,
+    active_unit_id: &UnitID,
+    path: &Option<Vec<Pos>>,
+    pos: Pos,
+) -> Result<RGBA, Error> {
+    if board.pos_to_unit.contains_key(&pos) {
+        return Err(Error::NotReachable(pos));
     }
-    path.push(from);
-    path.reverse();
-    Ok(path)
+    let Some((cost, _)) = movable.get(&pos) else {
+        return Err(Error::NotReachable(pos));
+    };
+    let cost = *cost;
+
+    let (move_points, moved) = board
+        .units
+        .get(active_unit_id)
+        .map(|u| (u.move_points, u.moved))
+        .unwrap_or((0, 0));
+    let is_first = moved + cost <= move_points;
+    // 顯示可移動範圍
+    let color = if is_first {
+        (50, 100, 255, 150) // 淺藍
+    } else {
+        (50, 50, 255, 150) // 深藍
+    };
+    // 顯示移動路徑
+    let Some(path) = path else {
+        // 不在移動路徑
+        return Ok(color);
+    };
+    if !path.contains(&pos) {
+        // 不在移動路徑
+        return Ok(color);
+    }
+    if is_first {
+        Ok((125, 0, 125, 150)) // 淺紫
+    } else {
+        Ok((100, 0, 100, 150)) // 深紫
+    }
 }
