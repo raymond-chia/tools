@@ -78,18 +78,24 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
 }
 
 pub fn move_unit_with_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Error> {
-    let latest = path.get(0).ok_or(Error::InvalidParameter)?;
-    let mut latest = *latest;
+    let actor = path.get(0).ok_or(Error::InvalidParameter)?;
+    let mut actor = *actor;
     for next in path {
-        move_unit(board, latest, next)?;
-        latest = next;
+        let result = move_unit(board, actor, next);
+        match result {
+            Ok(_) => {
+                actor = next;
+            }
+            Err(Error::AlliedUnitOnPos(_)) => {}
+            _ => return result,
+        }
     }
     Ok(())
 }
 
-/// 將 from 位置的單位移動到 to 位置
-pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
-    if from == to {
+/// 將 actor 位置的單位移動到 to 位置
+pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
+    if actor == to {
         return Ok(()); // 不需要移動
     }
     // to 應該在棋盤上
@@ -98,12 +104,12 @@ pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
     };
     let terrain = tile.terrain;
     // 檢查 from 位置有無單位
-    let unit_id = match board.pos_to_unit.get(&from) {
+    let unit_id = match board.pos_to_unit.get(&actor) {
         Some(id) => *id,
-        None => return Err(Error::NoUnitOnPos(from)),
+        None => return Err(Error::NoUnitOnPos(actor)),
     };
     let Some(active_unit) = board.units.get(&unit_id) else {
-        return Err(Error::NoUnitOnPos(from));
+        return Err(Error::NoUnitOnPos(actor));
     };
     // 檢查 to 位置是否已有單位
     let result = if let Some(unit_id) = board.pos_to_unit.get(&to) {
@@ -118,7 +124,7 @@ pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
         Ok(())
     };
     let Some(active_unit) = board.units.get_mut(&unit_id) else {
-        return Err(Error::NoUnitOnPos(from));
+        return Err(Error::NoUnitOnPos(actor));
     };
     let cost = movement_cost(terrain);
     if active_unit.moved + cost > active_unit.move_points * 2 {
@@ -126,7 +132,7 @@ pub fn move_unit(board: &mut Board, from: Pos, to: Pos) -> Result<(), Error> {
     }
     active_unit.moved += cost;
     if result.is_ok() {
-        board.pos_to_unit.remove(&from);
+        board.pos_to_unit.remove(&actor);
         board.pos_to_unit.insert(to, unit_id);
     }
     result

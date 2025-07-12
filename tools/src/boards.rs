@@ -11,7 +11,7 @@ use strum::IntoEnumIterator;
 const TILE_SIZE: f32 = 56.0;
 const TILE_OBJECT_SIZE: f32 = 10.0;
 const TILE_SHRINK_SIZE: f32 = TILE_SIZE / 40.0;
-const TILE_MOVEMENT_SHRINK_SIZE: f32 = TILE_SIZE / 20.0;
+const TILE_MOVEMENT_SHRINK_SIZE: f32 = TILE_SIZE / 5.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -203,30 +203,13 @@ impl BoardsEditor {
             ui,
             &mut self.camera,
             &board.tiles,
-            |painter, camera, pos, rect| {
-                let Some((unit_template, team)) = board
-                    .units
-                    .values()
-                    .find(|u| u.pos == pos)
-                    .map(|u| (&u.unit_template_type, &u.team))
-                else {
-                    return Err("該位置沒有單位".into());
-                };
-                let team_color = board
-                    .teams
-                    .get(team)
-                    .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-                painter.text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    unit_symbol(&unit_template),
-                    FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
-                    team_color,
-                );
-                Ok(())
-            },
+            show_static_others(board),
         );
 
+        // 僅處理點擊
+        if !ui.ctx().input(|i| i.pointer.primary_down()) {
+            return;
+        }
         let Ok(painted) = cursor_to_pos(&self.camera, ui) else {
             return;
         };
@@ -293,59 +276,44 @@ impl BoardsEditor {
         let Some(old_pos) = old_pos else {
             return;
         };
-        let movable = movable_area(&self.sim_board, old_pos);
+        let mut movable = movable_area(&self.sim_board, old_pos);
+        movable.remove(&old_pos); // 移除原位置，避免自己移動到自己身上
+        let movable = movable;
+
+        // 嘗試取得滑鼠目標與路徑
+        let (target, path) = if let Ok(target) = cursor_to_pos(&self.camera, ui) {
+            if self.sim_board.get_tile(target).is_some() {
+                if let Ok(path) = reconstruct_path(&movable, old_pos, target) {
+                    (Some(target), Some(path))
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, None)
+        };
 
         show_tiles(
             ui,
             &mut self.camera,
             &self.sim_board.tiles,
-            |painter, camera, pos, rect| {
-                if movable.contains_key(&pos) {
-                    painter.rect_filled(
-                        rect.shrink(TILE_MOVEMENT_SHRINK_SIZE * camera.zoom),
-                        2.0,
-                        Color32::BLUE,
-                    );
-                }
-                // 畫 unit
-                let Some(unit_id) = self.sim_board.pos_to_unit.get(&pos) else {
-                    return Err("該位置沒有單位".into());
-                };
-                let (unit_template, team) = self
-                    .sim_board
-                    .units
-                    .get(unit_id)
-                    .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
-                let team_color = self
-                    .sim_board
-                    .teams
-                    .get(team)
-                    .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-                painter.text(
-                    rect.center(),
-                    Align2::CENTER_CENTER,
-                    unit_symbol(&unit_template),
-                    FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
-                    team_color,
-                );
-                Ok(())
-            },
+            show_sim_others(&self.sim_board, &movable, &unit_id, &path, &target),
         );
 
-        let Ok(target) = cursor_to_pos(&self.camera, ui) else {
-            return;
-        };
-        // 僅處理座標在棋盤內
-        if self.sim_board.get_tile(target).is_none() {
-            return;
-        }
-
-        let Ok(path) = reconstruct_path(&movable, old_pos, target) else {
-            self.set_status("無法到達目標位置".to_string(), true);
-            return;
-        };
-        if let Err(e) = move_unit_with_path(&mut self.sim_board, path) {
-            self.set_status(format!("Error moving unit: {e:?}"), true);
+        // 滑鼠點擊時才移動
+        if let (Some(target), Some(path)) = (target, path) {
+            if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
+                return;
+            }
+            if self.sim_board.pos_to_unit.get(&target).is_some() {
+                self.set_status("目標位置已有單位，無法移動".to_string(), true);
+                return;
+            }
+            if let Err(e) = move_unit_with_path(&mut self.sim_board, path) {
+                self.set_status(format!("Error moving unit: {e:?}"), true);
+            }
         }
     }
 
@@ -668,7 +636,7 @@ fn show_tiles(
     ui: &mut Ui,
     camera: &mut Camera2D,
     tiles: &Vec<Vec<Tile>>,
-    show_others: impl Fn(&Painter, &Camera2D, Pos, Rect) -> Result<(), String>,
+    show_others: impl Fn(&Painter, &Camera2D, Pos, Rect),
 ) {
     // 處理攝影機平移與縮放
     camera.handle_pan_zoom(ui);
@@ -695,7 +663,7 @@ fn show_tiles(
                 x: col_idx,
                 y: row_idx,
             };
-            let _ = show_others(painter, camera, pos, rect);
+            show_others(painter, camera, pos, rect);
             // 畫 tile object
             painter.text(
                 rect.center(),
@@ -709,6 +677,109 @@ fn show_tiles(
     }
 }
 
+fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
+    |painter, camera, pos, rect| {
+        // 顯示單位
+        let Some((unit_template, team)) = board
+            .units
+            .values()
+            .find(|u| u.pos == pos)
+            .map(|u| (&u.unit_template_type, &u.team))
+        else {
+            // 該位置沒有單位
+            return;
+        };
+        let team_color = board
+            .teams
+            .get(team)
+            .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+        painter.text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            unit_symbol(&unit_template),
+            FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+            team_color,
+        );
+    }
+}
+
+fn show_sim_others(
+    board: &Board,
+    movable: &HashMap<Pos, (MovementCost, Pos)>,
+    unit_id: &UnitID,
+    path: &Option<Vec<Pos>>,
+    target: &Option<Pos>,
+) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
+    move |painter, camera, pos, rect| {
+        // 可移動範圍
+        let show_movement = || {
+            if board.pos_to_unit.contains_key(&pos) {
+                // 該位置有單位佔據，不能移動到該位置
+                return;
+            }
+
+            let Some((cost, _)) = movable.get(&pos) else {
+                // 該位置不在 movable
+                return;
+            };
+
+            let (move_points, moved) = board
+                .units
+                .get(&unit_id)
+                .map(|u| (u.move_points, u.moved))
+                .unwrap_or((0, 0));
+            let is_first = *cost + moved <= move_points;
+            // 顯示可移動範圍
+            let color = if is_first {
+                Color32::from_rgb(50, 100, 255)
+            } else {
+                Color32::from_rgb(50, 50, 255)
+            };
+            // 顯示移動路徑
+            let color = if let (Some(_), Some(path)) = (target, path) {
+                if path.contains(&pos) {
+                    if is_first {
+                        Color32::from_rgb(125, 0, 125) // 淺紫
+                    } else {
+                        Color32::from_rgb(100, 0, 100) // 深紫
+                    }
+                } else {
+                    color
+                }
+            } else {
+                color
+            };
+            painter.rect_filled(
+                rect.shrink(TILE_MOVEMENT_SHRINK_SIZE * camera.zoom),
+                2.0,
+                color,
+            );
+        };
+        show_movement();
+
+        // 顯示單位
+        let Some(unit_id) = board.pos_to_unit.get(&pos) else {
+            // 該位置沒有單位
+            return;
+        };
+        let (unit_template, team) = board
+            .units
+            .get(unit_id)
+            .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
+        let team_color = board
+            .teams
+            .get(team)
+            .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+        painter.text(
+            rect.center(),
+            Align2::CENTER_CENTER,
+            unit_symbol(&unit_template),
+            FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+            team_color,
+        );
+    }
+}
+
 fn cursor_to_pos(camera: &Camera2D, ui: &mut Ui) -> Result<Pos, String> {
     // 僅當滑鼠在面板內才偵測 hover
     if !ui.rect_contains_pointer(ui.max_rect()) {
@@ -717,10 +788,6 @@ fn cursor_to_pos(camera: &Camera2D, ui: &mut Ui) -> Result<Pos, String> {
     let Some(pointer_pos) = ui.ctx().pointer_hover_pos() else {
         return Err("無法獲取滑鼠位置".into());
     };
-    // 僅處理點擊
-    if !ui.ctx().input(|i| i.pointer.primary_down()) {
-        return Err("未點擊".into());
-    }
     // 反推回世界座標
     let world_pointer = camera.screen_to_world(pointer_pos);
     let tile_x = (world_pointer.x / TILE_SIZE).floor() as usize;
