@@ -90,6 +90,12 @@ impl Board {
             pos_to_unit,
         })
     }
+
+    pub fn unit_pos(&self, unit_id: &UnitID) -> Option<Pos> {
+        self.pos_to_unit
+            .iter()
+            .find_map(|(pos, id)| if id == unit_id { Some(*pos) } else { None })
+    }
 }
 
 // $x:expr: 匹配一個運算式

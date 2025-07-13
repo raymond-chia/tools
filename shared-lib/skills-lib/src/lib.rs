@@ -105,3 +105,13 @@ pub enum Effect {
         duration: i32, // -1 代表永久
     },
 }
+
+impl Effect {
+    pub fn shape(&self) -> &Shape {
+        match self {
+            Effect::Hp { shape, .. } => shape,
+            Effect::Burn { shape, .. } => shape,
+            Effect::MovePoints { shape, .. } => shape,
+        }
+    }
+}

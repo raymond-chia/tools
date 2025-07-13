@@ -11,7 +11,7 @@ use strum::IntoEnumIterator;
 const TILE_SIZE: f32 = 56.0;
 const TILE_OBJECT_SIZE: f32 = 10.0;
 const TILE_SHRINK_SIZE: f32 = TILE_SIZE / 40.0;
-const TILE_MOVEMENT_SHRINK_SIZE: f32 = TILE_SIZE / 5.0;
+const TILE_ACTION_SHRINK_SIZE: f32 = TILE_SIZE / 5.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -28,6 +28,7 @@ pub struct BoardsEditor {
     // 模擬
     sim_board: Board,
     sim_battle: Battle,
+    skill_selection: SkillSelection,
     // 其他
     camera: Camera2D,
     unit_templates: HashMap<UnitTemplateType, UnitTemplate>,
@@ -261,60 +262,102 @@ impl BoardsEditor {
     }
 
     fn sim(&mut self, ui: &mut Ui) {
-        // 取得當前回合角色，與可移動範圍
+        // 取得當前回合角色
         let Some(active_unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
             return;
         };
         let Some(_) = self.sim_board.units.get(&active_unit_id) else {
             return;
         };
-        let old_pos = self.sim_board.pos_to_unit.iter().find_map(|(pos, &id)| {
-            if id == active_unit_id {
-                Some(*pos)
+        let active_unit_pos = self.sim_board.unit_pos(&active_unit_id);
+        let Some(active_unit_pos) = active_unit_pos else {
+            return;
+        };
+
+        // 取得滑鼠目標座標
+        let target_pos = if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
+            if self.sim_board.get_tile(pos).is_some() {
+                Some(pos)
             } else {
                 None
             }
-        });
-        let Some(old_pos) = old_pos else {
-            return;
+        } else {
+            None
         };
-        let mut movable = movable_area(&self.sim_board, old_pos);
-        movable.remove(&old_pos); // 移除原位置，避免自己移動到自己身上
-        let movable = movable;
 
-        // 嘗試取得滑鼠目標與路徑
-        let (target, path) = if let Ok(target) = cursor_to_pos(&self.camera, ui) {
-            if self.sim_board.get_tile(target).is_some() {
-                if let Ok(path) = reconstruct_path(&movable, old_pos, target) {
-                    (Some(target), Some(path))
+        // 判斷是否有選擇技能
+        if self.skill_selection.selected_skill.is_some() {
+            // -------- 有選擇技能時：只顯示技能範圍 --------
+            // 以繁體中文註解：只顯示技能影響範圍（座標列表），不顯示移動範圍與路徑
+
+            // 取得技能物件與 range，並呼叫 skill_casting_area_around
+            let casting_area = if let Some(skill_id) = &self.skill_selection.selected_skill {
+                if let Some(skill) = self.skills.get(skill_id) {
+                    skill_casting_area_around(&self.sim_board, active_unit_pos, skill.range)
                 } else {
-                    (None, None)
+                    vec![]
                 }
             } else {
-                (None, None)
-            }
+                vec![]
+            };
+
+            let skill_area = if let Some(to) = target_pos {
+                self.skill_selection.preview_skill_area(
+                    &self.sim_board,
+                    &self.skills,
+                    active_unit_id,
+                    to,
+                )
+            } else {
+                vec![]
+            };
+            show_tiles(
+                ui,
+                &mut self.camera,
+                &self.sim_board.tiles,
+                show_skill_area_others(&self.sim_board, &casting_area, &skill_area),
+            );
+            // 不處理技能執行或移動
         } else {
-            (None, None)
-        };
+            // -------- 未選擇技能時：顯示移動範圍與路徑 --------
+            // 以繁體中文註解：維持原本顯示移動範圍與路徑
+            let mut movable = movable_area(&self.sim_board, active_unit_pos);
+            movable.remove(&active_unit_pos); // 移除原位置，避免自己移動到自己身上
+            let movable = movable;
 
-        show_tiles(
-            ui,
-            &mut self.camera,
-            &self.sim_board.tiles,
-            show_sim_others(&self.sim_board, &movable, &active_unit_id, &path),
-        );
+            // 嘗試取得滑鼠目標與路徑
+            // TODO 重用邏輯
+            let (target, path) = if let Ok(target) = cursor_to_pos(&self.camera, ui) {
+                if self.sim_board.get_tile(target).is_some() {
+                    let path =
+                        reconstruct_path(&movable, active_unit_pos, target).unwrap_or_default();
+                    (Some(target), path)
+                } else {
+                    (None, vec![])
+                }
+            } else {
+                (None, vec![])
+            };
 
-        // 滑鼠點擊時才移動
-        if let (Some(target), Some(path)) = (target, path) {
-            if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
-                return;
-            }
-            if self.sim_board.pos_to_unit.get(&target).is_some() {
-                self.set_status("目標位置已有單位，無法移動".to_string(), true);
-                return;
-            }
-            if let Err(e) = move_unit_with_path(&mut self.sim_board, path) {
-                self.set_status(format!("Error moving unit: {e:?}"), true);
+            show_tiles(
+                ui,
+                &mut self.camera,
+                &self.sim_board.tiles,
+                show_sim_others(&self.sim_board, &movable, &active_unit_id, &path),
+            );
+
+            // 滑鼠點擊時才移動（此處不需處理技能執行）
+            if let Some(target) = target {
+                if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
+                    return;
+                }
+                if self.sim_board.pos_to_unit.get(&target).is_some() {
+                    self.set_status("目標位置已有單位，無法移動".to_string(), true);
+                    return;
+                }
+                if let Err(e) = move_unit_with_path(&mut self.sim_board, path) {
+                    self.set_status(format!("Error moving unit: {e:?}"), true);
+                }
             }
         }
     }
@@ -608,6 +651,49 @@ impl BoardsEditor {
             return;
         };
         ui.label(format!("當前行動單位種類: {}", unit.unit_template_type));
+
+        // 以繁體中文註解：只顯示單位擁有的技能列表
+        // 顯示單位擁有的技能列表
+        ui.label("單位擁有的技能：");
+        // 技能選擇下拉選單（無「未選擇技能」選項），selected_idx = -1 表示未選擇技能
+        let skill_ids: Vec<&SkillID> = unit
+            .skills
+            .iter()
+            .filter(|id| self.skills.contains_key(*id))
+            .collect();
+        // 滑鼠右鍵點擊時取消技能選取
+        if ui.ctx().input(|i| i.pointer.secondary_clicked()) {
+            self.skill_selection.select_skill(None);
+        }
+        let mut selected_idx = self
+            .skill_selection
+            .selected_skill
+            .as_ref()
+            .and_then(|id| skill_ids.iter().position(|x| x == &id))
+            .map(|idx| idx as i32)
+            .unwrap_or(-1);
+        egui::ComboBox::from_id_salt("unit_skill_select_combo")
+            .selected_text(if selected_idx >= 0 {
+                skill_ids
+                    .get(selected_idx as usize)
+                    .map(|s| s.as_str())
+                    .unwrap_or("")
+            } else {
+                ""
+            })
+            .show_ui(ui, |ui| {
+                for (i, name) in skill_ids.iter().enumerate() {
+                    let response = ui.selectable_value(&mut selected_idx, i as i32, *name);
+                    if response.changed() {
+                        if selected_idx >= 0 {
+                            if let Some(skill_id) = skill_ids.get(selected_idx as usize) {
+                                self.skill_selection
+                                    .select_skill(Some(skill_id.to_string()));
+                            }
+                        }
+                    }
+                }
+            });
     }
 
     fn show_status_message(&mut self, ctx: &Context) {
@@ -709,9 +795,9 @@ fn show_sim_others(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
     active_unit_id: &UnitID,
-    path: &Option<Vec<Pos>>,
+    path: &[Pos],
 ) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
-    move |painter, camera, pos, rect| {
+    |painter, camera, pos, rect| {
         // 可移動範圍
         let show_movement = || {
             let color = movement_preview_color(board, movable, active_unit_id, path, pos);
@@ -722,7 +808,7 @@ fn show_sim_others(
             let color = Color32::from_rgba_premultiplied(color.0, color.1, color.2, color.3);
 
             painter.rect_filled(
-                rect.shrink(TILE_MOVEMENT_SHRINK_SIZE * camera.zoom),
+                rect.shrink(TILE_ACTION_SHRINK_SIZE * camera.zoom),
                 2.0,
                 color,
             );
@@ -730,26 +816,59 @@ fn show_sim_others(
         show_movement();
 
         // 顯示單位
-        let Some(unit_id) = board.pos_to_unit.get(&pos) else {
-            // 該位置沒有單位
-            return;
-        };
-        let (unit_template, team) = board
-            .units
-            .get(unit_id)
-            .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
-        let team_color = board
-            .teams
-            .get(team)
-            .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-        painter.text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            unit_symbol(&unit_template),
-            FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
-            team_color,
-        );
+        show_unit(board, painter, camera, pos, rect);
     }
+}
+
+/// 顯示技能範圍（座標高亮），同時高亮可施放區域與技能預覽區域
+fn show_skill_area_others(
+    board: &Board,
+    casting_area: &[Pos],
+    skill_area: &[Pos],
+) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
+    |painter, camera, pos, rect| {
+        // 技能預覽區域高亮（紅色半透明）
+        let color = if skill_area.contains(&pos) {
+            Some(Color32::from_rgba_premultiplied(255, 0, 0, 80))
+        }
+        // 技能可施放範圍高亮（藍色半透明）
+        else if casting_area.contains(&pos) {
+            Some(Color32::from_rgba_premultiplied(0, 128, 255, 80))
+        } else {
+            None
+        };
+        if let Some(color) = color {
+            painter.rect_filled(
+                rect.shrink(TILE_ACTION_SHRINK_SIZE * camera.zoom),
+                2.0,
+                color,
+            );
+        }
+        // 顯示單位
+        show_unit(board, painter, camera, pos, rect);
+    }
+}
+
+fn show_unit(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect: Rect) {
+    let Some(unit_id) = board.pos_to_unit.get(&pos) else {
+        // 該位置沒有單位
+        return;
+    };
+    let (unit_template, team) = board
+        .units
+        .get(unit_id)
+        .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
+    let team_color = board
+        .teams
+        .get(team)
+        .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        unit_symbol(&unit_template),
+        FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+        team_color,
+    );
 }
 
 fn cursor_to_pos(camera: &Camera2D, ui: &mut Ui) -> Result<Pos, String> {

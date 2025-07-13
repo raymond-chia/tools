@@ -161,7 +161,7 @@ pub fn movement_preview_color(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
     active_unit_id: &UnitID,
-    path: &Option<Vec<Pos>>,
+    path: &[Pos],
     pos: Pos,
 ) -> Result<RGBA, Error> {
     if board.pos_to_unit.contains_key(&pos) {
@@ -185,10 +185,6 @@ pub fn movement_preview_color(
         (50, 50, 255, 150) // 深藍
     };
     // 顯示移動路徑
-    let Some(path) = path else {
-        // 不在移動路徑
-        return Ok(color);
-    };
     if !path.contains(&pos) {
         // 不在移動路徑
         return Ok(color);
