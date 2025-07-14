@@ -42,6 +42,15 @@ impl SkillSelection {
             Some(p) => p,
             None => return vec![],
         };
+        // 取得單位物件，檢查移動點數
+        let unit = match board.units.get(&unit_id) {
+            Some(u) => u,
+            None => return vec![],
+        };
+        if unit.moved > unit.move_points {
+            // 單位移動太遠，無法再使用技能
+            return vec![];
+        }
         // 判斷 to 是否在技能 range 內，超過則不顯示範圍
         if !is_skill_in_range(skill.range, from, to) {
             return vec![];
@@ -53,7 +62,7 @@ impl SkillSelection {
             None => return vec![],
         };
         // 計算範圍
-        calc_shape_area(board, from, to, shape)
+        calc_shape_area(board, shape, from, to)
     }
 }
 
@@ -62,7 +71,7 @@ impl SkillSelection {
 /// - pos: 技能施放中心座標
 /// - shape: 技能形狀
 /// 回傳：座標列表
-pub fn calc_shape_area(board: &Board, from: Pos, to: Pos, shape: &Shape) -> Vec<Pos> {
+pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<Pos> {
     match shape {
         Shape::Point => vec![to],
         Shape::Circle(r) => {
@@ -215,7 +224,20 @@ pub fn is_skill_in_range(range: (usize, usize), from: Pos, to: Pos) -> bool {
 /// - from: 施放者座標
 /// - range: (min_range, max_range) 技能 range 設定
 /// 回傳：所有可施放座標
-pub fn skill_casting_area_around(board: &Board, from: Pos, range: (usize, usize)) -> Vec<Pos> {
+pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, usize)) -> Vec<Pos> {
+    let unit_id = match board.pos_to_unit.get(&active_unit_pos) {
+        Some(id) => id,
+        None => return vec![],
+    };
+    let unit = match board.units.get(unit_id) {
+        Some(u) => u,
+        None => return vec![],
+    };
+    if unit.moved > unit.move_points {
+        // 單位移動太遠，無法再使用技能
+        return vec![];
+    }
+
     let mut area = Vec::new();
     let (min_range, max_range) = (range.0 as isize, range.1 as isize);
     for dy in -max_range..=max_range {
@@ -224,8 +246,8 @@ pub fn skill_casting_area_around(board: &Board, from: Pos, range: (usize, usize)
             if dist < min_range || dist > max_range {
                 continue;
             }
-            let x = from.x as isize + dx;
-            let y = from.y as isize + dy;
+            let x = active_unit_pos.x as isize + dx;
+            let y = active_unit_pos.y as isize + dy;
             if x < 0 || y < 0 {
                 continue;
             }

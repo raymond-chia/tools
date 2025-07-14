@@ -96,7 +96,7 @@ pub fn reconstruct_path(
     Ok(path)
 }
 
-pub fn move_unit_with_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Error> {
+pub fn move_unit_along_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Error> {
     let actor = path.get(0).ok_or(Error::InvalidParameter)?;
     let mut actor = *actor;
     for next in path {
@@ -157,7 +157,7 @@ pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
     result
 }
 
-pub fn movement_preview_color(
+pub fn movement_area(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
     active_unit_id: &UnitID,

@@ -293,7 +293,7 @@ impl BoardsEditor {
             // 取得技能物件與 range，並呼叫 skill_casting_area_around
             let casting_area = if let Some(skill_id) = &self.skill_selection.selected_skill {
                 if let Some(skill) = self.skills.get(skill_id) {
-                    skill_casting_area_around(&self.sim_board, active_unit_pos, skill.range)
+                    skill_casting_area(&self.sim_board, active_unit_pos, skill.range)
                 } else {
                     vec![]
                 }
@@ -355,7 +355,11 @@ impl BoardsEditor {
                     self.set_status("目標位置已有單位，無法移動".to_string(), true);
                     return;
                 }
-                if let Err(e) = move_unit_with_path(&mut self.sim_board, path) {
+                if path.is_empty() {
+                    self.set_status("無法到達目標位置".to_string(), true);
+                    return;
+                }
+                if let Err(e) = move_unit_along_path(&mut self.sim_board, path) {
                     self.set_status(format!("Error moving unit: {e:?}"), true);
                 }
             }
@@ -800,7 +804,7 @@ fn show_sim_others(
     |painter, camera, pos, rect| {
         // 可移動範圍
         let show_movement = || {
-            let color = movement_preview_color(board, movable, active_unit_id, path, pos);
+            let color = movement_area(board, movable, active_unit_id, path, pos);
             let Ok(color) = color else {
                 // 無法取得顏色，可能是因為不在可移動範圍
                 return;
