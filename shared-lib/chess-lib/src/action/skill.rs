@@ -21,7 +21,7 @@ impl SkillSelection {
     /// - unit_id: 行動單位 ID
     /// - skills: 技能資料表
     /// 回傳：技能可作用範圍的座標 Vec<Pos>
-    pub fn preview_skill_area(
+    pub fn skill_affect_area(
         &self,
         board: &Board,
         skills: &BTreeMap<SkillID, Skill>,

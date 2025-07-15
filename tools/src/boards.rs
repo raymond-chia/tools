@@ -275,7 +275,7 @@ impl BoardsEditor {
         };
 
         // 取得滑鼠目標座標
-        let target_pos = if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
+        let target = if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
             if self.sim_board.get_tile(pos).is_some() {
                 Some(pos)
             } else {
@@ -301,8 +301,8 @@ impl BoardsEditor {
                 vec![]
             };
 
-            let skill_area = if let Some(to) = target_pos {
-                self.skill_selection.preview_skill_area(
+            let affect_area = if let Some(to) = target {
+                self.skill_selection.skill_affect_area(
                     &self.sim_board,
                     &self.skills,
                     active_unit_id,
@@ -315,9 +315,21 @@ impl BoardsEditor {
                 ui,
                 &mut self.camera,
                 &self.sim_board.tiles,
-                show_skill_area_others(&self.sim_board, &casting_area, &skill_area),
+                show_skill_area_others(&self.sim_board, &casting_area, &affect_area),
             );
-            // 不處理技能執行或移動
+            // 技能施放主流程
+            let (Some(skill_id), Some(to)) = (&self.skill_selection.selected_skill, target) else {
+                return;
+            };
+            if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
+                return;
+            }
+            if !casting_area.contains(&to) {
+                self.set_status("技能範圍外無法施放".to_string(), true);
+                return;
+            }
+            let msg = format!("{} 在 ({}, {}) 施放", skill_id, to.x, to.y);
+            self.set_status(msg, false);
         } else {
             // -------- 未選擇技能時：顯示移動範圍與路徑 --------
             // 以繁體中文註解：維持原本顯示移動範圍與路徑
@@ -326,17 +338,16 @@ impl BoardsEditor {
             let movable = movable;
 
             // 嘗試取得滑鼠目標與路徑
-            // TODO 重用邏輯
-            let (target, path) = if let Ok(target) = cursor_to_pos(&self.camera, ui) {
+            let path = if let Some(target) = target {
                 if self.sim_board.get_tile(target).is_some() {
                     let path =
                         reconstruct_path(&movable, active_unit_pos, target).unwrap_or_default();
-                    (Some(target), path)
+                    path
                 } else {
-                    (None, vec![])
+                    vec![]
                 }
             } else {
-                (None, vec![])
+                vec![]
             };
 
             show_tiles(
@@ -804,7 +815,7 @@ fn show_sim_others(
     |painter, camera, pos, rect| {
         // 可移動範圍
         let show_movement = || {
-            let color = movement_area(board, movable, active_unit_id, path, pos);
+            let color = movement_tile_color(board, movable, active_unit_id, path, pos);
             let Ok(color) = color else {
                 // 無法取得顏色，可能是因為不在可移動範圍
                 return;

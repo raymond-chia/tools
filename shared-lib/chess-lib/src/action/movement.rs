@@ -157,7 +157,7 @@ pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
     result
 }
 
-pub fn movement_area(
+pub fn movement_tile_color(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
     active_unit_id: &UnitID,
