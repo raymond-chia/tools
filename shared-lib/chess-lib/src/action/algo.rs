@@ -1,20 +1,28 @@
 use crate::*;
 use std::collections::{BTreeSet, HashMap};
 
-pub trait Board {
+/// 路徑搜尋專用棋盤介面，供 dijkstra 演算法使用
+pub trait PathfindingBoard {
+    /// 判斷座標是否合法
     fn is_valid(&self, pos: Pos) -> bool;
+    /// 判斷座標是否可通行
     fn is_passable(&self, active_unit_pos: Pos, pos: Pos, total: MovementCost) -> bool;
+    /// 取得座標移動成本
     fn get_cost(&self, pos: Pos) -> MovementCost;
+    /// 取得鄰近座標
     fn get_neighbors(&self, pos: Pos) -> Vec<Pos>;
 }
 
 // https://github.com/TheAlgorithms/Rust/blob/master/src/graph/dijkstra.rs
-pub fn dijkstra(graph: &impl Board, start: Pos) -> HashMap<Pos, (MovementCost, Pos)> {
+/// Dijkstra 最短路徑演算法，計算從起點到所有可達座標的最短距離與前驅座標
+/// 回傳 HashMap<Pos, (MovementCost, Pos)>，key 為座標，value 為 (累積成本, 前驅座標)
+pub fn dijkstra(graph: &impl PathfindingBoard, start: Pos) -> HashMap<Pos, (MovementCost, Pos)> {
     let mut ans = HashMap::new();
     let mut prio = BTreeSet::new();
 
     ans.insert(start, (0, start));
 
+    // 初始化起點鄰居
     for new in graph.get_neighbors(start) {
         if !graph.is_valid(new) {
             continue;
@@ -27,6 +35,7 @@ pub fn dijkstra(graph: &impl Board, start: Pos) -> HashMap<Pos, (MovementCost, P
         prio.insert((weight, new));
     }
 
+    // 主迴圈：每次取出最小成本座標，更新鄰居
     while let Some((path_weight, vertex)) = prio.pop_first() {
         for next in graph.get_neighbors(vertex) {
             if !graph.is_valid(next) {

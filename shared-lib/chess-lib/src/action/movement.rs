@@ -1,18 +1,21 @@
-use crate::action::algo::{self, Board as AlgoBoard};
+use crate::action::algo::{self, PathfindingBoard};
 use crate::*;
 use std::collections::HashMap;
 
+/// 提供移動邏輯用的棋盤視圖，實作 PathfindingBoard 供路徑搜尋演算法使用
 struct MovableBoardView<'a> {
     board: &'a Board,
     move_points: MovementCost,
     moved_distance: MovementCost,
 }
 
-impl<'a> AlgoBoard for MovableBoardView<'a> {
+impl<'a> PathfindingBoard for MovableBoardView<'a> {
+    /// 判斷座標是否合法
     fn is_valid(&self, pos: Pos) -> bool {
         self.board.get_tile(pos).is_some()
     }
 
+    /// 判斷座標是否可通行（不可超越兩倍移動力，不可穿越敵軍）
     fn is_passable(&self, active_unit_pos: Pos, pos: Pos, total: MovementCost) -> bool {
         // 不能超越兩倍移動力
         if total > self.move_points * 2 - self.moved_distance {
@@ -27,14 +30,16 @@ impl<'a> AlgoBoard for MovableBoardView<'a> {
             // 不合理
             return false;
         };
-        let Some(unit_id) = self.board.pos_to_unit.get(&pos) else {
-            // 沒有單位在目標位置
-            return true;
-        };
-        let target_team = self.board.units.get(unit_id).map_or("", |unit| &unit.team);
-        active_team == target_team
+        match self.board.pos_to_unit.get(&pos) {
+            None => true, // 目標位置無單位
+            Some(unit_id) => {
+                let target_team = self.board.units.get(unit_id).map_or("", |unit| &unit.team);
+                active_team == target_team
+            }
+        }
     }
 
+    /// 取得座標移動成本
     fn get_cost(&self, pos: Pos) -> MovementCost {
         self.board
             .get_tile(pos)
@@ -42,6 +47,7 @@ impl<'a> AlgoBoard for MovableBoardView<'a> {
             .unwrap_or(MAX_MOVEMENT_COST)
     }
 
+    /// 取得鄰近座標（上下左右）
     fn get_neighbors(&self, pos: Pos) -> Vec<Pos> {
         let dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)];
         dirs.into_iter()
@@ -58,7 +64,8 @@ impl<'a> AlgoBoard for MovableBoardView<'a> {
     }
 }
 
-/// 計算指定單位的可移動範圍
+/// 計算指定單位的可移動範圍（回傳所有可達座標與路徑成本）
+/// board: 棋盤物件，from: 單位座標
 pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos)> {
     let unit_id = match board.pos_to_unit.get(&from) {
         Some(id) => *id,
@@ -73,8 +80,7 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
         move_points: unit.move_points,
         moved_distance: unit.moved,
     };
-    let result = algo::dijkstra(&view, from);
-    result
+    algo::dijkstra(&view, from)
 }
 
 pub fn reconstruct_path(

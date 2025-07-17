@@ -67,97 +67,77 @@ impl SkillSelection {
 }
 
 /// 計算技能形狀範圍
-/// - board: 棋盤狀態
-/// - pos: 技能施放中心座標
-/// - shape: 技能形狀
+/// board: 棋盤物件, shape: 技能形狀, from: 施放者座標, to: 目標座標
 /// 回傳：座標列表
 pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<Pos> {
     match shape {
         Shape::Point => vec![to],
         Shape::Circle(r) => {
             let r = *r as isize - 1; // 半徑減 1，因為中心點也算一格
-            let mut area = Vec::new();
-            for dx in -r..=r {
-                for dy in -r..=r {
+            (-r..=r)
+                .flat_map(|dx| (-r..=r).map(move |dy| (dx, dy)))
+                .filter_map(|(dx, dy)| {
                     if dx.abs() + dy.abs() > r {
-                        continue;
+                        return None;
                     }
                     let x = to.x as isize + dx;
                     let y = to.y as isize + dy;
                     if x < 0 || y < 0 {
-                        continue;
+                        return None;
                     }
                     let target = Pos {
                         x: x as usize,
                         y: y as usize,
                     };
-                    if board.get_tile(target).is_none() {
-                        continue;
-                    }
-                    area.push(target);
-                }
-            }
-            area
+                    board.get_tile(target).map(|_| target)
+                })
+                .collect()
         }
-        Shape::Rectangle(w, h) => {
-            let mut area = Vec::new();
-            for dx in 0..*w {
-                for dy in 0..*h {
-                    let x = to.x + dx;
-                    let y = to.y + dy;
-                    let target = Pos { x, y };
-                    if board.get_tile(target).is_none() {
-                        continue;
-                    }
-                    area.push(target);
-                }
-            }
-            area
-        }
+        Shape::Rectangle(w, h) => (0..*w)
+            .flat_map(|dx| (0..*h).map(move |dy| (dx, dy)))
+            .filter_map(|(dx, dy)| {
+                let x = to.x + dx;
+                let y = to.y + dy;
+                let target = Pos { x, y };
+                board.get_tile(target).map(|_| target)
+            })
+            .collect(),
         Shape::Line(len) => {
-            // 若 from == to，回傳空 vec
             if from == to {
                 return vec![];
             }
-            // 依 from→to 方向，產生長度為 len 的直線座標
-            let mut area = Vec::new();
             let dx = to.x as isize - from.x as isize;
             let dy = to.y as isize - from.y as isize;
-            // 單位向量
             let dist = ((dx * dx + dy * dy) as f64).sqrt();
             let sx = dx as f64 / dist;
             let sy = dy as f64 / dist;
             let mut x = from.x as f64;
             let mut y = from.y as f64;
-            for _ in 0..*len {
-                x += sx;
-                y += sy;
-                let xi = x.round() as isize;
-                let yi = y.round() as isize;
-                if xi < 0 || yi < 0 {
-                    break;
-                }
-                let target = Pos {
-                    x: xi as usize,
-                    y: yi as usize,
-                };
-                if board.get_tile(target).is_none() {
-                    break;
-                }
-                area.push(target);
-            }
-            area
+            (0..*len)
+                .filter_map(|_| {
+                    x += sx;
+                    y += sy;
+                    let xi = x.round() as isize;
+                    let yi = y.round() as isize;
+                    if xi < 0 || yi < 0 {
+                        return None;
+                    }
+                    let target = Pos {
+                        x: xi as usize,
+                        y: yi as usize,
+                    };
+                    board.get_tile(target).map(|_| target)
+                })
+                .collect()
         }
         Shape::Cone(len, degree) => {
-            // 若 from == to，回傳空 vec
             if from == to {
                 return vec![];
             }
             // 以 45 度為單位，計算主方向（8向）
-            let mut area = Vec::new();
+            // 取得主方向（上下左右斜角）
             let dx = to.x as isize - from.x as isize;
             let dy = to.y as isize - from.y as isize;
-            // 取得主方向（上下左右斜角）
             let dir_x = match dx {
                 0 => 0,
                 _ if dx > 0 => 1,
@@ -168,40 +148,38 @@ pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<
                 _ if dy > 0 => 1,
                 _ => -1,
             };
-            // TODO 確認是否正確
-            // 錐形寬度：每 45 度為 1 格寬
+            // TODO 確認是否正確: 錐形寬度：每 45 度為 1 格寬 ??
             let cone_width = (*degree as isize / 45).max(1);
-            for step in 1..=*len {
-                let cx = from.x as isize + dir_x * step as isize;
-                let cy = from.y as isize + dir_y * step as isize;
-                for w in -cone_width..=cone_width {
-                    // 展開方向：垂直於主方向
-                    let (tx, ty) = if dir_x == 0 {
-                        (cx + w, cy)
-                    } else if dir_y == 0 {
-                        (cx, cy + w)
-                    } else {
-                        // 斜角時，展開兩側
-                        (cx + w, cy + w)
-                    };
-                    if tx < 0
-                        || ty < 0
-                        || tx as usize >= board.width()
-                        || ty as usize >= board.height()
-                    {
-                        continue;
-                    }
+            (1..=*len)
+                .flat_map(|step| {
+                    let cx = from.x as isize + dir_x * step as isize;
+                    let cy = from.y as isize + dir_y * step as isize;
+                    (-cone_width..=cone_width).map(move |w| {
+                        // 展開方向：垂直於主方向
+                        if dir_x == 0 {
+                            (cx + w, cy)
+                        } else if dir_y == 0 {
+                            (cx, cy + w)
+                        } else {
+                            // 斜角時，展開兩側
+                            (cx + w, cy + w)
+                        }
+                    })
+                })
+                .filter(|(tx, ty)| {
+                    *tx >= 0
+                        && *ty >= 0
+                        && (*tx as usize) < board.width()
+                        && (*ty as usize) < board.height()
+                })
+                .filter_map(|(tx, ty)| {
                     let target = Pos {
                         x: tx as usize,
                         y: ty as usize,
                     };
-                    if board.get_tile(target).is_none() {
-                        continue;
-                    }
-                    area.push(target);
-                }
-            }
-            area
+                    board.get_tile(target).map(|_| target)
+                })
+                .collect()
         }
     }
 }
