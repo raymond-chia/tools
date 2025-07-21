@@ -108,11 +108,6 @@ impl SkillsData {
                             return Err("範圍技能的效果形狀半徑不能小於 2".to_string());
                         }
                     }
-                    Shape::Rectangle(width, height) => {
-                        if *width < 2 && *height < 2 {
-                            return Err("範圍技能的效果形狀寬度和高度不能小於 2".to_string());
-                        }
-                    }
                     Shape::Line(length) => {
                         if *length < 2 {
                             return Err("範圍技能的效果形狀長度不能小於 2".to_string());
@@ -873,7 +868,6 @@ impl SkillsEditor {
         let shape_type = match shape {
             Shape::Point => "點".to_string(),
             Shape::Circle(_) => "圓形".to_string(),
-            Shape::Rectangle(_, _) => "矩形".to_string(),
             Shape::Line(_) => "直線".to_string(),
             Shape::Cone(_, _) => "錐形".to_string(),
         };
@@ -895,15 +889,6 @@ impl SkillsEditor {
                 {
                     if !matches!(shape, Shape::Circle(_)) {
                         *shape = Shape::Circle(1);
-                        changed = true;
-                    }
-                }
-                if ui
-                    .selectable_label(matches!(shape, Shape::Rectangle(_, _)), "矩形")
-                    .clicked()
-                {
-                    if !matches!(shape, Shape::Rectangle(_, _)) {
-                        *shape = Shape::Rectangle(2, 2);
                         changed = true;
                     }
                 }
@@ -934,17 +919,6 @@ impl SkillsEditor {
                 ui.add_space(20.0);
                 ui.label("半徑:");
                 if ui.add(DragValue::new(radius).range(1..=10)).changed() {
-                    changed = true;
-                }
-            }
-            Shape::Rectangle(width, height) => {
-                ui.add_space(20.0);
-                ui.label("寬度:");
-                if ui.add(DragValue::new(width).range(1..=10)).changed() {
-                    changed = true;
-                }
-                ui.label("高度:");
-                if ui.add(DragValue::new(height).range(1..=10)).changed() {
                     changed = true;
                 }
             }

@@ -54,6 +54,7 @@ impl UnitsEditor {
                     .into_iter()
                     .map(|(name, _)| name)
                     .collect();
+                self.skills.sort();
                 if self.skills.is_empty() {
                     self.selected_skill.clear();
                 } else if !self.skills.contains(&self.selected_skill) {

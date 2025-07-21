@@ -1,4 +1,3 @@
-use crate::action::algo::{self, PathfindingBoard};
 use crate::*;
 use std::collections::HashMap;
 
@@ -80,7 +79,7 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
         move_points: unit.move_points,
         moved_distance: unit.moved,
     };
-    algo::dijkstra(&view, from)
+    dijkstra(&view, from)
 }
 
 pub fn reconstruct_path(

@@ -59,3 +59,45 @@ pub fn dijkstra(graph: &impl PathfindingBoard, start: Pos) -> HashMap<Pos, (Move
 
     ans
 }
+
+pub fn bresenham_line(from: Pos, to: Pos, len: usize, is_valid: impl Fn(Pos) -> bool) -> Vec<Pos> {
+    let mut points = Vec::new();
+
+    let dx = (to.x as isize - from.x as isize).abs();
+    let dy = (to.y as isize - from.y as isize).abs();
+    let sx = if from.x < to.x { 1 } else { -1 };
+    let sy = if from.y < to.y { 1 } else { -1 };
+
+    let mut err = dx - dy;
+    let mut x = from.x as isize;
+    let mut y = from.y as isize;
+
+    for _ in 0..len {
+        if x < 0 || y < 0 {
+            break;
+        }
+        let pos = Pos {
+            x: x as usize,
+            y: y as usize,
+        };
+        if is_valid(pos) {
+            points.push(pos);
+        } else {
+            break; // 若超出板子範圍可終止
+        }
+        if x as usize == to.x && y as usize == to.y {
+            break; // 若到達目標可終止
+        }
+
+        let e2 = err * 2;
+        if e2 > -dy {
+            err -= dy;
+            x += sx;
+        }
+        if e2 < dx {
+            err += dx;
+            y += sy;
+        }
+    }
+    points
+}

@@ -1,6 +1,6 @@
-use crate::{board::Board, *};
+use crate::*;
 use skills_lib::*;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, f64::consts::PI};
 
 /// 技能選擇資料結構
 #[derive(Debug, Clone, Default)]
@@ -52,7 +52,7 @@ impl SkillSelection {
             return vec![];
         }
         // 判斷 to 是否在技能 range 內，超過則不顯示範圍
-        if !is_skill_in_range(skill.range, from, to) {
+        if !is_in_skill_range(skill.range, from, to) {
             return vec![];
         }
         // 取得技能範圍形狀（僅取第一個 effect 的 shape）
@@ -73,11 +73,12 @@ pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<
     match shape {
         Shape::Point => vec![to],
         Shape::Circle(r) => {
-            let r = *r as isize - 1; // 半徑減 1，因為中心點也算一格
+            let r = *r as isize; // 起點也算在半徑內
+            let r2 = r * r;
             (-r..=r)
                 .flat_map(|dx| (-r..=r).map(move |dy| (dx, dy)))
                 .filter_map(|(dx, dy)| {
-                    if dx.abs() + dy.abs() > r {
+                    if dx * dx + dy * dy > r2 {
                         return None;
                     }
                     let x = to.x as isize + dx;
@@ -85,101 +86,71 @@ pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<
                     if x < 0 || y < 0 {
                         return None;
                     }
-                    let target = Pos {
-                        x: x as usize,
-                        y: y as usize,
-                    };
+                    let (x, y) = (x as usize, y as usize);
+                    let target = Pos { x, y };
                     board.get_tile(target).map(|_| target)
                 })
                 .collect()
         }
-        Shape::Rectangle(w, h) => (0..*w)
-            .flat_map(|dx| (0..*h).map(move |dy| (dx, dy)))
-            .filter_map(|(dx, dy)| {
-                let x = to.x + dx;
-                let y = to.y + dy;
-                let target = Pos { x, y };
-                board.get_tile(target).map(|_| target)
-            })
-            .collect(),
         Shape::Line(len) => {
+            // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
             if from == to {
                 return vec![];
             }
-            let dx = to.x as isize - from.x as isize;
-            let dy = to.y as isize - from.y as isize;
-            let dist = ((dx * dx + dy * dy) as f64).sqrt();
-            let sx = dx as f64 / dist;
-            let sy = dy as f64 / dist;
-            let mut x = from.x as f64;
-            let mut y = from.y as f64;
-            (0..*len)
-                .filter_map(|_| {
-                    x += sx;
-                    y += sy;
-                    let xi = x.round() as isize;
-                    let yi = y.round() as isize;
-                    if xi < 0 || yi < 0 {
-                        return None;
-                    }
-                    let target = Pos {
-                        x: xi as usize,
-                        y: yi as usize,
-                    };
-                    board.get_tile(target).map(|_| target)
-                })
+            let len = len + 1; // 不計算起點
+            bresenham_line(from, to, len, |pos| board.get_tile(pos).is_some())
+                .into_iter()
+                .filter(|pos| *pos != from)
                 .collect()
         }
         Shape::Cone(len, degree) => {
             if from == to {
                 return vec![];
             }
-            // 以 45 度為單位，計算主方向（8向）
-            // 取得主方向（上下左右斜角）
-            let dx = to.x as isize - from.x as isize;
-            let dy = to.y as isize - from.y as isize;
-            let dir_x = match dx {
-                0 => 0,
-                _ if dx > 0 => 1,
-                _ => -1,
-            };
-            let dir_y = match dy {
-                0 => 0,
-                _ if dy > 0 => 1,
-                _ => -1,
-            };
-            // TODO 確認是否正確: 錐形寬度：每 45 度為 1 格寬 ??
-            let cone_width = (*degree as isize / 45).max(1);
-            (1..=*len)
-                .flat_map(|step| {
-                    let cx = from.x as isize + dir_x * step as isize;
-                    let cy = from.y as isize + dir_y * step as isize;
-                    (-cone_width..=cone_width).map(move |w| {
-                        // 展開方向：垂直於主方向
-                        if dir_x == 0 {
-                            (cx + w, cy)
-                        } else if dir_y == 0 {
-                            (cx, cy + w)
-                        } else {
-                            // 斜角時，展開兩側
-                            (cx + w, cy + w)
-                        }
-                    })
-                })
-                .filter(|(tx, ty)| {
-                    *tx >= 0
-                        && *ty >= 0
-                        && (*tx as usize) < board.width()
-                        && (*ty as usize) < board.height()
-                })
-                .filter_map(|(tx, ty)| {
-                    let target = Pos {
-                        x: tx as usize,
-                        y: ty as usize,
+            let len = *len as isize;
+            let len2 = len * len;
+            let degree = *degree as f64;
+            let from_x = from.x as isize;
+            let from_y = from.y as isize;
+            let dx = (to.x as isize - from_x) as f64;
+            let dy = (to.y as isize - from_y) as f64;
+            let target_theta = dy.atan2(dx);
+            let half_theta = degree.to_radians() / 2.0;
+
+            let mut area = vec![];
+            // 只在 from 附近搜尋半徑 len
+            for x in (from_x - len)..=(from_x + len) {
+                for y in (from_y - len)..=(from_y + len) {
+                    if x < 0 || y < 0 {
+                        continue;
+                    }
+                    let pos = Pos {
+                        x: x as usize,
+                        y: y as usize,
                     };
-                    board.get_tile(target).map(|_| target)
-                })
-                .collect()
+                    if board.get_tile(pos).is_none() {
+                        continue;
+                    }
+                    let dx = x - from_x;
+                    let dy = y - from_y;
+                    let distance2 = dx * dx + dy * dy;
+                    // 超出範圍 或 排除自身
+                    if distance2 > len2 || distance2 == 0 {
+                        continue;
+                    }
+                    // 格子的方向
+                    let point_theta = (dy as f64).atan2(dx as f64);
+                    // 角度差（方向無關正負、取最短和 2π補正）
+                    let delta = point_theta - target_theta;
+                    // 把 delta 調整到 [-PI, PI]
+                    let delta = clamp_pi(delta);
+                    if delta.abs() > half_theta {
+                        continue; // 超出角度範圍
+                    }
+                    area.push(pos);
+                }
+            }
+            area
         }
     }
 }
@@ -189,12 +160,25 @@ pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<
 /// - from: 施放者座標
 /// - to: 目標座標
 /// 回傳：是否符合技能距離限制
-pub fn is_skill_in_range(range: (usize, usize), from: Pos, to: Pos) -> bool {
+pub fn is_in_skill_range(range: (usize, usize), from: Pos, to: Pos) -> bool {
     let dx = from.x as isize - to.x as isize;
     let dy = from.y as isize - to.y as isize;
-    let dist = dx.abs() + dy.abs();
-    let (min_range, max_range) = (range.0 as isize, range.1 as isize);
+    let dist = dx * dx + dy * dy;
+    let dist = dist as usize;
+
+    let (min_range, max_range) = (range.0 * range.0, range.1 * range.1);
     min_range <= dist && dist <= max_range
+}
+
+/// 將角度限制在 [-PI, PI] 範圍內
+fn clamp_pi(mut rad: f64) -> f64 {
+    while rad < -PI {
+        rad += PI * 2.0;
+    }
+    while rad > PI {
+        rad -= PI * 2.0;
+    }
+    rad
 }
 
 /// 計算單位周邊區域的技能施放範圍（根據 range，不含 shape）
@@ -217,26 +201,23 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
     }
 
     let mut area = Vec::new();
-    let (min_range, max_range) = (range.0 as isize, range.1 as isize);
+    let max_range = range.1 as isize;
     for dy in -max_range..=max_range {
         for dx in -max_range..=max_range {
-            let dist = dx.abs() + dy.abs();
-            if dist < min_range || dist > max_range {
-                continue;
-            }
             let x = active_unit_pos.x as isize + dx;
             let y = active_unit_pos.y as isize + dy;
             if x < 0 || y < 0 {
                 continue;
             }
-            let pos = Pos {
-                x: x as usize,
-                y: y as usize,
-            };
-            if board.get_tile(pos).is_none() {
+            let (x, y) = (x as usize, y as usize);
+            let target = Pos { x, y };
+            if !is_in_skill_range(range, active_unit_pos, target) {
                 continue;
             }
-            area.push(pos);
+            if board.get_tile(target).is_none() {
+                continue;
+            }
+            area.push(target);
         }
     }
     area

@@ -80,7 +80,6 @@ pub enum Shape {
     #[default]
     Point,
     Circle(usize),
-    Rectangle(usize, usize),
     Line(usize),
     Cone(usize, DEGREE),
 }
@@ -107,6 +106,14 @@ pub enum Effect {
 }
 
 impl Effect {
+    pub fn target_type(&self) -> &TargetType {
+        match self {
+            Effect::Hp { target_type, .. } => target_type,
+            Effect::Burn { target_type, .. } => target_type,
+            Effect::MovePoints { target_type, .. } => target_type,
+        }
+    }
+
     pub fn shape(&self) -> &Shape {
         match self {
             Effect::Hp { shape, .. } => shape,
