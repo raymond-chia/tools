@@ -103,6 +103,9 @@ impl UnitsEditor {
         }
         let mut to_copy = None;
         let mut to_delete = None;
+        let mut to_move_up = None;
+        let mut to_move_down = None;
+        let mut to_select = None;
         egui::ScrollArea::vertical().show(ui, |ui| {
             for (idx, unit) in self.unit_templates.iter().enumerate() {
                 let name = &unit.name;
@@ -113,7 +116,7 @@ impl UnitsEditor {
                     egui::Color32::TRANSPARENT
                 });
                 if ui.add(button).clicked() {
-                    self.selected_unit = Some(name.clone());
+                    to_select = Some(name.clone());
                 }
                 ui.horizontal(|ui| {
                     if ui.button("複製").clicked() {
@@ -121,6 +124,13 @@ impl UnitsEditor {
                     }
                     if ui.button("刪除").clicked() {
                         to_delete = Some(idx);
+                    }
+                    // 排序按鈕
+                    if idx > 0 && ui.button("↑").clicked() {
+                        to_move_up = Some(idx);
+                    }
+                    if idx + 1 < self.unit_templates.len() && ui.button("↓").clicked() {
+                        to_move_down = Some(idx);
                     }
                 });
             }
@@ -137,6 +147,18 @@ impl UnitsEditor {
             self.unit_templates.remove(idx);
             self.selected_unit = None;
             self.has_unsaved_changes = true;
+        }
+        // 排序操作（for 迴圈外執行 swap）
+        if let Some(idx) = to_move_up {
+            self.unit_templates.swap(idx, idx - 1);
+            self.has_unsaved_changes = true;
+        } else if let Some(idx) = to_move_down {
+            self.unit_templates.swap(idx, idx + 1);
+            self.has_unsaved_changes = true;
+        }
+        // 選取操作（for 迴圈外執行）
+        if let Some(name) = to_select {
+            self.selected_unit = Some(name);
         }
     }
 
