@@ -62,10 +62,14 @@ pub struct Board {
     pub pos_to_unit: HashMap<Pos, UnitID>,
 }
 
+pub trait UnitTemplateGetter {
+    fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate>;
+}
+
 impl Board {
     pub fn from_config(
         config: BoardConfig,
-        unit_templates: &HashMap<UnitTemplateType, UnitTemplate>,
+        unit_templates: &impl UnitTemplateGetter,
         skills: &BTreeMap<SkillID, Skill>,
     ) -> Result<Self, String> {
         let teams = HashMap::from_iter(config.teams.into_iter().map(|(id, team)| (id, team)));

@@ -1,6 +1,7 @@
 use crate::common::*;
 use chess_lib::*;
 use egui::*;
+use indexmap::IndexMap;
 use rand::Rng;
 use skills_lib::*;
 use std::cell::RefCell;
@@ -31,7 +32,7 @@ pub struct BoardsEditor {
     skill_selection: SkillSelection,
     // 其他
     camera: Camera2D,
-    unit_templates: HashMap<UnitTemplateType, UnitTemplate>,
+    unit_templates: IndexMap<UnitTemplateType, UnitTemplate>,
     skills: BTreeMap<SkillID, Skill>,
     // status
     has_unsaved_changes: bool,
@@ -85,7 +86,7 @@ impl BoardsEditor {
                 }
             }
             Err(err) => {
-                self.unit_templates = HashMap::new();
+                self.unit_templates = IndexMap::new();
                 self.set_status(format!("載入單位類型失敗: {}", err), true);
                 return;
             }
@@ -645,7 +646,8 @@ impl BoardsEditor {
         let config = self.boards.get(board_id).expect("選擇的戰場應該存在");
 
         // 2. 呼叫 Board::from_config
-        match Board::from_config(config.clone(), &self.unit_templates, &self.skills) {
+        let m = UnitTemplateMap(&self.unit_templates);
+        match Board::from_config(config.clone(), &m, &self.skills) {
             Ok(board) => {
                 let turn_order = board.units.keys().cloned().collect();
                 self.sim_board = board;
@@ -1060,4 +1062,12 @@ fn to_team_color(color: Color32) -> RGB {
 
 fn to_egui_color(rgb: RGB) -> Color32 {
     Color32::from_rgb(rgb.0, rgb.1, rgb.2)
+}
+
+struct UnitTemplateMap<'a>(&'a IndexMap<UnitTemplateType, UnitTemplate>);
+
+impl<'a> UnitTemplateGetter for UnitTemplateMap<'a> {
+    fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+        self.0.get(typ)
+    }
 }
