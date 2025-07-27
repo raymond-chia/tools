@@ -1,0 +1,13 @@
+{
+  "tags": [],
+  "range": [1, 4],
+  "cost": 0,
+  "effects": [
+    {
+      "type": "hp",
+      "target_type": "any",
+      "shape": "point",
+      "value": -10
+    }
+  ]
+}

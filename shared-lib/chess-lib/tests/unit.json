@@ -1,0 +1,16 @@
+{
+  "Team": {
+    "id": "t1",
+    "color": [255, 0, 0]
+  },
+  "UnitTemplate": {
+    "name": "knight",
+    "skills": ["sprint", "slash"]
+  },
+  "UnitMarker": {
+    "id": 42,
+    "unit_template_type": "knight",
+    "team": "t1",
+    "pos": { "x": 0, "y": 0 }
+  }
+}

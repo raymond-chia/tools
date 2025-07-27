@@ -88,3 +88,71 @@ fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
         points as MovementCost
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn test_deserialize_unit() {
+        let data = include_str!("../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        // 從 skill_sprint.json 載入 sprint 技能
+        let sprint_data = include_str!("../tests/skill_sprint.json");
+        let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
+        let slash_data = include_str!("../tests/skill_slash.json");
+        let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+
+        // 測試 Team
+        let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
+        assert_eq!(team.id, "t1");
+        assert_eq!(team.color, (255, 0, 0));
+
+        // 測試 UnitTemplate
+        let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        assert_eq!(template.name, "knight");
+        assert_eq!(template.skills.len(), 2);
+        assert!(template.skills.contains("sprint"));
+        assert!(template.skills.contains("slash"));
+
+        // 測試 UnitMarker
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        assert_eq!(marker.id, 42);
+        assert_eq!(marker.unit_template_type, "knight");
+        assert_eq!(marker.team, "t1");
+        assert_eq!(marker.pos, Pos { x: 0, y: 0 });
+
+        // 測試 Unit::from_template
+
+        let skills_map = BTreeMap::from([
+            ("sprint".to_string(), sprint_skill),
+            ("slash".to_string(), slash_skill),
+        ]);
+
+        let unit = Unit::from_template(&marker, &template, &skills_map).unwrap();
+        assert_eq!(unit.id, marker.id);
+        assert_eq!(unit.unit_template_type, marker.unit_template_type);
+        assert_eq!(unit.team, marker.team);
+        assert_eq!(unit.moved, 0);
+        assert_eq!(unit.move_points, 30);
+        assert_eq!(unit.skills.len(), 2);
+        assert!(unit.skills.contains("sprint"));
+        assert!(unit.skills.contains("slash"));
+    }
+
+    #[test]
+    fn test_skills_to_move_points() {
+        let sprint_data = include_str!("../tests/skill_sprint.json");
+        let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
+        let slash_data = include_str!("../tests/skill_slash.json");
+        let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+        let sprint = "sprint".to_string();
+        let slash = "slash".to_string();
+
+        let skills_map = BTreeMap::from([(&sprint, &sprint_skill), (&slash, &slash_skill)]);
+
+        let move_points = super::skills_to_move_points(&skills_map);
+        assert_eq!(move_points, 30);
+    }
+}

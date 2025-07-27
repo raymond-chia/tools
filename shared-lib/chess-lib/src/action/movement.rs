@@ -1,6 +1,11 @@
 use crate::*;
 use std::collections::HashMap;
 
+const FIRST_MOVEMENT_COLOR: RGBA = (50, 100, 255, 150); // 淺藍
+const SECOND_MOVEMENT_COLOR: RGBA = (50, 50, 255, 150); // 深藍
+const FIRST_PATH_COLOR: RGBA = (125, 0, 125, 150); // 淺紫
+const SECOND_PATH_COLOR: RGBA = (100, 0, 100, 150); // 深紫
+
 /// 提供移動邏輯用的棋盤視圖，實作 PathfindingBoard 供路徑搜尋演算法使用
 struct MovableBoardView<'a> {
     board: &'a Board,
@@ -117,51 +122,6 @@ pub fn move_unit_along_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Err
     Ok(())
 }
 
-/// 將 actor 位置的單位移動到 to 位置
-pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
-    if actor == to {
-        return Ok(()); // 不需要移動
-    }
-    // to 應該在棋盤上
-    let Some(tile) = board.get_tile(to) else {
-        return Err(Error::NoTileOnPos(to));
-    };
-    let terrain = tile.terrain;
-    // 檢查 from 位置有無單位
-    let unit_id = match board.pos_to_unit.get(&actor) {
-        Some(id) => *id,
-        None => return Err(Error::NoUnitOnPos(actor)),
-    };
-    let Some(active_unit) = board.units.get(&unit_id) else {
-        return Err(Error::NoUnitOnPos(actor));
-    };
-    // 檢查 to 位置是否已有單位
-    let result = if let Some(unit_id) = board.pos_to_unit.get(&to) {
-        let Some(target_unit) = board.units.get(unit_id) else {
-            return Err(Error::NoUnitOnPos(to));
-        };
-        if active_unit.team != target_unit.team {
-            return Err(Error::HostileUnitOnPos(to));
-        }
-        Err(Error::AlliedUnitOnPos(to))
-    } else {
-        Ok(())
-    };
-    let Some(active_unit) = board.units.get_mut(&unit_id) else {
-        return Err(Error::NoUnitOnPos(actor));
-    };
-    let cost = movement_cost(terrain);
-    if active_unit.moved + cost > active_unit.move_points * 2 {
-        return Err(Error::NotEnoughPoints);
-    }
-    active_unit.moved += cost;
-    if result.is_ok() {
-        board.pos_to_unit.remove(&actor);
-        board.pos_to_unit.insert(to, unit_id);
-    }
-    result
-}
-
 pub fn movement_tile_color(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
@@ -185,9 +145,9 @@ pub fn movement_tile_color(
     let is_first = moved + cost <= move_points;
     // 顯示可移動範圍
     let color = if is_first {
-        (50, 100, 255, 150) // 淺藍
+        FIRST_MOVEMENT_COLOR // 淺藍
     } else {
-        (50, 50, 255, 150) // 深藍
+        SECOND_MOVEMENT_COLOR // 深藍
     };
     // 顯示移動路徑
     if !path.contains(&pos) {
@@ -195,8 +155,262 @@ pub fn movement_tile_color(
         return Ok(color);
     }
     if is_first {
-        Ok((125, 0, 125, 150)) // 淺紫
+        Ok(FIRST_PATH_COLOR) // 淺紫
     } else {
-        Ok((100, 0, 100, 150)) // 深紫
+        Ok(SECOND_PATH_COLOR) // 深紫
+    }
+}
+
+use inner::*;
+mod inner {
+    use super::*;
+
+    /// 將 actor 位置的單位移動到 to 位置
+    pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
+        if actor == to {
+            return Ok(()); // 不需要移動
+        }
+        // to 應該在棋盤上
+        let Some(tile) = board.get_tile(to) else {
+            return Err(Error::NoTileOnPos(to));
+        };
+        let terrain = tile.terrain;
+        // 檢查 from 位置有無單位
+        let unit_id = match board.pos_to_unit.get(&actor) {
+            Some(id) => *id,
+            None => return Err(Error::NoUnitOnPos(actor)),
+        };
+        let Some(active_unit) = board.units.get(&unit_id) else {
+            return Err(Error::NoUnitOnPos(actor));
+        };
+        // 檢查 to 位置是否已有單位
+        let result = if let Some(unit_id) = board.pos_to_unit.get(&to) {
+            let Some(target_unit) = board.units.get(unit_id) else {
+                return Err(Error::NoUnitOnPos(to));
+            };
+            if active_unit.team != target_unit.team {
+                return Err(Error::HostileUnitOnPos(to));
+            }
+            Err(Error::AlliedUnitOnPos(to))
+        } else {
+            Ok(())
+        };
+        let Some(active_unit) = board.units.get_mut(&unit_id) else {
+            return Err(Error::NoUnitOnPos(actor));
+        };
+        let cost = movement_cost(terrain);
+        if active_unit.moved + cost > active_unit.move_points * 2 {
+            return Err(Error::NotEnoughPoints);
+        }
+        active_unit.moved += cost;
+        if result.is_ok() {
+            board.pos_to_unit.remove(&actor);
+            board.pos_to_unit.insert(to, unit_id);
+        }
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skills_lib::*;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn basic_board_and_unit(start: Pos, ally: Pos, enemy: Pos) -> (Board, UnitID) {
+        // 建立地形
+        let tiles = vec![
+            vec![
+                Tile {
+                    terrain: Terrain::Plain,
+                    object: None,
+                };
+                3
+            ],
+            vec![
+                Tile {
+                    terrain: Terrain::Plain,
+                    object: None,
+                };
+                3
+            ],
+            vec![
+                Tile {
+                    terrain: Terrain::Plain,
+                    object: None
+                };
+                3
+            ],
+        ];
+
+        // 載入單位 & 技能
+        let data = include_str!("../../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
+        let teams = HashMap::from([(team.id.clone(), team.clone())]);
+        let skills_map = {
+            let sprint_data = include_str!("../../tests/skill_sprint.json");
+            let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
+            let slash_data = include_str!("../../tests/skill_slash.json");
+            let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+            BTreeMap::from([
+                ("sprint".to_string(), sprint_skill),
+                ("slash".to_string(), slash_skill),
+            ])
+        };
+        let unit_active = {
+            let mut unit_active = Unit::from_template(&marker, &template, &skills_map).unwrap();
+            // 避免走完所有格子
+            unit_active.moved = unit_active.move_points;
+            unit_active
+        };
+        let unit_id = unit_active.id;
+        let unit_ally = {
+            let mut unit_ally = Unit::from_template(&marker, &template, &skills_map).unwrap();
+            unit_ally.id = unit_id + 1;
+            unit_ally
+        };
+        let mut marker = marker;
+        marker.team = team.id.clone() + "-enemy";
+        let marker = marker;
+        let unit_enemy = {
+            let mut unit_enemy = Unit::from_template(&marker, &template, &skills_map).unwrap();
+            unit_enemy.id = unit_id + 2;
+            unit_enemy
+        };
+        let pos_to_unit = HashMap::from([
+            (start, unit_id),
+            (ally, unit_ally.id),
+            (enemy, unit_enemy.id),
+        ]);
+        let units = HashMap::from([
+            (unit_id, unit_active),
+            (unit_ally.id, unit_ally),
+            (unit_enemy.id, unit_enemy),
+        ]);
+
+        let board = Board {
+            tiles,
+            teams,
+            units,
+            pos_to_unit,
+        };
+        (board, unit_id)
+    }
+
+    #[test]
+    fn test_movable_area_blocked_by_unit() {
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let expect = BTreeSet::from([
+            Pos { x: 0, y: 0 },
+            Pos { x: 0, y: 1 },
+            Pos { x: 0, y: 2 },
+            Pos { x: 1, y: 1 },
+            Pos { x: 1, y: 2 },
+            Pos { x: 2, y: 1 },
+            // 1,0 被敵人擋住
+            // 2,0 因為敵人所以距離太遠
+            // 2,2 距離太遠
+        ]);
+        let (board, _) = basic_board_and_unit(start, ally, enemy);
+        let area = movable_area(&board, start);
+        let area = area.keys().cloned().collect::<BTreeSet<_>>();
+        assert_eq!(area, expect);
+    }
+
+    #[test]
+    fn test_reconstruct_path() {
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let (board, _) = basic_board_and_unit(start, ally, enemy);
+        let area = movable_area(&board, start);
+        let path = reconstruct_path(&area, start, Pos { x: 2, y: 1 }).unwrap();
+        assert_eq!(
+            path,
+            vec![
+                Pos { x: 0, y: 0 },
+                Pos { x: 0, y: 1 },
+                Pos { x: 1, y: 1 },
+                Pos { x: 2, y: 1 }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_move_unit() {
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let test_data = [
+            (false, vec![Pos { x: 0, y: 0 }, Pos { x: 1, y: 0 }]), // 不能經過敵人
+            (
+                true,
+                vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }],
+            ),
+            (
+                // 不能經過敵人
+                false,
+                vec![Pos { x: 0, y: 0 }, Pos { x: 1, y: 0 }, Pos { x: 2, y: 0 }],
+            ),
+            (
+                true,
+                vec![
+                    Pos { x: 0, y: 0 },
+                    Pos { x: 0, y: 1 },
+                    Pos { x: 1, y: 1 },
+                    Pos { x: 2, y: 1 },
+                ],
+            ),
+        ];
+        for (is_ok, path) in test_data {
+            let to = path.last().cloned().unwrap();
+            let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
+            let res = move_unit_along_path(&mut board, path);
+            assert_eq!(res.is_ok(), is_ok, "移動到 {:?} 應該成功 ? {}", to, is_ok);
+            if is_ok {
+                assert_eq!(board.pos_to_unit.get(&to), Some(&unit_id));
+                assert!(board.pos_to_unit.get(&start).is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn test_movement_tile_color() {
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let (board, active_unit_id) = basic_board_and_unit(start, ally, enemy);
+        let movable = movable_area(&board, start);
+        let path = reconstruct_path(&movable, start, Pos { x: 0, y: 2 }).unwrap();
+
+        // 寫死每一格的預期結果
+        let expected = [
+            // x=0
+            [Err(()), Err(()), Ok(SECOND_PATH_COLOR)],
+            // x=1
+            [
+                Err(()),
+                Ok(SECOND_MOVEMENT_COLOR),
+                Ok(SECOND_MOVEMENT_COLOR),
+            ],
+            // x=2
+            [Err(()), Ok(SECOND_MOVEMENT_COLOR), Err(())],
+        ];
+
+        for x in 0..3 {
+            for y in 0..3 {
+                let pos = Pos { x, y };
+                let result = movement_tile_color(&board, &movable, &active_unit_id, &path, pos);
+                match expected[x][y] {
+                    Ok(color) => assert_eq!(result.unwrap(), color, "({},{}) 顏色不符", x, y),
+                    Err(()) => assert!(result.is_err(), "({},{}) 應回錯誤", x, y),
+                }
+            }
+        }
     }
 }

@@ -1,0 +1,21 @@
+{
+  "tiles": [
+    [{ "terrain": "Plain" }, { "terrain": "Plain" }],
+    [{ "terrain": "Hill" }, { "terrain": "Hill" }]
+  ],
+  "teams": {
+    "t1": {
+      "id": "t1",
+      "color": [255, 0, 0]
+    }
+  },
+  "deployable": [{ "x": 1, "y": 1 }],
+  "units": {
+    "42": {
+      "id": 42,
+      "unit_template_type": "knight",
+      "team": "t1",
+      "pos": { "x": 0, "y": 0 }
+    }
+  }
+}

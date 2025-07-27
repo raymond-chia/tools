@@ -175,3 +175,80 @@ mod unitid_key_map {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_board_from_config() {
+        let (skills, template) = {
+            let data = include_str!("../tests/unit.json");
+            let v: serde_json::Value = serde_json::from_str(data).unwrap();
+            let sprint_data = include_str!("../tests/skill_sprint.json");
+            let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
+            let slash_data = include_str!("../tests/skill_slash.json");
+            let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+            let skills = BTreeMap::from([
+                ("sprint".to_string(), sprint_skill),
+                ("slash".to_string(), slash_skill),
+            ]);
+            let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+            (skills, template)
+        };
+
+        // 準備 BoardConfig
+        let data = include_str!("../tests/board.json");
+        let config: BoardConfig = serde_json::from_str(data).unwrap();
+        assert_eq!(config.deployable, BTreeSet::from([Pos { x: 1, y: 1 }]));
+
+        // 準備 UnitTemplateGetter stub
+        struct StubGetter {
+            template: UnitTemplate,
+        }
+        impl UnitTemplateGetter for StubGetter {
+            fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                if typ == &self.template.name {
+                    Some(&self.template)
+                } else {
+                    None
+                }
+            }
+        }
+        let stub_getter = StubGetter { template };
+
+        // 執行 from_config
+        let board = Board::from_config(config, &stub_getter, &skills).unwrap();
+
+        // 驗證 tiles
+        assert_eq!(board.width(), 2);
+        assert_eq!(board.height(), 2);
+        assert_eq!(
+            board.get_tile(Pos { x: 0, y: 0 }).unwrap().terrain,
+            Terrain::Plain
+        );
+        assert_eq!(
+            board.get_tile(Pos { x: 0, y: 1 }).unwrap().terrain,
+            Terrain::Hill
+        );
+
+        // 驗證 team
+        assert_eq!(board.teams.len(), 1);
+        assert!(board.teams.contains_key("t1"));
+
+        // 驗證 unit
+        assert_eq!(board.units.len(), 1);
+        assert!(board.units.contains_key(&42));
+        assert_eq!(board.unit_pos(&42), Some(Pos { x: 0, y: 0 }));
+    }
+
+    #[test]
+    fn test_movement_cost() {
+        assert_eq!(movement_cost(Terrain::Plain), 10);
+        assert_eq!(movement_cost(Terrain::Hill), 13);
+        assert_eq!(movement_cost(Terrain::Mountain), 20);
+        assert_eq!(movement_cost(Terrain::Forest), 13);
+        assert_eq!(movement_cost(Terrain::ShallowWater), 17);
+        assert_eq!(movement_cost(Terrain::DeepWater), MAX_MOVEMENT_COST);
+    }
+}

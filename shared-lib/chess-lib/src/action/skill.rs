@@ -18,8 +18,9 @@ impl SkillSelection {
     /// 預覽技能範圍
     /// 根據目前選擇的技能與棋盤狀態，計算技能可作用的座標列表
     /// - board: 棋盤狀態
-    /// - unit_id: 行動單位 ID
     /// - skills: 技能資料表
+    /// - unit_id: 行動單位 ID
+    /// - to: 指向格
     /// 回傳：技能可作用範圍的座標 Vec<Pos>
     pub fn skill_affect_area(
         &self,
@@ -66,121 +67,6 @@ impl SkillSelection {
     }
 }
 
-/// 計算技能形狀範圍
-/// board: 棋盤物件, shape: 技能形狀, from: 施放者座標, to: 目標座標
-/// 回傳：座標列表
-pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<Pos> {
-    match shape {
-        Shape::Point => vec![to],
-        Shape::Circle(r) => {
-            let r = *r as isize; // 起點也算在半徑內
-            let r2 = r * r;
-            (-r..=r)
-                .flat_map(|dx| (-r..=r).map(move |dy| (dx, dy)))
-                .filter_map(|(dx, dy)| {
-                    if dx * dx + dy * dy > r2 {
-                        return None;
-                    }
-                    let x = to.x as isize + dx;
-                    let y = to.y as isize + dy;
-                    if x < 0 || y < 0 {
-                        return None;
-                    }
-                    let (x, y) = (x as usize, y as usize);
-                    let target = Pos { x, y };
-                    board.get_tile(target).map(|_| target)
-                })
-                .collect()
-        }
-        Shape::Line(len) => {
-            // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-            if from == to {
-                return vec![];
-            }
-            let len = len + 1; // 不計算起點
-            bresenham_line(from, to, len, |pos| board.get_tile(pos).is_some())
-                .into_iter()
-                .filter(|pos| *pos != from)
-                .collect()
-        }
-        Shape::Cone(len, degree) => {
-            if from == to {
-                return vec![];
-            }
-            let len = *len as isize;
-            let len2 = len * len;
-            let degree = *degree as f64;
-            let from_x = from.x as isize;
-            let from_y = from.y as isize;
-            let dx = (to.x as isize - from_x) as f64;
-            let dy = (to.y as isize - from_y) as f64;
-            let target_theta = dy.atan2(dx);
-            let half_theta = degree.to_radians() / 2.0;
-
-            let mut area = vec![];
-            // 只在 from 附近搜尋半徑 len
-            for x in (from_x - len)..=(from_x + len) {
-                for y in (from_y - len)..=(from_y + len) {
-                    if x < 0 || y < 0 {
-                        continue;
-                    }
-                    let pos = Pos {
-                        x: x as usize,
-                        y: y as usize,
-                    };
-                    if board.get_tile(pos).is_none() {
-                        continue;
-                    }
-                    let dx = x - from_x;
-                    let dy = y - from_y;
-                    let distance2 = dx * dx + dy * dy;
-                    // 超出範圍 或 排除自身
-                    if distance2 > len2 || distance2 == 0 {
-                        continue;
-                    }
-                    // 格子的方向
-                    let point_theta = (dy as f64).atan2(dx as f64);
-                    // 角度差（方向無關正負、取最短和 2π補正）
-                    let delta = point_theta - target_theta;
-                    // 把 delta 調整到 [-PI, PI]
-                    let delta = clamp_pi(delta);
-                    if delta.abs() > half_theta {
-                        continue; // 超出角度範圍
-                    }
-                    area.push(pos);
-                }
-            }
-            area
-        }
-    }
-}
-
-/// 判斷技能施放距離是否符合 range 設定
-/// - skill: 技能資料
-/// - from: 施放者座標
-/// - to: 目標座標
-/// 回傳：是否符合技能距離限制
-pub fn is_in_skill_range(range: (usize, usize), from: Pos, to: Pos) -> bool {
-    let dx = from.x as isize - to.x as isize;
-    let dy = from.y as isize - to.y as isize;
-    let dist = dx * dx + dy * dy;
-    let dist = dist as usize;
-
-    let (min_range, max_range) = (range.0 * range.0, range.1 * range.1);
-    min_range <= dist && dist <= max_range
-}
-
-/// 將角度限制在 [-PI, PI] 範圍內
-fn clamp_pi(mut rad: f64) -> f64 {
-    while rad < -PI {
-        rad += PI * 2.0;
-    }
-    while rad > PI {
-        rad -= PI * 2.0;
-    }
-    rad
-}
-
 /// 計算單位周邊區域的技能施放範圍（根據 range，不含 shape）
 /// - board: 棋盤物件
 /// - from: 施放者座標
@@ -221,4 +107,296 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
         }
     }
     area
+}
+
+use inner::*;
+mod inner {
+    use super::*;
+
+    /// 計算技能形狀範圍
+    /// board: 棋盤物件, shape: 技能形狀, from: 施放者座標, to: 目標座標
+    /// 回傳：座標列表
+    pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<Pos> {
+        match shape {
+            Shape::Point => vec![to],
+            Shape::Circle(r) => {
+                let r = *r as isize; // 起點也算在半徑內
+                let r2 = r * r;
+                (-r..=r)
+                    .flat_map(|dx| (-r..=r).map(move |dy| (dx, dy)))
+                    .filter_map(|(dx, dy)| {
+                        if dx * dx + dy * dy > r2 {
+                            return None;
+                        }
+                        let x = to.x as isize + dx;
+                        let y = to.y as isize + dy;
+                        if x < 0 || y < 0 {
+                            return None;
+                        }
+                        let (x, y) = (x as usize, y as usize);
+                        let target = Pos { x, y };
+                        board.get_tile(target).map(|_| target)
+                    })
+                    .collect()
+            }
+            Shape::Line(len) => {
+                // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+                if from == to {
+                    return vec![];
+                }
+                let len = len + 1; // 不計算起點
+                bresenham_line(from, to, len, |pos| board.get_tile(pos).is_some())
+                    .into_iter()
+                    .filter(|pos| *pos != from)
+                    .collect()
+            }
+            Shape::Cone(len, degree) => {
+                if from == to {
+                    return vec![];
+                }
+                let len = *len as isize;
+                let len2 = len * len;
+                let degree = *degree as f64;
+                let from_x = from.x as isize;
+                let from_y = from.y as isize;
+                let dx = (to.x as isize - from_x) as f64;
+                let dy = (to.y as isize - from_y) as f64;
+                let target_theta = dy.atan2(dx);
+                let half_theta = degree.to_radians() / 2.0;
+
+                let mut area = vec![];
+                // 只在 from 附近搜尋半徑 len
+                for x in (from_x - len)..=(from_x + len) {
+                    for y in (from_y - len)..=(from_y + len) {
+                        if x < 0 || y < 0 {
+                            continue;
+                        }
+                        let pos = Pos {
+                            x: x as usize,
+                            y: y as usize,
+                        };
+                        if board.get_tile(pos).is_none() {
+                            continue;
+                        }
+                        let dx = x - from_x;
+                        let dy = y - from_y;
+                        let distance2 = dx * dx + dy * dy;
+                        // 超出範圍 或 排除自身
+                        if distance2 > len2 || distance2 == 0 {
+                            continue;
+                        }
+                        // 格子的方向
+                        let point_theta = (dy as f64).atan2(dx as f64);
+                        // 角度差（方向無關正負、取最短和 2π補正）
+                        let delta = point_theta - target_theta;
+                        // 把 delta 調整到 [-PI, PI]
+                        let delta = clamp_pi(delta);
+                        if delta.abs() > half_theta {
+                            continue; // 超出角度範圍
+                        }
+                        area.push(pos);
+                    }
+                }
+                area
+            }
+        }
+    }
+
+    /// 判斷技能施放距離是否符合 range 設定
+    /// - skill: 技能資料
+    /// - from: 施放者座標
+    /// - to: 目標座標
+    /// 回傳：是否符合技能距離限制
+    pub fn is_in_skill_range(range: (usize, usize), from: Pos, to: Pos) -> bool {
+        let dx = from.x as isize - to.x as isize;
+        let dy = from.y as isize - to.y as isize;
+        let dist = dx * dx + dy * dy;
+        let dist = dist as usize;
+
+        let (min_range, max_range) = (range.0 * range.0, range.1 * range.1);
+        min_range <= dist && dist <= max_range
+    }
+
+    mod inner {}
+
+    /// 將角度限制在 [-PI, PI] 範圍內
+    fn clamp_pi(mut rad: f64) -> f64 {
+        while rad < -PI {
+            rad += PI * 2.0;
+        }
+        while rad > PI {
+            rad -= PI * 2.0;
+        }
+        rad
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{BTreeSet, HashMap};
+
+    fn prepare_test_board(pos: Pos) -> (Board, UnitID, BTreeMap<SkillID, Skill>) {
+        let data = include_str!("../../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
+        let teams = HashMap::from([(team.id.clone(), team.clone())]);
+        let skills = {
+            let slash_data = include_str!("../../tests/skill_slash.json");
+            let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+            let shoot_data = include_str!("../../tests/skill_shoot.json");
+            let shoot_skill: Skill = serde_json::from_str(shoot_data).unwrap();
+            let splash_data = include_str!("../../tests/skill_splash.json");
+            let splash_skill: Skill = serde_json::from_str(splash_data).unwrap();
+            BTreeMap::from([
+                ("shoot".to_string(), shoot_skill),
+                ("slash".to_string(), slash_skill),
+                ("splash".to_string(), splash_skill),
+            ])
+        };
+        let template = {
+            let mut template = template;
+            template.skills = skills.iter().map(|(id, _)| id.clone()).collect();
+            template
+        };
+        let unit = Unit::from_template(&marker, &template, &skills).unwrap();
+        let unit_id = unit.id;
+
+        let board = Board {
+            tiles: vec![vec![Tile::default(); 10]; 10],
+            teams,
+            pos_to_unit: HashMap::from([(pos, unit_id)]),
+            units: HashMap::from([(unit_id, unit)]),
+        };
+        (board, unit_id, skills)
+    }
+
+    #[test]
+    fn test_select_skill() {
+        let mut sel = SkillSelection::default();
+        assert_eq!(sel.selected_skill, None);
+        sel.select_skill(Some("1".to_string()));
+        assert_eq!(sel.selected_skill, Some("1".to_string()));
+        sel.select_skill(None);
+        assert_eq!(sel.selected_skill, None);
+    }
+
+    #[test]
+    fn test_skill_affect_area() {
+        let (board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 });
+
+        let set = |v: &[Pos]| BTreeSet::from_iter(v.into_iter().copied());
+
+        // 測試
+        let test_data = [
+            ("slash", Pos { x: 1, y: 1 }, set(&[])), // 太近
+            ("slash", Pos { x: 1, y: 2 }, set(&[Pos { x: 1, y: 2 }])),
+            ("slash", Pos { x: 1, y: 3 }, set(&[])), // 太遠
+            ("shoot", Pos { x: 1, y: 1 }, set(&[])), // 太近
+            ("shoot", Pos { x: 1, y: 2 }, set(&[Pos { x: 1, y: 2 }])),
+            ("shoot", Pos { x: 1, y: 3 }, set(&[Pos { x: 1, y: 3 }])),
+            ("shoot", Pos { x: 1, y: 5 }, set(&[Pos { x: 1, y: 5 }])),
+            ("shoot", Pos { x: 1, y: 6 }, set(&[])), // 太遠
+            (
+                "splash",
+                Pos { x: 1, y: 1 },
+                set(&[
+                    Pos { x: 1, y: 0 },
+                    Pos { x: 0, y: 1 },
+                    Pos { x: 1, y: 1 },
+                    Pos { x: 2, y: 1 },
+                    Pos { x: 1, y: 2 },
+                ]),
+            ),
+            (
+                "splash",
+                Pos { x: 1, y: 5 },
+                set(&[
+                    Pos { x: 1, y: 4 },
+                    Pos { x: 0, y: 5 },
+                    Pos { x: 1, y: 5 },
+                    Pos { x: 2, y: 5 },
+                    Pos { x: 1, y: 6 },
+                ]),
+            ),
+            ("splash", Pos { x: 1, y: 6 }, set(&[])), // 太遠
+            ("splash", Pos { x: 0, y: 5 }, set(&[])), // 太遠
+            (
+                "splash",
+                Pos { x: 0, y: 4 },
+                set(&[
+                    Pos { x: 0, y: 3 },
+                    Pos { x: 0, y: 4 },
+                    Pos { x: 1, y: 4 },
+                    Pos { x: 0, y: 5 },
+                ]),
+            ),
+        ];
+        for (skill_id, pos, expected) in test_data {
+            let sel = SkillSelection {
+                selected_skill: Some(skill_id.to_string()),
+            };
+            let area = sel
+                .skill_affect_area(&board, &skills, unit_id, pos)
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            assert_eq!(area, expected);
+        }
+    }
+
+    #[test]
+    fn test_skill_casting_area() {
+        let (board, _, _) = prepare_test_board(Pos { x: 1, y: 1 });
+
+        let set = |v: &[Pos]| BTreeSet::from_iter(v.iter().copied());
+
+        let test_data = [
+            (
+                (0, 1),
+                Pos { x: 1, y: 1 },
+                set(&[
+                    Pos { x: 0, y: 1 },
+                    Pos { x: 1, y: 0 },
+                    Pos { x: 1, y: 1 },
+                    Pos { x: 2, y: 1 },
+                    Pos { x: 1, y: 2 },
+                ]),
+            ),
+            (
+                (1, 1),
+                Pos { x: 1, y: 1 },
+                set(&[
+                    Pos { x: 0, y: 1 },
+                    Pos { x: 1, y: 0 },
+                    Pos { x: 2, y: 1 },
+                    Pos { x: 1, y: 2 },
+                ]),
+            ),
+            (
+                (1, 2),
+                Pos { x: 1, y: 1 },
+                set(&[
+                    Pos { x: 0, y: 0 },
+                    Pos { x: 0, y: 1 },
+                    Pos { x: 0, y: 2 },
+                    Pos { x: 1, y: 0 },
+                    Pos { x: 1, y: 2 },
+                    Pos { x: 1, y: 3 },
+                    Pos { x: 2, y: 0 },
+                    Pos { x: 2, y: 1 },
+                    Pos { x: 2, y: 2 },
+                    Pos { x: 3, y: 1 },
+                ]),
+            ),
+        ];
+
+        for (range, active_unit_pos, expected) in test_data {
+            let area = skill_casting_area(&board, active_unit_pos, range)
+                .into_iter()
+                .collect::<BTreeSet<_>>();
+            assert_eq!(area, expected);
+        }
+    }
 }

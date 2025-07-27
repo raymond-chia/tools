@@ -101,3 +101,268 @@ pub fn bresenham_line(from: Pos, to: Pos, len: usize, is_valid: impl Fn(Pos) -> 
     }
     points
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Default)]
+    struct MockBoard {
+        width: usize,
+        height: usize,
+        impassable: Vec<Pos>,
+        slower: Vec<Pos>,
+    }
+
+    impl PathfindingBoard for MockBoard {
+        fn is_valid(&self, pos: Pos) -> bool {
+            pos.x < self.width && pos.y < self.height
+        }
+        fn is_passable(&self, _active_unit_pos: Pos, pos: Pos, _total: MovementCost) -> bool {
+            !self.impassable.contains(&pos)
+        }
+        fn get_cost(&self, _pos: Pos) -> MovementCost {
+            if self.slower.contains(&_pos) {
+                20 // 模擬較慢的地形
+            } else {
+                10 // 普通地形
+            }
+        }
+        fn get_neighbors(&self, pos: Pos) -> Vec<Pos> {
+            let mut neighbors = Vec::new();
+            let dirs = [(-1, 0), (1, 0), (0, -1), (0, 1)];
+            for (dx, dy) in dirs {
+                let nx = pos.x as isize + dx;
+                let ny = pos.y as isize + dy;
+                if nx >= 0 && ny >= 0 {
+                    neighbors.push(Pos {
+                        x: nx as usize,
+                        y: ny as usize,
+                    });
+                }
+            }
+            neighbors
+        }
+    }
+
+    #[test]
+    fn test_dijkstra_simple() {
+        let board = MockBoard {
+            width: 3,
+            height: 3,
+            impassable: vec![],
+            slower: vec![],
+        };
+        let test_data = [
+            (
+                Pos { x: 0, y: 0 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 0),
+                    (Pos { x: 1, y: 1 }, 20),
+                    (Pos { x: 1, y: 2 }, 30),
+                    (Pos { x: 2, y: 2 }, 40),
+                ],
+            ),
+            (
+                Pos { x: 1, y: 1 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 20),
+                    (Pos { x: 1, y: 1 }, 0),
+                    (Pos { x: 1, y: 2 }, 10),
+                    (Pos { x: 2, y: 2 }, 20),
+                ],
+            ),
+            (
+                Pos { x: 2, y: 0 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 20),
+                    (Pos { x: 1, y: 1 }, 20),
+                    (Pos { x: 1, y: 2 }, 30),
+                    (Pos { x: 2, y: 2 }, 20),
+                ],
+            ),
+            (
+                Pos { x: 2, y: 2 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 40),
+                    (Pos { x: 1, y: 1 }, 20),
+                    (Pos { x: 1, y: 2 }, 10),
+                    (Pos { x: 2, y: 2 }, 0),
+                ],
+            ),
+        ];
+        for (start, expected) in test_data {
+            let result = dijkstra(&board, start);
+            for (to, cost) in expected {
+                assert_eq!(result.get(&to).unwrap().0, cost);
+            }
+        }
+    }
+
+    #[test]
+    fn test_dijkstra_with_slower() {
+        let board = MockBoard {
+            width: 3,
+            height: 3,
+            impassable: vec![],
+            slower: vec![Pos { x: 0, y: 1 }],
+        };
+
+        let test_data = [
+            (
+                Pos { x: 0, y: 0 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 0),
+                    (Pos { x: 1, y: 0 }, 10),
+                    (Pos { x: 0, y: 1 }, 20),
+                ],
+            ),
+            (
+                Pos { x: 1, y: 0 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 10),
+                    (Pos { x: 1, y: 0 }, 0),
+                    (Pos { x: 0, y: 1 }, 30),
+                ],
+            ),
+            (
+                Pos { x: 0, y: 1 },
+                vec![
+                    (Pos { x: 0, y: 0 }, 10),
+                    (Pos { x: 1, y: 0 }, 20),
+                    (Pos { x: 0, y: 1 }, 0),
+                ],
+            ),
+        ];
+
+        for (start, expected) in test_data {
+            let result = dijkstra(&board, start);
+            for (to, cost) in expected {
+                assert_eq!(result.get(&to).unwrap().0, cost);
+            }
+        }
+    }
+
+    #[test]
+    fn test_dijkstra_with_impassable() {
+        let board = MockBoard {
+            width: 3,
+            height: 3,
+            impassable: vec![Pos { x: 1, y: 0 }, Pos { x: 1, y: 1 }],
+            slower: vec![],
+        };
+
+        let test_data = [
+            (
+                Pos { x: 0, y: 0 },
+                vec![
+                    (Pos { x: 0, y: 0 }, Some((0, Pos { x: 0, y: 0 }))),
+                    (Pos { x: 1, y: 0 }, None),
+                    (Pos { x: 1, y: 1 }, None),
+                    (Pos { x: 0, y: 2 }, Some((20, Pos { x: 0, y: 1 }))),
+                    (Pos { x: 2, y: 0 }, Some((60, Pos { x: 2, y: 1 }))),
+                    (Pos { x: 2, y: 2 }, Some((40, Pos { x: 1, y: 2 }))),
+                ],
+            ),
+            (
+                Pos { x: 2, y: 0 },
+                vec![
+                    (Pos { x: 0, y: 0 }, Some((60, Pos { x: 0, y: 1 }))),
+                    (Pos { x: 1, y: 0 }, None),
+                    (Pos { x: 1, y: 1 }, None),
+                    (Pos { x: 0, y: 2 }, Some((40, Pos { x: 1, y: 2 }))),
+                    (Pos { x: 2, y: 0 }, Some((0, Pos { x: 2, y: 0 }))),
+                    (Pos { x: 2, y: 2 }, Some((20, Pos { x: 2, y: 1 }))),
+                ],
+            ),
+            (
+                Pos { x: 2, y: 2 },
+                vec![
+                    (Pos { x: 0, y: 0 }, Some((40, Pos { x: 0, y: 1 }))),
+                    (Pos { x: 1, y: 0 }, None),
+                    (Pos { x: 1, y: 1 }, None),
+                    (Pos { x: 0, y: 2 }, Some((20, Pos { x: 1, y: 2 }))),
+                    (Pos { x: 2, y: 0 }, Some((20, Pos { x: 2, y: 1 }))),
+                    (Pos { x: 2, y: 2 }, Some((0, Pos { x: 2, y: 2 }))),
+                ],
+            ),
+        ];
+
+        for (start, expected) in test_data {
+            let result = dijkstra(&board, start);
+            for (to, expected) in expected {
+                match expected {
+                    Some((cost, prestep)) => {
+                        assert_eq!(
+                            result.get(&to).unwrap().0,
+                            cost,
+                            "from {:?} to {:?} cost mismatch",
+                            start,
+                            to
+                        );
+                        assert_eq!(
+                            result.get(&to).unwrap().1,
+                            prestep,
+                            "from {:?} to {:?} prestep mismatch",
+                            start,
+                            to
+                        );
+                    }
+                    None => assert!(
+                        result.get(&to).is_none(),
+                        "from {:?} to {:?} should be unreachable",
+                        start,
+                        to
+                    ),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bresenham_line() {
+        let test_data = [
+            (
+                10,
+                Pos { x: 0, y: 0 },
+                Pos { x: 3, y: 3 },
+                vec![
+                    Pos { x: 0, y: 0 },
+                    Pos { x: 1, y: 1 },
+                    Pos { x: 2, y: 2 },
+                    Pos { x: 3, y: 3 },
+                ],
+            ),
+            (
+                2,
+                Pos { x: 0, y: 0 },
+                Pos { x: 3, y: 3 },
+                vec![Pos { x: 0, y: 0 }, Pos { x: 1, y: 1 }],
+            ),
+            (
+                5,
+                Pos { x: 0, y: 0 },
+                Pos { x: 3, y: 1 },
+                vec![
+                    Pos { x: 0, y: 0 },
+                    Pos { x: 1, y: 0 },
+                    Pos { x: 2, y: 1 },
+                    Pos { x: 3, y: 1 },
+                ],
+            ),
+        ];
+        for (len, from, to, expected) in test_data {
+            let line = bresenham_line(from, to, len, |_| true);
+            assert_eq!(line, expected);
+        }
+    }
+
+    #[test]
+    fn test_bresenham_line_with_invalid() {
+        let from = Pos { x: 0, y: 0 };
+        let to = Pos { x: 3, y: 0 };
+        let line = bresenham_line(from, to, 10, |pos| pos.x < 2);
+        let expected = vec![Pos { x: 0, y: 0 }, Pos { x: 1, y: 0 }];
+        assert_eq!(line, expected);
+    }
+}

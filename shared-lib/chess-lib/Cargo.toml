@@ -9,3 +9,6 @@ skills-lib = { path = "../../shared-lib/skills-lib" }
 serde = { version = "1.0", features = ["derive"] }
 strum = "0.27.1"
 strum_macros = "0.27.1"
+
+[dev-dependencies]
+serde_json = "1"
