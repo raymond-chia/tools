@@ -120,7 +120,7 @@ impl BoardsEditor {
             if self.brush != BrushMode::Sim {
                 self.show_board_editor(ui);
             } else {
-                self.sim(ui);
+                self.show_sim(ui);
             }
         });
         self.show_status_message(ctx);
@@ -262,7 +262,7 @@ impl BoardsEditor {
         self.set_status(err_msg, true);
     }
 
-    fn sim(&mut self, ui: &mut Ui) {
+    fn show_sim(&mut self, ui: &mut Ui) {
         // 取得當前回合角色
         let Some(active_unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
             return;
@@ -711,6 +711,19 @@ impl BoardsEditor {
                     }
                 }
             });
+
+        // 顯示結束回合按鈕
+        ui.separator();
+        self.end_turn_button(ui);
+    }
+
+    /// 在模擬模式下顯示「結束回合」按鈕，並切換到下一角色
+    fn end_turn_button(&mut self, ui: &mut Ui) {
+        if ui.button("結束回合").clicked() {
+            self.sim_battle
+                .next_turn(&mut self.sim_board, &mut self.skill_selection);
+            self.set_status("已結束回合，切換到下一角色".to_string(), false);
+        }
     }
 
     fn show_status_message(&mut self, ctx: &Context) {
