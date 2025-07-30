@@ -92,6 +92,12 @@ pub enum Effect {
         shape: Shape,
         value: i32,
     },
+    MaxHp {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,
+        duration: i32, // -1 代表永久
+    },
     Burn {
         target_type: TargetType,
         shape: Shape,
@@ -109,6 +115,7 @@ impl Effect {
     pub fn target_type(&self) -> &TargetType {
         match self {
             Effect::Hp { target_type, .. } => target_type,
+            Effect::MaxHp { target_type, .. } => target_type,
             Effect::Burn { target_type, .. } => target_type,
             Effect::MovePoints { target_type, .. } => target_type,
         }
@@ -117,6 +124,7 @@ impl Effect {
     pub fn shape(&self) -> &Shape {
         match self {
             Effect::Hp { shape, .. } => shape,
+            Effect::MaxHp { shape, .. } => shape,
             Effect::Burn { shape, .. } => shape,
             Effect::MovePoints { shape, .. } => shape,
         }

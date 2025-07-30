@@ -30,6 +30,8 @@ pub struct Unit {
     pub team: TeamID,
     pub moved: MovementCost,
     pub move_points: MovementCost,
+    pub hp: i32,
+    pub max_hp: i32,
     pub skills: BTreeSet<String>,
 }
 
@@ -59,12 +61,15 @@ impl Unit {
             })
             .collect();
         let skills = skills?;
+        let max_hp = skills_to_max_hp(&skills);
         Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
             team: marker.team.clone(),
             moved: 0,
             move_points: skills_to_move_points(&skills),
+            hp: max_hp,
+            max_hp,
             skills: template.skills.clone(),
         })
     }
@@ -89,10 +94,25 @@ fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
     }
 }
 
+fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::MaxHp { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json;
+    use std::collections::HashMap;
 
     #[test]
     fn test_deserialize_unit() {
@@ -101,8 +121,8 @@ mod tests {
         // 從 skill_sprint.json 載入 sprint 技能
         let sprint_data = include_str!("../tests/skill_sprint.json");
         let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
-        let slash_data = include_str!("../tests/skill_slash.json");
-        let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+        let max_hp_data = include_str!("../tests/skill_max_hp.json");
+        let max_hp_skill: Skill = serde_json::from_str(max_hp_data).unwrap();
 
         // 測試 Team
         let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
@@ -124,35 +144,45 @@ mod tests {
         assert_eq!(marker.pos, Pos { x: 0, y: 0 });
 
         // 測試 Unit::from_template
-
         let skills_map = BTreeMap::from([
             ("sprint".to_string(), sprint_skill),
-            ("slash".to_string(), slash_skill),
+            ("max_hp".to_string(), max_hp_skill),
         ]);
 
-        let unit = Unit::from_template(&marker, &template, &skills_map).unwrap();
-        assert_eq!(unit.id, marker.id);
-        assert_eq!(unit.unit_template_type, marker.unit_template_type);
-        assert_eq!(unit.team, marker.team);
-        assert_eq!(unit.moved, 0);
-        assert_eq!(unit.move_points, 30);
-        assert_eq!(unit.skills.len(), 2);
-        assert!(unit.skills.contains("sprint"));
-        assert!(unit.skills.contains("slash"));
-    }
+        fn with_skills(mut template: UnitTemplate, skills: &[&str]) -> UnitTemplate {
+            template.skills = skills.iter().map(|s| s.to_string()).collect();
+            template
+        }
+        let test_data = [
+            (vec![], HashMap::from([("move_points", 0), ("max_hp", 0)])),
+            (
+                vec!["sprint"],
+                HashMap::from([("move_points", 30), ("max_hp", 0)]),
+            ),
+            (
+                vec!["max_hp"],
+                HashMap::from([("move_points", 0), ("max_hp", 10)]),
+            ),
+            (
+                vec!["sprint", "max_hp"],
+                HashMap::from([("move_points", 30), ("max_hp", 10)]),
+            ),
+        ];
 
-    #[test]
-    fn test_skills_to_move_points() {
-        let sprint_data = include_str!("../tests/skill_sprint.json");
-        let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
-        let slash_data = include_str!("../tests/skill_slash.json");
-        let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
-        let sprint = "sprint".to_string();
-        let slash = "slash".to_string();
-
-        let skills_map = BTreeMap::from([(&sprint, &sprint_skill), (&slash, &slash_skill)]);
-
-        let move_points = super::skills_to_move_points(&skills_map);
-        assert_eq!(move_points, 30);
+        for (skills, expect) in test_data {
+            let template = with_skills(template.clone(), &skills);
+            let unit = Unit::from_template(&marker, &template, &skills_map).unwrap();
+            assert_eq!(unit.id, marker.id);
+            assert_eq!(unit.unit_template_type, marker.unit_template_type);
+            assert_eq!(unit.team, marker.team);
+            assert_eq!(unit.moved, 0);
+            assert_eq!(unit.move_points, expect["move_points"] as usize);
+            assert_eq!(unit.hp, expect["max_hp"]);
+            assert_eq!(unit.max_hp, expect["max_hp"]);
+            assert_eq!(unit.skills.len(), skills.len());
+            for skill in skills {
+                assert!(unit.skills.contains(skill));
+            }
+        }
     }
 }

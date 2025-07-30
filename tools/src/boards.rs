@@ -318,8 +318,9 @@ impl BoardsEditor {
                 &self.sim_board.tiles,
                 show_skill_area_others(&self.sim_board, &casting_area, &affect_area),
             );
+
             // 技能施放主流程
-            let (Some(skill_id), Some(to)) = (&self.skill_selection.selected_skill, target) else {
+            let Some(to) = target else {
                 return;
             };
             if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
@@ -329,8 +330,21 @@ impl BoardsEditor {
                 self.set_status("技能範圍外無法施放".to_string(), true);
                 return;
             }
-            let msg = format!("{} 在 ({}, {}) 施放", skill_id, to.x, to.y);
-            self.set_status(msg, false);
+            // 技能施放主流程
+            match self.skill_selection.cast_skill(
+                &mut self.sim_board,
+                &self.skills,
+                active_unit_id,
+                to,
+            ) {
+                Ok(msgs) => {
+                    let msg = msgs.join("\n");
+                    self.set_status(msg, false);
+                }
+                Err(err) => {
+                    self.set_status(err, true);
+                }
+            }
         } else {
             // -------- 未選擇技能時：顯示移動範圍與路徑 --------
             // 以繁體中文註解：維持原本顯示移動範圍與路徑

@@ -15,6 +15,51 @@ impl SkillSelection {
         self.selected_skill = skill_id;
     }
 
+    /// 施放技能主流程
+    /// 回傳 Ok(訊息列表) 或 Err(錯誤)
+    pub fn cast_skill(
+        &self,
+        board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster: UnitID,
+        target: Pos,
+    ) -> Result<Vec<String>, String> {
+        let skill_id = self.selected_skill.as_ref().ok_or("未選擇技能")?;
+        let skill = skills
+            .get(skill_id)
+            .ok_or(format!("技能 {} 不存在", skill_id))?;
+        let affect_area = self.skill_affect_area(board, skills, caster, target);
+        let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
+        for pos in affect_area {
+            for effect in &skill.effects {
+                match effect {
+                    Effect::Hp { value, .. } => {
+                        if let Some(unit_id) = board.pos_to_unit.get(&pos) {
+                            if let Some(unit) = board.units.get_mut(unit_id) {
+                                let old = unit.hp;
+                                unit.hp += value;
+                                if unit.hp > unit.max_hp {
+                                    unit.hp = unit.max_hp;
+                                }
+                                msgs.push(format!("單位 {} HP: {} → {}", unit_id, old, unit.hp));
+                            }
+                        }
+                    }
+                    Effect::MaxHp { duration, .. } => {
+                        msgs.push(format!("[未實作] MaxHp 效果: 持續 {} 回合", duration));
+                    }
+                    Effect::Burn { duration, .. } => {
+                        msgs.push(format!("[未實作] Burn 效果: 持續 {} 回合", duration));
+                    }
+                    Effect::MovePoints { value, .. } => {
+                        msgs.push(format!("[未實作] 單位移動 {value}"));
+                    }
+                }
+            }
+        }
+        Ok(msgs)
+    }
+
     /// 預覽技能範圍
     /// 根據目前選擇的技能與棋盤狀態，計算技能可作用的座標列表
     /// - board: 棋盤狀態
@@ -282,6 +327,9 @@ mod tests {
         sel.select_skill(None);
         assert_eq!(sel.selected_skill, None);
     }
+
+    #[test]
+    fn test_cast_skill() {}
 
     #[test]
     fn test_skill_affect_area() {

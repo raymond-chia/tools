@@ -85,6 +85,7 @@ impl SkillsData {
         if skill.tags.contains(&Tag::Single) {
             match &skill.effects[0] {
                 Effect::Hp { shape, .. }
+                | Effect::MaxHp { shape, .. }
                 | Effect::Burn { shape, .. }
                 | Effect::MovePoints { shape, .. } => {
                     if shape != &Shape::Point {
@@ -98,6 +99,7 @@ impl SkillsData {
         if skill.tags.contains(&Tag::Area) {
             match &skill.effects[0] {
                 Effect::Hp { shape, .. }
+                | Effect::MaxHp { shape, .. }
                 | Effect::Burn { shape, .. }
                 | Effect::MovePoints { shape, .. } => match shape {
                     Shape::Point => {
@@ -131,6 +133,7 @@ impl SkillsData {
             }
             match &skill.effects[0] {
                 Effect::Hp { target_type, .. }
+                | Effect::MaxHp { target_type, .. }
                 | Effect::Burn { target_type, .. }
                 | Effect::MovePoints { target_type, .. } => {
                     if target_type != &TargetType::Caster {
@@ -451,6 +454,9 @@ impl SkillsEditor {
                                         Effect::Hp { .. } => {
                                             ui.label("HP 效果");
                                         }
+                                        Effect::MaxHp { .. } => {
+                                            ui.label("最大生命值效果");
+                                        }
                                         Effect::Burn { .. } => {
                                             ui.label("燃燒效果");
                                         }
@@ -527,6 +533,7 @@ impl SkillsEditor {
                 for effect in Effect::iter() {
                     let flag = match effect {
                         Effect::Hp { .. } => ui.button("新增 HP 效果").clicked(),
+                        Effect::MaxHp { .. } => ui.button("新增最大生命值效果").clicked(),
                         Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
                     };
@@ -751,6 +758,65 @@ impl SkillsEditor {
                     }
                 });
             }
+            Effect::MaxHp {
+                target_type,
+                shape,
+                value,
+                duration,
+            } => {
+                // 目標類型
+                ui.horizontal(|ui| {
+                    ui.label("目標類型:");
+                    let response = egui::ComboBox::new("target_type", "")
+                        .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(target_type, TargetType::Caster, "施法者");
+                            ui.selectable_value(target_type, TargetType::Ally, "盟友");
+                            ui.selectable_value(
+                                target_type,
+                                TargetType::AllyExcludeCaster,
+                                "盟友（排除施法者）",
+                            );
+                            ui.selectable_value(target_type, TargetType::Enemy, "敵人");
+                            ui.selectable_value(target_type, TargetType::Any, "任何");
+                            ui.selectable_value(
+                                target_type,
+                                TargetType::AnyExcludeCaster,
+                                "任何（排除施法者）",
+                            );
+                        });
+                    if response.response.changed() {
+                        changed = true;
+                    }
+                });
+
+                // 形狀
+                ui.horizontal(|ui| {
+                    ui.label("形狀:");
+                    if shape_editor(ui, shape) {
+                        changed = true;
+                    }
+                });
+
+                // 數值
+                ui.horizontal(|ui| {
+                    ui.label("最大生命值變化值:");
+                    if ui.add(DragValue::new(value)).changed() {
+                        changed = true;
+                    }
+                });
+
+                // 持續回合
+                ui.horizontal(|ui| {
+                    ui.label("持續回合 (-1=永久):");
+                    if ui
+                        .add(DragValue::new(duration).range(-1..=i32::MAX))
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                });
+            }
             Effect::Burn {
                 target_type,
                 shape,
@@ -849,7 +915,7 @@ impl SkillsEditor {
 
                 // 持續回合
                 ui.horizontal(|ui| {
-                    ui.label("持續回合 (-1=永久, 0=立即):");
+                    ui.label("持續回合 (-1=永久):");
                     if ui
                         .add(DragValue::new(duration).range(-1..=i32::MAX))
                         .changed()
