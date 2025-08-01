@@ -34,6 +34,8 @@ pub struct BoardsEditor {
     camera: Camera2D,
     unit_templates: IndexMap<UnitTemplateType, UnitTemplate>,
     skills: BTreeMap<SkillID, Skill>,
+    active_skill_ids: Vec<SkillID>,
+    passive_skill_ids: Vec<SkillID>,
     // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
@@ -94,9 +96,25 @@ impl BoardsEditor {
         match from_file::<_, BTreeMap<SkillID, Skill>>(SKILLS_FILE) {
             Ok(skills) => {
                 self.skills = skills;
+                // 分類主動/被動技能
+                let mut active_skill_ids = Vec::new();
+                let mut passive_skill_ids = Vec::new();
+                for (id, skill) in &self.skills {
+                    if skill.tags.contains(&skills_lib::Tag::Active) {
+                        active_skill_ids.push(id.clone());
+                    } else if skill.tags.contains(&skills_lib::Tag::Passive) {
+                        passive_skill_ids.push(id.clone());
+                    }
+                }
+                active_skill_ids.sort();
+                passive_skill_ids.sort();
+                self.active_skill_ids = active_skill_ids;
+                self.passive_skill_ids = passive_skill_ids;
             }
             Err(err) => {
                 self.skills = BTreeMap::new();
+                self.active_skill_ids = Vec::new();
+                self.passive_skill_ids = Vec::new();
                 self.set_status(format!("載入技能失敗: {}", err), true);
                 return;
             }
@@ -687,11 +705,18 @@ impl BoardsEditor {
         // 顯示單位擁有的技能列表
         ui.label("單位擁有的技能：");
         // 技能選擇下拉選單（無「未選擇技能」選項），selected_idx = -1 表示未選擇技能
-        let skill_ids: Vec<&SkillID> = unit
-            .skills
-            .iter()
-            .filter(|id| self.skills.contains_key(*id))
-            .collect();
+        // 依主/被動分類技能顯示
+        let mut skill_ids: Vec<&SkillID> = Vec::new();
+        skill_ids.extend(
+            unit.skills
+                .iter()
+                .filter(|id| self.active_skill_ids.contains(*id)),
+        );
+        skill_ids.extend(
+            unit.skills
+                .iter()
+                .filter(|id| self.passive_skill_ids.contains(*id)),
+        );
         // 滑鼠右鍵點擊時取消技能選取
         if ui.ctx().input(|i| i.pointer.secondary_clicked()) {
             self.skill_selection.select_skill(None);
@@ -713,7 +738,29 @@ impl BoardsEditor {
                 ""
             })
             .show_ui(ui, |ui| {
-                for (i, name) in skill_ids.iter().enumerate() {
+                ui.label("─── 主動技能 ───");
+                for (i, name) in skill_ids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, id)| self.active_skill_ids.contains(id))
+                {
+                    let response = ui.selectable_value(&mut selected_idx, i as i32, *name);
+                    if response.changed() {
+                        if selected_idx >= 0 {
+                            if let Some(skill_id) = skill_ids.get(selected_idx as usize) {
+                                self.skill_selection
+                                    .select_skill(Some(skill_id.to_string()));
+                            }
+                        }
+                    }
+                }
+                ui.separator();
+                ui.label("─── 被動技能 ───");
+                for (i, name) in skill_ids
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, id)| self.passive_skill_ids.contains(id))
+                {
                     let response = ui.selectable_value(&mut selected_idx, i as i32, *name);
                     if response.changed() {
                         if selected_idx >= 0 {

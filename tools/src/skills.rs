@@ -306,14 +306,24 @@ impl SkillsEditor {
         ui.add_space(10.0);
 
         ScrollArea::vertical().show(ui, |ui| {
-            // 收集所有技能 ID 並按字母順序排序
-            let mut skill_ids: Vec<_> = self.skills_data.skills.keys().collect();
-            skill_ids.sort(); // 按字母排序
+            let mut active_skill_ids = Vec::new();
+            let mut passive_skill_ids = Vec::new();
+            for (id, skill) in &self.skills_data.skills {
+                if skill.tags.contains(&Tag::Active) {
+                    active_skill_ids.push(id.clone());
+                } else if skill.tags.contains(&Tag::Passive) {
+                    passive_skill_ids.push(id.clone());
+                } else {
+                    panic!("技能 {} 必須有 Active 或 Passive 標籤", id);
+                }
+            }
+            active_skill_ids.sort();
+            passive_skill_ids.sort();
 
-            // 顯示排序後的技能列表
-            for skill_id in skill_ids {
+            // 依 load_file 分類後的 ID 顯示
+            ui.label("─── 主動技能 ───");
+            for skill_id in &active_skill_ids {
                 let selected = self.selected_skill.as_ref() == Some(skill_id);
-
                 let button = Button::new(skill_id)
                     .fill(if selected {
                         ui.style().visuals.selection.bg_fill
@@ -321,9 +331,22 @@ impl SkillsEditor {
                         ui.style().visuals.widgets.noninteractive.bg_fill
                     })
                     .min_size(egui::vec2(ui.available_width(), 0.0));
-
                 if ui.add(button).clicked() {
-                    // 點擊就直接切換技能
+                    self.selected_skill = Some(skill_id.clone());
+                }
+            }
+            ui.add(Separator::default());
+            ui.label("─── 被動技能 ───");
+            for skill_id in &passive_skill_ids {
+                let selected = self.selected_skill.as_ref() == Some(skill_id);
+                let button = Button::new(skill_id)
+                    .fill(if selected {
+                        ui.style().visuals.selection.bg_fill
+                    } else {
+                        ui.style().visuals.widgets.noninteractive.bg_fill
+                    })
+                    .min_size(egui::vec2(ui.available_width(), 0.0));
+                if ui.add(button).clicked() {
                     self.selected_skill = Some(skill_id.clone());
                 }
             }

@@ -7,7 +7,8 @@ use std::io;
 pub struct UnitsEditor {
     // 需要指定順序
     unit_templates: Vec<UnitTemplate>,
-    skills: Vec<String>,
+    active_skill_ids: Vec<String>,
+    passive_skill_ids: Vec<String>,
     selected_unit: Option<UnitTemplateType>,
     selected_skill: String,
     has_unsaved_changes: bool,
@@ -46,19 +47,33 @@ impl UnitsEditor {
                 return;
             }
         }
-        // 重新載入 skills
+        // 重新載入 skills，並分類主動/被動
         match SkillsData::from_file(SKILLS_FILE) {
             Ok(skills_data) => {
-                self.skills = skills_data
-                    .skills
-                    .into_iter()
-                    .map(|(name, _)| name)
+                let mut active_skill_ids = Vec::new();
+                let mut passive_skill_ids = Vec::new();
+                for (id, skill) in &skills_data.skills {
+                    if skill.tags.contains(&skills_lib::Tag::Active) {
+                        active_skill_ids.push(id.clone());
+                    } else if skill.tags.contains(&skills_lib::Tag::Passive) {
+                        passive_skill_ids.push(id.clone());
+                    }
+                }
+                active_skill_ids.sort();
+                passive_skill_ids.sort();
+                self.active_skill_ids = active_skill_ids;
+                self.passive_skill_ids = passive_skill_ids;
+                // 維持選取行為
+                let all_skills: Vec<String> = self
+                    .active_skill_ids
+                    .iter()
+                    .chain(self.passive_skill_ids.iter())
+                    .cloned()
                     .collect();
-                self.skills.sort();
-                if self.skills.is_empty() {
+                if all_skills.is_empty() {
                     self.selected_skill.clear();
-                } else if !self.skills.contains(&self.selected_skill) {
-                    self.selected_skill = self.skills.first().cloned().unwrap_or_default();
+                } else if !all_skills.contains(&self.selected_skill) {
+                    self.selected_skill = all_skills.first().cloned().unwrap_or_default();
                 }
             }
             Err(err) => {
@@ -178,7 +193,15 @@ impl UnitsEditor {
         egui::ComboBox::from_id_salt("add_skill_combo")
             .selected_text(format!("選擇技能: {}", &self.selected_skill))
             .show_ui(ui, |ui| {
-                for skill in &self.skills {
+                ui.label("─── 主動技能 ───");
+                for skill in &self.active_skill_ids {
+                    if ui.button(skill).clicked() {
+                        self.selected_skill = skill.clone();
+                    }
+                }
+                ui.separator();
+                ui.label("─── 被動技能 ───");
+                for skill in &self.passive_skill_ids {
                     if ui.button(skill).clicked() {
                         self.selected_skill = skill.clone();
                     }
