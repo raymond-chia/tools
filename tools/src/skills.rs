@@ -872,11 +872,6 @@ fn show_target_type_editor(ui: &mut Ui, target_type: &mut TargetType) -> bool {
                 ui.selectable_value(target_type, TargetType::Enemy, "敵人");
                 ui.selectable_value(target_type, TargetType::AnyUnit, "任何單位");
                 ui.selectable_value(target_type, TargetType::Any, "任何");
-                ui.selectable_value(
-                    target_type,
-                    TargetType::AnyExcludeCaster,
-                    "任何（排除施法者）",
-                );
             });
         if response.response.changed() {
             changed = true;

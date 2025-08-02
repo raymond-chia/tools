@@ -71,7 +71,6 @@ pub enum TargetType {
     AnyUnit,
     #[default]
     Any,
-    AnyExcludeCaster,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, EnumString, Display, PartialEq)]
@@ -148,7 +147,7 @@ impl Effect {
             | TargetType::AllyExcludeCaster
             | TargetType::Enemy
             | TargetType::AnyUnit => true,
-            TargetType::Any | TargetType::AnyExcludeCaster => false,
+            TargetType::Any => false,
         }
     }
 
