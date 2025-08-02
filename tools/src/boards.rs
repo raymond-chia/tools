@@ -403,7 +403,7 @@ impl BoardsEditor {
                     self.set_status("無法到達目標位置".to_string(), true);
                     return;
                 }
-                if let Err(e) = move_unit_along_path(&mut self.sim_board, path) {
+                if let Err(e) = move_unit_along_path(&mut self.sim_board, path, &self.skills) {
                     self.set_status(format!("Error moving unit: {e:?}"), true);
                 }
             }

@@ -6,9 +6,9 @@ pub type DEGREE = u16;
 pub type SkillID = String;
 
 /// 技能資料結構
-#[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Skill {
-    #[serde(default)]
+    #[serde(default = "default_tags")]
     pub tags: BTreeSet<Tag>,
     #[serde(default)]
     pub range: (usize, usize),
@@ -101,7 +101,7 @@ pub enum Effect {
     Burn {
         target_type: TargetType,
         shape: Shape,
-        duration: u16,
+        duration: i32, // -1 代表永久
     },
     MovePoints {
         target_type: TargetType,
@@ -109,6 +109,24 @@ pub enum Effect {
         value: i32,
         duration: i32, // -1 代表永久
     },
+    HitAndRun {
+        target_type: TargetType,
+        shape: Shape,
+        duration: i32, // -1 代表永久
+    },
+}
+
+impl Default for Skill {
+    fn default() -> Self {
+        Skill {
+            tags: default_tags(),
+            range: (0, 0),
+            cost: 0,
+            hit_rate: None,
+            crit_rate: None,
+            effects: Vec::new(),
+        }
+    }
 }
 
 impl Effect {
@@ -118,6 +136,7 @@ impl Effect {
             Effect::MaxHp { target_type, .. } => target_type,
             Effect::Burn { target_type, .. } => target_type,
             Effect::MovePoints { target_type, .. } => target_type,
+            Effect::HitAndRun { target_type, .. } => target_type,
         }
     }
 
@@ -127,6 +146,11 @@ impl Effect {
             Effect::MaxHp { shape, .. } => shape,
             Effect::Burn { shape, .. } => shape,
             Effect::MovePoints { shape, .. } => shape,
+            Effect::HitAndRun { shape, .. } => shape,
         }
     }
+}
+
+fn default_tags() -> BTreeSet<Tag> {
+    BTreeSet::from([Tag::Active, Tag::Single, Tag::Melee])
 }

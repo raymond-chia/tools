@@ -83,46 +83,34 @@ impl SkillsData {
 
         // 檢查單體技能
         if skill.tags.contains(&Tag::Single) {
-            match &skill.effects[0] {
-                Effect::Hp { shape, .. }
-                | Effect::MaxHp { shape, .. }
-                | Effect::Burn { shape, .. }
-                | Effect::MovePoints { shape, .. } => {
-                    if shape != &Shape::Point {
-                        return Err("單體技能的效果形狀必須是點".to_string());
-                    }
-                }
+            if skill.effects[0].shape() != &Shape::Point {
+                return Err("單體技能的效果形狀必須是點".to_string());
             }
         }
 
         // 檢查範圍技能
         if skill.tags.contains(&Tag::Area) {
-            match &skill.effects[0] {
-                Effect::Hp { shape, .. }
-                | Effect::MaxHp { shape, .. }
-                | Effect::Burn { shape, .. }
-                | Effect::MovePoints { shape, .. } => match shape {
-                    Shape::Point => {
-                        return Err("範圍技能的效果形狀不能是點".to_string());
+            match skill.effects[0].shape() {
+                Shape::Point => {
+                    return Err("範圍技能的效果形狀不能是點".to_string());
+                }
+                Shape::Circle(radius) => {
+                    if *radius < 2 {
+                        return Err("範圍技能的效果形狀半徑不能小於 2".to_string());
                     }
-                    Shape::Circle(radius) => {
-                        if *radius < 2 {
-                            return Err("範圍技能的效果形狀半徑不能小於 2".to_string());
-                        }
+                }
+                Shape::Line(length) => {
+                    if *length < 2 {
+                        return Err("範圍技能的效果形狀長度不能小於 2".to_string());
                     }
-                    Shape::Line(length) => {
-                        if *length < 2 {
-                            return Err("範圍技能的效果形狀長度不能小於 2".to_string());
-                        }
+                }
+                Shape::Cone(radius, angle) => {
+                    if *radius < 2 && *angle < 90 {
+                        return Err(
+                            "範圍技能的效果形狀半徑不能小於 2 同時角度又小於 90".to_string()
+                        );
                     }
-                    Shape::Cone(radius, angle) => {
-                        if *radius < 2 && *angle < 90 {
-                            return Err(
-                                "範圍技能的效果形狀半徑不能小於 2 同時角度又小於 90".to_string()
-                            );
-                        }
-                    }
-                },
+                }
             }
         }
 
@@ -131,15 +119,9 @@ impl SkillsData {
             if skill.range.0 != 0 || skill.range.1 != 0 {
                 return Err("施法者技能的範圍必須是 (0, 0)".to_string());
             }
-            match &skill.effects[0] {
-                Effect::Hp { target_type, .. }
-                | Effect::MaxHp { target_type, .. }
-                | Effect::Burn { target_type, .. }
-                | Effect::MovePoints { target_type, .. } => {
-                    if target_type != &TargetType::Caster {
-                        return Err("施法者技能的目標類型必須是施法者".to_string());
-                    }
-                }
+
+            if skill.effects[0].target_type() != &TargetType::Caster {
+                return Err("施法者技能的目標類型必須是施法者".to_string());
             }
         }
 
@@ -486,6 +468,9 @@ impl SkillsEditor {
                                         Effect::MovePoints { .. } => {
                                             ui.label("移動點數效果");
                                         }
+                                        Effect::HitAndRun { .. } => {
+                                            ui.label("打帶跑效果");
+                                        }
                                     }
 
                                     delete_effect_clicked = ui.button("🗑").clicked();
@@ -496,8 +481,7 @@ impl SkillsEditor {
                                 }
 
                                 ui.indent(format!("effect_{}", index), |ui| {
-                                    if Self::show_effect_editor(ui, effect, Self::show_shape_editor)
-                                    {
+                                    if Self::show_effect_editor(ui, effect) {
                                         self.has_unsaved_changes_flag = true;
                                     }
                                 });
@@ -559,6 +543,7 @@ impl SkillsEditor {
                         Effect::MaxHp { .. } => ui.button("新增最大生命值效果").clicked(),
                         Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
+                        Effect::HitAndRun { .. } => ui.button("新增打帶跑效果").clicked(),
                     };
                     effects.push((flag, effect));
                 }
@@ -727,11 +712,7 @@ impl SkillsEditor {
         changed
     }
 
-    fn show_effect_editor(
-        ui: &mut Ui,
-        effect: &mut Effect,
-        shape_editor: impl Fn(&mut Ui, &mut Shape) -> bool,
-    ) -> bool {
+    fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
         let mut changed = false;
         match effect {
             Effect::Hp {
@@ -739,47 +720,12 @@ impl SkillsEditor {
                 shape,
                 value,
             } => {
-                // 目標類型
-                ui.horizontal(|ui| {
-                    ui.label("目標類型:");
-                    let response = egui::ComboBox::new("target_type", "")
-                        .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(target_type, TargetType::Caster, "施法者");
-                            ui.selectable_value(target_type, TargetType::Ally, "盟友");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AllyExcludeCaster,
-                                "盟友（排除施法者）",
-                            );
-                            ui.selectable_value(target_type, TargetType::Enemy, "敵人");
-                            ui.selectable_value(target_type, TargetType::Any, "任何");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AnyExcludeCaster,
-                                "任何（排除施法者）",
-                            );
-                        });
-                    if response.response.changed() {
-                        changed = true;
-                    }
-                });
-
-                // 形狀
+                changed |= show_target_type_editor(ui, target_type);
                 ui.horizontal(|ui| {
                     ui.label("形狀:");
-                    if shape_editor(ui, shape) {
-                        changed = true;
-                    }
+                    changed |= show_shape_editor(ui, shape);
                 });
-
-                // 數值
-                ui.horizontal(|ui| {
-                    ui.label("HP 變化值:");
-                    if ui.add(DragValue::new(value)).changed() {
-                        changed = true;
-                    }
-                });
+                changed |= show_value_editor(ui, value, "HP 變化值:");
             }
             Effect::MaxHp {
                 target_type,
@@ -787,106 +733,25 @@ impl SkillsEditor {
                 value,
                 duration,
             } => {
-                // 目標類型
-                ui.horizontal(|ui| {
-                    ui.label("目標類型:");
-                    let response = egui::ComboBox::new("target_type", "")
-                        .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(target_type, TargetType::Caster, "施法者");
-                            ui.selectable_value(target_type, TargetType::Ally, "盟友");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AllyExcludeCaster,
-                                "盟友（排除施法者）",
-                            );
-                            ui.selectable_value(target_type, TargetType::Enemy, "敵人");
-                            ui.selectable_value(target_type, TargetType::Any, "任何");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AnyExcludeCaster,
-                                "任何（排除施法者）",
-                            );
-                        });
-                    if response.response.changed() {
-                        changed = true;
-                    }
-                });
-
-                // 形狀
+                changed |= show_target_type_editor(ui, target_type);
                 ui.horizontal(|ui| {
                     ui.label("形狀:");
-                    if shape_editor(ui, shape) {
-                        changed = true;
-                    }
+                    changed |= show_shape_editor(ui, shape);
                 });
-
-                // 數值
-                ui.horizontal(|ui| {
-                    ui.label("最大生命值變化值:");
-                    if ui.add(DragValue::new(value)).changed() {
-                        changed = true;
-                    }
-                });
-
-                // 持續回合
-                ui.horizontal(|ui| {
-                    ui.label("持續回合 (-1=永久):");
-                    if ui
-                        .add(DragValue::new(duration).range(-1..=i32::MAX))
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                });
+                changed |= show_value_editor(ui, value, "最大生命值變化值:");
+                changed |= show_duration_editor(ui, duration);
             }
             Effect::Burn {
                 target_type,
                 shape,
                 duration,
             } => {
-                // 目標類型
-                ui.horizontal(|ui| {
-                    ui.label("目標類型:");
-                    let response = egui::ComboBox::new("target_type", "")
-                        .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(target_type, TargetType::Caster, "施法者");
-                            ui.selectable_value(target_type, TargetType::Ally, "盟友");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AllyExcludeCaster,
-                                "盟友（排除施法者）",
-                            );
-                            ui.selectable_value(target_type, TargetType::Enemy, "敵人");
-                            ui.selectable_value(target_type, TargetType::Any, "任何");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AnyExcludeCaster,
-                                "任何（排除施法者）",
-                            );
-                        });
-
-                    if response.response.changed() {
-                        changed = true;
-                    }
-                });
-
-                // 形狀
+                changed |= show_target_type_editor(ui, target_type);
                 ui.horizontal(|ui| {
                     ui.label("形狀:");
-                    if shape_editor(ui, shape) {
-                        changed = true;
-                    }
+                    changed |= show_shape_editor(ui, shape);
                 });
-
-                // 持續回合
-                ui.horizontal(|ui| {
-                    ui.label("持續回合:");
-                    if ui.add(DragValue::new(duration)).changed() {
-                        changed = true;
-                    }
-                });
+                changed |= show_duration_editor(ui, duration);
             }
             Effect::MovePoints {
                 target_type,
@@ -894,147 +759,27 @@ impl SkillsEditor {
                 value,
                 duration,
             } => {
-                // 目標類型
-                ui.horizontal(|ui| {
-                    ui.label("目標類型:");
-                    let response = egui::ComboBox::new("target_type", "")
-                        .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(target_type, TargetType::Caster, "施法者");
-                            ui.selectable_value(target_type, TargetType::Ally, "盟友");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AllyExcludeCaster,
-                                "盟友（排除施法者）",
-                            );
-                            ui.selectable_value(target_type, TargetType::Enemy, "敵人");
-                            ui.selectable_value(target_type, TargetType::Any, "任何");
-                            ui.selectable_value(
-                                target_type,
-                                TargetType::AnyExcludeCaster,
-                                "任何（排除施法者）",
-                            );
-                        });
-                    if response.response.changed() {
-                        changed = true;
-                    }
-                });
-
-                // 形狀
+                changed |= show_target_type_editor(ui, target_type);
                 ui.horizontal(|ui| {
                     ui.label("形狀:");
-                    if shape_editor(ui, shape) {
-                        changed = true;
-                    }
+                    changed |= show_shape_editor(ui, shape);
                 });
-
-                // 數值
+                changed |= show_value_editor(ui, value, "移動點數變化值:");
+                changed |= show_duration_editor(ui, duration);
+            }
+            Effect::HitAndRun {
+                target_type,
+                shape,
+                duration,
+            } => {
+                changed |= show_target_type_editor(ui, target_type);
                 ui.horizontal(|ui| {
-                    ui.label("移動點數變化值:");
-                    if ui.add(DragValue::new(value)).changed() {
-                        changed = true;
-                    }
+                    ui.label("形狀:");
+                    changed |= show_shape_editor(ui, shape);
                 });
-
-                // 持續回合
-                ui.horizontal(|ui| {
-                    ui.label("持續回合 (-1=永久):");
-                    if ui
-                        .add(DragValue::new(duration).range(-1..=i32::MAX))
-                        .changed()
-                    {
-                        changed = true;
-                    }
-                });
+                changed |= show_duration_editor(ui, duration);
             }
         }
-
-        changed
-    }
-
-    fn show_shape_editor(ui: &mut Ui, shape: &mut Shape) -> bool {
-        let mut changed = false;
-        let shape_type = match shape {
-            Shape::Point => "點".to_string(),
-            Shape::Circle(_) => "圓形".to_string(),
-            Shape::Line(_) => "直線".to_string(),
-            Shape::Cone(_, _) => "錐形".to_string(),
-        };
-
-        // 切換
-        egui::ComboBox::new("shape_type", "")
-            .selected_text(shape_type)
-            .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(matches!(shape, Shape::Point), "點")
-                    .clicked()
-                {
-                    *shape = Shape::Point;
-                    changed = true;
-                }
-                if ui
-                    .selectable_label(matches!(shape, Shape::Circle(_)), "圓形")
-                    .clicked()
-                {
-                    if !matches!(shape, Shape::Circle(_)) {
-                        *shape = Shape::Circle(1);
-                        changed = true;
-                    }
-                }
-                if ui
-                    .selectable_label(matches!(shape, Shape::Line(_)), "直線")
-                    .clicked()
-                {
-                    if !matches!(shape, Shape::Line(_)) {
-                        *shape = Shape::Line(3);
-                        changed = true;
-                    }
-                }
-                if ui
-                    .selectable_label(matches!(shape, Shape::Cone(_, _)), "錐形")
-                    .clicked()
-                {
-                    if !matches!(shape, Shape::Cone(_, _)) {
-                        *shape = Shape::Cone(3, 45);
-                        changed = true;
-                    }
-                }
-            });
-
-        // 各個形狀細節
-        ui.horizontal(|ui| match shape {
-            Shape::Point => {}
-            Shape::Circle(radius) => {
-                ui.add_space(20.0);
-                ui.label("半徑:");
-                if ui.add(DragValue::new(radius).range(1..=10)).changed() {
-                    changed = true;
-                }
-            }
-            Shape::Line(length) => {
-                ui.add_space(20.0);
-                ui.label("長度:");
-                if ui.add(DragValue::new(length).range(1..=10)).changed() {
-                    changed = true;
-                }
-            }
-            Shape::Cone(length, angle) => {
-                ui.add_space(20.0);
-                ui.label("長度:");
-                if ui.add(DragValue::new(length).range(1..=10)).changed() {
-                    changed = true;
-                }
-                ui.label("角度:");
-                if ui
-                    .add(DragValue::new(angle).range(10.0..=120.0).suffix("°"))
-                    .changed()
-                {
-                    changed = true;
-                }
-            }
-        });
-
-        // Return whether anything changed
         changed
     }
 
@@ -1104,6 +849,149 @@ fn tag_button_group(ui: &mut Ui, tags: &[Tag], skill: &mut Skill, selected: &mut
                 skill.tags.insert(tag.clone());
                 changed = true;
             }
+        }
+    });
+    changed
+}
+
+// 共用目標類型編輯器
+fn show_target_type_editor(ui: &mut Ui, target_type: &mut TargetType) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label("目標類型:");
+        let response = egui::ComboBox::new("target_type", "")
+            .selected_text(format!("{:?}", target_type.clone()).to_lowercase())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(target_type, TargetType::Caster, "施法者");
+                ui.selectable_value(target_type, TargetType::Ally, "盟友");
+                ui.selectable_value(
+                    target_type,
+                    TargetType::AllyExcludeCaster,
+                    "盟友（排除施法者）",
+                );
+                ui.selectable_value(target_type, TargetType::Enemy, "敵人");
+                ui.selectable_value(target_type, TargetType::Any, "任何");
+                ui.selectable_value(
+                    target_type,
+                    TargetType::AnyExcludeCaster,
+                    "任何（排除施法者）",
+                );
+            });
+        if response.response.changed() {
+            changed = true;
+        }
+    });
+    changed
+}
+
+fn show_shape_editor(ui: &mut Ui, shape: &mut Shape) -> bool {
+    let mut changed = false;
+    let shape_type = match shape {
+        Shape::Point => "點".to_string(),
+        Shape::Circle(_) => "圓形".to_string(),
+        Shape::Line(_) => "直線".to_string(),
+        Shape::Cone(_, _) => "錐形".to_string(),
+    };
+
+    // 切換
+    egui::ComboBox::new("shape_type", "")
+        .selected_text(shape_type)
+        .show_ui(ui, |ui| {
+            if ui
+                .selectable_label(matches!(shape, Shape::Point), "點")
+                .clicked()
+            {
+                *shape = Shape::Point;
+                changed = true;
+            }
+            if ui
+                .selectable_label(matches!(shape, Shape::Circle(_)), "圓形")
+                .clicked()
+            {
+                if !matches!(shape, Shape::Circle(_)) {
+                    *shape = Shape::Circle(1);
+                    changed = true;
+                }
+            }
+            if ui
+                .selectable_label(matches!(shape, Shape::Line(_)), "直線")
+                .clicked()
+            {
+                if !matches!(shape, Shape::Line(_)) {
+                    *shape = Shape::Line(3);
+                    changed = true;
+                }
+            }
+            if ui
+                .selectable_label(matches!(shape, Shape::Cone(_, _)), "錐形")
+                .clicked()
+            {
+                if !matches!(shape, Shape::Cone(_, _)) {
+                    *shape = Shape::Cone(3, 45);
+                    changed = true;
+                }
+            }
+        });
+
+    // 各個形狀細節
+    ui.horizontal(|ui| match shape {
+        Shape::Point => {}
+        Shape::Circle(radius) => {
+            ui.add_space(20.0);
+            ui.label("半徑:");
+            if ui.add(DragValue::new(radius).range(1..=10)).changed() {
+                changed = true;
+            }
+        }
+        Shape::Line(length) => {
+            ui.add_space(20.0);
+            ui.label("長度:");
+            if ui.add(DragValue::new(length).range(1..=10)).changed() {
+                changed = true;
+            }
+        }
+        Shape::Cone(length, angle) => {
+            ui.add_space(20.0);
+            ui.label("長度:");
+            if ui.add(DragValue::new(length).range(1..=10)).changed() {
+                changed = true;
+            }
+            ui.label("角度:");
+            if ui
+                .add(DragValue::new(angle).range(10.0..=120.0).suffix("°"))
+                .changed()
+            {
+                changed = true;
+            }
+        }
+    });
+
+    // Return whether anything changed
+    changed
+}
+
+// 共用持續回合編輯器
+fn show_duration_editor(ui: &mut Ui, duration: &mut i32) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label("持續回合 (-1=永久):");
+        if ui
+            .add(DragValue::new(duration).range(-1..=i32::MAX))
+            .changed()
+        {
+            changed = true;
+        }
+    });
+    changed
+}
+
+// 共用數值編輯器（label 可參數化）
+fn show_value_editor(ui: &mut Ui, value: &mut i32, label: &str) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        if ui.add(DragValue::new(value)).changed() {
+            changed = true;
         }
     });
     changed

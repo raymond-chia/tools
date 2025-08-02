@@ -1,5 +1,6 @@
 use crate::*;
-use std::collections::HashMap;
+use skills_lib::*;
+use std::collections::{BTreeMap, HashMap};
 
 const FIRST_MOVEMENT_COLOR: RGBA = (50, 100, 255, 150); // 淺藍
 const SECOND_MOVEMENT_COLOR: RGBA = (50, 50, 255, 150); // 深藍
@@ -106,8 +107,26 @@ pub fn reconstruct_path(
     Ok(path)
 }
 
-pub fn move_unit_along_path(board: &mut Board, path: Vec<Pos>) -> Result<(), Error> {
+pub fn move_unit_along_path(
+    board: &mut Board,
+    path: Vec<Pos>,
+    skills_map: &BTreeMap<String, Skill>,
+) -> Result<(), Error> {
     let actor = path.get(0).ok_or(Error::InvalidParameter)?;
+    let unit_id = match board.pos_to_unit.get(actor) {
+        Some(id) => *id,
+        None => return Err(Error::NoUnitOnPos(*actor)),
+    };
+    let unit = match board.units.get(&unit_id) {
+        Some(u) => u,
+        None => return Err(Error::NoUnitOnPos(*actor)),
+    };
+    if unit.has_cast_skill_this_turn {
+        if !has_hit_and_run_skill(unit, skills_map) {
+            // 若無「打帶跑」則禁止移動，回傳現有錯誤型別
+            return Err(Error::NotEnoughPoints);
+        }
+    }
     let mut actor = *actor;
     for next in path {
         let result = move_unit(board, actor, next);
@@ -209,13 +228,38 @@ mod inner {
         }
         result
     }
+
+    pub fn has_hit_and_run_skill(unit: &Unit, skills_map: &BTreeMap<String, Skill>) -> bool {
+        for skill_id in &unit.skills {
+            if let Some(skill) = skills_map.get(skill_id) {
+                if skill
+                    .effects
+                    .iter()
+                    .any(|e| matches!(e, Effect::HitAndRun { .. }))
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skills_lib::*;
     use std::collections::{BTreeMap, BTreeSet};
+
+    fn skills_map() -> BTreeMap<String, Skill> {
+        let sprint_data = include_str!("../../tests/skill_sprint.json");
+        let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
+        let slash_data = include_str!("../../tests/skill_slash.json");
+        let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+        BTreeMap::from([
+            ("sprint".to_string(), sprint_skill),
+            ("slash".to_string(), slash_skill),
+        ])
+    }
 
     fn basic_board_and_unit(start: Pos, ally: Pos, enemy: Pos) -> (Board, UnitID) {
         // 建立地形
@@ -250,16 +294,7 @@ mod tests {
         let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
         let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
         let teams = HashMap::from([(team.id.clone(), team.clone())]);
-        let skills_map = {
-            let sprint_data = include_str!("../../tests/skill_sprint.json");
-            let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
-            let slash_data = include_str!("../../tests/skill_slash.json");
-            let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
-            BTreeMap::from([
-                ("sprint".to_string(), sprint_skill),
-                ("slash".to_string(), slash_skill),
-            ])
-        };
+        let skills_map = skills_map();
         let unit_active = {
             let mut unit_active = Unit::from_template(&marker, &template, &skills_map).unwrap();
             // 避免走完所有格子
@@ -343,6 +378,9 @@ mod tests {
 
     #[test]
     fn test_move_unit() {
+        // 測試時 skills_map 取自 basic_board_and_unit 內部
+        let skills_map = skills_map();
+
         let start = Pos { x: 0, y: 0 };
         let ally = Pos { x: 0, y: 1 };
         let enemy = Pos { x: 1, y: 0 };
@@ -370,12 +408,59 @@ mod tests {
         for (is_ok, path) in test_data {
             let to = path.last().cloned().unwrap();
             let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
-            let res = move_unit_along_path(&mut board, path);
+            let res = move_unit_along_path(&mut board, path, &skills_map);
             assert_eq!(res.is_ok(), is_ok, "移動到 {:?} 應該成功 ? {}", to, is_ok);
             if is_ok {
                 assert_eq!(board.pos_to_unit.get(&to), Some(&unit_id));
                 assert!(board.pos_to_unit.get(&start).is_none());
             }
+        }
+    }
+
+    #[test]
+    fn test_move_unit_hit_and_run() {
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let path = vec![start, Pos { x: 0, y: 2 }];
+
+        // 新增一個打帶跑技能
+        let hit_and_run_skill = Skill {
+            effects: vec![Effect::HitAndRun {
+                target_type: TargetType::Caster,
+                shape: Shape::Point,
+                duration: -1,
+            }],
+            ..Default::default()
+        };
+        let skills_map = BTreeMap::from([("hit_and_run".to_string(), hit_and_run_skill)]);
+
+        // 無打帶跑技能時禁止移動
+        {
+            let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
+            if let Some(unit) = board.units.get_mut(&unit_id) {
+                unit.has_cast_skill_this_turn = true;
+                unit.skills.clear();
+            }
+
+            let res = move_unit_along_path(&mut board, path.clone(), &skills_map);
+            assert!(
+                matches!(res, Err(Error::NotEnoughPoints)),
+                "無打帶跑技能時應禁止移動"
+            );
+        }
+
+        // 有打帶跑技能時可移動
+        {
+            let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
+            if let Some(unit) = board.units.get_mut(&unit_id) {
+                unit.has_cast_skill_this_turn = true;
+                unit.skills.clear();
+                unit.skills.insert("hit_and_run".to_string());
+            }
+
+            let res = move_unit_along_path(&mut board, path, &skills_map);
+            assert!(res.is_ok(), "有打帶跑技能時應可移動");
         }
     }
 

@@ -54,8 +54,14 @@ impl SkillSelection {
                     Effect::MovePoints { value, .. } => {
                         msgs.push(format!("[未實作] 單位移動 {value}"));
                     }
+                    Effect::HitAndRun { .. } => {
+                        msgs.push(format!("[未實作] 打帶跑"));
+                    }
                 }
             }
+        }
+        if let Some(unit) = board.units.get_mut(&caster) {
+            unit.has_cast_skill_this_turn = true;
         }
         Ok(msgs)
     }
@@ -329,7 +335,53 @@ mod tests {
     }
 
     #[test]
-    fn test_cast_skill() {}
+    fn test_cast_skill() {
+        // 準備棋盤、單位、技能
+        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 });
+
+        // 在 (1,3) 放置一個目標單位（手動建立新 Unit，id 為 unit_id+1）
+        let target_unit_id = unit_id + 1;
+        let data = include_str!("../../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        let mut target_template = template.clone();
+        target_template.skills = skills.keys().cloned().collect();
+        let mut target_unit = Unit::from_template(&marker, &target_template, &skills).unwrap();
+        target_unit.id = target_unit_id;
+        board.pos_to_unit.insert(Pos { x: 1, y: 3 }, target_unit_id);
+        board.units.insert(target_unit_id, target_unit);
+
+        // 施放 shoot 技能到 (1,3)
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("shoot".to_string()));
+        let target = Pos { x: 1, y: 3 };
+
+        // 施放前 HP
+        let orig_hp = board.units.get(&target_unit_id).unwrap().hp;
+
+        // 執行施放
+        let msgs = sel
+            .cast_skill(&mut board, &skills, unit_id, target)
+            .unwrap();
+
+        // 檢查訊息
+        assert!(msgs.iter().any(|m| m.contains("shoot 在 (1, 3) 施放")));
+        assert!(msgs.iter().any(|m| m.contains("HP:")));
+
+        // 檢查 HP 變化
+        let new_hp = board.units.get(&target_unit_id).unwrap().hp;
+        assert_eq!(new_hp, orig_hp - 10);
+
+        // 檢查 has_cast_skill_this_turn
+        assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
+
+        // 測試施放無效技能（未選擇技能）
+        let sel_none = SkillSelection::default();
+        let err = sel_none.cast_skill(&mut board, &skills, unit_id, target);
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("未選擇技能"));
+    }
 
     #[test]
     fn test_skill_affect_area() {

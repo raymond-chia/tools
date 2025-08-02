@@ -28,6 +28,7 @@ impl Battle {
         if let Some(active_unit_id) = self.get_current_unit_id().cloned() {
             if let Some(unit) = board.units.get_mut(&active_unit_id) {
                 unit.moved = 0;
+                unit.has_cast_skill_this_turn = false;
             }
         }
         skill_selection.select_skill(None);
@@ -67,6 +68,7 @@ mod tests {
                     let mut unit =
                         Unit::from_template(&marker, &template, &BTreeMap::new()).unwrap();
                     unit.moved = 3;
+                    unit.has_cast_skill_this_turn = true;
                     unit
                 }),
                 (223, {
@@ -94,6 +96,10 @@ mod tests {
         assert_eq!(battle.get_current_unit_id(), Some(&ids[0]));
         assert_eq!(skill_selection.selected_skill, Some("skill".to_string()));
         assert_eq!(board.units.get(&ids[0]).unwrap().moved, 3);
+        assert_eq!(
+            board.units.get(&ids[0]).unwrap().has_cast_skill_this_turn,
+            true
+        );
         for i in [1, 2, 0] {
             battle.next_turn(&mut board, &mut skill_selection);
             assert_eq!(battle.get_current_unit_id(), Some(&ids[i]));
@@ -102,6 +108,11 @@ mod tests {
                 board.units.get(&ids[i]).unwrap().moved,
                 0,
                 "{i}th turn moved distance check"
+            );
+            assert_eq!(
+                board.units.get(&ids[i]).unwrap().has_cast_skill_this_turn,
+                false,
+                "{i}th turn has cast skill this turn check"
             );
         }
     }
