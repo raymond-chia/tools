@@ -24,11 +24,36 @@ impl SkillSelection {
         caster: UnitID,
         target: Pos,
     ) -> Result<Vec<String>, String> {
+        // 施放前必須找到 unit，否則不能施放技能
+        let unit = board.units.get(&caster).ok_or("找不到施法者 unit")?;
+        if unit.has_cast_skill_this_turn {
+            return Err("本回合已施放過技能，無法再次施放".to_string());
+        }
         let skill_id = self.selected_skill.as_ref().ok_or("未選擇技能")?;
         let skill = skills
             .get(skill_id)
             .ok_or(format!("技能 {} 不存在", skill_id))?;
+        // 只判斷第一個 effect 的 target_type
+        let need_unit = skill
+            .effects
+            .get(0)
+            .map(|e| e.is_targeting_unit())
+            .ok_or("技能沒有有效的 effect")?;
+        if need_unit {
+            let has_target_unit = board.pos_to_unit.get(&target).is_some();
+            if !has_target_unit {
+                return Err(format!(
+                    "技能 {} 無法作用於 ({:?})，目標格必須有單位",
+                    skill_id, target
+                ));
+            }
+        }
+
+        // skill_affect_area 會檢查移動距離
         let affect_area = self.skill_affect_area(board, skills, caster, target);
+        if affect_area.is_empty() {
+            return Err(format!("技能 {} 無法作用於 ({:?})", skill_id, target));
+        }
         let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
         for pos in affect_area {
             for effect in &skill.effects {
@@ -287,7 +312,10 @@ mod tests {
     use super::*;
     use std::collections::{BTreeSet, HashMap};
 
-    fn prepare_test_board(pos: Pos) -> (Board, UnitID, BTreeMap<SkillID, Skill>) {
+    fn prepare_test_board(
+        pos: Pos,
+        extra_unit_pos: Option<Vec<Pos>>,
+    ) -> (Board, UnitID, BTreeMap<SkillID, Skill>) {
         let data = include_str!("../../tests/unit.json");
         let v: serde_json::Value = serde_json::from_str(data).unwrap();
         let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
@@ -315,11 +343,27 @@ mod tests {
         let unit = Unit::from_template(&marker, &template, &skills).unwrap();
         let unit_id = unit.id;
 
+        let mut pos_to_unit = HashMap::from([(pos, unit_id)]);
+        let mut units = HashMap::from([(unit_id, unit)]);
+
+        if let Some(pos_list) = extra_unit_pos {
+            let mut next_id = unit_id;
+            for p in pos_list {
+                next_id += 1;
+                let extra_template = template.clone();
+                let mut extra_unit =
+                    Unit::from_template(&marker, &extra_template, &skills).unwrap();
+                extra_unit.id = next_id;
+                pos_to_unit.insert(p, extra_unit.id);
+                units.insert(extra_unit.id, extra_unit);
+            }
+        }
+
         let board = Board {
             tiles: vec![vec![Tile::default(); 10]; 10],
             teams,
-            pos_to_unit: HashMap::from([(pos, unit_id)]),
-            units: HashMap::from([(unit_id, unit)]),
+            pos_to_unit,
+            units,
         };
         (board, unit_id, skills)
     }
@@ -337,20 +381,9 @@ mod tests {
     #[test]
     fn test_cast_skill() {
         // 準備棋盤、單位、技能
-        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 });
-
-        // 在 (1,3) 放置一個目標單位（手動建立新 Unit，id 為 unit_id+1）
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 3 }]));
         let target_unit_id = unit_id + 1;
-        let data = include_str!("../../tests/unit.json");
-        let v: serde_json::Value = serde_json::from_str(data).unwrap();
-        let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
-        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
-        let mut target_template = template.clone();
-        target_template.skills = skills.keys().cloned().collect();
-        let mut target_unit = Unit::from_template(&marker, &target_template, &skills).unwrap();
-        target_unit.id = target_unit_id;
-        board.pos_to_unit.insert(Pos { x: 1, y: 3 }, target_unit_id);
-        board.units.insert(target_unit_id, target_unit);
 
         // 施放 shoot 技能到 (1,3)
         let mut sel = SkillSelection::default();
@@ -375,17 +408,89 @@ mod tests {
 
         // 檢查 has_cast_skill_this_turn
         assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
+    }
+
+    #[test]
+    fn test_cast_skill_non_exist_skill() {
+        // 準備棋盤、單位、技能
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 3 }]));
 
         // 測試施放無效技能（未選擇技能）
+        let target = Pos { x: 1, y: 3 };
         let sel_none = SkillSelection::default();
         let err = sel_none.cast_skill(&mut board, &skills, unit_id, target);
         assert!(err.is_err());
-        assert!(err.unwrap_err().contains("未選擇技能"));
+        let err = err.unwrap_err();
+        assert!(err.contains("未選擇技能"), "{err:?}");
+
+        // 檢查 has_cast_skill_this_turn
+        assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn == false);
+    }
+
+    #[test]
+    fn test_cast_skill_once_per_turn() {
+        // 準備棋盤、單位、技能
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 2, y: 2 }, Some(vec![Pos { x: 2, y: 3 }]));
+
+        // 第一次施放 shoot 技能到 (2,3)
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("shoot".to_string()));
+        let target = Pos { x: 2, y: 3 };
+        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+        assert!(result.is_ok());
+
+        // 第二次同回合施放（應失敗）
+        let mut sel2 = SkillSelection::default();
+        sel2.select_skill(Some("shoot".to_string()));
+        let result2 = sel2.cast_skill(&mut board, &skills, unit_id, target);
+        assert!(result2.is_err());
+        assert!(result2.unwrap_err().contains("本回合已施放過技能"));
+    }
+
+    #[test]
+    fn test_cast_skill_moving_too_far() {
+        // 準備棋盤、單位、技能
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 2, y: 2 }, Some(vec![Pos { x: 2, y: 3 }]));
+        let movement_point = board.units.get(&unit_id).unwrap().move_points;
+        board.units.get_mut(&unit_id).unwrap().moved = movement_point + 1;
+
+        let target = Pos { x: 2, y: 3 };
+
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("shoot".to_string()));
+        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+        assert!(result.is_err(), "{:?}", &result);
+    }
+
+    #[test]
+    fn test_cast_skill_no_target() {
+        // 準備棋盤、單位、技能
+        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+
+        // 選擇 shoot 技能
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("shoot".to_string()));
+
+        // 施放到沒有單位的格子
+        let target = Pos { x: 2, y: 2 }; // 此格無 unit
+
+        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+
+        // 應回傳錯誤，且不應有施放技能訊息
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("無法作用於"), "{:?}", err_msg);
+
+        // 施法者狀態不變
+        assert!(!board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
     }
 
     #[test]
     fn test_skill_affect_area() {
-        let (board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 });
+        let (board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         let set = |v: &[Pos]| BTreeSet::from_iter(v.into_iter().copied());
 
@@ -448,7 +553,7 @@ mod tests {
 
     #[test]
     fn test_skill_casting_area() {
-        let (board, _, _) = prepare_test_board(Pos { x: 1, y: 1 });
+        let (board, _, _) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         let set = |v: &[Pos]| BTreeSet::from_iter(v.iter().copied());
 

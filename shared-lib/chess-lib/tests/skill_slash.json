@@ -5,7 +5,7 @@
   "effects": [
     {
       "type": "hp",
-      "target_type": "any",
+      "target_type": "any_unit",
       "shape": "point",
       "value": -10
     }

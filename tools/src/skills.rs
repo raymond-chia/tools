@@ -870,6 +870,7 @@ fn show_target_type_editor(ui: &mut Ui, target_type: &mut TargetType) -> bool {
                     "盟友（排除施法者）",
                 );
                 ui.selectable_value(target_type, TargetType::Enemy, "敵人");
+                ui.selectable_value(target_type, TargetType::AnyUnit, "任何單位");
                 ui.selectable_value(target_type, TargetType::Any, "任何");
                 ui.selectable_value(
                     target_type,

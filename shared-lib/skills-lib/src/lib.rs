@@ -68,6 +68,7 @@ pub enum TargetType {
     Ally,
     AllyExcludeCaster,
     Enemy,
+    AnyUnit,
     #[default]
     Any,
     AnyExcludeCaster,
@@ -137,6 +138,17 @@ impl Effect {
             Effect::Burn { target_type, .. } => target_type,
             Effect::MovePoints { target_type, .. } => target_type,
             Effect::HitAndRun { target_type, .. } => target_type,
+        }
+    }
+
+    pub fn is_targeting_unit(&self) -> bool {
+        match self.target_type() {
+            TargetType::Caster
+            | TargetType::Ally
+            | TargetType::AllyExcludeCaster
+            | TargetType::Enemy
+            | TargetType::AnyUnit => true,
+            TargetType::Any | TargetType::AnyExcludeCaster => false,
         }
     }
 
