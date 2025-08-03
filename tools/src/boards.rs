@@ -366,7 +366,7 @@ impl BoardsEditor {
         } else {
             // -------- 未選擇技能時：顯示移動範圍與路徑 --------
             // 以繁體中文註解：維持原本顯示移動範圍與路徑
-            let mut movable = movable_area(&self.sim_board, active_unit_pos);
+            let mut movable = movable_area(&self.sim_board, active_unit_pos, &self.skills);
             movable.remove(&active_unit_pos); // 移除原位置，避免自己移動到自己身上
             let movable = movable;
 

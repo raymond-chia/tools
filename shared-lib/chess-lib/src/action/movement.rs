@@ -71,7 +71,12 @@ impl<'a> PathfindingBoard for MovableBoardView<'a> {
 
 /// 計算指定單位的可移動範圍（回傳所有可達座標與路徑成本）
 /// board: 棋盤物件，from: 單位座標
-pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos)> {
+pub fn movable_area(
+    board: &Board,
+    from: Pos,
+    // 檢測
+    skills_map: &BTreeMap<String, Skill>,
+) -> HashMap<Pos, (MovementCost, Pos)> {
     let unit_id = match board.pos_to_unit.get(&from) {
         Some(id) => *id,
         None => return HashMap::new(),
@@ -80,6 +85,10 @@ pub fn movable_area(board: &Board, from: Pos) -> HashMap<Pos, (MovementCost, Pos
         Some(u) => u,
         None => return HashMap::new(),
     };
+    if unit.has_cast_skill_this_turn && !has_hit_and_run_skill(unit, skills_map) {
+        // 若無「打帶跑」則禁止移動，回傳現有錯誤型別
+        return HashMap::new();
+    }
     let view = MovableBoardView {
         board,
         move_points: unit.move_points,
@@ -110,6 +119,7 @@ pub fn reconstruct_path(
 pub fn move_unit_along_path(
     board: &mut Board,
     path: Vec<Pos>,
+    // 檢測
     skills_map: &BTreeMap<String, Skill>,
 ) -> Result<(), Error> {
     let actor = path.get(0).ok_or(Error::InvalidParameter)?;
@@ -121,11 +131,9 @@ pub fn move_unit_along_path(
         Some(u) => u,
         None => return Err(Error::NoUnitOnPos(*actor)),
     };
-    if unit.has_cast_skill_this_turn {
-        if !has_hit_and_run_skill(unit, skills_map) {
-            // 若無「打帶跑」則禁止移動，回傳現有錯誤型別
-            return Err(Error::NotEnoughPoints);
-        }
+    if unit.has_cast_skill_this_turn && !has_hit_and_run_skill(unit, skills_map) {
+        // 若無「打帶跑」則禁止移動，回傳現有錯誤型別
+        return Err(Error::NotEnoughPoints);
     }
     let mut actor = *actor;
     for next in path {
@@ -352,7 +360,7 @@ mod tests {
             // 2,2 距離太遠
         ]);
         let (board, _) = basic_board_and_unit(start, ally, enemy);
-        let area = movable_area(&board, start);
+        let area = movable_area(&board, start, &skills_map());
         let area = area.keys().cloned().collect::<BTreeSet<_>>();
         assert_eq!(area, expect);
     }
@@ -363,7 +371,7 @@ mod tests {
         let ally = Pos { x: 0, y: 1 };
         let enemy = Pos { x: 1, y: 0 };
         let (board, _) = basic_board_and_unit(start, ally, enemy);
-        let area = movable_area(&board, start);
+        let area = movable_area(&board, start, &skills_map());
         let path = reconstruct_path(&area, start, Pos { x: 2, y: 1 }).unwrap();
         assert_eq!(
             path,
@@ -470,7 +478,7 @@ mod tests {
         let ally = Pos { x: 0, y: 1 };
         let enemy = Pos { x: 1, y: 0 };
         let (board, active_unit_id) = basic_board_and_unit(start, ally, enemy);
-        let movable = movable_area(&board, start);
+        let movable = movable_area(&board, start, &skills_map());
         let path = reconstruct_path(&movable, start, Pos { x: 0, y: 2 }).unwrap();
 
         // 寫死每一格的預期結果
