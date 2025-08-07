@@ -26,8 +26,8 @@ impl SkillSelection {
     ) -> Result<Vec<String>, String> {
         // 施放前必須找到 unit，否則不能施放技能
         let unit = board.units.get(&caster).ok_or("找不到施法者 unit")?;
-        if unit.has_cast_skill_this_turn {
-            return Err("本回合已施放過技能，無法再次施放".to_string());
+        if let Err(e) = is_able_to_cast(unit) {
+            return Err(e);
         }
         let skill_id = self.selected_skill.as_ref().ok_or("未選擇技能")?;
         let skill = skills
@@ -124,8 +124,7 @@ impl SkillSelection {
             Some(u) => u,
             None => return vec![],
         };
-        if unit.moved > unit.move_points {
-            // 單位移動太遠，無法再使用技能
+        if is_able_to_cast(unit).is_err() {
             return vec![];
         }
         // 判斷 to 是否在技能 range 內，超過則不顯示範圍
@@ -157,8 +156,7 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
         Some(u) => u,
         None => return vec![],
     };
-    if unit.moved > unit.move_points {
-        // 單位移動太遠，無法再使用技能
+    if is_able_to_cast(unit).is_err() {
         return vec![];
     }
 
@@ -183,6 +181,16 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
         }
     }
     area
+}
+
+pub fn is_able_to_cast(unit: &Unit) -> Result<(), String> {
+    if unit.has_cast_skill_this_turn {
+        return Err("本回合已施放過技能，無法再次施放".to_string());
+    }
+    if unit.moved > unit.move_points {
+        return Err("本回合以移動太遠，無法施放技能".to_string());
+    }
+    Ok(())
 }
 
 use inner::*;

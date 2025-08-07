@@ -282,15 +282,23 @@ impl BoardsEditor {
 
     fn show_sim(&mut self, ui: &mut Ui) {
         // 取得當前回合角色
-        let Some(active_unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
+        let active_unit_id = match self.sim_battle.get_current_unit_id() {
+            Some(id) => *id,
+            None => {
+                self.set_status("當前回合角色不存在".to_string(), true);
+                return;
+            }
+        };
+        if self.sim_board.units.get(&active_unit_id).is_none() {
+            self.set_status("當前回合角色不存在".to_string(), true);
             return;
         };
-        let Some(_) = self.sim_board.units.get(&active_unit_id) else {
-            return;
-        };
-        let active_unit_pos = self.sim_board.unit_pos(&active_unit_id);
-        let Some(active_unit_pos) = active_unit_pos else {
-            return;
+        let active_unit_pos = match self.sim_board.unit_pos(&active_unit_id) {
+            Some(pos) => pos,
+            None => {
+                self.set_status("當前單位位置不存在於棋盤上".to_string(), true);
+                return;
+            }
         };
 
         // 取得滑鼠目標座標
@@ -305,17 +313,18 @@ impl BoardsEditor {
         };
 
         // 判斷是否有選擇技能
-        if self.skill_selection.selected_skill.is_some() {
+        if let Some(skill_id) = &self.skill_selection.selected_skill {
             // -------- 有選擇技能時：只顯示技能範圍 --------
             // 以繁體中文註解：只顯示技能影響範圍（座標列表），不顯示移動範圍與路徑
 
-            // 取得技能物件與 range，並呼叫 skill_casting_area_around
-            let casting_area = if let Some(skill_id) = &self.skill_selection.selected_skill {
-                if let Some(skill) = self.skills.get(skill_id) {
-                    skill_casting_area(&self.sim_board, active_unit_pos, skill.range)
-                } else {
-                    vec![]
-                }
+            // 只允許施放主動技能
+            if !self.active_skill_ids.contains(skill_id) {
+                self.set_status("被動技能無法施放".to_string(), true);
+                return;
+            }
+            // -------- 有選擇主動技能時：只顯示技能範圍 --------
+            let casting_area = if let Some(skill) = self.skills.get(skill_id) {
+                skill_casting_area(&self.sim_board, active_unit_pos, skill.range)
             } else {
                 vec![]
             };
@@ -344,11 +353,15 @@ impl BoardsEditor {
             if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
                 return;
             }
+            let unit = self.sim_board.units.get(&active_unit_id).unwrap();
+            if let Err(e) = is_able_to_cast(unit) {
+                self.set_status(e, true);
+                return;
+            }
             if !casting_area.contains(&to) {
                 self.set_status("技能範圍外無法施放".to_string(), true);
                 return;
             }
-            // 技能施放主流程
             match self.skill_selection.cast_skill(
                 &mut self.sim_board,
                 &self.skills,
@@ -372,13 +385,7 @@ impl BoardsEditor {
 
             // 嘗試取得滑鼠目標與路徑
             let path = if let Some(target) = target {
-                if self.sim_board.get_tile(target).is_some() {
-                    let path =
-                        reconstruct_path(&movable, active_unit_pos, target).unwrap_or_default();
-                    path
-                } else {
-                    vec![]
-                }
+                reconstruct_path(&movable, active_unit_pos, target).unwrap_or_default()
             } else {
                 vec![]
             };
@@ -671,9 +678,12 @@ impl BoardsEditor {
 
     fn init_sim(&mut self, ui: &mut Ui) {
         // 1. 取得目前選擇的 BoardConfig
-        let Some(board_id) = &self.selected_board else {
-            ui.label("請先選擇戰場");
-            return;
+        let board_id = match &self.selected_board {
+            None => {
+                ui.label("請先選擇戰場");
+                return;
+            }
+            Some(board_id) => board_id,
         };
         let config = self.boards.get(board_id).expect("選擇的戰場應該存在");
 
@@ -693,11 +703,19 @@ impl BoardsEditor {
     }
 
     fn show_sim_status(&mut self, ui: &mut Ui) {
-        let Some(unit_id) = self.sim_battle.get_current_unit_id().cloned() else {
-            return;
+        let unit_id = match self.sim_battle.get_current_unit_id() {
+            Some(id) => id,
+            None => {
+                self.set_status("當前回合角色不存在".to_string(), true);
+                return;
+            }
         };
-        let Some(unit) = self.sim_board.units.get(&unit_id) else {
-            return;
+        let unit = match self.sim_board.units.get(unit_id) {
+            Some(unit) => unit,
+            None => {
+                self.set_status("當前回合角色不存在".to_string(), true);
+                return;
+            }
         };
         ui.label(format!("當前行動單位種類: {}", unit.unit_template_type));
 
@@ -706,17 +724,11 @@ impl BoardsEditor {
         ui.label("單位擁有的技能：");
         // 技能選擇下拉選單（無「未選擇技能」選項），selected_idx = -1 表示未選擇技能
         // 依主/被動分類技能顯示
-        let mut skill_ids: Vec<&SkillID> = Vec::new();
-        skill_ids.extend(
-            unit.skills
-                .iter()
-                .filter(|id| self.active_skill_ids.contains(*id)),
-        );
-        skill_ids.extend(
-            unit.skills
-                .iter()
-                .filter(|id| self.passive_skill_ids.contains(*id)),
-        );
+        let skill_ids: Vec<&SkillID> = unit
+            .skills
+            .iter()
+            .filter(|id| self.active_skill_ids.contains(*id))
+            .collect();
         // 滑鼠右鍵點擊時取消技能選取
         if ui.ctx().input(|i| i.pointer.secondary_clicked()) {
             self.skill_selection.select_skill(None);
@@ -739,28 +751,7 @@ impl BoardsEditor {
             })
             .show_ui(ui, |ui| {
                 ui.label("─── 主動技能 ───");
-                for (i, name) in skill_ids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, id)| self.active_skill_ids.contains(id))
-                {
-                    let response = ui.selectable_value(&mut selected_idx, i as i32, *name);
-                    if response.changed() {
-                        if selected_idx >= 0 {
-                            if let Some(skill_id) = skill_ids.get(selected_idx as usize) {
-                                self.skill_selection
-                                    .select_skill(Some(skill_id.to_string()));
-                            }
-                        }
-                    }
-                }
-                ui.separator();
-                ui.label("─── 被動技能 ───");
-                for (i, name) in skill_ids
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, id)| self.passive_skill_ids.contains(id))
-                {
+                for (i, name) in skill_ids.iter().enumerate() {
                     let response = ui.selectable_value(&mut selected_idx, i as i32, *name);
                     if response.changed() {
                         if selected_idx >= 0 {
