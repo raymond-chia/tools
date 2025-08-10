@@ -1,0 +1,9 @@
+[workspace]
+members = ["core/chess-lib", "core/dialogs-lib", "core/skills-lib", "editor"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+strum = "0.27.1"
+strum_macros = "0.27.1"
+toml = "0.8.22"

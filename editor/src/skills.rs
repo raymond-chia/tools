@@ -784,7 +784,7 @@ impl SkillsEditor {
     }
 
     fn save_file(&mut self, path: PathBuf) {
-        for (skill_id, skill) in self.skills_data.skills.iter() {
+        for (skill_id, skill) in &self.skills_data.skills {
             if let Err(err) = SkillsData::validate(skill) {
                 self.set_status(format!("技能 {} 驗證失敗: {}", skill_id, err), true);
                 return;

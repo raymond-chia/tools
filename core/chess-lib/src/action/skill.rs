@@ -26,9 +26,7 @@ impl SkillSelection {
     ) -> Result<Vec<String>, String> {
         // 施放前必須找到 unit，否則不能施放技能
         let unit = board.units.get(&caster).ok_or("找不到施法者 unit")?;
-        if let Err(e) = is_able_to_cast(unit) {
-            return Err(e);
-        }
+        is_able_to_cast(unit)?;
         let skill_id = self.selected_skill.as_ref().ok_or("未選擇技能")?;
         let skill = skills
             .get(skill_id)
@@ -40,7 +38,7 @@ impl SkillSelection {
             .map(|e| e.is_targeting_unit())
             .ok_or("技能沒有有效的 effect")?;
         if need_unit {
-            let has_target_unit = board.pos_to_unit.get(&target).is_some();
+            let has_target_unit = board.pos_to_unit(target).is_some();
             if !has_target_unit {
                 return Err(format!(
                     "技能 {} 無法作用於 ({:?})，目標格必須有單位",
@@ -59,8 +57,8 @@ impl SkillSelection {
             for effect in &skill.effects {
                 match effect {
                     Effect::Hp { value, .. } => {
-                        if let Some(unit_id) = board.pos_to_unit.get(&pos) {
-                            if let Some(unit) = board.units.get_mut(unit_id) {
+                        if let Some(unit_id) = board.pos_to_unit(pos) {
+                            if let Some(unit) = board.units.get_mut(&unit_id) {
                                 let old = unit.hp;
                                 unit.hp += value;
                                 if unit.hp > unit.max_hp {
@@ -97,6 +95,7 @@ impl SkillSelection {
     /// - skills: 技能資料表
     /// - unit_id: 行動單位 ID
     /// - to: 指向格
+    ///
     /// 回傳：技能可作用範圍的座標 Vec<Pos>
     pub fn skill_affect_area(
         &self,
@@ -115,7 +114,7 @@ impl SkillSelection {
             None => return vec![],
         };
         // 取得單位位置
-        let from = match board.unit_pos(&unit_id) {
+        let from = match board.unit_to_pos(&unit_id) {
             Some(p) => p,
             None => return vec![],
         };
@@ -148,11 +147,11 @@ impl SkillSelection {
 /// - range: (min_range, max_range) 技能 range 設定
 /// 回傳：所有可施放座標
 pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, usize)) -> Vec<Pos> {
-    let unit_id = match board.pos_to_unit.get(&active_unit_pos) {
+    let unit_id = match board.pos_to_unit(active_unit_pos) {
         Some(id) => id,
         None => return vec![],
     };
-    let unit = match board.units.get(unit_id) {
+    let unit = match board.units.get(&unit_id) {
         Some(u) => u,
         None => return vec![],
     };
@@ -351,7 +350,8 @@ mod tests {
         let unit = Unit::from_template(&marker, &template, &skills).unwrap();
         let unit_id = unit.id;
 
-        let mut pos_to_unit = HashMap::from([(pos, unit_id)]);
+        let mut unit_map = UnitMap::default();
+        unit_map.insert(unit_id, pos);
         let mut units = HashMap::from([(unit_id, unit)]);
 
         if let Some(pos_list) = extra_unit_pos {
@@ -362,7 +362,7 @@ mod tests {
                 let mut extra_unit =
                     Unit::from_template(&marker, &extra_template, &skills).unwrap();
                 extra_unit.id = next_id;
-                pos_to_unit.insert(p, extra_unit.id);
+                unit_map.insert(extra_unit.id, p);
                 units.insert(extra_unit.id, extra_unit);
             }
         }
@@ -370,7 +370,7 @@ mod tests {
         let board = Board {
             tiles: vec![vec![Tile::default(); 10]; 10],
             teams,
-            pos_to_unit,
+            unit_map,
             units,
         };
         (board, unit_id, skills)

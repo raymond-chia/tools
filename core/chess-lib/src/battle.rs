@@ -25,7 +25,7 @@ impl Battle {
         self.current_turn_index = (self.current_turn_index + 1) % self.turn_order.len();
 
         // 歸零新回合角色的移動距離
-        if let Some(active_unit_id) = self.get_current_unit_id().cloned() {
+        if let Some(active_unit_id) = self.get_current_unit_id().copied() {
             if let Some(unit) = board.units.get_mut(&active_unit_id) {
                 unit.moved = 0;
                 unit.has_cast_skill_this_turn = false;

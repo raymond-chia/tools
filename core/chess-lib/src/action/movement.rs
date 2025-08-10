@@ -27,18 +27,18 @@ impl<'a> PathfindingBoard for MovableBoardView<'a> {
             return false;
         }
         // 不能穿越敵軍
-        let Some(unit_id) = self.board.pos_to_unit.get(&active_unit_pos) else {
+        let Some(unit_id) = self.board.pos_to_unit(active_unit_pos) else {
             // 不合理
             return false;
         };
-        let Some(active_team) = self.board.units.get(unit_id).map(|unit| &unit.team) else {
+        let Some(active_team) = self.board.units.get(&unit_id).map(|unit| &unit.team) else {
             // 不合理
             return false;
         };
-        match self.board.pos_to_unit.get(&pos) {
+        match self.board.pos_to_unit(pos) {
             None => true, // 目標位置無單位
             Some(unit_id) => {
-                let target_team = self.board.units.get(unit_id).map_or("", |unit| &unit.team);
+                let target_team = self.board.units.get(&unit_id).map_or("", |unit| &unit.team);
                 active_team == target_team
             }
         }
@@ -77,8 +77,8 @@ pub fn movable_area(
     // 檢測
     skills_map: &BTreeMap<String, Skill>,
 ) -> HashMap<Pos, (MovementCost, Pos)> {
-    let unit_id = match board.pos_to_unit.get(&from) {
-        Some(id) => *id,
+    let unit_id = match board.pos_to_unit(from) {
+        Some(id) => id,
         None => return HashMap::new(),
     };
     let unit = match board.units.get(&unit_id) {
@@ -123,8 +123,8 @@ pub fn move_unit_along_path(
     skills_map: &BTreeMap<String, Skill>,
 ) -> Result<(), Error> {
     let actor = path.get(0).ok_or(Error::InvalidParameter)?;
-    let unit_id = match board.pos_to_unit.get(actor) {
-        Some(id) => *id,
+    let unit_id = match board.pos_to_unit(*actor) {
+        Some(id) => id,
         None => return Err(Error::NoUnitOnPos(*actor)),
     };
     let unit = match board.units.get(&unit_id) {
@@ -156,7 +156,7 @@ pub fn movement_tile_color(
     path: &[Pos],
     pos: Pos,
 ) -> Result<RGBA, Error> {
-    if board.pos_to_unit.contains_key(&pos) {
+    if board.pos_to_unit(pos).is_some() {
         return Err(Error::NotReachable(pos));
     }
     let Some((cost, _)) = movable.get(&pos) else {
@@ -203,16 +203,16 @@ mod inner {
         };
         let terrain = tile.terrain;
         // 檢查 from 位置有無單位
-        let unit_id = match board.pos_to_unit.get(&actor) {
-            Some(id) => *id,
+        let unit_id = match board.pos_to_unit(actor) {
+            Some(id) => id,
             None => return Err(Error::NoUnitOnPos(actor)),
         };
         let Some(active_unit) = board.units.get(&unit_id) else {
             return Err(Error::NoUnitOnPos(actor));
         };
         // 檢查 to 位置是否已有單位
-        let result = if let Some(unit_id) = board.pos_to_unit.get(&to) {
-            let Some(target_unit) = board.units.get(unit_id) else {
+        let result = if let Some(unit_id) = board.pos_to_unit(to) {
+            let Some(target_unit) = board.units.get(&unit_id) else {
                 return Err(Error::NoUnitOnPos(to));
             };
             if active_unit.team != target_unit.team {
@@ -231,8 +231,7 @@ mod inner {
         }
         active_unit.moved += cost;
         if result.is_ok() {
-            board.pos_to_unit.remove(&actor);
-            board.pos_to_unit.insert(to, unit_id);
+            board.unit_map.move_unit(unit_id, actor, to);
         }
         result
     }
@@ -323,11 +322,15 @@ mod tests {
             unit_enemy.id = unit_id + 2;
             unit_enemy
         };
-        let pos_to_unit = HashMap::from([
+        let mut unit_map = UnitMap::default();
+        let pos_to_unit = vec![
             (start, unit_id),
             (ally, unit_ally.id),
             (enemy, unit_enemy.id),
-        ]);
+        ];
+        for (pos, id) in pos_to_unit {
+            unit_map.insert(id, pos);
+        }
         let units = HashMap::from([
             (unit_id, unit_active),
             (unit_ally.id, unit_ally),
@@ -338,7 +341,7 @@ mod tests {
             tiles,
             teams,
             units,
-            pos_to_unit,
+            unit_map,
         };
         (board, unit_id)
     }
@@ -419,8 +422,8 @@ mod tests {
             let res = move_unit_along_path(&mut board, path, &skills_map);
             assert_eq!(res.is_ok(), is_ok, "移動到 {:?} 應該成功 ? {}", to, is_ok);
             if is_ok {
-                assert_eq!(board.pos_to_unit.get(&to), Some(&unit_id));
-                assert!(board.pos_to_unit.get(&start).is_none());
+                assert_eq!(board.pos_to_unit(to), Some(unit_id));
+                assert!(board.pos_to_unit(start).is_none());
             }
         }
     }

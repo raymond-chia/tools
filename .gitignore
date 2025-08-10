@@ -25,5 +25,5 @@ dist-ssr
 
 
 target/
-shared-lib/test-data/ignore-*
-tools/src/test-assets
+core/test-data/ignore-*
+editor/src/test-assets

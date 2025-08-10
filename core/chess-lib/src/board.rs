@@ -59,7 +59,7 @@ pub struct Board {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: HashMap<TeamID, Team>,
     pub units: HashMap<UnitID, Unit>,
-    pub pos_to_unit: HashMap<Pos, UnitID>,
+    pub unit_map: UnitMap,
 }
 
 pub trait UnitTemplateGetter {
@@ -72,10 +72,10 @@ impl Board {
         unit_templates: &impl UnitTemplateGetter,
         skills: &BTreeMap<SkillID, Skill>,
     ) -> Result<Self, String> {
-        let teams = HashMap::from_iter(config.teams.into_iter().map(|(id, team)| (id, team)));
+        let teams = HashMap::from_iter(config.teams.into_iter());
 
         let mut units = HashMap::new();
-        let mut pos_to_unit = HashMap::new();
+        let mut unit_map = UnitMap::default();
         for (unit_id, unit_config) in config.units {
             let template = unit_templates
                 .get(&unit_config.unit_template_type)
@@ -83,7 +83,7 @@ impl Board {
                     format!("missing unit template: {}", &unit_config.unit_template_type)
                 })?;
             let unit = Unit::from_template(&unit_config, template, skills)?;
-            pos_to_unit.insert(unit_config.pos, unit_id);
+            unit_map.insert(unit_id, unit_config.pos);
             units.insert(unit_id, unit);
         }
 
@@ -91,14 +91,16 @@ impl Board {
             tiles: config.tiles,
             teams,
             units,
-            pos_to_unit,
+            unit_map,
         })
     }
 
-    pub fn unit_pos(&self, unit_id: &UnitID) -> Option<Pos> {
-        self.pos_to_unit
-            .iter()
-            .find_map(|(pos, id)| if id == unit_id { Some(*pos) } else { None })
+    pub fn pos_to_unit(&self, pos: Pos) -> Option<UnitID> {
+        self.unit_map.get_unit(pos)
+    }
+
+    pub fn unit_to_pos(&self, unit_id: &UnitID) -> Option<Pos> {
+        self.unit_map.get_pos(*unit_id)
     }
 }
 
@@ -140,6 +142,40 @@ pub fn movement_cost(t: Terrain) -> MovementCost {
         Terrain::Forest => 13,
         Terrain::ShallowWater => 17,
         Terrain::DeepWater => MAX_MOVEMENT_COST,
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct UnitMap {
+    pos_to_unit: HashMap<Pos, UnitID>,
+    unit_to_pos: HashMap<UnitID, Pos>,
+}
+
+impl UnitMap {
+    pub fn insert(&mut self, unit_id: UnitID, pos: Pos) {
+        self.pos_to_unit.insert(pos, unit_id);
+        self.unit_to_pos.insert(unit_id, pos);
+    }
+
+    pub fn move_unit(&mut self, unit_id: UnitID, from: Pos, to: Pos) -> Result<(), String> {
+        if self.unit_to_pos.get(&unit_id) != Some(&from) {
+            return Err(format!("unit {} is not at {:?}", unit_id, from));
+        }
+        if self.pos_to_unit.get(&to).is_some() {
+            return Err(format!("position {:?} is already occupied", to));
+        }
+        self.pos_to_unit.remove(&from);
+        self.pos_to_unit.insert(to, unit_id);
+        self.unit_to_pos.insert(unit_id, to);
+        Ok(())
+    }
+
+    pub fn get_unit(&self, pos: Pos) -> Option<UnitID> {
+        self.pos_to_unit.get(&pos).copied()
+    }
+
+    pub fn get_pos(&self, unit_id: UnitID) -> Option<Pos> {
+        self.unit_to_pos.get(&unit_id).copied()
     }
 }
 
@@ -239,7 +275,7 @@ mod tests {
         // 驗證 unit
         assert_eq!(board.units.len(), 1);
         assert!(board.units.contains_key(&42));
-        assert_eq!(board.unit_pos(&42), Some(Pos { x: 0, y: 0 }));
+        assert_eq!(board.unit_to_pos(&42), Some(Pos { x: 0, y: 0 }));
     }
 
     #[test]

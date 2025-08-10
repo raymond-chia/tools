@@ -1,12 +1,12 @@
 [package]
-name = "tools"
+name = "editor"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-skills-lib = { path = "../shared-lib/skills-lib" }
-dialogs-lib = { path = "../shared-lib/dialogs-lib" }
-chess-lib = { path = "../shared-lib/chess-lib" }
+skills-lib = { path = "../core/skills-lib" }
+dialogs-lib = { path = "../core/dialogs-lib" }
+chess-lib = { path = "../core/chess-lib" }
 
 eframe = "0.31.1"
 egui = "0.31.1"
