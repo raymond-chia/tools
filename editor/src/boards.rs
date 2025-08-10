@@ -355,7 +355,7 @@ impl BoardsEditor {
             }
             let unit = self.sim_board.units.get(&active_unit_id).unwrap();
             if let Err(e) = is_able_to_cast(unit) {
-                self.set_status(e, true);
+                self.set_status(e.to_string(), true);
                 return;
             }
             if !casting_area.contains(&to) {
@@ -373,7 +373,7 @@ impl BoardsEditor {
                     self.set_status(msg, false);
                 }
                 Err(err) => {
-                    self.set_status(err, true);
+                    self.set_status(err.to_string(), true);
                 }
             }
         } else {
@@ -402,7 +402,7 @@ impl BoardsEditor {
                 if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
                     return;
                 }
-                if self.sim_board.pos_to_unit.get(&target).is_some() {
+                if self.sim_board.pos_to_unit(target).is_some() {
                     self.set_status("目標位置已有單位，無法移動".to_string(), true);
                     return;
                 }
@@ -932,13 +932,13 @@ fn show_skill_area_others(
 }
 
 fn show_unit(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect: Rect) {
-    let Some(unit_id) = board.pos_to_unit.get(&pos) else {
+    let Some(unit_id) = board.pos_to_unit(pos) else {
         // 該位置沒有單位
         return;
     };
     let (unit_template, team) = board
         .units
-        .get(unit_id)
+        .get(&unit_id)
         .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
     let team_color = board
         .teams
@@ -1043,8 +1043,8 @@ where
     }
 
     // 檢查
-    for pos in positions {
-        let Some(tile) = board.get_tile(pos) else {
+    for pos in &positions {
+        let Some(tile) = board.get_tile(*pos) else {
             return Err("some tiles are out of bounds".to_string());
         };
         if tile.object.is_some() {
@@ -1053,8 +1053,8 @@ where
     }
 
     // 放置物件
-    for pos in positions {
-        let tile = board.get_tile_mut(pos).expect("just checked");
+    for pos in &positions {
+        let tile = board.get_tile_mut(*pos).expect("just checked");
         let rel = Pos {
             x: pos.x - main_pos.x,
             y: pos.y - main_pos.y,

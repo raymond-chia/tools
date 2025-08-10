@@ -102,11 +102,13 @@ pub fn reconstruct_path(
     from: Pos,
     to: Pos,
 ) -> Result<Vec<Pos>, Error> {
+    let func = "reconstruct_path";
+
     let mut path = Vec::new();
     let mut current = to;
     while current != from {
         let Some((_, prev)) = map.get(&current) else {
-            return Err(Error::NotReachable(to));
+            return Err(Error::NotReachable { func, pos: to });
         };
         path.push(current);
         current = *prev;
@@ -122,18 +124,20 @@ pub fn move_unit_along_path(
     // 檢測
     skills_map: &BTreeMap<String, Skill>,
 ) -> Result<(), Error> {
-    let actor = path.get(0).ok_or(Error::InvalidParameter)?;
+    let func = "move_unit_along_path";
+
+    let actor = path.get(0).ok_or(Error::InvalidParameter { func })?;
     let unit_id = match board.pos_to_unit(*actor) {
         Some(id) => id,
-        None => return Err(Error::NoUnitOnPos(*actor)),
+        None => return Err(Error::NoUnitAtPos { func, pos: *actor }),
     };
     let unit = match board.units.get(&unit_id) {
         Some(u) => u,
-        None => return Err(Error::NoUnitOnPos(*actor)),
+        None => return Err(Error::NoUnitAtPos { func, pos: *actor }),
     };
     if unit.has_cast_skill_this_turn && !has_hit_and_run_skill(unit, skills_map) {
-        // 若無「打帶跑」則禁止移動，回傳現有錯誤型別
-        return Err(Error::NotEnoughPoints);
+        // 若無「打帶跑」則禁止移動
+        return Err(Error::NotEnoughPoints { func });
     }
     let mut actor = *actor;
     for next in path {
@@ -142,8 +146,13 @@ pub fn move_unit_along_path(
             Ok(_) => {
                 actor = next;
             }
-            Err(Error::AlliedUnitOnPos(_)) => {}
-            _ => return result,
+            Err(Error::AlliedUnitAtPos { .. }) => {}
+            Err(e) => {
+                return Err(Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                });
+            }
         }
     }
     Ok(())
@@ -156,11 +165,13 @@ pub fn movement_tile_color(
     path: &[Pos],
     pos: Pos,
 ) -> Result<RGBA, Error> {
+    let func = "movement_tile_color";
+
     if board.pos_to_unit(pos).is_some() {
-        return Err(Error::NotReachable(pos));
+        return Err(Error::NotReachable { func, pos });
     }
     let Some((cost, _)) = movable.get(&pos) else {
-        return Err(Error::NotReachable(pos));
+        return Err(Error::NotReachable { func, pos });
     };
     let cost = *cost;
 
@@ -194,44 +205,52 @@ mod inner {
 
     /// 將 actor 位置的單位移動到 to 位置
     pub fn move_unit(board: &mut Board, actor: Pos, to: Pos) -> Result<(), Error> {
+        let func = "move_unit";
+
         if actor == to {
             return Ok(()); // 不需要移動
         }
         // to 應該在棋盤上
         let Some(tile) = board.get_tile(to) else {
-            return Err(Error::NoTileOnPos(to));
+            return Err(Error::NoTileAtPos { func, pos: to });
         };
         let terrain = tile.terrain;
         // 檢查 from 位置有無單位
         let unit_id = match board.pos_to_unit(actor) {
             Some(id) => id,
-            None => return Err(Error::NoUnitOnPos(actor)),
+            None => return Err(Error::NoUnitAtPos { func, pos: actor }),
         };
         let Some(active_unit) = board.units.get(&unit_id) else {
-            return Err(Error::NoUnitOnPos(actor));
+            return Err(Error::NoUnitAtPos { func, pos: actor });
         };
         // 檢查 to 位置是否已有單位
         let result = if let Some(unit_id) = board.pos_to_unit(to) {
             let Some(target_unit) = board.units.get(&unit_id) else {
-                return Err(Error::NoUnitOnPos(to));
+                return Err(Error::NoUnitAtPos { func, pos: to });
             };
             if active_unit.team != target_unit.team {
-                return Err(Error::HostileUnitOnPos(to));
+                return Err(Error::HostileUnitAtPos { func, pos: to });
             }
-            Err(Error::AlliedUnitOnPos(to))
+            Err(Error::AlliedUnitAtPos { func, pos: to })
         } else {
             Ok(())
         };
         let Some(active_unit) = board.units.get_mut(&unit_id) else {
-            return Err(Error::NoUnitOnPos(actor));
+            return Err(Error::NoUnitAtPos { func, pos: actor });
         };
         let cost = movement_cost(terrain);
         if active_unit.moved + cost > active_unit.move_points * 2 {
-            return Err(Error::NotEnoughPoints);
+            return Err(Error::NotEnoughPoints { func });
         }
         active_unit.moved += cost;
         if result.is_ok() {
-            board.unit_map.move_unit(unit_id, actor, to);
+            board
+                .unit_map
+                .move_unit(unit_id, actor, to)
+                .map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?;
         }
         result
     }
@@ -456,7 +475,12 @@ mod tests {
 
             let res = move_unit_along_path(&mut board, path.clone(), &skills_map);
             assert!(
-                matches!(res, Err(Error::NotEnoughPoints)),
+                matches!(
+                    res,
+                    Err(Error::NotEnoughPoints {
+                        func: "move_unit_along_path"
+                    })
+                ),
                 "無打帶跑技能時應禁止移動"
             );
         }

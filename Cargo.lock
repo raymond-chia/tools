@@ -637,6 +637,7 @@ dependencies = [
  "skills-lib",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -872,6 +873,7 @@ dependencies = [
  "skills-lib",
  "strum 0.27.2",
  "strum_macros 0.27.2",
+ "thiserror 2.0.12",
  "toml",
  "winapi",
 ]

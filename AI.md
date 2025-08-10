@@ -4,8 +4,53 @@
 
 ## core
 
-- function 盡量回傳 Result
-- Result Err 要定義在 enum
+### 錯誤處理規範（專案標準）
+
+- core 目錄下各 crate 必須以 `enum` 定義錯誤型別，並 derive [`thiserror::Error`](https://docs.rs/thiserror)。
+- 重要錯誤應攜帶 function name 及 context（如參數、狀態等），以利追蹤與除錯。
+- Option 場景應視情況改為 Result，避免以 None 隱藏錯誤，並確保錯誤傳遞時保留來源（source）。
+- 錯誤訊息建議使用 `#[error("...")]` 屬性，訊息可帶參數與來源資訊，並鼓勵使用 `{source}` 以自動串接上下游錯誤。
+- 本規範為專案標準，所有錯誤處理皆須遵循。
+
+#### 範例
+
+```rust
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum ChessError {
+    #[error("Invalid move in {func}: {reason}")]
+    InvalidMove {
+        func: &'static str,
+        reason: String,
+    },
+    #[error("IO error in {func}: {source}")]
+    Io {
+        func: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("Unknown error")]
+    Unknown,
+}
+
+// 使用範例
+fn do_something() -> Result<(), ChessError> {
+    let func = "do_something";
+    // ...邏輯
+    Err(ChessError::InvalidMove {
+        func,
+        reason: "out of bound".to_string(),
+    })
+}
+```
+
+> 註：
+>
+> - 若需包裝外部錯誤，請於 enum variant 加上 `#[source]` 並攜帶來源錯誤。
+> - 建議錯誤訊息攜帶 function name、參數、狀態等 context。
+> - Option 場景若有錯誤語意，請改用 Result 並明確回傳錯誤型別。
+> - 錯誤傳遞時應保留來源（source），以利追蹤。
 
 # Rust 專案結構說明
 

@@ -71,7 +71,9 @@ impl Board {
         config: BoardConfig,
         unit_templates: &impl UnitTemplateGetter,
         skills: &BTreeMap<SkillID, Skill>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, Error> {
+        let func = "Board::from_config";
+
         let teams = HashMap::from_iter(config.teams.into_iter());
 
         let mut units = HashMap::new();
@@ -79,10 +81,15 @@ impl Board {
         for (unit_id, unit_config) in config.units {
             let template = unit_templates
                 .get(&unit_config.unit_template_type)
-                .ok_or_else(|| {
-                    format!("missing unit template: {}", &unit_config.unit_template_type)
+                .ok_or_else(|| Error::MissingUnitTemplate {
+                    func,
+                    template_type: unit_config.unit_template_type.clone(),
                 })?;
-            let unit = Unit::from_template(&unit_config, template, skills)?;
+            let unit =
+                Unit::from_template(&unit_config, template, skills).map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?;
             unit_map.insert(unit_id, unit_config.pos);
             units.insert(unit_id, unit);
         }
@@ -152,17 +159,24 @@ pub struct UnitMap {
 }
 
 impl UnitMap {
+    // 初始化專用
     pub fn insert(&mut self, unit_id: UnitID, pos: Pos) {
         self.pos_to_unit.insert(pos, unit_id);
         self.unit_to_pos.insert(unit_id, pos);
     }
 
-    pub fn move_unit(&mut self, unit_id: UnitID, from: Pos, to: Pos) -> Result<(), String> {
+    pub fn move_unit(&mut self, unit_id: UnitID, from: Pos, to: Pos) -> Result<(), Error> {
+        let func = "UnitMap::move_unit";
+
         if self.unit_to_pos.get(&unit_id) != Some(&from) {
-            return Err(format!("unit {} is not at {:?}", unit_id, from));
+            return Err(Error::UnitNotAtPos {
+                func,
+                unit_id,
+                pos: from,
+            });
         }
         if self.pos_to_unit.get(&to).is_some() {
-            return Err(format!("position {:?} is already occupied", to));
+            return Err(Error::PosOccupied { func, pos: to });
         }
         self.pos_to_unit.remove(&from);
         self.pos_to_unit.insert(to, unit_id);

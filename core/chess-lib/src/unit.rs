@@ -50,7 +50,9 @@ impl Unit {
         marker: &UnitMarker,
         template: &UnitTemplate,
         skills: &BTreeMap<SkillID, Skill>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, Error> {
+        let func = "Unit::from_template";
+
         let skills: Result<_, _> = template
             .skills
             .iter()
@@ -58,7 +60,10 @@ impl Unit {
                 skills
                     .get(id)
                     .map(|s| (id, s))
-                    .ok_or_else(|| format!("Skill {id} not found"))
+                    .ok_or_else(|| Error::SkillNotFound {
+                        func,
+                        skill_id: id.clone(),
+                    })
             })
             .collect();
         let skills = skills?;

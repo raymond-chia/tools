@@ -23,34 +23,57 @@ impl SkillSelection {
         skills: &BTreeMap<SkillID, Skill>,
         caster: UnitID,
         target: Pos,
-    ) -> Result<Vec<String>, String> {
+    ) -> Result<Vec<String>, Error> {
+        let func = "SkillSelection::cast_skill";
+
         // 施放前必須找到 unit，否則不能施放技能
-        let unit = board.units.get(&caster).ok_or("找不到施法者 unit")?;
-        is_able_to_cast(unit)?;
-        let skill_id = self.selected_skill.as_ref().ok_or("未選擇技能")?;
-        let skill = skills
-            .get(skill_id)
-            .ok_or(format!("技能 {} 不存在", skill_id))?;
+        let unit = board
+            .units
+            .get(&caster)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+        is_able_to_cast(unit).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+        let skill_id = self
+            .selected_skill
+            .as_ref()
+            .ok_or_else(|| Error::NoSkillSelected { func })?;
+        let skill = skills.get(skill_id).ok_or_else(|| Error::SkillNotFound {
+            func,
+            skill_id: skill_id.clone(),
+        })?;
         // 只判斷第一個 effect 的 target_type
         let need_unit = skill
             .effects
             .get(0)
             .map(|e| e.is_targeting_unit())
-            .ok_or("技能沒有有效的 effect")?;
+            .ok_or_else(|| Error::InvalidSkill {
+                func,
+                skill_id: skill_id.clone(),
+            })?;
         if need_unit {
             let has_target_unit = board.pos_to_unit(target).is_some();
             if !has_target_unit {
-                return Err(format!(
-                    "技能 {} 無法作用於 ({:?})，目標格必須有單位",
-                    skill_id, target
-                ));
+                return Err(Error::SkillTargetNoUnit {
+                    func,
+                    skill_id: skill_id.clone(),
+                    pos: target,
+                });
             }
         }
 
         // skill_affect_area 會檢查移動距離
         let affect_area = self.skill_affect_area(board, skills, caster, target);
         if affect_area.is_empty() {
-            return Err(format!("技能 {} 無法作用於 ({:?})", skill_id, target));
+            return Err(Error::SkillAffectEmpty {
+                func,
+                skill_id: skill_id.clone(),
+                pos: target,
+            });
         }
         let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
         for pos in affect_area {
@@ -182,12 +205,14 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
     area
 }
 
-pub fn is_able_to_cast(unit: &Unit) -> Result<(), String> {
+pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
+    let func = "is_able_to_cast";
+
     if unit.has_cast_skill_this_turn {
-        return Err("本回合已施放過技能，無法再次施放".to_string());
+        return Err(Error::NotEnoughPoints { func });
     }
     if unit.moved > unit.move_points {
-        return Err("本回合以移動太遠，無法施放技能".to_string());
+        return Err(Error::NotEnoughPoints { func });
     }
     Ok(())
 }
@@ -430,7 +455,7 @@ mod tests {
         let err = sel_none.cast_skill(&mut board, &skills, unit_id, target);
         assert!(err.is_err());
         let err = err.unwrap_err();
-        assert!(err.contains("未選擇技能"), "{err:?}");
+        assert!(matches!(err, Error::NoSkillSelected { .. }), "{err:?}");
 
         // 檢查 has_cast_skill_this_turn
         assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn == false);
@@ -454,7 +479,14 @@ mod tests {
         sel2.select_skill(Some("shoot".to_string()));
         let result2 = sel2.cast_skill(&mut board, &skills, unit_id, target);
         assert!(result2.is_err());
-        assert!(result2.unwrap_err().contains("本回合已施放過技能"));
+        assert!(
+            matches!(
+                root_error(result2.as_ref().unwrap_err()),
+                Error::NotEnoughPoints { .. }
+            ),
+            "{:?}",
+            result2
+        );
     }
 
     #[test]
@@ -490,7 +522,11 @@ mod tests {
         // 應回傳錯誤，且不應有施放技能訊息
         assert!(result.is_err());
         let err_msg = result.unwrap_err();
-        assert!(err_msg.contains("無法作用於"), "{:?}", err_msg);
+        assert!(
+            matches!(err_msg, Error::SkillTargetNoUnit { .. }),
+            "{:?}",
+            err_msg
+        );
 
         // 施法者狀態不變
         assert!(!board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);

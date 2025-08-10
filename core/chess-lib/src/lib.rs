@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 mod action;
 mod battle;
 mod board;
+mod error;
 mod unit;
 
 pub use action::*;
 pub use battle::*;
 pub use board::*;
+pub use error::*;
 pub use unit::*;
 
 pub type BoardID = String;
@@ -20,20 +22,6 @@ pub type RGBA = (u8, u8, u8, u8);
 
 pub const PLAYER_TEAM: &str = "player";
 pub const MAX_MOVEMENT_COST: MovementCost = 999;
-
-#[derive(Debug)]
-pub enum Error {
-    InvalidParameter,
-
-    NotEnoughPoints,
-    NotReachable(Pos),
-
-    NoUnitOnPos(Pos),
-    AlliedUnitOnPos(Pos),
-    HostileUnitOnPos(Pos),
-
-    NoTileOnPos(Pos),
-}
 
 #[derive(
     Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash,
