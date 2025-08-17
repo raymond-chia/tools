@@ -106,8 +106,8 @@ impl Board {
         self.unit_map.get_unit(pos)
     }
 
-    pub fn unit_to_pos(&self, unit_id: &UnitID) -> Option<Pos> {
-        self.unit_map.get_pos(*unit_id)
+    pub fn unit_to_pos(&self, unit_id: UnitID) -> Option<Pos> {
+        self.unit_map.get_pos(unit_id)
     }
 }
 
@@ -168,14 +168,14 @@ impl UnitMap {
     pub fn move_unit(&mut self, unit_id: UnitID, from: Pos, to: Pos) -> Result<(), Error> {
         let func = "UnitMap::move_unit";
 
-        if self.unit_to_pos.get(&unit_id) != Some(&from) {
+        if self.get_pos(unit_id) != Some(from) {
             return Err(Error::UnitNotAtPos {
                 func,
                 unit_id,
                 pos: from,
             });
         }
-        if self.pos_to_unit.get(&to).is_some() {
+        if self.get_unit(to).is_some() {
             return Err(Error::PosOccupied { func, pos: to });
         }
         self.pos_to_unit.remove(&from);
@@ -289,7 +289,8 @@ mod tests {
         // 驗證 unit
         assert_eq!(board.units.len(), 1);
         assert!(board.units.contains_key(&42));
-        assert_eq!(board.unit_to_pos(&42), Some(Pos { x: 0, y: 0 }));
+        assert_eq!(board.pos_to_unit(Pos { x: 0, y: 0 }), Some(42));
+        assert_eq!(board.unit_to_pos(42), Some(Pos { x: 0, y: 0 }));
     }
 
     #[test]
@@ -300,5 +301,46 @@ mod tests {
         assert_eq!(movement_cost(Terrain::Forest), 13);
         assert_eq!(movement_cost(Terrain::ShallowWater), 17);
         assert_eq!(movement_cost(Terrain::DeepWater), MAX_MOVEMENT_COST);
+    }
+
+    #[test]
+    fn test_move_unit() {
+        let mut unit_map = UnitMap::default();
+        let unit_id = 1;
+        let from = Pos { x: 0, y: 0 };
+        let to = Pos { x: 1, y: 0 };
+        let other = Pos { x: 2, y: 0 };
+
+        // 先插入單位
+        unit_map.insert(unit_id, from);
+
+        // 正常移動
+        assert!(unit_map.move_unit(unit_id, from, to).is_ok());
+        assert_eq!(unit_map.get_unit(to), Some(unit_id));
+        assert_eq!(unit_map.get_pos(unit_id), Some(to));
+        assert_eq!(unit_map.get_unit(from), None);
+
+        // from 位置錯誤
+        let err = unit_map.move_unit(unit_id, from, other).unwrap_err();
+        match err {
+            Error::UnitNotAtPos {
+                unit_id: e_id, pos, ..
+            } => {
+                assert_eq!(e_id, unit_id);
+                assert_eq!(pos, from);
+            }
+            _ => panic!("應該是 UnitNotAtPos"),
+        }
+
+        // to 位置已被佔用
+        let unit_id2 = 2;
+        unit_map.insert(unit_id2, from);
+        let err = unit_map.move_unit(unit_id2, from, to).unwrap_err();
+        match err {
+            Error::PosOccupied { pos, .. } => {
+                assert_eq!(pos, to);
+            }
+            _ => panic!("應該是 PosOccupied"),
+        }
     }
 }

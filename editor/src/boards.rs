@@ -293,7 +293,7 @@ impl BoardsEditor {
             self.set_status("當前回合角色不存在".to_string(), true);
             return;
         };
-        let active_unit_pos = match self.sim_board.unit_to_pos(&active_unit_id) {
+        let active_unit_pos = match self.sim_board.unit_to_pos(active_unit_id) {
             Some(pos) => pos,
             None => {
                 self.set_status("當前單位位置不存在於棋盤上".to_string(), true);

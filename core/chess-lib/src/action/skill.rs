@@ -137,7 +137,7 @@ impl SkillSelection {
             None => return vec![],
         };
         // 取得單位位置
-        let from = match board.unit_to_pos(&unit_id) {
+        let from = match board.unit_to_pos(unit_id) {
             Some(p) => p,
             None => return vec![],
         };
@@ -205,6 +205,7 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
     area
 }
 
+/// 判定現在狀態能否使用任何技能
 pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
     let func = "is_able_to_cast";
 
@@ -217,98 +218,99 @@ pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
     Ok(())
 }
 
+/// 計算技能形狀範圍
+/// board: 棋盤物件, shape: 技能形狀, from: 施放者座標, to: 目標座標
+/// 回傳：座標列表
+/// 只給本檔案和 ai.rs 使用
+pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<Pos> {
+    match shape {
+        Shape::Point => vec![to],
+        Shape::Circle(r) => {
+            let r = *r as isize; // 起點也算在半徑內
+            let r2 = r * r;
+            (-r..=r)
+                .flat_map(|dx| (-r..=r).map(move |dy| (dx, dy)))
+                .filter_map(|(dx, dy)| {
+                    if dx * dx + dy * dy > r2 {
+                        return None;
+                    }
+                    let x = to.x as isize + dx;
+                    let y = to.y as isize + dy;
+                    if x < 0 || y < 0 {
+                        return None;
+                    }
+                    let (x, y) = (x as usize, y as usize);
+                    let target = Pos { x, y };
+                    board.get_tile(target).map(|_| target)
+                })
+                .collect()
+        }
+        Shape::Line(len) => {
+            // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
+            if from == to {
+                return vec![];
+            }
+            let len = len + 1; // 不計算起點
+            bresenham_line(from, to, len, |pos| board.get_tile(pos).is_some())
+                .into_iter()
+                .filter(|pos| *pos != from)
+                .collect()
+        }
+        Shape::Cone(len, degree) => {
+            if from == to {
+                return vec![];
+            }
+            let len = *len as isize;
+            let len2 = len * len;
+            let degree = *degree as f64;
+            let from_x = from.x as isize;
+            let from_y = from.y as isize;
+            let dx = (to.x as isize - from_x) as f64;
+            let dy = (to.y as isize - from_y) as f64;
+            let target_theta = dy.atan2(dx);
+            let half_theta = degree.to_radians() / 2.0;
+
+            let mut area = vec![];
+            // 只在 from 附近搜尋半徑 len
+            for x in (from_x - len)..=(from_x + len) {
+                for y in (from_y - len)..=(from_y + len) {
+                    if x < 0 || y < 0 {
+                        continue;
+                    }
+                    let pos = Pos {
+                        x: x as usize,
+                        y: y as usize,
+                    };
+                    if board.get_tile(pos).is_none() {
+                        continue;
+                    }
+                    let dx = x - from_x;
+                    let dy = y - from_y;
+                    let distance2 = dx * dx + dy * dy;
+                    // 超出範圍 或 排除自身
+                    if distance2 > len2 || distance2 == 0 {
+                        continue;
+                    }
+                    // 格子的方向
+                    let point_theta = (dy as f64).atan2(dx as f64);
+                    // 角度差（方向無關正負、取最短和 2π補正）
+                    let delta = point_theta - target_theta;
+                    // 把 delta 調整到 [-PI, PI]
+                    let delta = clamp_pi(delta);
+                    if delta.abs() > half_theta {
+                        continue; // 超出角度範圍
+                    }
+                    area.push(pos);
+                }
+            }
+            area
+        }
+    }
+}
+
 use inner::*;
 mod inner {
     use super::*;
-
-    /// 計算技能形狀範圍
-    /// board: 棋盤物件, shape: 技能形狀, from: 施放者座標, to: 目標座標
-    /// 回傳：座標列表
-    pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<Pos> {
-        match shape {
-            Shape::Point => vec![to],
-            Shape::Circle(r) => {
-                let r = *r as isize; // 起點也算在半徑內
-                let r2 = r * r;
-                (-r..=r)
-                    .flat_map(|dx| (-r..=r).map(move |dy| (dx, dy)))
-                    .filter_map(|(dx, dy)| {
-                        if dx * dx + dy * dy > r2 {
-                            return None;
-                        }
-                        let x = to.x as isize + dx;
-                        let y = to.y as isize + dy;
-                        if x < 0 || y < 0 {
-                            return None;
-                        }
-                        let (x, y) = (x as usize, y as usize);
-                        let target = Pos { x, y };
-                        board.get_tile(target).map(|_| target)
-                    })
-                    .collect()
-            }
-            Shape::Line(len) => {
-                // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-                if from == to {
-                    return vec![];
-                }
-                let len = len + 1; // 不計算起點
-                bresenham_line(from, to, len, |pos| board.get_tile(pos).is_some())
-                    .into_iter()
-                    .filter(|pos| *pos != from)
-                    .collect()
-            }
-            Shape::Cone(len, degree) => {
-                if from == to {
-                    return vec![];
-                }
-                let len = *len as isize;
-                let len2 = len * len;
-                let degree = *degree as f64;
-                let from_x = from.x as isize;
-                let from_y = from.y as isize;
-                let dx = (to.x as isize - from_x) as f64;
-                let dy = (to.y as isize - from_y) as f64;
-                let target_theta = dy.atan2(dx);
-                let half_theta = degree.to_radians() / 2.0;
-
-                let mut area = vec![];
-                // 只在 from 附近搜尋半徑 len
-                for x in (from_x - len)..=(from_x + len) {
-                    for y in (from_y - len)..=(from_y + len) {
-                        if x < 0 || y < 0 {
-                            continue;
-                        }
-                        let pos = Pos {
-                            x: x as usize,
-                            y: y as usize,
-                        };
-                        if board.get_tile(pos).is_none() {
-                            continue;
-                        }
-                        let dx = x - from_x;
-                        let dy = y - from_y;
-                        let distance2 = dx * dx + dy * dy;
-                        // 超出範圍 或 排除自身
-                        if distance2 > len2 || distance2 == 0 {
-                            continue;
-                        }
-                        // 格子的方向
-                        let point_theta = (dy as f64).atan2(dx as f64);
-                        // 角度差（方向無關正負、取最短和 2π補正）
-                        let delta = point_theta - target_theta;
-                        // 把 delta 調整到 [-PI, PI]
-                        let delta = clamp_pi(delta);
-                        if delta.abs() > half_theta {
-                            continue; // 超出角度範圍
-                        }
-                        area.push(pos);
-                    }
-                }
-                area
-            }
-        }
-    }
 
     /// 判斷技能施放距離是否符合 range 設定
     /// - skill: 技能資料
@@ -325,10 +327,8 @@ mod inner {
         min_range <= dist && dist <= max_range
     }
 
-    mod inner {}
-
     /// 將角度限制在 [-PI, PI] 範圍內
-    fn clamp_pi(mut rad: f64) -> f64 {
+    pub fn clamp_pi(mut rad: f64) -> f64 {
         while rad < -PI {
             rad += PI * 2.0;
         }
@@ -647,5 +647,34 @@ mod tests {
                 .collect::<BTreeSet<_>>();
             assert_eq!(area, expected);
         }
+    }
+
+    #[test]
+    fn test_is_able_to_cast() {
+        let (mut board, unit_id, _skills) = prepare_test_board(Pos { x: 0, y: 0 }, None);
+        let unit = board.units.get_mut(&unit_id).unwrap();
+
+        // 正常可施放
+        unit.has_cast_skill_this_turn = false;
+        unit.moved = 0;
+        unit.move_points = 2;
+        assert!(is_able_to_cast(unit).is_ok());
+
+        // 已施放過技能
+        unit.has_cast_skill_this_turn = true;
+        unit.moved = 0;
+        assert!(matches!(
+            is_able_to_cast(unit),
+            Err(Error::NotEnoughPoints { .. })
+        ));
+
+        // 移動超過點數
+        unit.has_cast_skill_this_turn = false;
+        unit.moved = 3;
+        unit.move_points = 2;
+        assert!(matches!(
+            is_able_to_cast(unit),
+            Err(Error::NotEnoughPoints { .. })
+        ));
     }
 }

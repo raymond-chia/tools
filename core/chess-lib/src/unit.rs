@@ -82,37 +82,42 @@ impl Unit {
     }
 }
 
-fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
-    let points: i32 = skills
-        .iter()
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::MovePoints { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum();
-    if points < 0 {
-        0
-    } else {
-        points as MovementCost
-    }
-}
+use inner::*;
+mod inner {
+    use super::*;
 
-fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
-    skills
-        .iter()
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::MaxHp { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
+    pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
+        let points: i32 = skills
+            .iter()
+            .flat_map(|(_, skill)| &skill.effects)
+            .filter_map(|effect| {
+                if let Effect::MovePoints { value, .. } = effect {
+                    Some(*value)
+                } else {
+                    None
+                }
+            })
+            .sum();
+        if points < 0 {
+            0
+        } else {
+            points as MovementCost
+        }
+    }
+
+    pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+        skills
+            .iter()
+            .flat_map(|(_, skill)| &skill.effects)
+            .filter_map(|effect| {
+                if let Effect::MaxHp { value, .. } = effect {
+                    Some(*value)
+                } else {
+                    None
+                }
+            })
+            .sum()
+    }
 }
 
 #[cfg(test)]
