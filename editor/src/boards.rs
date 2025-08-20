@@ -36,9 +36,12 @@ pub struct BoardsEditor {
     skills: BTreeMap<SkillID, Skill>,
     active_skill_ids: Vec<SkillID>,
     passive_skill_ids: Vec<SkillID>,
+    ai_config: AIConfig,
     // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
+    // AI 評分結果
+    ai_score_result: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
@@ -119,6 +122,18 @@ impl BoardsEditor {
                 return;
             }
         }
+        // 載入 AI 設定
+        match from_file::<_, AIConfig>(AI_FILE) {
+            Ok(ai) => {
+                self.ai_config = ai;
+            }
+            Err(err) => {
+                self.ai_config = AIConfig::default();
+                self.set_status(format!("載入 AI 設定失敗: {}", err), true);
+                return;
+            }
+        }
+
         self.set_status("已重新載入戰場".to_string(), false);
     }
 
@@ -704,13 +719,13 @@ impl BoardsEditor {
 
     fn show_sim_status(&mut self, ui: &mut Ui) {
         let unit_id = match self.sim_battle.get_current_unit_id() {
-            Some(id) => id,
+            Some(&id) => id,
             None => {
                 self.set_status("當前回合角色不存在".to_string(), true);
                 return;
             }
         };
-        let unit = match self.sim_board.units.get(unit_id) {
+        let unit = match self.sim_board.units.get(&unit_id) {
             Some(unit) => unit,
             None => {
                 self.set_status("當前回合角色不存在".to_string(), true);
@@ -767,6 +782,41 @@ impl BoardsEditor {
         // 顯示結束回合按鈕
         ui.separator();
         self.end_turn_button(ui);
+
+        ui.separator();
+
+        // AI 評分按鈕
+        if ui.button("AI 評分 (score_actions)").clicked() {
+            let result = score_actions(&self.sim_board, &self.skills, &self.ai_config, unit_id);
+            match result {
+                Ok(actions) => {
+                    let mut s = String::new();
+                    for (i, a) in actions.iter().enumerate() {
+                        s.push_str(&format!(
+                            "[{}] {:?}\n分數: {:.2}\n原因: {}\n\n",
+                            i + 1,
+                            a.action,
+                            a.score,
+                            a.reason
+                        ));
+                    }
+                    self.ai_score_result = Some(s);
+                }
+                Err(e) => {
+                    self.ai_score_result = Some(format!("AI 評分失敗: {:?}", e));
+                }
+            }
+        }
+
+        if let Some(result) = self.ai_score_result.clone() {
+            ui.separator();
+            ui.label("AI 評分結果：");
+            egui::ScrollArea::vertical()
+                .max_height(200.0)
+                .show(ui, |ui| {
+                    ui.label(result);
+                });
+        }
     }
 
     /// 在模擬模式下顯示「結束回合」按鈕，並切換到下一角色

@@ -1,14 +1,22 @@
 use crate::*;
+use serde::Deserialize;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Default)]
+pub struct AIConfig {
+    pub tendencies: BTreeMap<UnitTemplateType, Tendency>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
 pub struct Tendency {
     pub weights: Weights,
     pub positioning_preference: PositionPreference,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
 pub struct Weights {
     pub attack: AIScore,
     pub support: AIScore,
@@ -20,15 +28,17 @@ pub struct Weights {
     pub distance_base: AIScore,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Default)]
 pub enum PositionPreference {
     Frontline,
+    #[default]
     Flexible,
     Backline,
 }
 
 #[derive(Debug)]
 pub enum Action {
+    Idle,
     Move {
         path: Vec<Pos>,
     },
@@ -47,18 +57,28 @@ pub struct ScoredAction {
     pub reason: String, // for debug purpose
 }
 
-#[derive(Debug)]
-pub struct Config {
-    pub tendencies: BTreeMap<UnitTemplateType, Tendency>,
-}
-
 pub fn decide_action(
     board: &Board,
     skills: &BTreeMap<SkillID, Skill>,
-    config: &Config,
+    config: &AIConfig,
     unit_id: UnitID,
 ) -> Result<ScoredAction, Error> {
-    let func = "decide_action";
+    let scored = score_actions(board, skills, config, unit_id)?;
+    let best = scored.into_iter().next().unwrap_or_else(|| ScoredAction {
+        action: Action::Idle,
+        score: 0.0,
+        reason: format!("no valid action"),
+    });
+    Ok(best)
+}
+
+pub fn score_actions(
+    board: &Board,
+    skills: &BTreeMap<SkillID, Skill>,
+    config: &AIConfig,
+    unit_id: UnitID,
+) -> Result<Vec<ScoredAction>, Error> {
+    let func = "score_actions";
 
     let unit = board
         .units
@@ -81,9 +101,13 @@ pub fn decide_action(
     // 取得所有可移動格與路徑
     let movable = movable_area(board, from, skills);
 
-    let mut actions = Vec::new();
+    let mut actions = vec![Action::Idle];
     // 產生所有 Move 行動（不移動也算一種）
     for (&to, _) in &movable {
+        if from == to {
+            // 已經包含在 idle
+            continue;
+        }
         let path = match reconstruct_path(&movable, from, to) {
             Err(_) => continue,
             Ok(p) => p,
@@ -149,12 +173,7 @@ pub fn decide_action(
 
     // 按分數排序，取最高分
     scored.sort_by(|a, b| b.score.total_cmp(&a.score));
-    let best = scored.into_iter().next().unwrap_or_else(|| ScoredAction {
-        action: Action::Move { path: vec![from] },
-        score: 0.0,
-        reason: format!("no valid action"),
-    });
-    Ok(best)
+    Ok(scored)
 }
 
 use inner::*;
@@ -182,6 +201,11 @@ mod inner {
             .filter_map(|(id, _)| board.unit_to_pos(*id))
             .collect();
         match action {
+            Action::Idle => Ok(ScoredAction {
+                action,
+                score: 0.0,
+                reason: format!("idle action"),
+            }),
             Action::Move { path } => score_move(tendency, enemy_positions, path),
             Action::MoveAndUseSkill {
                 path,
@@ -279,7 +303,11 @@ mod inner {
     ) -> Result<ScoredAction, Error> {
         let func = "ai.score_move_and_use_skill";
 
-        Err(Error::InvalidParameter { func })
+        Ok(ScoredAction {
+            action: Action::Idle,
+            score: -1.0,
+            reason: format!("not implemented"),
+        })
     }
 
     fn manhattan_distance(a: Pos, b: Pos) -> usize {
