@@ -21,7 +21,7 @@ pub type TeamID = String;
 pub type MovementCost = usize;
 pub type RGB = (u8, u8, u8);
 pub type RGBA = (u8, u8, u8, u8);
-pub type AIScore = i32;
+pub type AIScore = f32;
 
 pub const PLAYER_TEAM: &str = "player";
 pub const MAX_MOVEMENT_COST: MovementCost = 999;

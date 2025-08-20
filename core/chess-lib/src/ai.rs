@@ -12,6 +12,12 @@ pub struct Tendency {
 pub struct Weights {
     pub attack: AIScore,
     pub support: AIScore,
+    /// score_move 最近敵人距離權重
+    pub nearest_enemy: AIScore,
+    /// score_move 所有敵人平均距離權重
+    pub avg_enemy: AIScore,
+    /// score_move 距離基準分，可 data-driven 設定
+    pub distance_base: AIScore,
 }
 
 #[derive(Debug)]
@@ -135,17 +141,19 @@ pub fn decide_action(
     }
 
     // 評分所有行動
-    let mut scored: Vec<ScoredAction> = actions
+    let scored: Result<Vec<ScoredAction>, Error> = actions
         .into_iter()
-        .map(|action| score(tendency, action))
+        .map(|action| score(board, tendency, unit_id, action))
         .collect();
+    let mut scored = scored?;
 
     // 按分數排序，取最高分
-    scored.sort_by(|a, b| b.score.cmp(&a.score));
-    let best = scored
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| score(tendency, Action::Move { path: vec![from] }));
+    scored.sort_by(|a, b| b.score.total_cmp(&a.score));
+    let best = scored.into_iter().next().unwrap_or_else(|| ScoredAction {
+        action: Action::Move { path: vec![from] },
+        score: 0.0,
+        reason: format!("no valid action"),
+    });
     Ok(best)
 }
 
@@ -153,11 +161,128 @@ use inner::*;
 mod inner {
     use super::*;
 
-    pub fn score(tendency: &Tendency, action: Action) -> ScoredAction {
-        ScoredAction {
-            action,
-            score: 0,
-            reason: String::new(),
+    pub fn score(
+        board: &Board,
+        tendency: &Tendency,
+        unit_id: UnitID,
+        action: Action,
+    ) -> Result<ScoredAction, Error> {
+        let func = "ai.score";
+
+        // 取得所有敵對單位位置
+        let actor_team = &board
+            .units
+            .get(&unit_id)
+            .ok_or(Error::NoActingUnit { func, unit_id })?
+            .team;
+        let enemy_positions: Vec<Pos> = board
+            .units
+            .iter()
+            .filter(|(_, u)| &u.team != actor_team)
+            .filter_map(|(id, _)| board.unit_to_pos(*id))
+            .collect();
+        match action {
+            Action::Move { path } => score_move(tendency, enemy_positions, path),
+            Action::MoveAndUseSkill {
+                path,
+                skill_id,
+                target,
+                target_units,
+            } => {
+                let ally_positions: Vec<Pos> = board
+                    .units
+                    .iter()
+                    .filter(|(_, u)| &u.team == actor_team)
+                    .filter_map(|(id, _)| board.unit_to_pos(*id))
+                    .collect();
+                score_move_and_use_skill(
+                    tendency,
+                    ally_positions,
+                    enemy_positions,
+                    path,
+                    skill_id,
+                    target,
+                    target_units,
+                )
+            }
         }
+    }
+
+    mod inner {}
+
+    fn score_move(
+        tendency: &Tendency,
+        enemy_positions: Vec<Pos>,
+        path: Vec<Pos>,
+    ) -> Result<ScoredAction, Error> {
+        let func = "ai.score_move";
+        let actor_pos = *path.last().ok_or(Error::InvalidParameter { func })?;
+
+        // 計算與最近敵人距離與平均距離
+        let mut min_dist: AIScore = 99.0;
+        let mut sum_dist: AIScore = 0.0;
+        let mut cnt: AIScore = 0.0;
+        for enemy_pos in &enemy_positions {
+            let d = manhattan_distance(actor_pos, *enemy_pos) as AIScore;
+            if d < min_dist {
+                min_dist = d;
+            }
+            sum_dist += d;
+            cnt += 1.0;
+        }
+        let avg_dist: AIScore = if cnt > 0.0 { sum_dist / cnt } else { 0.0 };
+
+        // 位置分數根據 tendency.positioning_preference 與 weights 權重
+        let w = &tendency.weights;
+        let mut score: AIScore = 0.0;
+        match tendency.positioning_preference {
+            PositionPreference::Frontline => {
+                // 越靠近敵人越高分
+                score += w.nearest_enemy * (w.distance_base - min_dist);
+                score += w.avg_enemy * (w.distance_base - avg_dist);
+            }
+            PositionPreference::Backline => {
+                // 越遠離敵人越高分
+                score += w.nearest_enemy * min_dist;
+                score += w.avg_enemy * avg_dist;
+            }
+            PositionPreference::Flexible => {
+                // 可自訂，預設不加分
+            }
+        }
+
+        let reason = format!(
+            "最近敵人距離: {:.2}, 平均敵人距離: {:.2}, 分數: {:.2} (權重: nearest {:.2}, avg {:.2}, 偏好 {:?})",
+            min_dist,
+            avg_dist,
+            score,
+            w.nearest_enemy,
+            w.avg_enemy,
+            tendency.positioning_preference
+        );
+
+        Ok(ScoredAction {
+            action: Action::Move { path },
+            score,
+            reason,
+        })
+    }
+
+    fn score_move_and_use_skill(
+        tendency: &Tendency,
+        ally_positions: Vec<Pos>,
+        enemy_positions: Vec<Pos>,
+        path: Vec<Pos>,
+        skill_id: SkillID,
+        target: Pos,
+        target_units: Vec<UnitID>,
+    ) -> Result<ScoredAction, Error> {
+        let func = "ai.score_move_and_use_skill";
+
+        Err(Error::InvalidParameter { func })
+    }
+
+    fn manhattan_distance(a: Pos, b: Pos) -> usize {
+        ((a.x as isize - b.x as isize).abs() + (a.y as isize - b.y as isize).abs()) as usize
     }
 }
