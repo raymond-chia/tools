@@ -341,177 +341,180 @@ impl SkillsEditor {
         let mut add_effect_clicked = false;
         let mut delete_effect_indices = None;
 
-        if let Some(skill_id) = &self.selected_skill {
-            ui.heading("技能編輯: ");
-            let skill = match self.skills_data.skills.get_mut(skill_id) {
+        let skill_id = match &self.selected_skill {
+            None => {
+                ui.heading("技能編輯器");
+                ui.label("選擇或建立一個技能開始編輯");
+                return;
+            }
+            Some(skill_id) => skill_id,
+        };
+        ui.heading("技能編輯: ");
+        let skill = match self.skills_data.skills.get_mut(skill_id) {
+            None => {
+                self.set_status("技能不存在".to_string(), true);
+                return;
+            }
+            Some(skill) => skill,
+        };
+        let mut new_skill_id = skill_id.clone();
+        ui.text_edit_singleline(&mut new_skill_id);
+
+        ui.horizontal(|ui| {
+            delete_clicked = ui.button("刪除技能").clicked();
+        });
+
+        ui.add_space(8.0);
+        ui.add(Separator::default());
+
+        // 計算 ScrollArea 的最大高度，為底部留出空間
+        let available_height = ui.available_height();
+        let scroll_height = available_height.max(100.0) - 40.0; // 為底部狀態欄保留空間
+
+        // 添加可捲動區域，設定最大高度
+        ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .max_height(scroll_height)
+            .show(ui, |ui| {
+                // 在可捲動區域內編輯技能，直接使用 skills_data 中的技能
+                // 基本屬性編輯
+                ui.heading("基本屬性");
+
+                // 標籤編輯
+                ui.collapsing("標籤", |ui| {
+                    if Self::show_tags_editor(ui, skill) {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                });
+
+                // 範圍編輯
+                ui.horizontal(|ui| {
+                    ui.label("範圍:");
+                    if ui
+                        .add(DragValue::new(&mut skill.range.0).prefix("最小: "))
+                        .changed()
+                    {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                    if ui
+                        .add(DragValue::new(&mut skill.range.1).prefix("最大: "))
+                        .changed()
+                    {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                });
+
+                // 消耗編輯
+                ui.horizontal(|ui| {
+                    ui.label("消耗:");
+                    if ui.add(DragValue::new(&mut skill.cost)).changed() {
+                        self.has_unsaved_changes_flag = true;
+                    }
+                });
+
+                // 命中率編輯
+                ui.horizontal(|ui| {
+                    ui.label("命中率:");
+                    let mut has_hit_rate = skill.hit_rate.is_some();
+                    if ui.checkbox(&mut has_hit_rate, "").changed() {
+                        skill.hit_rate = if has_hit_rate { Some(100) } else { None };
+                        self.has_unsaved_changes_flag = true;
+                    }
+
+                    if let Some(hit_rate) = &mut skill.hit_rate {
+                        if ui
+                            .add_enabled(
+                                has_hit_rate,
+                                DragValue::new(hit_rate).range(0..=100).suffix("%"),
+                            )
+                            .changed()
+                        {
+                            self.has_unsaved_changes_flag = true;
+                        }
+                    }
+                });
+
+                // 爆擊率編輯
+                ui.horizontal(|ui| {
+                    ui.label("爆擊率:");
+                    let mut has_crit_rate = skill.crit_rate.is_some();
+                    if ui.checkbox(&mut has_crit_rate, "").changed() {
+                        skill.crit_rate = if has_crit_rate { Some(10) } else { None };
+                        self.has_unsaved_changes_flag = true;
+                    }
+
+                    if let Some(crit_rate) = &mut skill.crit_rate {
+                        if ui
+                            .add_enabled(
+                                has_crit_rate,
+                                DragValue::new(crit_rate).range(0..=100).suffix("%"),
+                            )
+                            .changed()
+                        {
+                            self.has_unsaved_changes_flag = true;
+                        }
+                    }
+                });
+
+                ui.add_space(8.0);
+                ui.add(Separator::default());
+
+                // 效果編輯
+                ui.horizontal(|ui| {
+                    ui.heading("效果");
+                    add_effect_clicked = ui.button("新增效果").clicked();
+                });
+
+                // 處理效果編輯
+                for (index, effect) in skill.effects.iter_mut().enumerate() {
+                    ui.push_id(index, |ui| {
+                        let mut delete_effect_clicked = false;
+                        ui.horizontal(|ui| {
+                            match effect {
+                                Effect::Hp { .. } => {
+                                    ui.label("HP 效果");
+                                }
+                                Effect::MaxHp { .. } => {
+                                    ui.label("最大生命值效果");
+                                }
+                                Effect::Burn { .. } => {
+                                    ui.label("燃燒效果");
+                                }
+                                Effect::MovePoints { .. } => {
+                                    ui.label("移動點數效果");
+                                }
+                                Effect::HitAndRun { .. } => {
+                                    ui.label("打帶跑效果");
+                                }
+                            }
+
+                            delete_effect_clicked = ui.button("🗑").clicked();
+                        });
+
+                        if delete_effect_clicked {
+                            delete_effect_indices = Some(index);
+                        }
+
+                        ui.indent(format!("effect_{}", index), |ui| {
+                            if Self::show_effect_editor(ui, effect) {
+                                self.has_unsaved_changes_flag = true;
+                            }
+                        });
+
+                        ui.add_space(8.0);
+                    });
+                }
+            });
+        if &new_skill_id != skill_id && !self.skills_data.skills.contains_key(&new_skill_id) {
+            let skill = match self.skills_data.skills.remove(skill_id) {
                 None => {
-                    self.set_status("技能不存在".to_string(), true);
+                    self.set_status(format!("舊技能名稱應該存在: {skill_id}"), true);
                     return;
                 }
                 Some(skill) => skill,
             };
-            let mut new_skill_id = skill_id.clone();
-            ui.text_edit_singleline(&mut new_skill_id);
-
-            ui.horizontal(|ui| {
-                delete_clicked = ui.button("刪除技能").clicked();
-            });
-
-            ui.add_space(8.0);
-            ui.add(Separator::default());
-
-            // 計算 ScrollArea 的最大高度，為底部留出空間
-            let available_height = ui.available_height();
-            let scroll_height = available_height.max(100.0) - 40.0; // 為底部狀態欄保留空間
-
-            // 添加可捲動區域，設定最大高度
-            ScrollArea::vertical()
-                .auto_shrink([false; 2])
-                .max_height(scroll_height)
-                .show(ui, |ui| {
-                    // 在可捲動區域內編輯技能，直接使用 skills_data 中的技能
-                    // 基本屬性編輯
-                    ui.heading("基本屬性");
-
-                    // 標籤編輯
-                    ui.collapsing("標籤", |ui| {
-                        if Self::show_tags_editor(ui, skill) {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                    });
-
-                    // 範圍編輯
-                    ui.horizontal(|ui| {
-                        ui.label("範圍:");
-                        if ui
-                            .add(DragValue::new(&mut skill.range.0).prefix("最小: "))
-                            .changed()
-                        {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                        if ui
-                            .add(DragValue::new(&mut skill.range.1).prefix("最大: "))
-                            .changed()
-                        {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                    });
-
-                    // 消耗編輯
-                    ui.horizontal(|ui| {
-                        ui.label("消耗:");
-                        if ui.add(DragValue::new(&mut skill.cost)).changed() {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                    });
-
-                    // 命中率編輯
-                    ui.horizontal(|ui| {
-                        ui.label("命中率:");
-                        let mut has_hit_rate = skill.hit_rate.is_some();
-                        if ui.checkbox(&mut has_hit_rate, "").changed() {
-                            skill.hit_rate = if has_hit_rate { Some(100) } else { None };
-                            self.has_unsaved_changes_flag = true;
-                        }
-
-                        if let Some(hit_rate) = &mut skill.hit_rate {
-                            if ui
-                                .add_enabled(
-                                    has_hit_rate,
-                                    DragValue::new(hit_rate).range(0..=100).suffix("%"),
-                                )
-                                .changed()
-                            {
-                                self.has_unsaved_changes_flag = true;
-                            }
-                        }
-                    });
-
-                    // 爆擊率編輯
-                    ui.horizontal(|ui| {
-                        ui.label("爆擊率:");
-                        let mut has_crit_rate = skill.crit_rate.is_some();
-                        if ui.checkbox(&mut has_crit_rate, "").changed() {
-                            skill.crit_rate = if has_crit_rate { Some(10) } else { None };
-                            self.has_unsaved_changes_flag = true;
-                        }
-
-                        if let Some(crit_rate) = &mut skill.crit_rate {
-                            if ui
-                                .add_enabled(
-                                    has_crit_rate,
-                                    DragValue::new(crit_rate).range(0..=100).suffix("%"),
-                                )
-                                .changed()
-                            {
-                                self.has_unsaved_changes_flag = true;
-                            }
-                        }
-                    });
-
-                    ui.add_space(8.0);
-                    ui.add(Separator::default());
-
-                    // 效果編輯
-                    ui.horizontal(|ui| {
-                        ui.heading("效果");
-                        add_effect_clicked = ui.button("新增效果").clicked();
-                    });
-
-                    // 處理效果編輯
-                    for (index, effect) in skill.effects.iter_mut().enumerate() {
-                        ui.push_id(index, |ui| {
-                            let mut delete_effect_clicked = false;
-                            ui.horizontal(|ui| {
-                                match effect {
-                                    Effect::Hp { .. } => {
-                                        ui.label("HP 效果");
-                                    }
-                                    Effect::MaxHp { .. } => {
-                                        ui.label("最大生命值效果");
-                                    }
-                                    Effect::Burn { .. } => {
-                                        ui.label("燃燒效果");
-                                    }
-                                    Effect::MovePoints { .. } => {
-                                        ui.label("移動點數效果");
-                                    }
-                                    Effect::HitAndRun { .. } => {
-                                        ui.label("打帶跑效果");
-                                    }
-                                }
-
-                                delete_effect_clicked = ui.button("🗑").clicked();
-                            });
-
-                            if delete_effect_clicked {
-                                delete_effect_indices = Some(index);
-                            }
-
-                            ui.indent(format!("effect_{}", index), |ui| {
-                                if Self::show_effect_editor(ui, effect) {
-                                    self.has_unsaved_changes_flag = true;
-                                }
-                            });
-
-                            ui.add_space(8.0);
-                        });
-                    }
-                });
-            if &new_skill_id != skill_id && !self.skills_data.skills.contains_key(&new_skill_id) {
-                let skill = match self.skills_data.skills.remove(skill_id) {
-                    None => {
-                        self.set_status(format!("舊技能名稱應該存在: {skill_id}"), true);
-                        return;
-                    }
-                    Some(skill) => skill,
-                };
-                self.skills_data.skills.insert(new_skill_id.clone(), skill);
-                self.selected_skill = Some(new_skill_id);
-            }
-        } else {
-            ui.heading("技能編輯器");
-            ui.label("選擇或建立一個技能開始編輯");
+            self.skills_data.skills.insert(new_skill_id.clone(), skill);
+            self.selected_skill = Some(new_skill_id);
         }
 
         // 處理刪除技能按鈕
