@@ -3,32 +3,31 @@ use serde::Deserialize;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
+#[serde(default)]
 pub struct AIConfig {
     pub tendencies: BTreeMap<UnitTemplateType, Tendency>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct Tendency {
     pub weights: Weights,
     pub positioning_preference: PositionPreference,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct Weights {
     pub attack: AIScore,
     pub support: AIScore,
     /// score_move 最近敵人距離權重
     pub nearest_enemy: AIScore,
-    /// score_move 所有敵人平均距離權重
-    pub avg_enemy: AIScore,
     /// score_move 距離基準分，可 data-driven 設定
     pub distance_base: AIScore,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub enum PositionPreference {
     Frontline,
     #[default]
@@ -263,12 +262,10 @@ mod inner {
             PositionPreference::Frontline => {
                 // 越靠近敵人越高分
                 score += w.nearest_enemy * (w.distance_base - min_dist);
-                score += w.avg_enemy * (w.distance_base - avg_dist);
             }
             PositionPreference::Backline => {
                 // 越遠離敵人越高分
                 score += w.nearest_enemy * min_dist;
-                score += w.avg_enemy * avg_dist;
             }
             PositionPreference::Flexible => {
                 // 可自訂，預設不加分
@@ -276,13 +273,8 @@ mod inner {
         }
 
         let reason = format!(
-            "最近敵人距離: {:.2}, 平均敵人距離: {:.2}, 分數: {:.2} (權重: nearest {:.2}, avg {:.2}, 偏好 {:?})",
-            min_dist,
-            avg_dist,
-            score,
-            w.nearest_enemy,
-            w.avg_enemy,
-            tendency.positioning_preference
+            "最近敵人距離: {:.2}, 平均敵人距離: {:.2}, 分數: {:.2} (權重: nearest {:.2}, 偏好 {:?})",
+            min_dist, avg_dist, score, w.nearest_enemy, tendency.positioning_preference
         );
 
         Ok(ScoredAction {

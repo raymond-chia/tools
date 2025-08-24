@@ -1,5 +1,5 @@
 use eframe::egui;
-use egui::{Pos2, RichText, Ui, Vec2};
+use egui::*;
 use rfd::FileDialog;
 use serde::{Serialize, de::DeserializeOwned};
 use std::fs;

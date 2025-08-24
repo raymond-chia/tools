@@ -30,6 +30,8 @@ pub struct BoardsEditor {
     sim_board: Board,
     sim_battle: Battle,
     skill_selection: SkillSelection,
+    // AI 評分結果
+    ai_score_result: Option<String>,
     // 其他
     camera: Camera2D,
     unit_templates: IndexMap<UnitTemplateType, UnitTemplate>,
@@ -40,8 +42,6 @@ pub struct BoardsEditor {
     // status
     has_unsaved_changes: bool,
     status_message: Option<(String, bool)>,
-    // AI 評分結果
-    ai_score_result: Option<String>,
 }
 
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
@@ -84,10 +84,13 @@ impl BoardsEditor {
                     .into_iter()
                     .map(|u| (u.name.clone(), u))
                     .collect();
-                if let Some(selected) = &self.selected_unit {
-                    if !self.unit_templates.contains_key(selected) {
-                        self.selected_unit = None;
-                    }
+                let is_selected_exist = self
+                    .selected_unit
+                    .as_ref()
+                    .map_or(false, |selected| self.unit_templates.contains_key(selected));
+                if !is_selected_exist {
+                    // 如果選中的單位不存在，則清除選中狀態
+                    self.selected_unit = None;
                 }
             }
             Err(err) => {

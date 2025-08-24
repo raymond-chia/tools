@@ -1,6 +1,6 @@
 use crate::{common::*, skills::SkillsData};
 use chess_lib::{UnitTemplate, UnitTemplateType};
-use egui::{Button, Ui};
+use egui::*;
 use std::io;
 
 #[derive(Default)]
@@ -35,11 +35,12 @@ impl UnitsEditor {
         match load_unit_templates(UNIT_TEMPLATES_FILE) {
             Ok(unit_templates) => {
                 self.unit_templates = unit_templates;
-                if let Some(selected) = &self.selected_unit {
-                    if !self.unit_templates.iter().any(|u| &u.name == selected) {
-                        // 如果選中的單位不存在，則清除選中狀態
-                        self.selected_unit = None;
-                    }
+                let is_selected_exist = self.selected_unit.as_ref().map_or(false, |selected| {
+                    self.unit_templates.iter().any(|u| &u.name == selected)
+                });
+                if !is_selected_exist {
+                    // 如果選中的單位不存在，則清除選中狀態
+                    self.selected_unit = None;
                 }
             }
             Err(err) => {
@@ -84,31 +85,30 @@ impl UnitsEditor {
         self.set_status("已重新載入 unit_templates 與 skills".to_string(), false);
     }
 
-    pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::SidePanel::left("unit_list_panel")
+    pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        SidePanel::left("unit_list_panel")
             .default_width(200.0)
             .show(ctx, |ui| {
+                if ui.button("重新載入").clicked() {
+                    self.reload();
+                }
+                if ui.button("儲存").clicked() {
+                    if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
+                        self.set_status(format!("儲存失敗: {e}"), true);
+                    } else {
+                        self.set_status("儲存成功".to_string(), false);
+                        self.has_unsaved_changes = false;
+                    }
+                }
                 self.show_unit_list(ui);
             });
-        egui::CentralPanel::default().show(ctx, |ui| {
+        CentralPanel::default().show(ctx, |ui| {
             self.show_unit_editor(ui);
         });
         self.show_status_message(ctx);
     }
 
     fn show_unit_list(&mut self, ui: &mut Ui) {
-        if ui.button("重新載入").clicked() {
-            self.reload();
-        }
-        if ui.button("儲存").clicked() {
-            if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
-                self.set_status(format!("儲存失敗: {e}"), true);
-            } else {
-                self.set_status("儲存成功".to_string(), false);
-                self.has_unsaved_changes = false;
-            }
-        }
-
         ui.heading("單位列表");
         if ui.button("新增單位").clicked() {
             let new_unit = UnitTemplate::default();
@@ -121,14 +121,14 @@ impl UnitsEditor {
         let mut to_move_up = None;
         let mut to_move_down = None;
         let mut to_select = None;
-        egui::ScrollArea::vertical().show(ui, |ui| {
+        ScrollArea::vertical().show(ui, |ui| {
             for (idx, unit) in self.unit_templates.iter().enumerate() {
                 let name = &unit.name;
                 let selected = self.selected_unit == Some(name.clone());
                 let button = Button::new(name).fill(if selected {
-                    egui::Color32::DARK_GRAY
+                    ui.style().visuals.selection.bg_fill
                 } else {
-                    egui::Color32::TRANSPARENT
+                    ui.style().visuals.widgets.noninteractive.bg_fill
                 });
                 if ui.add(button).clicked() {
                     to_select = Some(name.clone());
@@ -178,19 +178,22 @@ impl UnitsEditor {
     }
 
     fn show_unit_editor(&mut self, ui: &mut Ui) {
-        let Some(orig_name) = self.selected_unit.clone() else {
-            return;
+        let orig_name = match self.selected_unit.clone() {
+            None => return,
+            Some(orig_name) => orig_name,
         };
         let idx = self.unit_templates.iter().position(|u| u.name == orig_name);
-        let Some(idx) = idx else {
-            return;
+        let idx = match idx {
+            None => return,
+            Some(idx) => idx,
         };
-        let mut unit = self.unit_templates[idx].clone();
+        let unit = &mut self.unit_templates[idx];
         ui.heading("單位編輯");
         ui.label("名稱（含等級）：");
         ui.text_edit_singleline(&mut unit.name);
+        self.selected_unit = Some(unit.name.clone());
         ui.label("技能：");
-        egui::ComboBox::from_id_salt("add_skill_combo")
+        ComboBox::from_id_salt("add_skill_combo")
             .selected_text(format!("選擇技能: {}", &self.selected_skill))
             .show_ui(ui, |ui| {
                 ui.label("─── 主動技能 ───");
@@ -224,15 +227,6 @@ impl UnitsEditor {
             unit.skills.remove(&deleted);
             self.has_unsaved_changes = true;
         }
-
-        // 判斷名稱是否有變更
-        let name_changed = unit.name != orig_name;
-        if name_changed && !self.unit_templates.iter().any(|u| u.name == unit.name) {
-            self.selected_unit = Some(unit.name.clone());
-            self.unit_templates[idx] = unit;
-        } else if !name_changed {
-            self.unit_templates[idx] = unit;
-        }
     }
 
     fn save_unit_templates(&self, path: &str) -> Result<(), io::Error> {
@@ -250,7 +244,7 @@ impl UnitsEditor {
         self.status_message = Some((msg, is_error));
     }
 
-    fn show_status_message(&mut self, ctx: &egui::Context) {
+    fn show_status_message(&mut self, ctx: &Context) {
         if let Some((message, is_error)) = &self.status_message {
             show_status_message(ctx, message, *is_error);
         }
