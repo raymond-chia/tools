@@ -339,7 +339,9 @@ impl SkillsEditor {
         // 首先添加標題和按鈕（這些保持在固定位置）
         let mut delete_clicked = false;
         let mut add_effect_clicked = false;
-        let mut delete_effect_indices = None;
+        let mut move_up_effect_index: Option<usize> = None;
+        let mut move_down_effect_index: Option<usize> = None;
+        let mut delete_effect_index = None;
 
         let skill_id = match &self.selected_skill {
             None => {
@@ -466,33 +468,35 @@ impl SkillsEditor {
                 });
 
                 // 處理效果編輯
+                let effects_len = skill.effects.len();
                 for (index, effect) in skill.effects.iter_mut().enumerate() {
                     ui.push_id(index, |ui| {
+                        let mut move_up_clicked = false;
+                        let mut move_down_clicked = false;
                         let mut delete_effect_clicked = false;
                         ui.horizontal(|ui| {
                             match effect {
-                                Effect::Hp { .. } => {
-                                    ui.label("HP 效果");
-                                }
-                                Effect::MaxHp { .. } => {
-                                    ui.label("最大生命值效果");
-                                }
-                                Effect::Burn { .. } => {
-                                    ui.label("燃燒效果");
-                                }
-                                Effect::MovePoints { .. } => {
-                                    ui.label("移動點數效果");
-                                }
-                                Effect::HitAndRun { .. } => {
-                                    ui.label("打帶跑效果");
-                                }
-                            }
-
+                                Effect::Hp { .. } => ui.label("HP 效果"),
+                                Effect::MaxHp { .. } => ui.label("最大生命值效果"),
+                                Effect::Burn { .. } => ui.label("燃燒效果"),
+                                Effect::MovePoints { .. } => ui.label("移動點數效果"),
+                                Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
+                            };
+                            move_up_clicked = ui.add_enabled(index > 0, Button::new("↑")).clicked();
+                            move_down_clicked = ui
+                                .add_enabled(index + 1 < effects_len, Button::new("↓"))
+                                .clicked();
                             delete_effect_clicked = ui.button("🗑").clicked();
                         });
 
+                        if move_up_clicked {
+                            move_up_effect_index = Some(index);
+                        }
+                        if move_down_clicked {
+                            move_down_effect_index = Some(index);
+                        }
                         if delete_effect_clicked {
-                            delete_effect_indices = Some(index);
+                            delete_effect_index = Some(index);
                         }
 
                         ui.indent(format!("effect_{}", index), |ui| {
@@ -505,6 +509,17 @@ impl SkillsEditor {
                     });
                 }
             });
+
+        // for 迴圈外統一處理 move
+        if let Some(idx) = move_up_effect_index.take() {
+            skill.effects.swap(idx, idx - 1);
+            self.has_unsaved_changes_flag = true;
+        }
+        if let Some(idx) = move_down_effect_index.take() {
+            skill.effects.swap(idx, idx + 1);
+            self.has_unsaved_changes_flag = true;
+        }
+
         if &new_skill_id != skill_id && !self.skills_data.skills.contains_key(&new_skill_id) {
             let skill = match self.skills_data.skills.remove(skill_id) {
                 None => {
@@ -530,12 +545,12 @@ impl SkillsEditor {
         }
 
         // 處理刪除效果
-        if delete_effect_indices.is_some() && self.selected_skill.is_some() {
+        if delete_effect_index.is_some() && self.selected_skill.is_some() {
             let skill_id = self
                 .selected_skill
                 .clone()
                 .expect("selected skill in race condition");
-            let index = delete_effect_indices
+            let index = delete_effect_index
                 .take()
                 .expect("delete effect in race condition");
             self.confirmation_action = ConfirmationAction::DeleteEffect(skill_id, index);
