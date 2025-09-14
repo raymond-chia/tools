@@ -177,6 +177,14 @@ impl BoardsEditor {
                     self.has_unsaved_changes = false;
                 }
             }
+            if ui.button("匯出所有戰場為小檔案").clicked() {
+                match export_boards_to_files(&self.boards) {
+                    Ok(count) => {
+                        self.set_status(format!("已匯出 {count} 個戰場檔案到 boards/ 目錄"), false)
+                    }
+                    Err(e) => self.set_status(format!("匯出失敗: {}", e), true),
+                }
+            }
             ui.heading("戰場列表");
             if ui.button("新增戰場").clicked() {
                 let new_board_id = format!("新戰場{}", self.boards.len() + 1);
@@ -874,6 +882,22 @@ fn load_boards(path: &str) -> io::Result<BTreeMap<BoardID, BoardConfig>> {
 
 fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Result<()> {
     to_file(path, boards)
+}
+
+/// 匯出所有 board 為 boards/{id}.toml 檔案，不更動原本設定檔
+fn export_boards_to_files(boards: &BTreeMap<BoardID, BoardConfig>) -> Result<usize, String> {
+    if let Err(e) = std::fs::create_dir_all(BOARDS_SEPARATE_DIR) {
+        return Err(format!("建立目錄失敗: {}", e));
+    }
+    let mut count = 0;
+    for (id, board) in boards {
+        let file_path = format!("{}/{}.toml", BOARDS_SEPARATE_DIR, id);
+        match to_file(&file_path, board) {
+            Ok(_) => count += 1,
+            Err(e) => return Err(format!("寫入 {} 失敗: {}", file_path, e)),
+        }
+    }
+    Ok(count)
 }
 
 // 避免 mut editor 出現太多次，只使用 editor 的 member
