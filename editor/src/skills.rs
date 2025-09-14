@@ -338,6 +338,7 @@ impl SkillsEditor {
     fn show_skill_editor(&mut self, ui: &mut Ui) {
         // 首先添加標題和按鈕（這些保持在固定位置）
         let mut delete_clicked = false;
+        let mut copy_clicked = false;
         let mut add_effect_clicked = false;
         let mut move_up_effect_index: Option<usize> = None;
         let mut move_down_effect_index: Option<usize> = None;
@@ -364,6 +365,7 @@ impl SkillsEditor {
 
         ui.horizontal(|ui| {
             delete_clicked = ui.button("刪除技能").clicked();
+            copy_clicked = ui.button("複製技能").clicked();
         });
 
         ui.add_space(8.0);
@@ -537,6 +539,10 @@ impl SkillsEditor {
             let skill_id = self.selected_skill.clone().unwrap();
             self.confirmation_action = ConfirmationAction::DeleteSkill(skill_id);
             self.show_confirmation_dialog = true;
+        }
+        // 處理複製技能按鈕
+        if copy_clicked {
+            self.copy_skill();
         }
 
         // 處理添加效果按鈕
@@ -868,6 +874,35 @@ impl SkillsEditor {
     /// 檢查目前編輯中的技能是否有未保存的變動
     pub fn has_unsaved_changes(&self) -> bool {
         self.has_unsaved_changes_flag
+    }
+
+    /// 複製目前選取的技能，產生新 ID（自動加 "_copy" 並避免重複），並選取新技能
+    fn copy_skill(&mut self) {
+        let skill_id = match &self.selected_skill {
+            Some(id) => id.clone(),
+            None => {
+                self.set_status("請先選擇要複製的技能".to_string(), true);
+                return;
+            }
+        };
+        let orig_skill = match self.skills_data.skills.get(&skill_id) {
+            Some(skill) => skill.clone(),
+            None => {
+                self.set_status("技能不存在".to_string(), true);
+                return;
+            }
+        };
+        // 自動產生新 ID
+        let mut new_id = format!("{}_copy", skill_id);
+        let mut idx = 2;
+        while self.skills_data.skills.contains_key(&new_id) {
+            new_id = format!("{}_copy{}", skill_id, idx);
+            idx += 1;
+        }
+        self.skills_data.skills.insert(new_id.clone(), orig_skill);
+        self.selected_skill = Some(new_id.clone());
+        self.has_unsaved_changes_flag = true;
+        self.set_status(format!("已複製技能為 {}", new_id), false);
     }
 }
 
