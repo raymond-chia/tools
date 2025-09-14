@@ -13,6 +13,7 @@ const TILE_SIZE: f32 = 56.0;
 const TILE_OBJECT_SIZE: f32 = 10.0;
 const TILE_SHRINK_SIZE: f32 = TILE_SIZE / 40.0;
 const TILE_ACTION_SHRINK_SIZE: f32 = TILE_SIZE / 5.0;
+const TILE_DEPLOYABLE_SIZE: f32 = 28.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -52,6 +53,7 @@ enum BrushMode {
     Object,
     Unit,
     Team,
+    Deploy,
     Sim,
 }
 
@@ -245,7 +247,8 @@ impl BoardsEditor {
         );
 
         // 僅處理點擊
-        if !ui.ctx().input(|i| i.pointer.primary_down()) {
+        let pointer_state = ui.ctx().input(|i| i.pointer.clone());
+        if !pointer_state.primary_down() {
             return;
         }
         let Ok(painted) = cursor_to_pos(&self.camera, ui) else {
@@ -291,6 +294,21 @@ impl BoardsEditor {
                 };
                 if let Err(e) = paint_unit(board, painted, marker) {
                     err_msg = format!("Error painting unit: {}", e);
+                }
+            }
+            BrushMode::Deploy => {
+                // 前面已經限制只有 down 可以過來
+                if !pointer_state.primary_pressed() {
+                    return;
+                }
+                if board.get_tile(painted).is_some() {
+                    // 只允許在有效格子操作
+                    if board.deployable.contains(&painted) {
+                        board.deployable.remove(&painted);
+                    } else {
+                        board.deployable.insert(painted);
+                    }
+                    self.has_unsaved_changes = true;
                 }
             }
             BrushMode::Team | BrushMode::Sim | BrushMode::None => {}
@@ -445,6 +463,7 @@ impl BoardsEditor {
                 (BrushMode::Object, "物件筆刷"),
                 (BrushMode::Unit, "單位筆刷"),
                 (BrushMode::Team, "隊伍編輯"),
+                (BrushMode::Deploy, "部署格子"),
                 (BrushMode::Sim, "模擬"),
             ] {
                 if ui.selectable_label(self.brush == mode, label).clicked() {
@@ -471,6 +490,9 @@ impl BoardsEditor {
             }
             BrushMode::Team => {
                 self.show_team_settings(ui);
+            }
+            BrushMode::Deploy => {
+                ui.label("部署格子筆刷：點擊格子以切換是否可部署");
             }
             BrushMode::Sim => {
                 if changed {
@@ -902,15 +924,25 @@ fn show_tiles(
 
 fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
     |painter, camera, pos, rect| {
+        // 顯示部署格子（黃色圓圈）
+        if board.deployable.contains(&pos) {
+            painter.text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                "★", // 部署格子符號
+                FontId::proportional(TILE_DEPLOYABLE_SIZE * camera.zoom),
+                Color32::LIGHT_BLUE,
+            );
+        }
         // 顯示單位
-        let Some((unit_template, team)) = board
+        let (unit_template, team) = match board
             .units
             .values()
             .find(|u| u.pos == pos)
             .map(|u| (&u.unit_template_type, &u.team))
-        else {
-            // 該位置沒有單位
-            return;
+        {
+            None => return, // 該位置沒有單位
+            Some(v) => v,
         };
         let team_color = board
             .teams
