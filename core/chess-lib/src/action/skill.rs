@@ -150,7 +150,7 @@ impl SkillSelection {
             return vec![];
         }
         // 判斷 to 是否在技能 range 內，超過則不顯示範圍
-        if !is_in_skill_range(skill.range, from, to) {
+        if !is_in_skill_range_manhattan(skill.range, from, to) {
             return vec![];
         }
         // 取得技能範圍形狀（僅取第一個 effect 的 shape）
@@ -193,7 +193,7 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
             }
             let (x, y) = (x as usize, y as usize);
             let target = Pos { x, y };
-            if !is_in_skill_range(range, active_unit_pos, target) {
+            if !is_in_skill_range_manhattan(range, active_unit_pos, target) {
                 continue;
             }
             if board.get_tile(target).is_none() {
@@ -317,13 +317,12 @@ mod inner {
     /// - from: 施放者座標
     /// - to: 目標座標
     /// 回傳：是否符合技能距離限制
-    pub fn is_in_skill_range(range: (usize, usize), from: Pos, to: Pos) -> bool {
-        let dx = from.x as isize - to.x as isize;
-        let dy = from.y as isize - to.y as isize;
-        let dist = dx * dx + dy * dy;
-        let dist = dist as usize;
+    pub fn is_in_skill_range_manhattan(range: (usize, usize), from: Pos, to: Pos) -> bool {
+        let dx = (from.x as isize - to.x as isize).abs();
+        let dy = (from.y as isize - to.y as isize).abs();
+        let dist = (dx + dy) as usize;
 
-        let (min_range, max_range) = (range.0 * range.0, range.1 * range.1);
+        let (min_range, max_range) = range;
         min_range <= dist && dist <= max_range
     }
 
