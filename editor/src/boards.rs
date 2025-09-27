@@ -101,21 +101,9 @@ impl BoardsEditor {
                 return;
             }
         }
-        match from_file::<_, BTreeMap<SkillID, Skill>>(SKILLS_FILE) {
-            Ok(skills) => {
+        match load_skills(SKILLS_FILE) {
+            Ok((skills, active_skill_ids, passive_skill_ids)) => {
                 self.skills = skills;
-                // 分類主動/被動技能
-                let mut active_skill_ids = Vec::new();
-                let mut passive_skill_ids = Vec::new();
-                for (id, skill) in &self.skills {
-                    if skill.tags.contains(&skills_lib::Tag::Active) {
-                        active_skill_ids.push(id.clone());
-                    } else if skill.tags.contains(&skills_lib::Tag::Passive) {
-                        passive_skill_ids.push(id.clone());
-                    }
-                }
-                active_skill_ids.sort();
-                passive_skill_ids.sort();
                 self.active_skill_ids = active_skill_ids;
                 self.passive_skill_ids = passive_skill_ids;
             }

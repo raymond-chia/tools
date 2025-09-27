@@ -2,6 +2,8 @@ use eframe::egui;
 use egui::*;
 use rfd::FileDialog;
 use serde::{Serialize, de::DeserializeOwned};
+use skills_lib::*;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -9,6 +11,7 @@ use std::path::{Path, PathBuf};
 pub const DIALOGS_FILE: &str = "core/test-data/ignore-dialogs.toml";
 pub const SKILLS_FILE: &str = "core/test-data/ignore-skills.toml";
 pub const UNIT_TEMPLATES_FILE: &str = "core/test-data/ignore-unit-templates.toml";
+pub const PROGRESSION_FILE: &str = "core/test-data/ignore-player-progression.toml";
 pub const BOARDS_FILE: &str = "core/test-data/ignore-boards.toml";
 pub const BOARDS_SEPARATE_DIR: &str = "core/test-data/ignore-boards/";
 pub const AI_FILE: &str = "core/test-data/ignore-ai.toml";
@@ -161,4 +164,29 @@ pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
     egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
         ui.label(RichText::new(message).color(color));
     });
+}
+
+pub fn load_skills<P: AsRef<Path>>(
+    path: P,
+) -> io::Result<(BTreeMap<SkillID, Skill>, Vec<SkillID>, Vec<SkillID>)> {
+    match from_file::<_, BTreeMap<SkillID, Skill>>(path) {
+        Ok(skills) => {
+            // 分類主動/被動技能
+            let mut active_skill_ids = Vec::new();
+            let mut passive_skill_ids = Vec::new();
+            for (id, skill) in &skills {
+                if skill.tags.contains(&skills_lib::Tag::Active) {
+                    active_skill_ids.push(id.clone());
+                } else if skill.tags.contains(&skills_lib::Tag::Passive) {
+                    passive_skill_ids.push(id.clone());
+                }
+            }
+            active_skill_ids.sort();
+            passive_skill_ids.sort();
+            return Ok((skills, active_skill_ids, passive_skill_ids));
+        }
+        Err(err) => {
+            return Err(err);
+        }
+    }
 }

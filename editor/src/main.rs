@@ -2,6 +2,7 @@ mod ai;
 mod boards;
 mod common;
 mod dialogs;
+mod player_progression;
 mod skills;
 mod units;
 
@@ -10,6 +11,7 @@ use boards::BoardsEditor;
 use dialogs::DialogsEditor;
 use eframe::{Frame, egui};
 use egui::{FontData, FontDefinitions, FontFamily, Ui};
+use player_progression::PlayerProgressionEditor;
 use skills::SkillsEditor;
 use units::UnitsEditor;
 
@@ -18,8 +20,9 @@ use units::UnitsEditor;
 enum EditorMode {
     Skills,
     Units,
-    AI,
     Boards,
+    PlayerProgression,
+    AI,
     Dialogs,
 }
 
@@ -28,8 +31,9 @@ struct EditorApp {
     editor_mode: EditorMode,
     skills_editor: SkillsEditor,
     units_editor: UnitsEditor,
-    ai_editor: AIEditor,
     boards_editor: BoardsEditor,
+    player_progression_editor: PlayerProgressionEditor,
+    ai_editor: AIEditor,
     dialogs_editor: DialogsEditor,
     pending_mode: Option<EditorMode>,
     show_mode_switch_confirmation: bool,
@@ -84,8 +88,9 @@ impl EditorApp {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::new(),
             units_editor: UnitsEditor::new(),
-            ai_editor: AIEditor::new(),
             boards_editor: BoardsEditor::new(),
+            player_progression_editor: PlayerProgressionEditor::new(),
+            ai_editor: AIEditor::new(),
             dialogs_editor: DialogsEditor::new(),
             pending_mode: None,
             show_mode_switch_confirmation: false,
@@ -97,8 +102,9 @@ impl EditorApp {
             for (mode, label) in [
                 (EditorMode::Skills, "技能編輯器"),
                 (EditorMode::Units, "單位編輯器"),
-                (EditorMode::AI, "AI 編輯器"),
                 (EditorMode::Boards, "戰場編輯器"),
+                (EditorMode::PlayerProgression, "玩家進度編輯器"),
+                (EditorMode::AI, "AI 編輯器"),
                 (EditorMode::Dialogs, "劇情編輯器"),
             ] {
                 if ui
@@ -108,8 +114,11 @@ impl EditorApp {
                     let has_unsaved_changes = match self.editor_mode {
                         EditorMode::Skills => self.skills_editor.has_unsaved_changes(),
                         EditorMode::Units => self.units_editor.has_unsaved_changes(),
-                        EditorMode::AI => self.ai_editor.has_unsaved_changes(),
                         EditorMode::Boards => self.boards_editor.has_unsaved_changes(),
+                        EditorMode::PlayerProgression => {
+                            self.player_progression_editor.has_unsaved_changes()
+                        }
+                        EditorMode::AI => self.ai_editor.has_unsaved_changes(),
                         EditorMode::Dialogs => self.dialogs_editor.has_unsaved_changes(),
                     };
                     if has_unsaved_changes {
@@ -133,15 +142,17 @@ impl EditorApp {
         let current_mode = match self.editor_mode {
             EditorMode::Skills => "技能編輯器",
             EditorMode::Units => "單位編輯器",
-            EditorMode::AI => "AI 編輯器",
             EditorMode::Boards => "戰場編輯器",
+            EditorMode::PlayerProgression => "玩家進度編輯器",
+            EditorMode::AI => "AI 編輯器",
             EditorMode::Dialogs => "劇情編輯器",
         };
         let target_mode = match self.pending_mode {
             Some(EditorMode::Skills) => "技能編輯器",
             Some(EditorMode::Units) => "單位編輯器",
-            Some(EditorMode::AI) => "AI 編輯器",
             Some(EditorMode::Boards) => "戰場編輯器",
+            Some(EditorMode::PlayerProgression) => "玩家進度編輯器",
+            Some(EditorMode::AI) => "AI 編輯器",
             Some(EditorMode::Dialogs) => "劇情編輯器",
             None => "其他編輯器",
         };
@@ -197,11 +208,14 @@ impl eframe::App for EditorApp {
             EditorMode::Units => {
                 self.units_editor.update(ctx, frame);
             }
-            EditorMode::AI => {
-                self.ai_editor.update(ctx, frame);
-            }
             EditorMode::Boards => {
                 self.boards_editor.update(ctx, frame);
+            }
+            EditorMode::PlayerProgression => {
+                self.player_progression_editor.update(ctx, frame);
+            }
+            EditorMode::AI => {
+                self.ai_editor.update(ctx, frame);
             }
             EditorMode::Dialogs => {
                 self.dialogs_editor.update(ctx, frame);
