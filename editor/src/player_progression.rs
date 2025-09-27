@@ -20,10 +20,12 @@ pub struct PlayerProgress {
 }
 
 /// 玩家在某戰場的 roster 狀態（可依需求擴充）
+/// 玩家單位資料，技能分為主動與被動
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Unit {
     pub unit_type: UnitTemplateType,
-    pub skills: Vec<SkillID>,
+    pub active_skills: Vec<SkillID>,
+    pub passive_skills: Vec<SkillID>,
 }
 
 #[derive(Debug, Default)]
@@ -188,7 +190,8 @@ impl PlayerProgressionEditor {
                 if let Some(typ) = unit_types.get(selected_idx) {
                     progress.roster.push(Unit {
                         unit_type: (*typ).clone(),
-                        skills: vec![],
+                        active_skills: vec![],
+                        passive_skills: vec![],
                     });
                     self.has_unsaved_changes = true;
                 }
@@ -208,22 +211,98 @@ impl PlayerProgressionEditor {
                     ui.label("種類");
                     ui.label("技能");
                 });
-                for (idx, unit) in progress.roster.iter().enumerate() {
+                let mut to_remove_unit: Option<usize> = None;
+                for (idx, unit) in progress.roster.iter_mut().enumerate() {
                     ui.horizontal(|ui| {
                         ui.label(format!("{}", idx + 1));
                         ui.label(format!("{}", unit.unit_type));
-                        if unit.skills.is_empty() {
-                            ui.label("-");
+                        if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
+                            to_remove_unit = Some(idx);
+                        }
+
+                        // 顯示主動技能（可刪除）
+                        if unit.active_skills.is_empty() {
+                            ui.label("主動: -");
                         } else {
-                            let skill_str = unit
-                                .skills
-                                .iter()
-                                .map(|s| s.as_str())
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            ui.label(skill_str);
+                            ui.horizontal(|ui| {
+                                ui.label("主動:");
+                                let mut to_remove: Option<usize> = None;
+                                for (i, skill) in unit.active_skills.iter().enumerate() {
+                                    ui.label(skill.as_str());
+                                    if ui.small_button("x").on_hover_text("移除主動技能").clicked()
+                                    {
+                                        to_remove = Some(i);
+                                    }
+                                }
+                                if let Some(idx) = to_remove {
+                                    unit.active_skills.remove(idx);
+                                    self.has_unsaved_changes = true;
+                                }
+                            });
+                        }
+                        // 顯示被動技能（可刪除）
+                        if unit.passive_skills.is_empty() {
+                            ui.label("被動: -");
+                        } else {
+                            ui.horizontal(|ui| {
+                                ui.label("被動:");
+                                let mut to_remove: Option<usize> = None;
+                                for (i, skill) in unit.passive_skills.iter().enumerate() {
+                                    ui.label(skill.as_str());
+                                    if ui.small_button("x").on_hover_text("移除被動技能").clicked()
+                                    {
+                                        to_remove = Some(i);
+                                    }
+                                }
+                                if let Some(idx) = to_remove {
+                                    unit.passive_skills.remove(idx);
+                                    self.has_unsaved_changes = true;
+                                }
+                            });
+                        }
+
+                        // 技能選單：分開主動與被動
+                        // 主動技能
+                        let mut add_active_skill: Option<SkillID> = None;
+                        egui::ComboBox::from_id_salt(format!("unit_active_skill_combo_{}", idx))
+                            .selected_text("新增主動技能")
+                            .show_ui(ui, |ui| {
+                                for skill_id in self.active_skill_ids.iter() {
+                                    if ui.selectable_label(false, skill_id.as_str()).clicked() {
+                                        add_active_skill = Some(skill_id.clone());
+                                    }
+                                }
+                            });
+                        if let Some(skill_id) = add_active_skill {
+                            if !unit.active_skills.contains(&skill_id) {
+                                unit.active_skills.push(skill_id);
+                                unit.active_skills.sort();
+                                self.has_unsaved_changes = true;
+                            }
+                        }
+                        // 被動技能
+                        let mut add_passive_skill: Option<SkillID> = None;
+                        egui::ComboBox::from_id_salt(format!("unit_passive_skill_combo_{}", idx))
+                            .selected_text("新增被動技能")
+                            .show_ui(ui, |ui| {
+                                for skill_id in self.passive_skill_ids.iter() {
+                                    if ui.selectable_label(false, skill_id.as_str()).clicked() {
+                                        add_passive_skill = Some(skill_id.clone());
+                                    }
+                                }
+                            });
+                        if let Some(skill_id) = add_passive_skill {
+                            if !unit.passive_skills.contains(&skill_id) {
+                                unit.passive_skills.push(skill_id);
+                                unit.passive_skills.sort();
+                                self.has_unsaved_changes = true;
+                            }
                         }
                     });
+                }
+                if let Some(idx) = to_remove_unit {
+                    progress.roster.remove(idx);
+                    self.has_unsaved_changes = true;
                 }
             });
     }
