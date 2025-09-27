@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
 use std::collections::BTreeMap;
+use std::io;
 
 /// 每個戰場對應的玩家進度（roster）
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
@@ -129,8 +130,15 @@ impl PlayerProgressionEditor {
                 self.reload();
             }
             if ui.button("儲存進度").clicked() {
-                self.set_status("儲存成功".to_string(), false);
-                self.has_unsaved_changes = false;
+                match save_progression(&self.data) {
+                    Ok(_) => {
+                        self.set_status("儲存成功".to_string(), false);
+                        self.has_unsaved_changes = false;
+                    }
+                    Err(e) => {
+                        self.set_status(format!("儲存失敗: {}", e), true);
+                    }
+                }
             }
         });
         ui.separator();
@@ -320,4 +328,8 @@ impl PlayerProgressionEditor {
     pub fn has_unsaved_changes(&self) -> bool {
         self.has_unsaved_changes
     }
+}
+
+fn save_progression(data: &PlayerProgressionData) -> io::Result<()> {
+    to_file(PROGRESSION_FILE, data)
 }
