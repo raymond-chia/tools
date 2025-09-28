@@ -1,11 +1,12 @@
 use crate::common::*;
+use crate::player_progression::{PlayerProgressionData, Unit as ProgressionUnit};
 use chess_lib::*;
 use egui::*;
 use indexmap::IndexMap;
 use rand::Rng;
 use skills_lib::*;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io;
 use strum::IntoEnumIterator;
 
@@ -39,6 +40,7 @@ pub struct BoardsEditor {
     skills: BTreeMap<SkillID, Skill>,
     active_skill_ids: Vec<SkillID>,
     passive_skill_ids: Vec<SkillID>,
+    player_progression: PlayerProgressionData,
     ai_config: AIConfig,
     // status
     has_unsaved_changes: bool,
@@ -65,6 +67,15 @@ impl BoardsEditor {
     }
 
     fn reload(&mut self) {
+        // 先載入玩家進度資料
+        self.player_progression = match from_file::<_, PlayerProgressionData>(PROGRESSION_FILE) {
+            Ok(data) => data,
+            Err(err) => {
+                self.set_status(format!("載入 player_progression 失敗: {}", err), true);
+                return;
+            }
+        };
+
         match load_boards(BOARDS_FILE) {
             Ok(boards) => {
                 self.boards = boards;
@@ -726,11 +737,28 @@ impl BoardsEditor {
         // 2. 呼叫 Board::from_config
         let m = UnitTemplateMap(&self.unit_templates);
         match Board::from_config(config.clone(), &m, &self.skills) {
-            Ok(board) => {
+            Ok(mut board) => {
+                let progression = match self.player_progression.boards.get(board_id) {
+                    Some(p) => p,
+                    None => {
+                        self.set_status(
+                            format!("玩家進度資料中沒有此戰場的資料: {}", board_id),
+                            true,
+                        );
+                        return;
+                    }
+                };
+                if let Err(msg) = override_player_unit(&mut board, &progression.roster) {
+                    self.set_status(msg, true);
+                    return;
+                }
                 let turn_order = board.units.keys().cloned().collect();
                 self.sim_board = board;
                 self.sim_battle = Battle::new(turn_order);
-                self.set_status(format!("轉換成功: BoardConfig 已成功轉換為 Board。"), false);
+                self.set_status(
+                    format!("轉換成功: BoardConfig 已成功轉換為 Board，並覆蓋玩家單位內容。"),
+                    false,
+                );
             }
             Err(e) => {
                 self.set_status(format!("轉換失敗：{}", e), true);
@@ -1224,6 +1252,51 @@ fn to_team_color(color: Color32) -> RGB {
 
 fn to_egui_color(rgb: RGB) -> Color32 {
     Color32::from_rgb(rgb.0, rgb.1, rgb.2)
+}
+
+// 將玩家進度的 roster 覆蓋到 board 上 team "player" 的單位
+fn override_player_unit(
+    board: &mut Board,
+    roster_map: &BTreeMap<UnitTemplateType, ProgressionUnit>,
+) -> Result<(), String> {
+    // 1. 取得 board 上所有 team "player" 單位（map: unit_template_type → &mut Unit），若有重複則 set_status 跳錯並 return。
+    let mut board_map: HashMap<UnitTemplateType, &mut Unit> = HashMap::new();
+    for unit in board.units.values_mut() {
+        if unit.team != PLAYER_TEAM {
+            continue;
+        }
+        let unit_type = unit.unit_template_type.clone();
+        if board_map.contains_key(&unit_type) {
+            return Err(format!(
+                "Board 上 team 'player' 單位種類重複: {}",
+                unit_type
+            ));
+        }
+        board_map.insert(unit_type, unit);
+    }
+
+    // 2. 檢查兩邊 key 是否完全一致
+    let board_keys: BTreeSet<_> = board_map.keys().collect();
+    let roster_keys: BTreeSet<_> = roster_map.keys().collect();
+    if board_keys != roster_keys {
+        return Err(format!(
+            "玩家單位種類不一致\nBoard: {:?}\nRoster: {:?}",
+            board_keys, roster_keys
+        ));
+    }
+
+    // 3. 覆蓋資料
+    for (key, board_unit) in board_map.iter_mut() {
+        let roster_unit = roster_map.get(key).unwrap();
+        // skills = active_skills + passive_skills
+        board_unit.skills = roster_unit
+            .active_skills
+            .iter()
+            .chain(&roster_unit.passive_skills)
+            .cloned()
+            .collect();
+    }
+    Ok(())
 }
 
 struct UnitTemplateMap<'a>(&'a IndexMap<UnitTemplateType, UnitTemplate>);
