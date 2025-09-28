@@ -5,7 +5,7 @@ use egui::*;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 
 /// 每個戰場對應的玩家進度（roster）
@@ -17,7 +17,7 @@ pub struct PlayerProgressionData {
 
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct PlayerProgress {
-    pub roster: Vec<Unit>,
+    pub roster: BTreeMap<UnitTemplateType, Unit>,
 }
 
 /// 玩家在某戰場的 roster 狀態（可依需求擴充）
@@ -25,8 +25,8 @@ pub struct PlayerProgress {
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Unit {
     pub unit_type: UnitTemplateType,
-    pub active_skills: Vec<SkillID>,
-    pub passive_skills: Vec<SkillID>,
+    pub active_skills: BTreeSet<SkillID>,
+    pub passive_skills: BTreeSet<SkillID>,
 }
 
 #[derive(Debug, Default)]
@@ -196,11 +196,14 @@ impl PlayerProgressionEditor {
                 });
             if ui.button("新增").clicked() {
                 if let Some(typ) = unit_types.get(selected_idx) {
-                    progress.roster.push(Unit {
-                        unit_type: (*typ).clone(),
-                        active_skills: vec![],
-                        passive_skills: vec![],
-                    });
+                    progress.roster.insert(
+                        (*typ).clone(),
+                        Unit {
+                            unit_type: (*typ).clone(),
+                            active_skills: BTreeSet::new(),
+                            passive_skills: BTreeSet::new(),
+                        },
+                    );
                     self.has_unsaved_changes = true;
                 }
             }
@@ -219,52 +222,49 @@ impl PlayerProgressionEditor {
                     ui.label("種類");
                     ui.label("技能");
                 });
-                let mut to_remove_unit: Option<usize> = None;
-                for (idx, unit) in progress.roster.iter_mut().enumerate() {
+                let mut to_remove_unit: Option<UnitTemplateType> = None;
+                let mut to_edit_unit: Option<Unit> = None;
+                for (typ, unit) in progress.roster.iter() {
+                    // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
+                    // 若需編輯，需複製出來再處理
+
                     ui.horizontal(|ui| {
-                        ui.label(format!("{}", idx + 1));
-                        ui.label(format!("{}", unit.unit_type));
+                        ui.label(format!("{}", typ));
                         if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
-                            to_remove_unit = Some(idx);
+                            to_remove_unit = Some(typ.clone());
                         }
 
-                        // 顯示主動技能（可刪除）
+                        // 主動技能
                         if unit.active_skills.is_empty() {
                             ui.label("主動: -");
                         } else {
                             ui.horizontal(|ui| {
                                 ui.label("主動:");
-                                let mut to_remove: Option<usize> = None;
-                                for (i, skill) in unit.active_skills.iter().enumerate() {
+                                for skill in unit.active_skills.iter() {
                                     ui.label(skill.as_str());
                                     if ui.small_button("x").on_hover_text("移除主動技能").clicked()
                                     {
-                                        to_remove = Some(i);
+                                        let mut new_unit = unit.clone();
+                                        new_unit.active_skills.remove(skill);
+                                        to_edit_unit = Some(new_unit);
                                     }
-                                }
-                                if let Some(idx) = to_remove {
-                                    unit.active_skills.remove(idx);
-                                    self.has_unsaved_changes = true;
                                 }
                             });
                         }
-                        // 顯示被動技能（可刪除）
+                        // 被動技能
                         if unit.passive_skills.is_empty() {
                             ui.label("被動: -");
                         } else {
                             ui.horizontal(|ui| {
                                 ui.label("被動:");
-                                let mut to_remove: Option<usize> = None;
-                                for (i, skill) in unit.passive_skills.iter().enumerate() {
+                                for skill in unit.passive_skills.iter() {
                                     ui.label(skill.as_str());
                                     if ui.small_button("x").on_hover_text("移除被動技能").clicked()
                                     {
-                                        to_remove = Some(i);
+                                        let mut new_unit = unit.clone();
+                                        new_unit.passive_skills.remove(skill);
+                                        to_edit_unit = Some(new_unit);
                                     }
-                                }
-                                if let Some(idx) = to_remove {
-                                    unit.passive_skills.remove(idx);
-                                    self.has_unsaved_changes = true;
                                 }
                             });
                         }
@@ -272,7 +272,7 @@ impl PlayerProgressionEditor {
                         // 技能選單：分開主動與被動
                         // 主動技能
                         let mut add_active_skill: Option<SkillID> = None;
-                        egui::ComboBox::from_id_salt(format!("unit_active_skill_combo_{}", idx))
+                        egui::ComboBox::from_id_salt(format!("unit_active_skill_combo_{}", typ))
                             .selected_text("新增主動技能")
                             .show_ui(ui, |ui| {
                                 for skill_id in self.active_skill_ids.iter() {
@@ -283,14 +283,14 @@ impl PlayerProgressionEditor {
                             });
                         if let Some(skill_id) = add_active_skill {
                             if !unit.active_skills.contains(&skill_id) {
-                                unit.active_skills.push(skill_id);
-                                unit.active_skills.sort();
-                                self.has_unsaved_changes = true;
+                                let mut new_unit = unit.clone();
+                                new_unit.active_skills.insert(skill_id);
+                                to_edit_unit = Some(new_unit);
                             }
                         }
                         // 被動技能
                         let mut add_passive_skill: Option<SkillID> = None;
-                        egui::ComboBox::from_id_salt(format!("unit_passive_skill_combo_{}", idx))
+                        egui::ComboBox::from_id_salt(format!("unit_passive_skill_combo_{}", typ))
                             .selected_text("新增被動技能")
                             .show_ui(ui, |ui| {
                                 for skill_id in self.passive_skill_ids.iter() {
@@ -301,15 +301,21 @@ impl PlayerProgressionEditor {
                             });
                         if let Some(skill_id) = add_passive_skill {
                             if !unit.passive_skills.contains(&skill_id) {
-                                unit.passive_skills.push(skill_id);
-                                unit.passive_skills.sort();
-                                self.has_unsaved_changes = true;
+                                let mut new_unit = unit.clone();
+                                new_unit.passive_skills.insert(skill_id);
+                                to_edit_unit = Some(new_unit);
                             }
                         }
                     });
                 }
-                if let Some(idx) = to_remove_unit {
-                    progress.roster.remove(idx);
+                if let Some(typ) = to_remove_unit {
+                    progress.roster.remove(&typ);
+                    self.has_unsaved_changes = true;
+                }
+                if let Some(new_unit) = to_edit_unit {
+                    let typ = new_unit.unit_type.clone();
+                    progress.roster.remove(&typ);
+                    progress.roster.insert(typ, new_unit);
                     self.has_unsaved_changes = true;
                 }
             });
