@@ -192,22 +192,19 @@ impl crate::common::New for SkillsEditor {
 impl SkillsEditor {
     pub fn new() -> Self {
         // 嘗試自動載入寫死的檔案
-        let (skills_data, current_file_path, err) = match SkillsData::from_file(SKILLS_FILE) {
-            Ok(skills_data) => {
-                let current_file_path = Some(std::path::PathBuf::from(SKILLS_FILE));
-                (skills_data, current_file_path, None)
-            }
-            Err(err) => (SkillsData::default(), None, Some(err)),
-        };
-        let mut result = Self {
-            skills_data,
-            current_file_path,
-            ..Default::default()
-        };
-        if let Some(err) = err {
-            result.set_status(err.to_string(), true);
-        }
+        let mut result = Self::default();
+        result.reload();
         return result;
+    }
+
+    /// 重新載入固定技能檔案（SKILLS_FILE），失敗時保留原資料並回傳錯誤
+    pub fn reload(&mut self) {
+        self.load_file(PathBuf::from(SKILLS_FILE));
+    }
+
+    /// 儲存技能資料到固定檔案（SKILLS_FILE），失敗時回傳錯誤
+    pub fn save(&mut self) {
+        self.save_file(PathBuf::from(SKILLS_FILE));
     }
 }
 
@@ -256,6 +253,13 @@ impl SkillsEditor {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 show_file_menu(ui, self);
+                ui.separator();
+                if ui.button("重新載入").clicked() {
+                    self.reload();
+                }
+                if ui.button("儲存").clicked() {
+                    self.save();
+                }
             });
         });
 

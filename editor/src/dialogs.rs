@@ -32,19 +32,19 @@ impl crate::common::New for DialogsEditor {
 
 impl DialogsEditor {
     pub fn new() -> Self {
-        let (script, current_file_path, err) = match from_file(DIALOGS_FILE) {
-            Ok(s) => (s, Some(PathBuf::from(DIALOGS_FILE)), None),
-            Err(err) => (Script::default(), None, Some(err)),
-        };
-        let mut result = Self {
-            script,
-            current_file_path,
-            ..Default::default()
-        };
-        if let Some(err) = err {
-            result.set_status(err.to_string(), true);
-        }
+        let mut result = Self::default();
+        result.reload();
         return result;
+    }
+
+    /// 重新載入固定對話檔案（DIALOGS_FILE），失敗時保留原資料並回傳錯誤
+    pub fn reload(&mut self) {
+        self.load_file(PathBuf::from(DIALOGS_FILE));
+    }
+
+    /// 儲存對話資料到固定檔案（DIALOGS_FILE），失敗時回傳錯誤
+    pub fn save(&mut self) {
+        self.save_file(PathBuf::from(DIALOGS_FILE));
     }
 }
 
@@ -83,6 +83,13 @@ impl DialogsEditor {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 self.show_file_menu(ui);
+                ui.separator();
+                if ui.button("重新載入").clicked() {
+                    self.reload();
+                }
+                if ui.button("儲存").clicked() {
+                    self.save();
+                }
 
                 egui::menu::menu_button(ui, "節點", |ui| {
                     if ui.button("添加").clicked() {
