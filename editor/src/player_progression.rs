@@ -228,51 +228,45 @@ impl PlayerProgressionEditor {
                     // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
                     // 若需編輯，需複製出來再處理
 
-                    ui.horizontal(|ui| {
-                        ui.label(format!("{}", typ));
-                        if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
-                            to_remove_unit = Some(typ.clone());
-                        }
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(format!("{}", typ));
+                            if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
+                                to_remove_unit = Some(typ.clone());
+                            }
+                        });
 
-                        // 主動技能
-                        if unit.active_skills.is_empty() {
-                            ui.label("主動: -");
-                        } else {
-                            ui.horizontal(|ui| {
+                        // 主動技能換行
+                        ui.vertical(|ui| {
+                            if unit.active_skills.is_empty() {
+                                ui.label("主動: -");
+                            } else {
                                 ui.label("主動:");
-                                for skill in unit.active_skills.iter() {
-                                    ui.label(skill.as_str());
-                                    if ui.small_button("x").on_hover_text("移除主動技能").clicked()
-                                    {
-                                        let mut new_unit = unit.clone();
-                                        new_unit.active_skills.remove(skill);
-                                        to_edit_unit = Some(new_unit);
-                                    }
-                                }
-                            });
-                        }
-                        // 被動技能
-                        if unit.passive_skills.is_empty() {
-                            ui.label("被動: -");
-                        } else {
-                            ui.horizontal(|ui| {
-                                ui.label("被動:");
-                                for skill in unit.passive_skills.iter() {
-                                    ui.label(skill.as_str());
-                                    if ui.small_button("x").on_hover_text("移除被動技能").clicked()
-                                    {
-                                        let mut new_unit = unit.clone();
-                                        new_unit.passive_skills.remove(skill);
-                                        to_edit_unit = Some(new_unit);
-                                    }
-                                }
-                            });
-                        }
-
-                        // 技能選單：分開主動與被動
-                        // 主動技能
-                        let mut add_active_skill: Option<SkillID> = None;
-                        egui::ComboBox::from_id_salt(format!("unit_active_skill_combo_{}", typ))
+                                egui::ScrollArea::horizontal()
+                                    .id_salt(format!("active_skills_scroll_{}", typ))
+                                    .max_height(32.0)
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            for skill in unit.active_skills.iter() {
+                                                ui.label(skill.as_str());
+                                                if ui
+                                                    .small_button("x")
+                                                    .on_hover_text("移除主動技能")
+                                                    .clicked()
+                                                {
+                                                    let mut new_unit = unit.clone();
+                                                    new_unit.active_skills.remove(skill);
+                                                    to_edit_unit = Some(new_unit);
+                                                }
+                                            }
+                                        });
+                                    });
+                            }
+                            let mut add_active_skill: Option<SkillID> = None;
+                            egui::ComboBox::from_id_salt(format!(
+                                "unit_active_skill_combo_{}",
+                                typ
+                            ))
                             .selected_text("新增主動技能")
                             .show_ui(ui, |ui| {
                                 for skill_id in self.active_skill_ids.iter() {
@@ -281,16 +275,46 @@ impl PlayerProgressionEditor {
                                     }
                                 }
                             });
-                        if let Some(skill_id) = add_active_skill {
-                            if !unit.active_skills.contains(&skill_id) {
-                                let mut new_unit = unit.clone();
-                                new_unit.active_skills.insert(skill_id);
-                                to_edit_unit = Some(new_unit);
+                            if let Some(skill_id) = add_active_skill {
+                                if !unit.active_skills.contains(&skill_id) {
+                                    let mut new_unit = unit.clone();
+                                    new_unit.active_skills.insert(skill_id);
+                                    to_edit_unit = Some(new_unit);
+                                }
                             }
-                        }
-                        // 被動技能
-                        let mut add_passive_skill: Option<SkillID> = None;
-                        egui::ComboBox::from_id_salt(format!("unit_passive_skill_combo_{}", typ))
+                        });
+
+                        // 被動技能換行
+                        ui.vertical(|ui| {
+                            if unit.passive_skills.is_empty() {
+                                ui.label("被動: -");
+                            } else {
+                                ui.label("被動:");
+                                egui::ScrollArea::horizontal()
+                                    .id_salt(format!("passive_skills_scroll_{}", typ))
+                                    .max_height(32.0)
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            for skill in unit.passive_skills.iter() {
+                                                ui.label(skill.as_str());
+                                                if ui
+                                                    .small_button("x")
+                                                    .on_hover_text("移除被動技能")
+                                                    .clicked()
+                                                {
+                                                    let mut new_unit = unit.clone();
+                                                    new_unit.passive_skills.remove(skill);
+                                                    to_edit_unit = Some(new_unit);
+                                                }
+                                            }
+                                        });
+                                    });
+                            }
+                            let mut add_passive_skill: Option<SkillID> = None;
+                            egui::ComboBox::from_id_salt(format!(
+                                "unit_passive_skill_combo_{}",
+                                typ
+                            ))
                             .selected_text("新增被動技能")
                             .show_ui(ui, |ui| {
                                 for skill_id in self.passive_skill_ids.iter() {
@@ -299,13 +323,14 @@ impl PlayerProgressionEditor {
                                     }
                                 }
                             });
-                        if let Some(skill_id) = add_passive_skill {
-                            if !unit.passive_skills.contains(&skill_id) {
-                                let mut new_unit = unit.clone();
-                                new_unit.passive_skills.insert(skill_id);
-                                to_edit_unit = Some(new_unit);
+                            if let Some(skill_id) = add_passive_skill {
+                                if !unit.passive_skills.contains(&skill_id) {
+                                    let mut new_unit = unit.clone();
+                                    new_unit.passive_skills.insert(skill_id);
+                                    to_edit_unit = Some(new_unit);
+                                }
                             }
-                        }
+                        });
                     });
                 }
                 if let Some(typ) = to_remove_unit {

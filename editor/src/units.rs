@@ -214,16 +214,48 @@ impl UnitsEditor {
             unit.skills.insert(self.selected_skill.clone());
             self.has_unsaved_changes = true;
         }
-        let mut deleted = None;
-        ui.horizontal(|ui| {
-            for skill in &unit.skills {
-                ui.label(skill);
-                if ui.button("移除").clicked() {
-                    deleted = Some(skill.clone());
-                }
-            }
-        });
-        if let Some(deleted) = deleted {
+        // 主動技能區塊
+        ui.label("【主動技能】");
+        let mut deleted_active = None;
+        // 主動技能顯示區塊支援左右捲動
+        ScrollArea::horizontal()
+            .id_salt("active_skills_scroll")
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for skill in &unit.skills {
+                        if self.active_skill_ids.contains(skill) {
+                            ui.label(skill);
+                            if ui.button("移除").clicked() {
+                                deleted_active = Some(skill.clone());
+                            }
+                        }
+                    }
+                });
+            });
+        if let Some(deleted) = deleted_active {
+            unit.skills.remove(&deleted);
+            self.has_unsaved_changes = true;
+        }
+
+        // 被動技能區塊
+        ui.label("【被動技能】");
+        let mut deleted_passive = None;
+        // 被動技能顯示區塊支援左右捲動
+        ScrollArea::horizontal()
+            .id_salt("passive_skills_scroll")
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for skill in &unit.skills {
+                        if self.passive_skill_ids.contains(skill) {
+                            ui.label(skill);
+                            if ui.button("移除").clicked() {
+                                deleted_passive = Some(skill.clone());
+                            }
+                        }
+                    }
+                });
+            });
+        if let Some(deleted) = deleted_passive {
             unit.skills.remove(&deleted);
             self.has_unsaved_changes = true;
         }
