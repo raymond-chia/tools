@@ -27,6 +27,9 @@ pub struct Unit {
     pub unit_type: UnitTemplateType,
     pub active_skills: BTreeSet<SkillID>,
     pub passive_skills: BTreeSet<SkillID>,
+    /// 行動優先值，預設為 0
+    #[serde(default)]
+    pub initiative: u32,
 }
 
 #[derive(Debug, Default)]
@@ -200,8 +203,7 @@ impl PlayerProgressionEditor {
                         (*typ).clone(),
                         Unit {
                             unit_type: (*typ).clone(),
-                            active_skills: BTreeSet::new(),
-                            passive_skills: BTreeSet::new(),
+                            ..Default::default()
                         },
                     );
                     self.has_unsaved_changes = true;
@@ -217,11 +219,6 @@ impl PlayerProgressionEditor {
                     ui.label("此戰場尚無單位");
                     return;
                 }
-                ui.horizontal(|ui| {
-                    ui.label("序號");
-                    ui.label("種類");
-                    ui.label("技能");
-                });
                 let mut to_remove_unit: Option<UnitTemplateType> = None;
                 let mut to_edit_unit: Option<Unit> = None;
                 for (typ, unit) in progress.roster.iter() {
@@ -230,7 +227,7 @@ impl PlayerProgressionEditor {
 
                     ui.vertical(|ui| {
                         ui.horizontal(|ui| {
-                            ui.label(format!("{}", typ));
+                            ui.label(format!("種類: {}", typ));
                             if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
                                 to_remove_unit = Some(typ.clone());
                             }

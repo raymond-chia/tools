@@ -13,6 +13,9 @@ pub struct Team {
 pub struct UnitTemplate {
     pub name: UnitTemplateType,
     pub skills: BTreeSet<String>,
+    /// 行動優先值，預設為 0
+    #[serde(default)]
+    pub initiative: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -41,6 +44,7 @@ impl Default for UnitTemplate {
         Self {
             name: String::new(),
             skills: BTreeSet::new(),
+            initiative: 0,
         }
     }
 }
