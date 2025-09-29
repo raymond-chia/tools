@@ -167,6 +167,9 @@ impl PlayerProgressionEditor {
             }
         };
 
+        // 強制中央內容最小寬度
+        ui.set_min_width(ui.available_width());
+
         ui.heading(format!("編輯戰場: {board_id} 的 Roster"));
 
         let progress = self.data.boards.get_mut(board_id).unwrap();
@@ -212,58 +215,53 @@ impl PlayerProgressionEditor {
         });
 
         ui.heading("單位列表");
-        egui::ScrollArea::vertical()
-            .max_height(200.0)
-            .show(ui, |ui| {
-                if progress.roster.is_empty() {
-                    ui.label("此戰場尚無單位");
-                    return;
-                }
-                let mut to_remove_unit: Option<UnitTemplateType> = None;
-                let mut to_edit_unit: Option<Unit> = None;
-                for (typ, unit) in progress.roster.iter() {
-                    // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
-                    // 若需編輯，需複製出來再處理
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            if progress.roster.is_empty() {
+                ui.label("此戰場尚無單位");
+                return;
+            }
+            let mut to_remove_unit: Option<UnitTemplateType> = None;
+            let mut to_edit_unit: Option<Unit> = None;
+            for (typ, unit) in progress.roster.iter() {
+                // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
+                // 若需編輯，需複製出來再處理
 
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(format!("種類: {}", typ));
+                        if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
+                            to_remove_unit = Some(typ.clone());
+                        }
+                    });
+
+                    // 主動技能換行
                     ui.vertical(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(format!("種類: {}", typ));
-                            if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
-                                to_remove_unit = Some(typ.clone());
-                            }
-                        });
-
-                        // 主動技能換行
-                        ui.vertical(|ui| {
-                            if unit.active_skills.is_empty() {
-                                ui.label("主動: -");
-                            } else {
-                                ui.label("主動:");
-                                egui::ScrollArea::horizontal()
-                                    .id_salt(format!("active_skills_scroll_{}", typ))
-                                    .max_height(32.0)
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            for skill in unit.active_skills.iter() {
-                                                ui.label(skill.as_str());
-                                                if ui
-                                                    .small_button("x")
-                                                    .on_hover_text("移除主動技能")
-                                                    .clicked()
-                                                {
-                                                    let mut new_unit = unit.clone();
-                                                    new_unit.active_skills.remove(skill);
-                                                    to_edit_unit = Some(new_unit);
-                                                }
+                        if unit.active_skills.is_empty() {
+                            ui.label("主動: -");
+                        } else {
+                            ui.label("主動:");
+                            egui::ScrollArea::horizontal()
+                                .id_salt(format!("active_skills_scroll_{}", typ))
+                                .max_height(32.0)
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        for skill in unit.active_skills.iter() {
+                                            ui.label(skill.as_str());
+                                            if ui
+                                                .small_button("x")
+                                                .on_hover_text("移除主動技能")
+                                                .clicked()
+                                            {
+                                                let mut new_unit = unit.clone();
+                                                new_unit.active_skills.remove(skill);
+                                                to_edit_unit = Some(new_unit);
                                             }
-                                        });
+                                        }
                                     });
-                            }
-                            let mut add_active_skill: Option<SkillID> = None;
-                            egui::ComboBox::from_id_salt(format!(
-                                "unit_active_skill_combo_{}",
-                                typ
-                            ))
+                                });
+                        }
+                        let mut add_active_skill: Option<SkillID> = None;
+                        egui::ComboBox::from_id_salt(format!("unit_active_skill_combo_{}", typ))
                             .selected_text("新增主動技能")
                             .show_ui(ui, |ui| {
                                 for skill_id in self.active_skill_ids.iter() {
@@ -272,46 +270,43 @@ impl PlayerProgressionEditor {
                                     }
                                 }
                             });
-                            if let Some(skill_id) = add_active_skill {
-                                if !unit.active_skills.contains(&skill_id) {
-                                    let mut new_unit = unit.clone();
-                                    new_unit.active_skills.insert(skill_id);
-                                    to_edit_unit = Some(new_unit);
-                                }
+                        if let Some(skill_id) = add_active_skill {
+                            if !unit.active_skills.contains(&skill_id) {
+                                let mut new_unit = unit.clone();
+                                new_unit.active_skills.insert(skill_id);
+                                to_edit_unit = Some(new_unit);
                             }
-                        });
+                        }
+                    });
 
-                        // 被動技能換行
-                        ui.vertical(|ui| {
-                            if unit.passive_skills.is_empty() {
-                                ui.label("被動: -");
-                            } else {
-                                ui.label("被動:");
-                                egui::ScrollArea::horizontal()
-                                    .id_salt(format!("passive_skills_scroll_{}", typ))
-                                    .max_height(32.0)
-                                    .show(ui, |ui| {
-                                        ui.horizontal(|ui| {
-                                            for skill in unit.passive_skills.iter() {
-                                                ui.label(skill.as_str());
-                                                if ui
-                                                    .small_button("x")
-                                                    .on_hover_text("移除被動技能")
-                                                    .clicked()
-                                                {
-                                                    let mut new_unit = unit.clone();
-                                                    new_unit.passive_skills.remove(skill);
-                                                    to_edit_unit = Some(new_unit);
-                                                }
+                    // 被動技能換行
+                    ui.vertical(|ui| {
+                        if unit.passive_skills.is_empty() {
+                            ui.label("被動: -");
+                        } else {
+                            ui.label("被動:");
+                            egui::ScrollArea::horizontal()
+                                .id_salt(format!("passive_skills_scroll_{}", typ))
+                                .max_height(32.0)
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        for skill in unit.passive_skills.iter() {
+                                            ui.label(skill.as_str());
+                                            if ui
+                                                .small_button("x")
+                                                .on_hover_text("移除被動技能")
+                                                .clicked()
+                                            {
+                                                let mut new_unit = unit.clone();
+                                                new_unit.passive_skills.remove(skill);
+                                                to_edit_unit = Some(new_unit);
                                             }
-                                        });
+                                        }
                                     });
-                            }
-                            let mut add_passive_skill: Option<SkillID> = None;
-                            egui::ComboBox::from_id_salt(format!(
-                                "unit_passive_skill_combo_{}",
-                                typ
-                            ))
+                                });
+                        }
+                        let mut add_passive_skill: Option<SkillID> = None;
+                        egui::ComboBox::from_id_salt(format!("unit_passive_skill_combo_{}", typ))
                             .selected_text("新增被動技能")
                             .show_ui(ui, |ui| {
                                 for skill_id in self.passive_skill_ids.iter() {
@@ -320,27 +315,27 @@ impl PlayerProgressionEditor {
                                     }
                                 }
                             });
-                            if let Some(skill_id) = add_passive_skill {
-                                if !unit.passive_skills.contains(&skill_id) {
-                                    let mut new_unit = unit.clone();
-                                    new_unit.passive_skills.insert(skill_id);
-                                    to_edit_unit = Some(new_unit);
-                                }
+                        if let Some(skill_id) = add_passive_skill {
+                            if !unit.passive_skills.contains(&skill_id) {
+                                let mut new_unit = unit.clone();
+                                new_unit.passive_skills.insert(skill_id);
+                                to_edit_unit = Some(new_unit);
                             }
-                        });
+                        }
                     });
-                }
-                if let Some(typ) = to_remove_unit {
-                    progress.roster.remove(&typ);
-                    self.has_unsaved_changes = true;
-                }
-                if let Some(new_unit) = to_edit_unit {
-                    let typ = new_unit.unit_type.clone();
-                    progress.roster.remove(&typ);
-                    progress.roster.insert(typ, new_unit);
-                    self.has_unsaved_changes = true;
-                }
-            });
+                });
+            }
+            if let Some(typ) = to_remove_unit {
+                progress.roster.remove(&typ);
+                self.has_unsaved_changes = true;
+            }
+            if let Some(new_unit) = to_edit_unit {
+                let typ = new_unit.unit_type.clone();
+                progress.roster.remove(&typ);
+                progress.roster.insert(typ, new_unit);
+                self.has_unsaved_changes = true;
+            }
+        });
     }
 
     fn show_status_message(&mut self, ctx: &Context) {
