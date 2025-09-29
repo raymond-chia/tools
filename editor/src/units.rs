@@ -192,6 +192,18 @@ impl UnitsEditor {
         ui.label("名稱（含等級）：");
         ui.text_edit_singleline(&mut unit.name);
         self.selected_unit = Some(unit.name.clone());
+
+        // 行動優先值（initiative）設定
+        ui.horizontal(|ui| {
+            ui.label("行動優先值 (initiative)：");
+            let drag = egui::DragValue::new(&mut unit.initiative)
+                .range(0..=999)
+                .speed(1);
+            if ui.add(drag).changed() {
+                self.has_unsaved_changes = true;
+            }
+        });
+
         ui.label("技能：");
         ComboBox::from_id_salt("add_skill_combo")
             .selected_text(format!("選擇技能: {}", &self.selected_skill))

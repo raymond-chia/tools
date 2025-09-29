@@ -234,6 +234,18 @@ impl PlayerProgressionEditor {
                         }
                     });
 
+                    // 行動優先值（initiative）設定
+                    ui.horizontal(|ui| {
+                        ui.label("行動優先值 (initiative)：");
+                        let mut temp_unit = unit.clone();
+                        let drag = egui::DragValue::new(&mut temp_unit.initiative)
+                            .range(0..=999)
+                            .speed(1);
+                        if ui.add(drag).changed() {
+                            to_edit_unit = Some(temp_unit);
+                        }
+                    });
+
                     // 主動技能換行
                     ui.vertical(|ui| {
                         if unit.active_skills.is_empty() {
