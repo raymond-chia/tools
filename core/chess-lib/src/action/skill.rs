@@ -94,11 +94,14 @@ impl SkillSelection {
                     Effect::MaxHp { duration, .. } => {
                         msgs.push(format!("[未實作] MaxHp 效果: 持續 {} 回合", duration));
                     }
-                    Effect::Burn { duration, .. } => {
-                        msgs.push(format!("[未實作] Burn 效果: 持續 {} 回合", duration));
+                    Effect::Initiative { value, .. } => {
+                        msgs.push(format!("[未實作] Initiative 效果: +{} ini", value));
                     }
                     Effect::MovePoints { value, .. } => {
                         msgs.push(format!("[未實作] 單位移動 {value}"));
+                    }
+                    Effect::Burn { duration, .. } => {
+                        msgs.push(format!("[未實作] Burn 效果: 持續 {} 回合", duration));
                     }
                     Effect::HitAndRun { .. } => {
                         msgs.push(format!("[未實作] 打帶跑"));

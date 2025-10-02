@@ -13,9 +13,6 @@ pub struct Team {
 pub struct UnitTemplate {
     pub name: UnitTemplateType,
     pub skills: BTreeSet<String>,
-    /// 行動優先值，預設為 0
-    #[serde(default)]
-    pub initiative: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -44,7 +41,6 @@ impl Default for UnitTemplate {
         Self {
             name: String::new(),
             skills: BTreeSet::new(),
-            initiative: 0,
         }
     }
 }
@@ -107,6 +103,22 @@ mod inner {
         } else {
             points as MovementCost
         }
+    }
+
+    /// 計算單位 initiative 技能等級總和
+    /// 尋找所有 effect 為 Effect::Initiative 的技能，並加總其 value
+    pub fn skills_to_initiative(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+        skills
+            .iter()
+            .flat_map(|(_, skill)| &skill.effects)
+            .filter_map(|effect| {
+                if let Effect::Initiative { value, .. } = effect {
+                    Some(*value)
+                } else {
+                    None
+                }
+            })
+            .sum()
     }
 
     pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {

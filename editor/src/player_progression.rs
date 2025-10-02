@@ -27,9 +27,6 @@ pub struct Unit {
     pub unit_type: UnitTemplateType,
     pub active_skills: BTreeSet<SkillID>,
     pub passive_skills: BTreeSet<SkillID>,
-    /// 行動優先值，預設為 0
-    #[serde(default)]
-    pub initiative: u32,
 }
 
 #[derive(Debug, Default)]
@@ -231,18 +228,6 @@ impl PlayerProgressionEditor {
                         ui.label(format!("種類: {}", typ));
                         if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
                             to_remove_unit = Some(typ.clone());
-                        }
-                    });
-
-                    // 行動優先值（initiative）設定
-                    ui.horizontal(|ui| {
-                        ui.label("行動優先值 (initiative)：");
-                        let mut temp_unit = unit.clone();
-                        let drag = egui::DragValue::new(&mut temp_unit.initiative)
-                            .range(0..=999)
-                            .speed(1);
-                        if ui.add(drag).changed() {
-                            to_edit_unit = Some(temp_unit);
                         }
                     });
 
