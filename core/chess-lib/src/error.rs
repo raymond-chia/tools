@@ -1,3 +1,7 @@
+//! error.rs：
+//! - 定義棋盤與戰鬥相關錯誤型別（Error），攜帶 function name 與 context。
+//! - 支援錯誤巢狀、來源追蹤與除錯輔助。
+//! - 僅放錯誤定義與錯誤處理相關工具函式。
 // 棋盤邏輯錯誤型別，攜帶 function name 與 context，支援來源錯誤巢狀
 use crate::*;
 use skills_lib::*;

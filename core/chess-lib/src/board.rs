@@ -1,3 +1,7 @@
+//! board.rs：
+//! - 定義棋盤（Board）、地形（Terrain）、物件（Object）、單位配置等資料結構。
+//! - 負責棋盤初始化、單位與位置對應、地形查詢等邏輯。
+//! - 不負責單位屬性計算、AI 決策或戰鬥流程。
 use crate::*;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;

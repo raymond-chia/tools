@@ -1,3 +1,7 @@
+//! movement.rs：
+//! - 負責單位移動相關邏輯（如移動規則、移動點消耗、特殊移動技能等）。
+//! - 僅處理移動本身，不負責戰鬥判定、AI 決策或棋盤初始化。
+//! - 移動相關的資料結構與輔助函式應集中於此。
 use crate::*;
 use skills_lib::*;
 use std::collections::{BTreeMap, HashMap};

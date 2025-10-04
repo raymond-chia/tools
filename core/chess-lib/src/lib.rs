@@ -1,3 +1,7 @@
+//! lib.rs：
+//! - 負責模組匯入、型別定義與全域常數。
+//! - 僅作為 crate 入口與 re-export，不放具體邏輯或資料結構實作。
+//! - 不負責戰鬥、AI、棋盤、單位等細節邏輯。
 use serde::{Deserialize, Serialize};
 
 mod action;

@@ -1,3 +1,7 @@
+//! unit.rs：
+//! - 定義單位（Unit）、單位模板（UnitTemplate）等資料結構，僅負責靜態資料與屬性，不含戰鬥邏輯。
+//! - 所有單位屬性衍生值（如先攻 initiative、移動力等）之計算，應實作於 unit.rs 內部方法或輔助函式。
+//! - 不負責戰鬥流程與判定（如命中、閃避、格擋、傷害計算等）。
 use crate::*;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;

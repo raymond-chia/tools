@@ -1,3 +1,7 @@
+//! skill.rs：
+//! - 負責技能效果、技能施放與解析邏輯。
+//! - 僅處理技能本身，不負責戰鬥流程、AI 決策或棋盤初始化。
+//! - 技能相關的資料結構與輔助函式應集中於此。
 use crate::*;
 use skills_lib::*;
 use std::{collections::BTreeMap, f64::consts::PI};
