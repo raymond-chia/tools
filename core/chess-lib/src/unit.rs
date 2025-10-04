@@ -85,11 +85,7 @@ impl Unit {
     /// - 1D6 隨機
     /// - 技能 initiative 加總（i32）
     /// - 未來可擴充 buff/debuff、裝備等
-    pub fn calc_initiative<R: rand::Rng>(
-        &self,
-        skills: &BTreeMap<&SkillID, &Skill>,
-        rng: &mut R,
-    ) -> i32 {
+    pub fn calc_initiative<R: rand::Rng>(rng: &mut R, skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
         let roll = rng.random_range(1..=6);
         let skill_initiative = skills_to_initiative(&skills);
         roll + skill_initiative

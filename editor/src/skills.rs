@@ -482,10 +482,11 @@ impl SkillsEditor {
                         let mut delete_effect_clicked = false;
                         ui.horizontal(|ui| {
                             match effect {
-                                Effect::Hp { .. } => ui.label("HP 效果"),
-                                Effect::MaxHp { .. } => ui.label("最大生命值效果"),
-                                Effect::Burn { .. } => ui.label("燃燒效果"),
-                                Effect::MovePoints { .. } => ui.label("移動點數效果"),
+                                Effect::Hp { .. } => ui.label("HP"),
+                                Effect::MaxHp { .. } => ui.label("最大 HP"),
+                                Effect::Initiative { .. } => ui.label("先攻值"),
+                                Effect::MovePoints { .. } => ui.label("移動點數"),
+                                Effect::Burn { .. } => ui.label("燃燒"),
                                 Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
                             };
                             move_up_clicked = ui.add_enabled(index > 0, Button::new("↑")).clicked();
@@ -586,9 +587,10 @@ impl SkillsEditor {
                 for effect in Effect::iter() {
                     let flag = match effect {
                         Effect::Hp { .. } => ui.button("新增 HP 效果").clicked(),
-                        Effect::MaxHp { .. } => ui.button("新增最大生命值效果").clicked(),
-                        Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
+                        Effect::MaxHp { .. } => ui.button("新增最大 HP 效果").clicked(),
+                        Effect::Initiative { .. } => ui.button("新增先攻值效果").clicked(),
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
+                        Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::HitAndRun { .. } => ui.button("新增打帶跑效果").clicked(),
                     };
                     effects.push((flag, effect));
@@ -784,12 +786,13 @@ impl SkillsEditor {
                     ui.label("形狀:");
                     changed |= show_shape_editor(ui, shape);
                 });
-                changed |= show_value_editor(ui, value, "最大生命值變化值:");
+                changed |= show_value_editor(ui, value, "最大 HP 變化值:");
                 changed |= show_duration_editor(ui, duration);
             }
-            Effect::Burn {
+            Effect::Initiative {
                 target_type,
                 shape,
+                value,
                 duration,
             } => {
                 changed |= show_target_type_editor(ui, target_type);
@@ -797,6 +800,7 @@ impl SkillsEditor {
                     ui.label("形狀:");
                     changed |= show_shape_editor(ui, shape);
                 });
+                changed |= show_value_editor(ui, value, "先攻變化值:");
                 changed |= show_duration_editor(ui, duration);
             }
             Effect::MovePoints {
@@ -811,6 +815,18 @@ impl SkillsEditor {
                     changed |= show_shape_editor(ui, shape);
                 });
                 changed |= show_value_editor(ui, value, "移動點數變化值:");
+                changed |= show_duration_editor(ui, duration);
+            }
+            Effect::Burn {
+                target_type,
+                shape,
+                duration,
+            } => {
+                changed |= show_target_type_editor(ui, target_type);
+                ui.horizontal(|ui| {
+                    ui.label("形狀:");
+                    changed |= show_shape_editor(ui, shape);
+                });
                 changed |= show_duration_editor(ui, duration);
             }
             Effect::HitAndRun {

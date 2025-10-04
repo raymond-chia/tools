@@ -286,10 +286,10 @@ impl BoardsEditor {
             }
             BrushMode::Unit => {
                 let marker = if let Some(template_type) = &self.selected_unit {
-                    let mut rng = rand::thread_rng();
+                    let mut rng = rand::rng();
                     // 數字太大無法存入 toml
                     // 使用 i64 max 當作 ID 上限
-                    let id = rng.gen_range(0..u64::MAX / 2 - 1);
+                    let id = rng.random_range(0..u64::MAX / 2 - 1);
                     Some(UnitMarker {
                         id,
                         unit_template_type: template_type.clone(),
@@ -752,7 +752,25 @@ impl BoardsEditor {
                     self.set_status(msg, true);
                     return;
                 }
-                let turn_order = board.units.keys().cloned().collect();
+                // 依照 calc_initiative 隨機排序單位
+                let mut rng = rand::rng();
+                let turn_order = board
+                    .units
+                    .iter()
+                    .map(|(&id, unit)| {
+                        let skill_refs: BTreeMap<&SkillID, &Skill> = unit
+                            .skills
+                            .iter()
+                            .filter_map(|sid| self.skills.get(sid).map(|s| (sid, s)))
+                            .collect();
+                        let ini = Unit::calc_initiative(&mut rng, &skill_refs);
+                        (id, ini)
+                    })
+                    .collect::<Vec<_>>();
+                let mut turn_order = turn_order;
+                turn_order.sort_by(|a, b| b.1.cmp(&a.1)); // 由大到小排序
+                let turn_order = turn_order.into_iter().map(|(id, _)| id).collect();
+
                 self.sim_board = board;
                 self.sim_battle = Battle::new(turn_order);
                 self.set_status(
