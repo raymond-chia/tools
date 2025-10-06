@@ -288,8 +288,8 @@ impl BoardsEditor {
                 let marker = if let Some(template_type) = &self.selected_unit {
                     let mut rng = rand::rng();
                     // 數字太大無法存入 toml
-                    // 使用 i64 max 當作 ID 上限
-                    let id = rng.random_range(0..u64::MAX / 2 - 1);
+                    // 使用 u32 max 當作 ID 上限
+                    let id = rng.random_range(0..u32::MAX);
                     Some(UnitMarker {
                         id,
                         unit_template_type: template_type.clone(),

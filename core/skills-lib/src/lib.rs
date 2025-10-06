@@ -15,7 +15,7 @@ pub struct Skill {
     #[serde(default)]
     pub cost: u16,
     #[serde(default)]
-    pub hit_rate: Option<u16>,
+    pub accuracy: Option<i32>,
     #[serde(default)]
     pub crit_rate: Option<u16>,
     #[serde(default)]
@@ -128,7 +128,7 @@ impl Default for Skill {
             tags: default_tags(),
             range: (0, 0),
             cost: 0,
-            hit_rate: None,
+            accuracy: None,
             crit_rate: None,
             effects: Vec::new(),
         }

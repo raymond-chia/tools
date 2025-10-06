@@ -3,6 +3,7 @@
 //! - 僅處理技能本身，不負責戰鬥流程、AI 決策或棋盤初始化。
 //! - 技能相關的資料結構與輔助函式應集中於此。
 use crate::*;
+use rand::Rng;
 use skills_lib::*;
 use std::{collections::BTreeMap, f64::consts::PI};
 
@@ -51,24 +52,12 @@ impl SkillSelection {
             skill_id: skill_id.clone(),
         })?;
         // 只判斷第一個 effect 的 target_type
-        let need_unit = skill
-            .effects
-            .get(0)
-            .map(|e| e.is_targeting_unit())
-            .ok_or_else(|| Error::InvalidSkill {
+        is_targeting_valid_target(board, skill_id, skill, caster, target).or_else(|err| {
+            Err(Error::InvalidParameter {
                 func,
-                skill_id: skill_id.clone(),
-            })?;
-        if need_unit {
-            let has_target_unit = board.pos_to_unit(target).is_some();
-            if !has_target_unit {
-                return Err(Error::SkillTargetNoUnit {
-                    func,
-                    skill_id: skill_id.clone(),
-                    pos: target,
-                });
-            }
-        }
+                detail: format!("invalid target for skill: {}", err),
+            })
+        })?;
 
         // skill_affect_area 會檢查移動距離
         let affect_area = self.skill_affect_area(board, skills, caster, target);
@@ -80,39 +69,29 @@ impl SkillSelection {
             });
         }
         let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
-        for pos in affect_area {
-            for effect in &skill.effects {
-                match effect {
-                    Effect::Hp { value, .. } => {
-                        if let Some(unit_id) = board.pos_to_unit(pos) {
-                            if let Some(unit) = board.units.get_mut(&unit_id) {
-                                let old = unit.hp;
-                                unit.hp += value;
-                                if unit.hp > unit.max_hp {
-                                    unit.hp = unit.max_hp;
-                                }
-                                msgs.push(format!("單位 {} HP: {} → {}", unit_id, old, unit.hp));
-                            }
+
+        // 命中機制最終設計摘要如下：
+        // 1. 技能命中數值（accuracy）僅計算一次，並套用於所有目標（僅計算命中數值，不進行閃避或格擋判定）。
+        // 2. 檢查每個目標是否為技能效果的合法套用對象（敵軍、友軍、自己等）。
+        // 3. 僅對符合效果目標的單位，進行閃避與格擋的判定。
+        // 4. 若目標被「閃避」則不套用效果；若為「命中」或「格擋」則都會套用效果，但格擋可影響效果強度（如減傷）。
+        // 5. 命中結果（命中、閃避、格擋）皆可顯示訊息。
+        match skill.accuracy {
+            None => {
+                // 無命中數值，所有格子直接套用效果
+                for pos in affect_area {
+                    for effect in &skill.effects {
+                        if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
+                            msgs.push(msg);
                         }
-                    }
-                    Effect::MaxHp { duration, .. } => {
-                        msgs.push(format!("[未實作] MaxHp 效果: 持續 {} 回合", duration));
-                    }
-                    Effect::Initiative { value, .. } => {
-                        msgs.push(format!("[未實作] Initiative 效果: +{} ini", value));
-                    }
-                    Effect::MovePoints { value, .. } => {
-                        msgs.push(format!("[未實作] 單位移動 {value}"));
-                    }
-                    Effect::Burn { duration, .. } => {
-                        msgs.push(format!("[未實作] Burn 效果: 持續 {} 回合", duration));
-                    }
-                    Effect::HitAndRun { .. } => {
-                        msgs.push(format!("[未實作] 打帶跑"));
                     }
                 }
             }
+            Some(accuracy) => {
+                msgs.extend(calc_hit_result(board, skill, affect_area, accuracy)?);
+            }
         }
+
         if let Some(unit) = board.units.get_mut(&caster) {
             unit.has_cast_skill_this_turn = true;
         }
@@ -318,6 +297,252 @@ pub fn calc_shape_area(board: &Board, shape: &Shape, from: Pos, to: Pos) -> Vec<
 use inner::*;
 mod inner {
     use super::*;
+
+    pub fn is_targeting_valid_target(
+        board: &Board,
+        skill_id: &str,
+        skill: &Skill,
+        caster_id: UnitID,
+        target: Pos,
+    ) -> Result<(), Error> {
+        let func = "is_targeting_valid_target";
+
+        // 只檢查第一個效果
+        let first_effect = skill.effects.get(0).ok_or_else(|| Error::InvalidSkill {
+            func,
+            skill_id: skill_id.to_string(),
+        })?;
+        // 如果技能只需要瞄準位置，則直接通過
+        if !first_effect.is_targeting_unit() {
+            return Ok(());
+        }
+        // 檢查陣營是否符合技能效果目標
+        let caster_unit = board
+            .units
+            .get(&caster_id)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster_id,
+            })?;
+        let target_id = board
+            .pos_to_unit(target)
+            .ok_or_else(|| Error::SkillTargetNoUnit {
+                func,
+                skill_id: skill_id.to_string(),
+                pos: target,
+            })?;
+        let target_unit = board
+            .units
+            .get(&target_id)
+            .ok_or_else(|| Error::SkillTargetNoUnit {
+                func,
+                skill_id: skill_id.to_string(),
+                pos: target,
+            })?;
+        let effect_target_type = first_effect.target_type();
+        let err_msg = match effect_target_type {
+            TargetType::Caster => {
+                if caster_id != target_id {
+                    "skill only affect caster".to_string()
+                } else {
+                    "".to_string()
+                }
+            }
+            TargetType::Ally => {
+                if caster_unit.team != target_unit.team {
+                    format!(
+                        "skill only affect ally: caster team {}, target team {}",
+                        caster_unit.team, target_unit.team
+                    )
+                } else {
+                    "".to_string()
+                }
+            }
+            TargetType::AllyExcludeCaster => {
+                if caster_id == target_id {
+                    "skill only affect ally `exclude caster`".to_string()
+                } else if caster_unit.team != target_unit.team {
+                    format!(
+                        "skill only affect `ally` exclude caster: caster team {}, target team {}",
+                        caster_unit.team, target_unit.team
+                    )
+                } else {
+                    "".to_string()
+                }
+            }
+            TargetType::Enemy => {
+                if caster_unit.team == target_unit.team {
+                    format!(
+                        "skill only affect enemy: caster team {}, target team {}",
+                        caster_unit.team, target_unit.team
+                    )
+                } else {
+                    "".to_string()
+                }
+            }
+            TargetType::AnyUnit => "".to_string(), // 任何單位都可
+            TargetType::Any => {
+                return Err(Error::InvalidImplementation {
+                    func,
+                    detail: "any target should not reach here".to_string(),
+                });
+            }
+        };
+        if err_msg.len() > 0 {
+            return Err(Error::SkillAffectWrongUnit {
+                func,
+                skill_id: skill_id.to_string(),
+                detail: err_msg,
+            });
+        }
+        Ok(())
+    }
+
+    pub fn calc_hit_result(
+        board: &mut Board,
+        skill: &Skill,
+        affect_area: Vec<Pos>,
+        accuracy: i32,
+    ) -> Result<Vec<String>, Error> {
+        let func = "calc_hit_result";
+
+        // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
+        let mut rng = rand::rng();
+        let hit_random = rng.random_range(1..20);
+        let hit_score = accuracy + hit_random;
+
+        let mut msgs = vec![];
+
+        for pos in affect_area {
+            let unit_id = match board.pos_to_unit(pos) {
+                // 無單位，直接套用效果
+                None => {
+                    for effect in &skill.effects {
+                        if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
+                            msgs.push(format!("空地 {pos:?} 受到效果：{msg}"));
+                        }
+                    }
+                    continue;
+                }
+                Some(unit_id) => unit_id,
+            };
+            let unit =
+                board
+                    .units
+                    .get_mut(&unit_id)
+                    .ok_or_else(|| Error::InvalidImplementation {
+                        func,
+                        detail: "unit not found".to_string(),
+                    })?;
+            let unit_type = unit.unit_template_type.clone();
+            // TODO 使用單位的數值
+            let evasion = 0;
+
+            let evade_score = hit_score - evasion;
+            if evade_score <= 0 {
+                msgs.push(format!(
+                    "單位 {unit_type} 閃避了攻擊！(accuracy={accuracy}, final accuracy={hit_score}, evade={evasion})",
+                ));
+                continue;
+            }
+
+            // TODO 使用單位的數值
+            let block = 0;
+            let block_reduction = 1;
+            let block_score = hit_score - block - evasion;
+            if block_score <= 0 {
+                for effect in &skill.effects {
+                    match effect {
+                        Effect::Hp {
+                            value,
+                            target_type,
+                            shape,
+                        } => {
+                            let mut value = *value;
+                            if value < 0 {
+                                value += block_reduction;
+                            }
+                            let effect = Effect::Hp {
+                                value,
+                                target_type: target_type.clone(),
+                                shape: shape.clone(),
+                            };
+                            let old_hp = board
+                                .units
+                                .get_mut(&unit_id)
+                                .ok_or_else(|| Error::InvalidImplementation {
+                                    func,
+                                    detail: format!("unit not found 2: {unit_type}"),
+                                })?
+                                .hp;
+                            if let Some(msg) = apply_effect_to_pos(board, &effect, pos) {
+                                let new_hp = board
+                                    .units
+                                    .get_mut(&unit_id)
+                                    .ok_or_else(|| Error::InvalidImplementation {
+                                        func,
+                                        detail: format!("unit not found 3: {unit_type}"),
+                                    })?
+                                    .hp;
+                                msgs.push(format!(
+                                    "單位 {unit_type} 格擋攻擊！HP: {old_hp} → {new_hp} (accuracy={accuracy}, final accuracy={hit_score}, evade={evasion}, block={block})：{msg}",
+                                ));
+                            }
+                        }
+                        _ => {
+                            if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
+                                msgs.push(format!(
+                                    "單位 {unit_type} 格擋攻擊！(accuracy={accuracy}, final accuracy={hit_score}, evade={evasion}, block={block})。但是命中效果不受影響：{msg}",
+                                ));
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+
+            for effect in &skill.effects {
+                if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
+                    msgs.push(format!(
+                        "單位 {unit_type} 被完全命中 (accuracy={accuracy}, final accuracy={hit_score}, evade={evasion}, block={block})：{msg}"
+                    ));
+                }
+            }
+        }
+        Ok(msgs)
+    }
+
+    /// 將單一效果套用到指定座標（單一 entry-point，方便後續擴充/重構）
+    pub fn apply_effect_to_pos(board: &mut Board, effect: &Effect, pos: Pos) -> Option<String> {
+        match effect {
+            Effect::Hp { value, .. } => {
+                if let Some(unit_id) = board.pos_to_unit(pos) {
+                    if let Some(unit) = board.units.get_mut(&unit_id) {
+                        let old = unit.hp;
+                        unit.hp += value;
+                        if unit.hp > unit.max_hp {
+                            unit.hp = unit.max_hp;
+                        }
+                        return Some(format!("單位 {} HP: {} → {}", unit_id, old, unit.hp));
+                    }
+                }
+                None
+            }
+            Effect::MaxHp {
+                duration, value, ..
+            } => Some(format!("[未實作] MaxHp {value}, 持續 {duration} 回合",)),
+            Effect::Initiative {
+                duration, value, ..
+            } => Some(format!("[未實作] Initiative {value}, 持續 {duration} 回合",)),
+            Effect::MovePoints {
+                value, duration, ..
+            } => Some(format!("[未實作] 單位移動 {value}, 持續 {duration} 回合")),
+            Effect::Burn { duration, .. } => {
+                Some(format!("[未實作] Burn 效果, 持續 {duration} 回合",))
+            }
+            Effect::HitAndRun { .. } => Some(format!("[未實作] 打帶跑")),
+        }
+    }
 
     /// 判斷技能施放距離是否符合 range 設定
     /// - skill: 技能資料

@@ -420,21 +420,18 @@ impl SkillsEditor {
                     }
                 });
 
-                // 命中率編輯
+                // 命中數值編輯
                 ui.horizontal(|ui| {
-                    ui.label("命中率:");
-                    let mut has_hit_rate = skill.hit_rate.is_some();
-                    if ui.checkbox(&mut has_hit_rate, "").changed() {
-                        skill.hit_rate = if has_hit_rate { Some(100) } else { None };
+                    ui.label("命中數值:");
+                    let mut has_accuracy = skill.accuracy.is_some();
+                    if ui.checkbox(&mut has_accuracy, "").changed() {
+                        skill.accuracy = if has_accuracy { Some(100) } else { None };
                         self.has_unsaved_changes_flag = true;
                     }
 
-                    if let Some(hit_rate) = &mut skill.hit_rate {
+                    if let Some(accuracy) = &mut skill.accuracy {
                         if ui
-                            .add_enabled(
-                                has_hit_rate,
-                                DragValue::new(hit_rate).range(0..=100).suffix("%"),
-                            )
+                            .add_enabled(has_accuracy, DragValue::new(accuracy).range(0..=i32::MAX))
                             .changed()
                         {
                             self.has_unsaved_changes_flag = true;

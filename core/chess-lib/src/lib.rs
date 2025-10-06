@@ -19,7 +19,7 @@ pub use error::*;
 pub use unit::*;
 
 pub type BoardID = String;
-pub type UnitID = u64;
+pub type UnitID = u32;
 pub type UnitTemplateType = String;
 pub type TeamID = String;
 pub type MovementCost = usize;

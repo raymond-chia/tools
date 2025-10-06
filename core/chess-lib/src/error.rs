@@ -10,8 +10,11 @@ use thiserror::Error;
 /// 棋盤核心錯誤型別
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("`{func}`: 參數錯誤")]
-    InvalidParameter { func: &'static str },
+    #[error("`{func}`: 實作錯誤: {detail}")]
+    InvalidImplementation { func: &'static str, detail: String },
+
+    #[error("`{func}`: 參數錯誤: {detail}")]
+    InvalidParameter { func: &'static str, detail: String },
 
     // 建立戰場
     #[error("`{func}`: 缺少單位模板 {template_type}")]
@@ -26,7 +29,6 @@ pub enum Error {
         func: &'static str,
         skill_id: SkillID,
     },
-
     // 使用技能
     #[error("`{func}`: 未選擇技能")]
     NoSkillSelected { func: &'static str },
@@ -48,6 +50,12 @@ pub enum Error {
         func: &'static str,
         skill_id: SkillID,
         pos: Pos,
+    },
+    #[error("`{func}`: 技能 {skill_id} 無法作用於單位: {detail}")]
+    SkillAffectWrongUnit {
+        func: &'static str,
+        skill_id: SkillID,
+        detail: String,
     },
 
     // 使用技能、移動單位

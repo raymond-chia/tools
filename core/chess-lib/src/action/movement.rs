@@ -130,7 +130,10 @@ pub fn move_unit_along_path(
 ) -> Result<(), Error> {
     let func = "move_unit_along_path";
 
-    let actor = path.get(0).ok_or(Error::InvalidParameter { func })?;
+    let actor = path.get(0).ok_or(Error::InvalidParameter {
+        func,
+        detail: "actor position not found".to_string(),
+    })?;
     let unit_id = match board.pos_to_unit(*actor) {
         Some(id) => id,
         None => return Err(Error::NoUnitAtPos { func, pos: *actor }),

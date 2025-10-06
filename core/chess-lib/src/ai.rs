@@ -243,7 +243,10 @@ mod inner {
         path: Vec<Pos>,
     ) -> Result<ScoredAction, Error> {
         let func = "ai.score_move";
-        let actor_pos = *path.last().ok_or(Error::InvalidParameter { func })?;
+        let actor_pos = *path.last().ok_or(Error::InvalidParameter {
+            func,
+            detail: "actor position not found".to_string(),
+        })?;
 
         // 計算與最近敵人距離與平均距離
         let mut min_dist: AIScore = 99.0;
