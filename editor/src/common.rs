@@ -8,13 +8,13 @@ use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
-pub const DIALOGS_FILE: &str = "core/test-data/ignore-dialogs.toml";
-pub const SKILLS_FILE: &str = "core/test-data/ignore-skills.toml";
-pub const UNIT_TEMPLATES_FILE: &str = "core/test-data/ignore-unit-templates.toml";
-pub const PROGRESSION_FILE: &str = "core/test-data/ignore-player-progression.toml";
-pub const BOARDS_FILE: &str = "core/test-data/ignore-boards.toml";
-pub const BOARDS_SEPARATE_DIR: &str = "core/test-data/ignore-boards/";
-pub const AI_FILE: &str = "core/test-data/ignore-ai.toml";
+pub const DIALOGS_FILE: &str = "test-data/ignore-dialogs.toml";
+pub const SKILLS_FILE: &str = "test-data/ignore-skills.toml";
+pub const UNIT_TEMPLATES_FILE: &str = "test-data/ignore-unit-templates.toml";
+pub const PROGRESSION_FILE: &str = "test-data/ignore-player-progression.toml";
+pub const BOARDS_FILE: &str = "test-data/ignore-boards.toml";
+pub const BOARDS_SEPARATE_DIR: &str = "test-data/ignore-boards/";
+pub const AI_FILE: &str = "test-data/ignore-ai.toml";
 
 #[derive(Debug, Clone)]
 pub struct Camera2D {
