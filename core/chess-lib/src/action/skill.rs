@@ -53,9 +53,9 @@ impl SkillSelection {
         })?;
         // 只判斷第一個 effect 的 target_type
         is_targeting_valid_target(board, skill_id, skill, caster, target).or_else(|err| {
-            Err(Error::InvalidParameter {
+            Err(Error::Wrap {
                 func,
-                detail: format!("invalid target for skill: {}", err),
+                source: Box::new(err),
             })
         })?;
 
@@ -805,11 +805,12 @@ mod tests {
 
         // 應回傳錯誤，且不應有施放技能訊息
         assert!(result.is_err());
-        let err_msg = result.unwrap_err();
+        let err = result.unwrap_err();
+        let inner_err = root_error(&err);
         assert!(
-            matches!(err_msg, Error::SkillTargetNoUnit { .. }),
+            matches!(inner_err, Error::SkillTargetNoUnit { .. }),
             "{:?}",
-            err_msg
+            inner_err
         );
 
         // 施法者狀態不變
