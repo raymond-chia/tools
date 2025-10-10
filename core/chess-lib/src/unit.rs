@@ -84,69 +84,96 @@ impl Unit {
             skills: template.skills.clone(),
         })
     }
-
-    /// 計算單位本回合的 initiative 值
-    /// - 1D6 隨機
-    /// - 技能 initiative 加總（i32）
-    /// - 未來可擴充 buff/debuff、裝備等
-    pub fn calc_initiative<R: rand::Rng>(rng: &mut R, skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
-        let roll = rng.random_range(1..=6);
-        let skill_initiative = skills_to_initiative(&skills);
-        roll + skill_initiative
-    }
 }
 
-use inner::*;
-mod inner {
-    use super::*;
+/// 計算單位本回合的 initiative 值
+/// - 1D6 隨機
+/// - 技能 initiative 加總（i32）
+/// - 未來可擴充 buff/debuff、裝備等
+pub fn calc_initiative<R: rand::Rng>(rng: &mut R, skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    let roll = rng.random_range(1..=6);
+    let skill_initiative = skills_to_initiative(&skills);
+    roll + skill_initiative
+}
 
-    pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
-        skills
-            .iter()
-            .flat_map(|(_, skill)| &skill.effects)
-            .filter_map(|effect| {
-                if let Effect::MaxHp { value, .. } = effect {
-                    Some(*value)
-                } else {
-                    None
-                }
-            })
-            .sum()
-    }
+pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::MaxHp { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
 
-    /// 計算單位 initiative 技能等級總和
-    /// 尋找所有 effect 為 Effect::Initiative 的技能，並加總其 value
-    pub fn skills_to_initiative(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
-        skills
-            .iter()
-            .flat_map(|(_, skill)| &skill.effects)
-            .filter_map(|effect| {
-                if let Effect::Initiative { value, .. } = effect {
-                    Some(*value)
-                } else {
-                    None
-                }
-            })
-            .sum()
-    }
+/// 計算單位 initiative 技能等級總和
+/// 尋找所有 effect 為 Effect::Initiative 的技能，並加總其 value
+pub fn skills_to_initiative(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::Initiative { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
 
-    pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
-        let points: i32 = skills
-            .iter()
-            .flat_map(|(_, skill)| &skill.effects)
-            .filter_map(|effect| {
-                if let Effect::MovePoints { value, .. } = effect {
-                    Some(*value)
-                } else {
-                    None
-                }
-            })
-            .sum();
-        if points < 0 {
-            0
-        } else {
-            points as MovementCost
-        }
+/// 計算單位 evasion 技能等級總和
+/// 尋找所有 effect 為 Effect::Evasion 的技能，並加總其 value
+pub fn skills_to_evasion(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::Evasion { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+/// 計算單位 block 技能等級總和
+/// 尋找所有 effect 為 Effect::Block 的技能，並加總其 value
+pub fn skills_to_block(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::Block { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
+    let points: i32 = skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::MovePoints { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum();
+    if points < 0 {
+        0
+    } else {
+        points as MovementCost
     }
 }
 

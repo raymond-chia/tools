@@ -482,6 +482,8 @@ impl SkillsEditor {
                                 Effect::Hp { .. } => ui.label("HP"),
                                 Effect::MaxHp { .. } => ui.label("最大 HP"),
                                 Effect::Initiative { .. } => ui.label("先攻值"),
+                                Effect::Evasion { .. } => ui.label("閃避"),
+                                Effect::Block { .. } => ui.label("格擋"),
                                 Effect::MovePoints { .. } => ui.label("移動點數"),
                                 Effect::Burn { .. } => ui.label("燃燒"),
                                 Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
@@ -586,6 +588,8 @@ impl SkillsEditor {
                         Effect::Hp { .. } => ui.button("新增 HP 效果").clicked(),
                         Effect::MaxHp { .. } => ui.button("新增最大 HP 效果").clicked(),
                         Effect::Initiative { .. } => ui.button("新增先攻值效果").clicked(),
+                        Effect::Evasion { .. } => ui.button("新增閃避效果").clicked(),
+                        Effect::Block { .. } => ui.button("新增格擋效果").clicked(),
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
                         Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::HitAndRun { .. } => ui.button("新增打帶跑效果").clicked(),
@@ -798,6 +802,34 @@ impl SkillsEditor {
                     changed |= show_shape_editor(ui, shape);
                 });
                 changed |= show_value_editor(ui, value, "先攻變化值:");
+                changed |= show_duration_editor(ui, duration);
+            }
+            Effect::Evasion {
+                target_type,
+                shape,
+                value,
+                duration,
+            } => {
+                changed |= show_target_type_editor(ui, target_type);
+                ui.horizontal(|ui| {
+                    ui.label("形狀:");
+                    changed |= show_shape_editor(ui, shape);
+                });
+                changed |= show_value_editor(ui, value, "閃避數值變化：");
+                changed |= show_duration_editor(ui, duration);
+            }
+            Effect::Block {
+                target_type,
+                shape,
+                value,
+                duration,
+            } => {
+                changed |= show_target_type_editor(ui, target_type);
+                ui.horizontal(|ui| {
+                    ui.label("形狀:");
+                    changed |= show_shape_editor(ui, shape);
+                });
+                changed |= show_value_editor(ui, value, "格擋數值變化：");
                 changed |= show_duration_editor(ui, duration);
             }
             Effect::MovePoints {

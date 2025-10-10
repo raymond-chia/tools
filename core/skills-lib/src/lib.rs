@@ -104,6 +104,18 @@ pub enum Effect {
         value: i32,
         duration: i32, // -1 代表永久
     },
+    Evasion {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,    // 增加的閃避
+        duration: i32, // -1 代表永久
+    },
+    Block {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,    // 增加的格擋
+        duration: i32, // -1 代表永久
+    },
     MovePoints {
         target_type: TargetType,
         shape: Shape,
@@ -141,6 +153,8 @@ impl Effect {
             Effect::Hp { target_type, .. } => target_type,
             Effect::MaxHp { target_type, .. } => target_type,
             Effect::Initiative { target_type, .. } => target_type,
+            Effect::Evasion { target_type, .. } => target_type,
+            Effect::Block { target_type, .. } => target_type,
             Effect::MovePoints { target_type, .. } => target_type,
             Effect::Burn { target_type, .. } => target_type,
             Effect::HitAndRun { target_type, .. } => target_type,
@@ -163,6 +177,8 @@ impl Effect {
             Effect::Hp { shape, .. } => shape,
             Effect::MaxHp { shape, .. } => shape,
             Effect::Initiative { shape, .. } => shape,
+            Effect::Evasion { shape, .. } => shape,
+            Effect::Block { shape, .. } => shape,
             Effect::MovePoints { shape, .. } => shape,
             Effect::Burn { shape, .. } => shape,
             Effect::HitAndRun { shape, .. } => shape,

@@ -88,7 +88,13 @@ impl SkillSelection {
                 }
             }
             Some(accuracy) => {
-                msgs.extend(calc_hit_result(board, skill, affect_area, accuracy)?);
+                msgs.extend(calc_hit_result(
+                    board,
+                    skills,
+                    skill,
+                    affect_area,
+                    accuracy,
+                )?);
             }
         }
 
@@ -400,6 +406,7 @@ mod inner {
 
     pub fn calc_hit_result(
         board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
         skill: &Skill,
         affect_area: Vec<Pos>,
         accuracy: i32,
@@ -408,7 +415,9 @@ mod inner {
 
         // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
         let mut rng = rand::rng();
-        let hit_random = rng.random_range(1..20);
+        let hit_random = rng.random_range(1..100);
+        let critical_failure = 5;
+        let critical_success = 95;
         let hit_score = accuracy + hit_random;
 
         let mut msgs = vec![];
@@ -435,21 +444,50 @@ mod inner {
                         detail: "unit not found".to_string(),
                     })?;
             let unit_type = unit.unit_template_type.clone();
-            // TODO 使用單位的數值
-            let evasion = 0;
-
+            if hit_random <= critical_failure {
+                // 完全閃避
+                msgs.push(format!(
+                    "亂數={hit_random} <= {critical_failure}%，單位 {unit_type} 完全閃避了攻擊！"
+                ));
+                continue;
+            }
+            if hit_random > critical_success {
+                // 完全命中
+                for effect in &skill.effects {
+                    if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
+                        msgs.push(format!(
+                            "亂數={hit_random} > {critical_success}%，單位 {unit_type} 被完全命中了：{msg}"
+                        ));
+                    }
+                }
+                continue;
+            }
+            let unit_skills: BTreeMap<_, _> = board
+                .units
+                .get(&unit_id)
+                .map(|unit| {
+                    unit.skills
+                        .iter()
+                        .filter_map(|skill_id| skills.get(skill_id).map(|s| (skill_id, s)))
+                        .collect()
+                })
+                .unwrap_or_default();
+            // 計算閃避值
+            let evasion = crate::unit::skills_to_evasion(&unit_skills);
+            // 閃避
             let evade_score = hit_score - evasion;
             if evade_score <= 0 {
                 msgs.push(format!(
-                    "單位 {unit_type} 閃避了攻擊！(accuracy={accuracy}, final accuracy={hit_score}, evade={evasion})",
+                    "單位 {unit_type} 閃避了攻擊！(accuracy={accuracy}, random={hit_random}, evade={evasion})",
                 ));
                 continue;
             }
 
-            // TODO 使用單位的數值
-            let block = 0;
+            // 計算格擋值
+            let block = crate::unit::skills_to_block(&unit_skills);
             let block_reduction = 1;
             let block_score = hit_score - block - evasion;
+            // 格擋
             if block_score <= 0 {
                 for effect in &skill.effects {
                     match effect {
@@ -485,14 +523,14 @@ mod inner {
                                     })?
                                     .hp;
                                 msgs.push(format!(
-                                    "單位 {unit_type} 格擋攻擊！HP: {old_hp} → {new_hp} (accuracy={accuracy}, final accuracy={hit_score}, evade={evasion}, block={block})：{msg}",
+                                    "單位 {unit_type} 格擋攻擊！HP: {old_hp} → {new_hp} (accuracy={accuracy}, random={hit_random}, evade={evasion}, block={block})：{msg}",
                                 ));
                             }
                         }
                         _ => {
                             if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
                                 msgs.push(format!(
-                                    "單位 {unit_type} 格擋攻擊！(accuracy={accuracy}, final accuracy={hit_score}, evade={evasion}, block={block})。但是命中效果不受影響：{msg}",
+                                    "單位 {unit_type} 格擋攻擊！(accuracy={accuracy}, random={hit_random}, evade={evasion}, block={block})。但是命中效果不受影響：{msg}",
                                 ));
                             }
                         }
@@ -501,10 +539,11 @@ mod inner {
                 continue;
             }
 
+            // 完全命中
             for effect in &skill.effects {
                 if let Some(msg) = apply_effect_to_pos(board, effect, pos) {
                     msgs.push(format!(
-                        "單位 {unit_type} 被完全命中 (accuracy={accuracy}, final accuracy={hit_score}, evade={evasion}, block={block})：{msg}"
+                        "單位 {unit_type} 被完全命中 (accuracy={accuracy}, random={hit_random}, evade={evasion}, block={block})：{msg}"
                     ));
                 }
             }
@@ -518,12 +557,16 @@ mod inner {
             Effect::Hp { value, .. } => {
                 if let Some(unit_id) = board.pos_to_unit(pos) {
                     if let Some(unit) = board.units.get_mut(&unit_id) {
-                        let old = unit.hp;
+                        let old_hp = unit.hp;
                         unit.hp += value;
                         if unit.hp > unit.max_hp {
                             unit.hp = unit.max_hp;
                         }
-                        return Some(format!("單位 {} HP: {} → {}", unit_id, old, unit.hp));
+                        let new_hp = unit.hp;
+                        return Some(format!(
+                            "單位 {} HP: {old_hp} → {new_hp}",
+                            &unit.unit_template_type,
+                        ));
                     }
                 }
                 None
@@ -534,6 +577,16 @@ mod inner {
             Effect::Initiative {
                 duration, value, ..
             } => Some(format!("[未實作] Initiative {value}, 持續 {duration} 回合",)),
+            Effect::Evasion {
+                value, duration, ..
+            } => Some(format!(
+                "[未實作] Evasion 效果 +{value}%, 持續 {duration} 回合"
+            )),
+            Effect::Block {
+                value, duration, ..
+            } => Some(format!(
+                "[未實作] Block 效果 +{value}%, 持續 {duration} 回合"
+            )),
             Effect::MovePoints {
                 value, duration, ..
             } => Some(format!("[未實作] 單位移動 {value}, 持續 {duration} 回合")),

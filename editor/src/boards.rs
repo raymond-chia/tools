@@ -763,7 +763,7 @@ impl BoardsEditor {
                             .iter()
                             .filter_map(|sid| self.skills.get(sid).map(|s| (sid, s)))
                             .collect();
-                        let ini = Unit::calc_initiative(&mut rng, &skill_refs);
+                        let ini = chess_lib::calc_initiative(&mut rng, &skill_refs);
                         (id, ini)
                     })
                     .collect::<Vec<_>>();
