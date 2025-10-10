@@ -27,4 +27,3 @@ dist-ssr
 target/
 coverage/
 ignore-*
-editor/src/test-assets
