@@ -254,4 +254,310 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_unit_template_default() {
+        let default = UnitTemplate::default();
+        assert_eq!(default.name, "");
+        assert!(default.skills.is_empty());
+    }
+
+    #[test]
+    fn test_unit_struct_fields_extreme() {
+        let unit = Unit {
+            id: 999,
+            unit_template_type: "超級戰士".to_string(),
+            team: "t99".to_string(),
+            moved: usize::MAX,
+            move_points: usize::MAX,
+            has_cast_skill_this_turn: true,
+            hp: i32::MIN,
+            max_hp: i32::MAX,
+            skills: ["超級技能".to_string()].iter().cloned().collect(),
+        };
+        assert_eq!(unit.id, 999);
+        assert_eq!(unit.unit_template_type, "超級戰士");
+        assert_eq!(unit.team, "t99");
+        assert_eq!(unit.moved, usize::MAX);
+        assert_eq!(unit.move_points, usize::MAX);
+        assert!(unit.has_cast_skill_this_turn);
+        assert_eq!(unit.hp, i32::MIN);
+        assert_eq!(unit.max_hp, i32::MAX);
+        assert!(unit.skills.contains("超級技能"));
+    }
+
+    #[test]
+    fn test_unit_from_template_skill_not_found() {
+        let marker = UnitMarker {
+            id: 1,
+            unit_template_type: "knight".to_string(),
+            team: "t1".to_string(),
+            pos: Pos { x: 0, y: 0 },
+        };
+        let template = UnitTemplate {
+            name: "knight".to_string(),
+            skills: ["not_exist_skill".to_string()].iter().cloned().collect(),
+        };
+        let skills_map = BTreeMap::new();
+        let result = Unit::from_template(&marker, &template, &skills_map);
+        match result {
+            Err(Error::SkillNotFound { skill_id, .. }) => assert_eq!(skill_id, "not_exist_skill"),
+            _ => panic!("Should return Error::SkillNotFound"),
+        }
+    }
+
+    #[test]
+    fn test_skills_to_max_hp() {
+        let mut skills = BTreeMap::new();
+        // 無技能
+        assert_eq!(skills_to_max_hp(&skills), 0);
+
+        // 一個 MaxHp 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::MaxHp {
+            value: 10,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(&key_a, &skill1);
+        assert_eq!(skills_to_max_hp(&skills), 10);
+
+        // 多個 MaxHp 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::MaxHp {
+            value: 20,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(&key_b, &skill2);
+        assert_eq!(skills_to_max_hp(&skills), 30);
+
+        // 非 MaxHp 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::Initiative {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(&key_c, &skill3);
+        assert_eq!(skills_to_max_hp(&skills), 30);
+    }
+
+    #[test]
+    fn test_calc_initiative_with_and_without_skill() {
+        let mut rng = rand::rng();
+        let mut skills = BTreeMap::new();
+        // 無技能
+        let result = calc_initiative(&mut rng, &skills);
+        assert!(result >= 1 && result <= 6);
+
+        // 有 initiative 技能
+        let mut skill = Skill::default();
+        skill.effects = vec![Effect::Initiative {
+            value: 3,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key = "test".to_string();
+        skills.insert(&key, &skill);
+        let result = calc_initiative(&mut rng, &skills);
+        assert!(result >= 4 && result <= 9);
+
+        // 有 initiative 技能
+        let mut skill = Skill::default();
+        skill.effects = vec![
+            Effect::Initiative {
+                value: 3,
+                target_type: Default::default(),
+                shape: Default::default(),
+                duration: 0,
+            },
+            Effect::Initiative {
+                value: 2,
+                target_type: Default::default(),
+                shape: Default::default(),
+                duration: 0,
+            },
+        ];
+        let key = "test".to_string();
+        skills.insert(&key, &skill);
+        let result = calc_initiative(&mut rng, &skills);
+        assert!(result >= 6 && result <= 11);
+    }
+
+    #[test]
+    fn test_skills_to_initiative() {
+        let mut skills = BTreeMap::new();
+        // 無技能
+        assert_eq!(skills_to_initiative(&skills), 0);
+
+        // 一個 initiative 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::Initiative {
+            value: 2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(&key_a, &skill1);
+        assert_eq!(skills_to_initiative(&skills), 2);
+
+        // 多個 initiative 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::Initiative {
+            value: 3,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(&key_b, &skill2);
+        assert_eq!(skills_to_initiative(&skills), 5);
+
+        // 非 initiative 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxHp {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(&key_c, &skill3);
+        assert_eq!(skills_to_initiative(&skills), 5);
+    }
+
+    #[test]
+    fn test_skills_to_evasion() {
+        let mut skills = BTreeMap::new();
+        // 無技能
+        assert_eq!(skills_to_evasion(&skills), 0);
+
+        // 一個 evasion 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::Evasion {
+            value: 2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(&key_a, &skill1);
+        assert_eq!(skills_to_evasion(&skills), 2);
+
+        // 多個 evasion 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::Evasion {
+            value: 3,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(&key_b, &skill2);
+        assert_eq!(skills_to_evasion(&skills), 5);
+
+        // 非 evasion 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxHp {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(&key_c, &skill3);
+        assert_eq!(skills_to_evasion(&skills), 5);
+    }
+
+    #[test]
+    fn test_skills_to_block() {
+        let mut skills = BTreeMap::new();
+        // 無技能
+        assert_eq!(skills_to_block(&skills), 0);
+
+        // 一個 block 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::Block {
+            value: 2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(&key_a, &skill1);
+        assert_eq!(skills_to_block(&skills), 2);
+
+        // 多個 block 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::Block {
+            value: 3,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(&key_b, &skill2);
+        assert_eq!(skills_to_block(&skills), 5);
+
+        // 非 block 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxHp {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(&key_c, &skill3);
+        assert_eq!(skills_to_block(&skills), 5);
+    }
+
+    #[test]
+    fn test_skills_to_move_points_negative() {
+        let mut skills = BTreeMap::new();
+        // 負數 move_points，應回傳 0
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::MovePoints {
+            value: -10,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(&key_a, &skill1);
+        assert_eq!(skills_to_move_points(&skills), 0);
+
+        // 正負混合，總和為負，仍回傳 0
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::MovePoints {
+            value: 5,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(&key_b, &skill2);
+        assert_eq!(skills_to_move_points(&skills), 0);
+
+        // 正負混合，總和為正
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MovePoints {
+            value: 20,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(&key_c, &skill3);
+        assert_eq!(skills_to_move_points(&skills), 15);
+    }
 }
