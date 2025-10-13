@@ -962,4 +962,109 @@ mod tests {
             Err(Error::NotEnoughPoints { .. })
         ));
     }
+
+    #[test]
+    fn test_is_targeting_valid_target_error_cases() {
+        // 準備棋盤、單位、技能
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let target_unit_id = unit_id + 1;
+        let mut skill = skills.get("slash").unwrap().clone();
+
+        // 取得原始隊伍
+        let orig_team = board.units.get(&unit_id).unwrap().team.clone();
+
+        // Caster: 目標不是自己
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = orig_team.clone();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+        };
+        let err = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(matches!(err, Err(Error::SkillAffectWrongUnit { .. })));
+        // Caster: 目標是自己（合法）
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+        };
+        let ok = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 1 });
+        assert!(ok.is_ok());
+
+        // Ally: 目標不同隊伍
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = "other".to_string();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Ally,
+            shape: Shape::Point,
+        };
+        let err = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(matches!(err, Err(Error::SkillAffectWrongUnit { .. })));
+        // Ally: 目標同隊（合法）
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = orig_team.clone();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Ally,
+            shape: Shape::Point,
+        };
+        let ok = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(ok.is_ok());
+
+        // AllyExcludeCaster: 目標是自己
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = orig_team.clone();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::AllyExcludeCaster,
+            shape: Shape::Point,
+        };
+        let err = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 1 });
+        assert!(matches!(err, Err(Error::SkillAffectWrongUnit { .. })));
+        // AllyExcludeCaster: 目標同隊他人（合法）
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = orig_team.clone();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::AllyExcludeCaster,
+            shape: Shape::Point,
+        };
+        let ok = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(ok.is_ok());
+
+        // Enemy: 目標同隊
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = orig_team.clone();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+        };
+        let err = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(matches!(err, Err(Error::SkillAffectWrongUnit { .. })));
+        // Enemy: 目標不同隊伍（合法）
+        board.units.get_mut(&unit_id).unwrap().team = orig_team.clone();
+        board.units.get_mut(&target_unit_id).unwrap().team = "other".to_string();
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+        };
+        let ok = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(ok.is_ok());
+        // 還原隊伍
+        board.units.get_mut(&target_unit_id).unwrap().team = orig_team.clone();
+
+        // Any: 不會進入錯誤分支，is_targeting_unit() 為 false，會直接 Ok(())
+        skill.effects[0] = Effect::Hp {
+            value: 0,
+            target_type: TargetType::Any,
+            shape: Shape::Point,
+        };
+        let ok = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
+        assert!(ok.is_ok());
+    }
 }

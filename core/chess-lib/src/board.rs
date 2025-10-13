@@ -233,6 +233,8 @@ mod unitid_key_map {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // 用於測試自訂序列化
+    use serde_json;
 
     #[test]
     fn test_board_from_config() {
@@ -346,5 +348,57 @@ mod tests {
             }
             _ => panic!("應該是 PosOccupied"),
         }
+    }
+
+    #[test]
+    fn test_unitid_key_map_serialize() {
+        // 準備資料
+        let mut map: BTreeMap<UnitID, UnitMarker> = BTreeMap::new();
+        map.insert(
+            42,
+            UnitMarker {
+                id: 42,
+                unit_template_type: "TestTemplate".to_string(),
+                team: "t1".to_string(),
+                pos: Pos { x: 1, y: 2 },
+            },
+        );
+        map.insert(
+            7,
+            UnitMarker {
+                id: 7,
+                unit_template_type: "Another".to_string(),
+                team: "t2".to_string(),
+                pos: Pos { x: 0, y: 0 },
+            },
+        );
+
+        // 序列化
+        // 直接呼叫自訂 serialize
+        let json = {
+            let mut buf = Vec::new();
+            {
+                let mut ser = serde_json::Serializer::new(&mut buf);
+                super::unitid_key_map::serialize(&map, &mut ser).unwrap();
+            }
+            String::from_utf8(buf).unwrap()
+        };
+
+        // 反序列化
+        let deser: BTreeMap<UnitID, UnitMarker> = {
+            let mut de = serde_json::Deserializer::from_str(&json);
+            super::unitid_key_map::deserialize(&mut de).unwrap()
+        };
+
+        // 驗證
+        assert_eq!(deser.len(), 2);
+        assert_eq!(deser[&42].unit_template_type, "TestTemplate");
+        assert_eq!(deser[&42].pos, Pos { x: 1, y: 2 });
+        assert_eq!(deser[&42].id, 42);
+        assert_eq!(deser[&42].team, "t1");
+        assert_eq!(deser[&7].unit_template_type, "Another");
+        assert_eq!(deser[&7].pos, Pos { x: 0, y: 0 });
+        assert_eq!(deser[&7].id, 7);
+        assert_eq!(deser[&7].team, "t2");
     }
 }
