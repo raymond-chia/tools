@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 
+fonts/*/
 target/
 coverage/
 ignore-*

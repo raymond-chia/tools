@@ -199,12 +199,12 @@ impl SkillsEditor {
 
     /// 重新載入固定技能檔案（SKILLS_FILE），失敗時保留原資料並回傳錯誤
     pub fn reload(&mut self) {
-        self.load_file(PathBuf::from(SKILLS_FILE));
+        self.load_file(skills_file());
     }
 
     /// 儲存技能資料到固定檔案（SKILLS_FILE），失敗時回傳錯誤
     pub fn save(&mut self) {
-        self.save_file(PathBuf::from(SKILLS_FILE));
+        self.save_file(skills_file());
     }
 }
 

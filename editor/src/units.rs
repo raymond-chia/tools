@@ -15,7 +15,7 @@ pub struct UnitsEditor {
     status_message: Option<(String, bool)>,
 }
 
-pub fn load_unit_templates(path: &str) -> io::Result<Vec<UnitTemplate>> {
+pub fn load_unit_templates<P: AsRef<std::path::Path>>(path: P) -> io::Result<Vec<UnitTemplate>> {
     #[derive(serde::Deserialize)]
     struct UnitTemplatesConfig {
         unit_templates: Vec<UnitTemplate>,
@@ -32,7 +32,7 @@ impl UnitsEditor {
 
     pub fn reload(&mut self) {
         // 重新載入 unit_templates
-        match load_unit_templates(UNIT_TEMPLATES_FILE) {
+        match load_unit_templates(unit_templates_file()) {
             Ok(unit_templates) => {
                 self.unit_templates = unit_templates;
                 let is_selected_exist = self.selected_unit.as_ref().map_or(false, |selected| {
@@ -49,7 +49,7 @@ impl UnitsEditor {
             }
         }
         // 重新載入 skills，並分類主動/被動
-        match SkillsData::from_file(SKILLS_FILE) {
+        match SkillsData::from_file(skills_file()) {
             Ok(skills_data) => {
                 let mut active_skill_ids = Vec::new();
                 let mut passive_skill_ids = Vec::new();
@@ -93,7 +93,7 @@ impl UnitsEditor {
                     self.reload();
                 }
                 if ui.button("儲存").clicked() {
-                    if let Err(e) = self.save_unit_templates(UNIT_TEMPLATES_FILE) {
+                    if let Err(e) = self.save_unit_templates(unit_templates_file()) {
                         self.set_status(format!("儲存失敗: {e}"), true);
                     } else {
                         self.set_status("儲存成功".to_string(), false);
@@ -262,7 +262,7 @@ impl UnitsEditor {
         }
     }
 
-    fn save_unit_templates(&self, path: &str) -> Result<(), io::Error> {
+    fn save_unit_templates<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), io::Error> {
         #[derive(serde::Serialize)]
         struct UnitTemplatesConfig<'a> {
             unit_templates: &'a Vec<UnitTemplate>,

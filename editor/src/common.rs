@@ -8,13 +8,34 @@ use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
 
-pub const DIALOGS_FILE: &str = "test-data/ignore-dialogs.toml";
-pub const SKILLS_FILE: &str = "test-data/ignore-skills.toml";
-pub const UNIT_TEMPLATES_FILE: &str = "test-data/ignore-unit-templates.toml";
-pub const PROGRESSION_FILE: &str = "test-data/ignore-player-progression.toml";
-pub const BOARDS_FILE: &str = "test-data/ignore-boards.toml";
-pub const BOARDS_SEPARATE_DIR: &str = "test-data/ignore-boards/";
-pub const AI_FILE: &str = "test-data/ignore-ai.toml";
+/// 取得跨平台對話資料路徑
+pub fn dialogs_file() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-dialogs.toml"])
+}
+/// 取得跨平台技能資料路徑
+pub fn skills_file() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-skills.toml"])
+}
+/// 取得跨平台單位模板資料路徑
+pub fn unit_templates_file() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-unit-templates.toml"])
+}
+/// 取得跨平台玩家進度資料路徑
+pub fn progression_file() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-player-progressions.toml"])
+}
+/// 取得跨平台棋盤資料路徑
+pub fn boards_file() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-boards.toml"])
+}
+/// 取得跨平台棋盤分開存放目錄
+pub fn boards_separate_dir() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-boards"])
+}
+/// 取得跨平台 AI 設定檔路徑
+pub fn ai_file() -> PathBuf {
+    PathBuf::from_iter(["test-data", "ignore-ai.toml"])
+}
 
 #[derive(Debug, Clone)]
 pub struct Camera2D {

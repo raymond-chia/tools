@@ -1,5 +1,5 @@
 use crate::common::*;
-use crate::player_progression::{PlayerProgressionData, Unit as ProgressionUnit};
+use crate::player_progressions::{PlayerProgressionData, Unit as ProgressionUnit};
 use chess_lib::*;
 use egui::*;
 use indexmap::IndexMap;
@@ -68,7 +68,7 @@ impl BoardsEditor {
 
     fn reload(&mut self) {
         // 先載入玩家進度資料
-        self.player_progression = match from_file::<_, PlayerProgressionData>(PROGRESSION_FILE) {
+        self.player_progression = match from_file::<_, PlayerProgressionData>(progression_file()) {
             Ok(data) => data,
             Err(err) => {
                 self.set_status(format!("載入 player_progression 失敗: {}", err), true);
@@ -76,7 +76,7 @@ impl BoardsEditor {
             }
         };
 
-        match load_boards(BOARDS_FILE) {
+        match load_boards(boards_file()) {
             Ok(boards) => {
                 self.boards = boards;
                 if let Some(id) = &self.selected_board {
@@ -91,7 +91,7 @@ impl BoardsEditor {
             }
         }
         // 載入 unit_templates
-        match crate::units::load_unit_templates(UNIT_TEMPLATES_FILE) {
+        match crate::units::load_unit_templates(unit_templates_file()) {
             Ok(unit_templates) => {
                 self.unit_templates = unit_templates
                     .into_iter()
@@ -112,7 +112,7 @@ impl BoardsEditor {
                 return;
             }
         }
-        match load_skills(SKILLS_FILE) {
+        match load_skills(skills_file()) {
             Ok((skills, active_skill_ids, passive_skill_ids)) => {
                 self.skills = skills;
                 self.active_skill_ids = active_skill_ids;
@@ -127,7 +127,7 @@ impl BoardsEditor {
             }
         }
         // 載入 AI 設定
-        match from_file::<_, AIConfig>(AI_FILE) {
+        match from_file::<_, AIConfig>(ai_file()) {
             Ok(ai) => {
                 self.ai_config = ai;
             }
@@ -169,7 +169,7 @@ impl BoardsEditor {
                 self.reload();
             }
             if ui.button("儲存戰場").clicked() {
-                if let Err(e) = save_boards(BOARDS_FILE, &self.boards) {
+                if let Err(e) = save_boards(boards_file(), &self.boards) {
                     self.set_status(format!("儲存失敗: {}", e), true);
                 } else {
                     self.set_status("儲存成功".to_string(), false);
@@ -910,25 +910,28 @@ impl BoardsEditor {
     }
 }
 
-fn load_boards(path: &str) -> io::Result<BTreeMap<BoardID, BoardConfig>> {
+fn load_boards<P: AsRef<std::path::Path>>(path: P) -> io::Result<BTreeMap<BoardID, BoardConfig>> {
     from_file(path)
 }
 
-fn save_boards(path: &str, boards: &BTreeMap<BoardID, BoardConfig>) -> io::Result<()> {
+fn save_boards<P: AsRef<std::path::Path>>(
+    path: P,
+    boards: &BTreeMap<BoardID, BoardConfig>,
+) -> io::Result<()> {
     to_file(path, boards)
 }
 
 /// 匯出所有 board 為 boards/{id}.toml 檔案，不更動原本設定檔
 fn export_boards_to_files(boards: &BTreeMap<BoardID, BoardConfig>) -> Result<usize, String> {
-    if let Err(e) = std::fs::create_dir_all(BOARDS_SEPARATE_DIR) {
+    if let Err(e) = std::fs::create_dir_all(boards_separate_dir()) {
         return Err(format!("建立目錄失敗: {}", e));
     }
     let mut count = 0;
     for (id, board) in boards {
-        let file_path = format!("{}/{}.toml", BOARDS_SEPARATE_DIR, id);
+        let file_path = boards_separate_dir().join(format!("{}.toml", id));
         match to_file(&file_path, board) {
             Ok(_) => count += 1,
-            Err(e) => return Err(format!("寫入 {} 失敗: {}", file_path, e)),
+            Err(e) => return Err(format!("寫入 {} 失敗: {}", file_path.display(), e)),
         }
     }
     Ok(count)

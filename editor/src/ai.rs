@@ -38,7 +38,7 @@ impl AIEditor {
 
     fn reload(&mut self) {
         // 重新載入 unit_templates
-        let unit_templates = match crate::units::load_unit_templates(UNIT_TEMPLATES_FILE) {
+        let unit_templates = match crate::units::load_unit_templates(unit_templates_file()) {
             Ok(unit_templates) => unit_templates,
             Err(err) => {
                 self.set_status(format!("載入單位類型失敗: {}", err), true);
@@ -55,7 +55,7 @@ impl AIEditor {
             self.selected_unit_type = None;
         }
         // 重新載入 AI
-        let ai_config = match from_file::<_, AIConfig>(AI_FILE) {
+        let ai_config = match from_file::<_, AIConfig>(ai_file()) {
             Ok(ai_config) => ai_config,
             Err(err) => {
                 self.set_status(format!("載入 AI 設定失敗: {}", err), true);
@@ -245,5 +245,5 @@ impl AIEditor {
 }
 
 fn save_ai(ai_config: &AIConfig) -> io::Result<()> {
-    to_file(AI_FILE, ai_config)
+    to_file(ai_file(), ai_config)
 }

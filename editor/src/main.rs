@@ -2,7 +2,7 @@ mod ai;
 mod boards;
 mod common;
 mod dialogs;
-mod player_progression;
+mod player_progressions;
 mod skills;
 mod units;
 
@@ -11,7 +11,7 @@ use boards::BoardsEditor;
 use dialogs::DialogsEditor;
 use eframe::{Frame, egui};
 use egui::{FontData, FontDefinitions, FontFamily, Ui};
-use player_progression::PlayerProgressionEditor;
+use player_progressions::PlayerProgressionEditor;
 use skills::SkillsEditor;
 use units::UnitsEditor;
 
@@ -44,20 +44,20 @@ impl EditorApp {
         // 設定字體以支援繁體中文
         let mut fonts = FontDefinitions::default();
 
-        // 在 Windows 中，使用系統已安裝的中文字體
-        // 微軟正黑體是 Windows 中常見的繁體中文字體
-        match std::fs::read("C:\\Windows\\Fonts\\msjh.ttc") {
+        // 嘗試載入專案內的中文字型（如 fonts/NotoSans.ttf）
+        match std::fs::read("fonts/NotoSans.ttf") {
             Ok(font_data) => {
-                fonts
-                    .font_data
-                    .insert("msyh".to_owned(), FontData::from_owned(font_data).into());
+                fonts.font_data.insert(
+                    "noto_sans".to_owned(),
+                    FontData::from_owned(font_data).into(),
+                );
 
                 // 將中文字體添加到 Proportional 字體族中的首位
                 fonts
                     .families
                     .get_mut(&FontFamily::Proportional)
                     .unwrap()
-                    .insert(0, "msyh".to_owned());
+                    .insert(0, "noto_sans".to_owned());
             }
             Err(err) => {
                 println!("無法載入中文字體: {}", err);
