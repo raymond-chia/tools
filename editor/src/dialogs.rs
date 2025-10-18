@@ -134,6 +134,7 @@ impl DialogsEditor {
 
             // 處理攝影機移動與縮放
             self.camera.handle_pan_zoom(ui);
+            self.camera.handle_keyboard_zoom(ui);
 
             // 第1階段：收集所有節點資訊，準備繪製和交互
             // 預先計算節點的位置和矩形區域

@@ -81,6 +81,21 @@ impl Camera2D {
             }
         }
     }
+
+    /// 處理鍵盤縮放（Ctrl + + / Ctrl + -）
+    pub fn handle_keyboard_zoom(&mut self, ctx: &Ui) {
+        ctx.input(|i| {
+            // 支援 Ctrl + + / Ctrl + - / Ctrl + =（部分鍵盤 + 需用 =）
+            if i.key_pressed(Key::Plus) || i.key_pressed(Key::Equals) {
+                self.zoom += 0.1;
+                self.zoom = self.zoom.clamp(0.1, 2.0);
+            }
+            if i.key_pressed(Key::Minus) {
+                self.zoom -= 0.1;
+                self.zoom = self.zoom.clamp(0.1, 2.0);
+            }
+        });
+    }
 }
 
 pub fn from_toml<T>(content: &str) -> io::Result<T>

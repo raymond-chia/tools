@@ -959,6 +959,7 @@ fn show_tiles(
 ) {
     // 處理攝影機平移與縮放
     camera.handle_pan_zoom(ui);
+    camera.handle_keyboard_zoom(ui);
 
     // 先繪製格子內容
     let painter = ui.painter();
