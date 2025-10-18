@@ -1,6 +1,8 @@
 use crate::{common::*, skills::SkillsData};
 use chess_lib::{UnitTemplate, UnitTemplateType};
 use egui::*;
+use skills_lib::*;
+use std::collections::{HashMap, HashSet};
 use std::io;
 
 #[derive(Default)]
@@ -93,11 +95,18 @@ impl UnitsEditor {
                     self.reload();
                 }
                 if ui.button("儲存").clicked() {
-                    if let Err(e) = self.save_unit_templates(unit_templates_file()) {
-                        self.set_status(format!("儲存失敗: {e}"), true);
-                    } else {
-                        self.set_status("儲存成功".to_string(), false);
-                        self.has_unsaved_changes = false;
+                    match self.validate_skills_exist_in_units() {
+                        Ok(_) => {
+                            if let Err(e) = self.save_unit_templates(unit_templates_file()) {
+                                self.set_status(format!("儲存失敗: {e}"), true);
+                            } else {
+                                self.set_status("儲存成功".to_string(), false);
+                                self.has_unsaved_changes = false;
+                            }
+                        }
+                        Err(missing) => {
+                            self.set_status(format!("儲存失敗：{:?}", missing), true);
+                        }
                     }
                 }
                 self.show_unit_list(ui);
@@ -187,6 +196,10 @@ impl UnitsEditor {
             None => return,
             Some(idx) => idx,
         };
+
+        // 先取得不存在的技能，避免 self 的可變借用衝突
+        let missing_skills = self.validate_skills_exist_in_units();
+
         let unit = &mut self.unit_templates[idx];
         ui.heading("單位編輯");
         ui.label("名稱（含等級）：");
@@ -260,6 +273,32 @@ impl UnitsEditor {
             unit.skills.remove(&deleted);
             self.has_unsaved_changes = true;
         }
+
+        // 額外顯示不存在的技能（紅色警告）
+        let missing_skills = match missing_skills {
+            Ok(_) => return,
+            Err(s) => s,
+        };
+        let missing_skills = match missing_skills.get(&unit.name) {
+            None => return,
+            Some(s) => s,
+        };
+        if !missing_skills.is_empty() {
+            ui.colored_label(Color32::RED, "⚠️ 不存在的技能：");
+            let mut deleted_missing = None;
+            ui.horizontal(|ui| {
+                for skill in missing_skills {
+                    ui.colored_label(Color32::RED, skill);
+                    if ui.button("移除").clicked() {
+                        deleted_missing = Some(skill.clone());
+                    }
+                }
+            });
+            if let Some(deleted) = deleted_missing {
+                unit.skills.remove(&deleted);
+                self.has_unsaved_changes = true;
+            }
+        }
     }
 
     fn save_unit_templates<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), io::Error> {
@@ -271,6 +310,36 @@ impl UnitsEditor {
             unit_templates: &self.unit_templates,
         };
         return to_file(path, &config);
+    }
+
+    /// 檢查所有單位模板中的技能是否存在於技能清單
+    /// 若全部技能都存在則回傳 Ok(())
+    /// 若有不存在技能則回傳 Err((錯誤訊息, Vec<技能ID>))
+    fn validate_skills_exist_in_units(
+        &self,
+    ) -> Result<(), HashMap<UnitTemplateType, Vec<SkillID>>> {
+        let all_skills: HashSet<&String> = self
+            .active_skill_ids
+            .iter()
+            .chain(self.passive_skill_ids.iter())
+            .collect();
+        let mut missing = HashMap::new();
+        for unit in &self.unit_templates {
+            let missing_skills: Vec<_> = unit
+                .skills
+                .iter()
+                .filter(|skill| !all_skills.contains(skill))
+                .cloned()
+                .collect();
+            if !missing_skills.is_empty() {
+                missing.insert(unit.name.clone(), missing_skills);
+            }
+        }
+        if missing.is_empty() {
+            Ok(())
+        } else {
+            Err(missing)
+        }
     }
 
     pub fn set_status(&mut self, msg: String, is_error: bool) {
