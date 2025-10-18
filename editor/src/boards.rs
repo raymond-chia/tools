@@ -328,7 +328,13 @@ impl BoardsEditor {
         let active_unit_id = match self.sim_battle.get_current_unit_id() {
             Some(id) => *id,
             None => {
-                self.set_status("當前回合角色不存在".to_string(), true);
+                self.set_status(
+                    format!(
+                        "無當前回合角色，回合順序：{:?}",
+                        &self.sim_battle.turn_order,
+                    ),
+                    true,
+                );
                 return;
             }
         };
@@ -749,6 +755,7 @@ impl BoardsEditor {
                     }
                 };
                 if let Err(msg) = override_player_unit(&mut board, &progression.roster) {
+                    eprintln!("Error overriding player units: {}", msg);
                     self.set_status(msg, true);
                     return;
                 }
@@ -763,7 +770,7 @@ impl BoardsEditor {
                             .iter()
                             .filter_map(|sid| self.skills.get(sid).map(|s| (sid, s)))
                             .collect();
-                        let ini = chess_lib::calc_initiative(&mut rng, &skill_refs);
+                        let ini = calc_initiative(&mut rng, &skill_refs);
                         (id, ini)
                     })
                     .collect::<Vec<_>>();
@@ -788,7 +795,13 @@ impl BoardsEditor {
         let unit_id = match self.sim_battle.get_current_unit_id() {
             Some(&id) => id,
             None => {
-                self.set_status("當前回合角色不存在".to_string(), true);
+                self.set_status(
+                    format!(
+                        "無當前回合角色，回合順序：{:?}",
+                        &self.sim_battle.turn_order,
+                    ),
+                    true,
+                );
                 return;
             }
         };
