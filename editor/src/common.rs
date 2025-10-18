@@ -21,7 +21,7 @@ pub fn unit_templates_file() -> PathBuf {
     PathBuf::from_iter(["test-data", "ignore-unit-templates.toml"])
 }
 /// 取得跨平台玩家進度資料路徑
-pub fn progression_file() -> PathBuf {
+pub fn progressions_file() -> PathBuf {
     PathBuf::from_iter(["test-data", "ignore-player-progressions.toml"])
 }
 /// 取得跨平台棋盤資料路徑

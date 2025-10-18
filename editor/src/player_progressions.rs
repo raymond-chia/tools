@@ -59,7 +59,7 @@ impl PlayerProgressionEditor {
         let board_ids: Vec<String> = board_map.keys().cloned().collect();
 
         // 2. 讀取玩家進度資料
-        let mut data = match from_file::<_, PlayerProgressionData>(progression_file()) {
+        let mut data = match from_file::<_, PlayerProgressionData>(progressions_file()) {
             Ok(d) => d,
             Err(err) => {
                 self.set_status(format!("載入玩家進度失敗: {}", err), true);
@@ -130,13 +130,18 @@ impl PlayerProgressionEditor {
                 self.reload();
             }
             if ui.button("儲存進度").clicked() {
-                match save_progression(&self.data) {
-                    Ok(_) => {
-                        self.set_status("儲存成功".to_string(), false);
-                        self.has_unsaved_changes = false;
-                    }
-                    Err(e) => {
-                        self.set_status(format!("儲存失敗: {}", e), true);
+                match self.validate_skills_exist() {
+                    Ok(_) => match save_progression(&self.data) {
+                        Ok(_) => {
+                            self.set_status("儲存成功".to_string(), false);
+                            self.has_unsaved_changes = false;
+                        }
+                        Err(e) => {
+                            self.set_status(format!("儲存失敗: {}", e), true);
+                        }
+                    },
+                    Err(msg) => {
+                        self.set_status(format!("儲存失敗：{}", msg), true);
                     }
                 }
             }
@@ -335,6 +340,31 @@ impl PlayerProgressionEditor {
         });
     }
 
+    /// 檢查所有進度中的技能是否存在於 skills 資料表
+    fn validate_skills_exist(&self) -> Result<(), String> {
+        let mut missing: Vec<(String, String, String)> = Vec::new();
+        for (board_id, progress) in &self.data.boards {
+            for (unit_type, unit) in &progress.roster {
+                for skill_id in unit.active_skills.iter().chain(unit.passive_skills.iter()) {
+                    if !self.skills.contains_key(skill_id) {
+                        missing.push((board_id.clone(), unit_type.clone(), skill_id.clone()));
+                    }
+                }
+            }
+        }
+        if !missing.is_empty() {
+            let mut msg = String::from("下列技能不存在：\n");
+            for (board, unit, skill) in missing {
+                msg.push_str(&format!(
+                    "戰場: {}, 單位: {}, 技能: {}\n",
+                    board, unit, skill
+                ));
+            }
+            return Err(msg);
+        }
+        Ok(())
+    }
+
     fn show_status_message(&mut self, ctx: &Context) {
         if let Some((message, is_error)) = &self.status_message {
             show_status_message(ctx, message, *is_error);
@@ -351,5 +381,5 @@ impl PlayerProgressionEditor {
 }
 
 fn save_progression(data: &PlayerProgressionData) -> io::Result<()> {
-    to_file(progression_file(), data)
+    to_file(progressions_file(), data)
 }

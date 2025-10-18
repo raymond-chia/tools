@@ -68,7 +68,7 @@ impl BoardsEditor {
 
     fn reload(&mut self) {
         // 先載入玩家進度資料
-        self.player_progression = match from_file::<_, PlayerProgressionData>(progression_file()) {
+        self.player_progression = match from_file::<_, PlayerProgressionData>(progressions_file()) {
             Ok(data) => data,
             Err(err) => {
                 self.set_status(format!("載入 player_progression 失敗: {}", err), true);
