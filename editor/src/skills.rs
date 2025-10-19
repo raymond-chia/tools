@@ -8,6 +8,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 
+const RACIAL_TARGET_TYPE: TargetType = TargetType::Caster;
+const RACIAL_SHAPE: Shape = Shape::Point;
+const RACIAL_DURATION: i32 = -1;
+
 /// 技能資料集
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SkillsData {
@@ -353,6 +357,7 @@ impl SkillsEditor {
         // 首先添加標題和按鈕（這些保持在固定位置）
         let mut delete_clicked = false;
         let mut copy_clicked = false;
+        let mut init_racial = false;
         let mut add_effect_clicked = false;
         let mut move_up_effect_index: Option<usize> = None;
         let mut move_down_effect_index: Option<usize> = None;
@@ -380,6 +385,11 @@ impl SkillsEditor {
         ui.horizontal(|ui| {
             delete_clicked = ui.button("刪除技能").clicked();
             copy_clicked = ui.button("複製技能").clicked();
+
+            // 新增「初始化種族說明技能」按鈕
+            if skill.tags.contains(&Tag::Racial) {
+                init_racial = ui.button("初始化種族說明技能").clicked();
+            }
         });
 
         ui.add_space(8.0);
@@ -545,7 +555,7 @@ impl SkillsEditor {
                 Some(skill) => skill,
             };
             self.skills_data.skills.insert(new_skill_id.clone(), skill);
-            self.selected_skill = Some(new_skill_id);
+            self.selected_skill = Some(new_skill_id.clone());
         }
 
         // 處理刪除技能按鈕
@@ -557,6 +567,9 @@ impl SkillsEditor {
         // 處理複製技能按鈕
         if copy_clicked {
             self.copy_skill();
+        }
+        if init_racial {
+            self.init_racial_skill_effects(&new_skill_id);
         }
 
         // 處理添加效果按鈕
@@ -919,6 +932,80 @@ impl SkillsEditor {
         self.set_status(format!("已複製技能為 {}", new_id), false);
     }
 
+    /// 初始化種族說明技能效果，符合 validate_racial_skill 規則
+    fn init_racial_skill_effects(&mut self, skill: &str) {
+        // 定義五種效果的順序與型別
+        let racial_types: [fn(i32) -> Effect; 5] = [
+            |value| Effect::MaxHp {
+                target_type: RACIAL_TARGET_TYPE,
+                shape: RACIAL_SHAPE,
+                value,
+                duration: RACIAL_DURATION,
+            },
+            |value| Effect::Initiative {
+                target_type: RACIAL_TARGET_TYPE,
+                shape: RACIAL_SHAPE,
+                value,
+                duration: RACIAL_DURATION,
+            },
+            |value| Effect::Evasion {
+                target_type: RACIAL_TARGET_TYPE,
+                shape: RACIAL_SHAPE,
+                value,
+                duration: RACIAL_DURATION,
+            },
+            |value| Effect::Block {
+                target_type: RACIAL_TARGET_TYPE,
+                shape: RACIAL_SHAPE,
+                value,
+                duration: RACIAL_DURATION,
+            },
+            |value| Effect::MovePoints {
+                target_type: RACIAL_TARGET_TYPE,
+                shape: RACIAL_SHAPE,
+                value,
+                duration: RACIAL_DURATION,
+            },
+        ];
+
+        // 先收集現有五種效果的 value
+        let mut found: [Option<i32>; 5] = [None, None, None, None, None];
+        let mut others: Vec<Effect> = Vec::new();
+
+        let skill = match self.skills_data.skills.get_mut(skill) {
+            None => {
+                self.set_status("技能不存在".to_string(), true);
+                return;
+            }
+            Some(skill) => skill,
+        };
+        for eff in &skill.effects {
+            match eff {
+                Effect::MaxHp { value, .. } => found[0] = Some(*value),
+                Effect::Initiative { value, .. } => found[1] = Some(*value),
+                Effect::Evasion { value, .. } => found[2] = Some(*value),
+                Effect::Block { value, .. } => found[3] = Some(*value),
+                Effect::MovePoints { value, .. } => found[4] = Some(*value),
+                _ => others.push(eff.clone()),
+            }
+        }
+
+        // 產生五種效果（保留 value，覆蓋其他欄位，缺少則補 0）
+        let mut new_racial_effects = Vec::with_capacity(5);
+        for i in 0..5 {
+            let value = found[i].unwrap_or(0);
+            new_racial_effects.push(racial_types[i](value));
+        }
+
+        // 依 validate_racial_skill 順序排列於最前面，其他效果保留順序在末尾
+        skill.effects.clear();
+        skill.effects.extend(new_racial_effects);
+        skill.effects.extend(others);
+
+        self.has_unsaved_changes_flag = true;
+        self.set_status("已初始化種族說明技能效果".to_string(), false);
+    }
+
     fn save_file(&mut self, path: PathBuf) {
         for (skill_id, skill) in &self.skills_data.skills {
             if let Err(err) = SkillsData::validate(skill) {
@@ -974,9 +1061,9 @@ impl SkillsEditor {
 fn validate_racial_skill(skill: &Skill) -> Result<(), String> {
     let mut effects = skill.effects.iter();
     let check = |effect: &Effect| {
-        effect.target_type() == &TargetType::Caster
-            && effect.shape() == &Shape::Point
-            && effect.duration() == -1
+        effect.target_type() == &RACIAL_TARGET_TYPE
+            && effect.shape() == &RACIAL_SHAPE
+            && effect.duration() == RACIAL_DURATION
     };
     let max_hp = effects
         .next()
