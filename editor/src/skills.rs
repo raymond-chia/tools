@@ -55,29 +55,43 @@ impl SkillsData {
         }
 
         // 檢查標籤的互斥條件
-        // 條件1: active, passive 只能擇一
-        let has_passive = skill.tags.contains(&Tag::Passive);
-        let has_active = skill.tags.contains(&Tag::Active);
-        if has_passive && has_active {
-            return Err("技能不能同時是主動 (Active) 和被動 (Passive)".to_string());
+        // 條件1: active, passive, racial 只能擇一
+        let mut count = 0;
+        for tag in [&Tag::Racial, &Tag::Passive, &Tag::Active] {
+            if skill.tags.contains(tag) {
+                count += 1;
+            }
+        }
+        if count != 1 {
+            return Err(
+                "技能不能同時是種族 (Racial)、被動 (Passive)、主動 (Active) 標籤".to_string(),
+            );
+        }
+        if skill.tags.contains(&Tag::Racial) {
+            if let Err(msg) = validate_racial_skill(skill) {
+                return Err(format!("種族說明技能格式錯誤: {}", msg));
+            }
         }
 
         // 條件2: single, area 只能擇一
-        let has_single = skill.tags.contains(&Tag::Single);
-        let has_area = skill.tags.contains(&Tag::Area);
-        if has_single && has_area {
+        let mut count = 0;
+        for tag in [&Tag::Single, &Tag::Area] {
+            if skill.tags.contains(tag) {
+                count += 1;
+            }
+        }
+        if count != 1 {
             return Err("技能不能同時是單體 (Single) 和範圍 (Area)".to_string());
         }
 
         // 條件3: caster, melee, ranged 只能擇一
-        let has_caster = skill.tags.contains(&Tag::Caster);
-        let has_melee = skill.tags.contains(&Tag::Melee);
-        let has_ranged = skill.tags.contains(&Tag::Ranged);
-        let range_count = [has_caster, has_melee, has_ranged]
-            .iter()
-            .filter(|&&b| b)
-            .count();
-        if range_count > 1 {
+        let mut count = 0;
+        for tag in [&Tag::Caster, &Tag::Melee, &Tag::Ranged] {
+            if skill.tags.contains(tag) {
+                count += 1;
+            }
+        }
+        if count != 1 {
             return Err("技能的作用範圍 (Caster/Melee/Ranged) 只能擇一".to_string());
         }
 
@@ -294,49 +308,45 @@ impl SkillsEditor {
         ScrollArea::vertical().show(ui, |ui| {
             let mut active_skill_ids = Vec::new();
             let mut passive_skill_ids = Vec::new();
+            let mut racial_skill_ids = Vec::new();
             for (id, skill) in &self.skills_data.skills {
                 if skill.tags.contains(&Tag::Active) {
                     active_skill_ids.push(id.clone());
                 } else if skill.tags.contains(&Tag::Passive) {
                     passive_skill_ids.push(id.clone());
+                } else if skill.tags.contains(&Tag::Racial) {
+                    racial_skill_ids.push(id.clone());
                 } else {
-                    panic!("技能 {} 必須有 Active 或 Passive 標籤", id);
+                    panic!("技能 {} 必須有 Active or Passive or Racial 標籤", id);
                 }
             }
             active_skill_ids.sort();
             passive_skill_ids.sort();
+            racial_skill_ids.sort();
 
-            // 依 load_file 分類後的 ID 顯示
-            ui.label("─── 主動技能 ───");
-            for skill_id in &active_skill_ids {
-                let selected = self.selected_skill.as_ref() == Some(skill_id);
-                let button = Button::new(skill_id)
-                    .fill(if selected {
-                        ui.style().visuals.selection.bg_fill
-                    } else {
-                        ui.style().visuals.widgets.noninteractive.bg_fill
-                    })
-                    .min_size(egui::vec2(ui.available_width(), 0.0));
-                if ui.add(button).clicked() {
-                    self.selected_skill = Some(skill_id.clone());
-                }
-            }
-            ui.add(Separator::default());
-            ui.label("─── 被動技能 ───");
-            for skill_id in &passive_skill_ids {
-                let selected = self.selected_skill.as_ref() == Some(skill_id);
-                let button = Button::new(skill_id)
-                    .fill(if selected {
-                        ui.style().visuals.selection.bg_fill
-                    } else {
-                        ui.style().visuals.widgets.noninteractive.bg_fill
-                    })
-                    .min_size(egui::vec2(ui.available_width(), 0.0));
-                if ui.add(button).clicked() {
-                    self.selected_skill = Some(skill_id.clone());
-                }
-            }
+            self.show_skill_category(ui, "─── 主動技能 ───", &active_skill_ids);
+            self.show_skill_category(ui, "─── 被動技能 ───", &passive_skill_ids);
+            self.show_skill_category(ui, "─── 種族技能 ───", &racial_skill_ids);
         });
+    }
+
+    /// 類別技能顯示（可直接操作 self.selected_skill）
+    fn show_skill_category(&mut self, ui: &mut Ui, title: &str, skill_ids: &[String]) {
+        ui.label(title);
+        for skill_id in skill_ids {
+            let selected = self.selected_skill.as_ref() == Some(skill_id);
+            let button = Button::new(skill_id)
+                .fill(if selected {
+                    ui.style().visuals.selection.bg_fill
+                } else {
+                    ui.style().visuals.widgets.noninteractive.bg_fill
+                })
+                .min_size(egui::vec2(ui.available_width(), 0.0));
+            if ui.add(button).clicked() {
+                self.selected_skill = Some(skill_id.clone());
+            }
+        }
+        ui.add(Separator::default());
     }
 
     fn show_skill_editor(&mut self, ui: &mut Ui) {
@@ -700,15 +710,19 @@ impl SkillsEditor {
 
     fn show_tags_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
         let mut changed = false;
-        let active = vec![Tag::Passive, Tag::Active];
-        let area = vec![Tag::Single, Tag::Area];
-        let range = vec![Tag::Caster, Tag::Melee, Tag::Ranged];
+        let active = [Tag::Racial, Tag::Passive, Tag::Active];
+        let area = [Tag::Single, Tag::Area];
+        let range = [Tag::Caster, Tag::Melee, Tag::Ranged];
 
         ui.group(|ui| {
-            let mut selected = if skill.tags.contains(&Tag::Passive) {
-                0
+            // 0: Racial, 1: Passive, 2: Active
+            let mut selected = if skill.tags.contains(&Tag::Racial) {
+                active.iter().position(|e| e == &Tag::Racial).unwrap()
+            } else if skill.tags.contains(&Tag::Passive) {
+                active.iter().position(|e| e == &Tag::Passive).unwrap()
             } else {
-                1 // 默認為 Active
+                // 默認為 Active
+                active.iter().position(|e| e == &Tag::Active).unwrap()
             };
 
             tag_button_group(ui, &active, skill, &mut selected);
@@ -716,9 +730,10 @@ impl SkillsEditor {
 
         ui.group(|ui| {
             let mut selected = if skill.tags.contains(&Tag::Area) {
-                1
+                area.iter().position(|e| e == &Tag::Area).unwrap()
             } else {
-                0 // 默認為 Single
+                // 默認為 Single
+                area.iter().position(|e| e == &Tag::Single).unwrap()
             };
 
             tag_button_group(ui, &area, skill, &mut selected);
@@ -726,11 +741,12 @@ impl SkillsEditor {
 
         ui.group(|ui| {
             let mut selected = if skill.tags.contains(&Tag::Caster) {
-                0
+                range.iter().position(|e| e == &Tag::Caster).unwrap()
             } else if skill.tags.contains(&Tag::Ranged) {
-                2
+                range.iter().position(|e| e == &Tag::Ranged).unwrap()
             } else {
-                1 // 默認為 Melee
+                // 默認為 Melee
+                range.iter().position(|e| e == &Tag::Melee).unwrap()
             };
 
             tag_button_group(ui, &range, skill, &mut selected);
@@ -874,6 +890,35 @@ impl SkillsEditor {
         changed
     }
 
+    /// 複製目前選取的技能，產生新 ID（自動加 "_copy" 並避免重複），並選取新技能
+    fn copy_skill(&mut self) {
+        let skill_id = match &self.selected_skill {
+            Some(id) => id.clone(),
+            None => {
+                self.set_status("請先選擇要複製的技能".to_string(), true);
+                return;
+            }
+        };
+        let orig_skill = match self.skills_data.skills.get(&skill_id) {
+            Some(skill) => skill.clone(),
+            None => {
+                self.set_status("技能不存在".to_string(), true);
+                return;
+            }
+        };
+        // 自動產生新 ID
+        let mut new_id = format!("{}_copy", skill_id);
+        let mut idx = 2;
+        while self.skills_data.skills.contains_key(&new_id) {
+            new_id = format!("{}_copy{}", skill_id, idx);
+            idx += 1;
+        }
+        self.skills_data.skills.insert(new_id.clone(), orig_skill);
+        self.selected_skill = Some(new_id.clone());
+        self.has_unsaved_changes_flag = true;
+        self.set_status(format!("已複製技能為 {}", new_id), false);
+    }
+
     fn save_file(&mut self, path: PathBuf) {
         for (skill_id, skill) in &self.skills_data.skills {
             if let Err(err) = SkillsData::validate(skill) {
@@ -924,35 +969,71 @@ impl SkillsEditor {
     pub fn has_unsaved_changes(&self) -> bool {
         self.has_unsaved_changes_flag
     }
+}
 
-    /// 複製目前選取的技能，產生新 ID（自動加 "_copy" 並避免重複），並選取新技能
-    fn copy_skill(&mut self) {
-        let skill_id = match &self.selected_skill {
-            Some(id) => id.clone(),
-            None => {
-                self.set_status("請先選擇要複製的技能".to_string(), true);
-                return;
+fn validate_racial_skill(skill: &Skill) -> Result<(), String> {
+    let mut effects = skill.effects.iter();
+    let check = |effect: &Effect| {
+        effect.target_type() == &TargetType::Caster
+            && effect.shape() == &Shape::Point
+            && effect.duration() == -1
+    };
+    let max_hp = effects
+        .next()
+        .ok_or_else(|| "max_hp not found".to_string())?;
+    match max_hp {
+        Effect::MaxHp { .. } => {
+            if !check(max_hp) {
+                return Err("hp max 設定有問題".to_string());
             }
-        };
-        let orig_skill = match self.skills_data.skills.get(&skill_id) {
-            Some(skill) => skill.clone(),
-            None => {
-                self.set_status("技能不存在".to_string(), true);
-                return;
-            }
-        };
-        // 自動產生新 ID
-        let mut new_id = format!("{}_copy", skill_id);
-        let mut idx = 2;
-        while self.skills_data.skills.contains_key(&new_id) {
-            new_id = format!("{}_copy{}", skill_id, idx);
-            idx += 1;
         }
-        self.skills_data.skills.insert(new_id.clone(), orig_skill);
-        self.selected_skill = Some(new_id.clone());
-        self.has_unsaved_changes_flag = true;
-        self.set_status(format!("已複製技能為 {}", new_id), false);
+        _ => return Err("first effect must be max_hp".to_string()),
     }
+    let initiative = effects
+        .next()
+        .ok_or_else(|| "initiative not found".to_string())?;
+    match initiative {
+        Effect::Initiative { .. } => {
+            if !check(initiative) {
+                return Err("initiative 設定有問題".to_string());
+            }
+        }
+        _ => return Err("second effect must be initiative".to_string()),
+    }
+    let evasion = effects
+        .next()
+        .ok_or_else(|| "evasion not found".to_string())?;
+    match evasion {
+        Effect::Evasion { .. } => {
+            if !check(evasion) {
+                return Err("evasion 設定有問題".to_string());
+            }
+        }
+        _ => return Err("third effect must be evasion".to_string()),
+    }
+    let block = effects
+        .next()
+        .ok_or_else(|| "block not found".to_string())?;
+    match block {
+        Effect::Block { .. } => {
+            if !check(block) {
+                return Err("block 設定有問題".to_string());
+            }
+        }
+        _ => return Err("fourth effect must be block".to_string()),
+    }
+    let move_points = effects
+        .next()
+        .ok_or_else(|| "move_points not found".to_string())?;
+    match move_points {
+        Effect::MovePoints { .. } => {
+            if !check(move_points) {
+                return Err("move_points 設定有問題".to_string());
+            }
+        }
+        _ => return Err("fifth effect must be move_points".to_string()),
+    }
+    Ok(())
 }
 
 fn tag_button_group(ui: &mut Ui, tags: &[Tag], skill: &mut Skill, selected: &mut usize) -> bool {

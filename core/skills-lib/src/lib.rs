@@ -39,6 +39,7 @@ pub struct Skill {
 #[strum(serialize_all = "snake_case")]
 pub enum Tag {
     // 主動; 被動
+    Racial,
     Passive,
     Active,
     // 範圍
@@ -182,6 +183,20 @@ impl Effect {
             Effect::MovePoints { shape, .. } => shape,
             Effect::Burn { shape, .. } => shape,
             Effect::HitAndRun { shape, .. } => shape,
+        }
+    }
+
+    pub fn duration(&self) -> i32 {
+        match self {
+            Effect::MaxHp { duration, .. } => *duration,
+            Effect::Initiative { duration, .. } => *duration,
+            Effect::Evasion { duration, .. } => *duration,
+            Effect::Block { duration, .. } => *duration,
+            Effect::MovePoints { duration, .. } => *duration,
+            Effect::Burn { duration, .. } => *duration,
+            Effect::HitAndRun { duration, .. } => *duration,
+            // 立即生效、立即結束
+            Effect::Hp { .. } => 0,
         }
     }
 }
