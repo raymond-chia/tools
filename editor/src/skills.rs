@@ -429,73 +429,7 @@ impl SkillsEditor {
 
                 // 範圍編輯
                 // 若為種族技能，隱藏範圍、消耗、命中、爆擊
-                let is_racial = skill.tags.contains(&Tag::Racial);
-                if !is_racial {
-                    ui.horizontal(|ui| {
-                        ui.label("範圍:");
-                        if ui
-                            .add(DragValue::new(&mut skill.range.0).prefix("最小: "))
-                            .changed()
-                        {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                        if ui
-                            .add(DragValue::new(&mut skill.range.1).prefix("最大: "))
-                            .changed()
-                        {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                    });
-
-                    ui.horizontal(|ui| {
-                        ui.label("消耗:");
-                        if ui.add(DragValue::new(&mut skill.cost)).changed() {
-                            self.has_unsaved_changes_flag = true;
-                        }
-                    });
-
-                    ui.horizontal(|ui| {
-                        ui.label("命中數值:");
-                        let mut has_accuracy = skill.accuracy.is_some();
-                        if ui.checkbox(&mut has_accuracy, "").changed() {
-                            skill.accuracy = if has_accuracy { Some(100) } else { None };
-                            self.has_unsaved_changes_flag = true;
-                        }
-
-                        if let Some(accuracy) = &mut skill.accuracy {
-                            if ui
-                                .add_enabled(
-                                    has_accuracy,
-                                    DragValue::new(accuracy).range(0..=i32::MAX),
-                                )
-                                .changed()
-                            {
-                                self.has_unsaved_changes_flag = true;
-                            }
-                        }
-                    });
-
-                    ui.horizontal(|ui| {
-                        ui.label("爆擊率:");
-                        let mut has_crit_rate = skill.crit_rate.is_some();
-                        if ui.checkbox(&mut has_crit_rate, "").changed() {
-                            skill.crit_rate = if has_crit_rate { Some(10) } else { None };
-                            self.has_unsaved_changes_flag = true;
-                        }
-
-                        if let Some(crit_rate) = &mut skill.crit_rate {
-                            if ui
-                                .add_enabled(
-                                    has_crit_rate,
-                                    DragValue::new(crit_rate).range(0..=100).suffix("%"),
-                                )
-                                .changed()
-                            {
-                                self.has_unsaved_changes_flag = true;
-                            }
-                        }
-                    });
-                }
+                self.has_unsaved_changes_flag |= show_basic_skill_editor(ui, skill);
 
                 ui.add_space(8.0);
                 ui.add(Separator::default());
@@ -510,74 +444,16 @@ impl SkillsEditor {
                 let effects_len = skill.effects.len();
                 for (index, effect) in skill.effects.iter_mut().enumerate() {
                     ui.push_id(index, |ui| {
-                        let mut move_up_clicked = false;
-                        let mut move_down_clicked = false;
-                        let mut delete_effect_clicked = false;
-                        let is_racial_effect = is_racial && is_racial_effect(effect);
-
-                        // 效果標籤
-                        ui.horizontal(|ui| {
-                            match effect {
-                                Effect::Hp { .. } => ui.label("HP"),
-                                Effect::MaxHp { .. } => ui.label("最大 HP"),
-                                Effect::Initiative { .. } => ui.label("先攻值"),
-                                Effect::Evasion { .. } => ui.label("閃避"),
-                                Effect::Block { .. } => ui.label("格擋"),
-                                Effect::MovePoints { .. } => ui.label("移動點數"),
-                                Effect::Burn { .. } => ui.label("燃燒"),
-                                Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
-                            };
-                            // 種族效果不顯示刪除、上下移動
-                            if !is_racial_effect {
-                                move_up_clicked =
-                                    ui.add_enabled(index > 0, Button::new("↑")).clicked();
-                                move_down_clicked = ui
-                                    .add_enabled(index + 1 < effects_len, Button::new("↓"))
-                                    .clicked();
-                                delete_effect_clicked = ui.button("🗑").clicked();
-                            }
-                        });
-
-                        if !is_racial_effect {
-                            if move_up_clicked {
-                                move_up_effect_index = Some(index);
-                            }
-                            if move_down_clicked {
-                                move_down_effect_index = Some(index);
-                            }
-                            if delete_effect_clicked {
-                                delete_effect_index = Some(index);
-                            }
-                        }
-
-                        // 效果編輯器：種族效果不顯示目標、形狀、持續回合
-                        ui.indent(format!("effect_{}", index), |ui| {
-                            if !is_racial_effect {
-                                if Self::show_effect_editor(ui, effect) {
-                                    self.has_unsaved_changes_flag = true;
-                                }
-                            } else {
-                                // 只顯示數值編輯器
-                                match effect {
-                                    Effect::MaxHp { value, .. } => {
-                                        show_value_editor(ui, value, "");
-                                    }
-                                    Effect::Initiative { value, .. } => {
-                                        show_value_editor(ui, value, "");
-                                    }
-                                    Effect::Evasion { value, .. } => {
-                                        show_value_editor(ui, value, "");
-                                    }
-                                    Effect::Block { value, .. } => {
-                                        show_value_editor(ui, value, "");
-                                    }
-                                    Effect::MovePoints { value, .. } => {
-                                        show_value_editor(ui, value, "");
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        });
+                        self.has_unsaved_changes_flag |= show_skill_effect_editor(
+                            ui,
+                            index,
+                            effect,
+                            skill.tags.contains(&Tag::Racial),
+                            effects_len,
+                            &mut move_up_effect_index,
+                            &mut move_down_effect_index,
+                            &mut delete_effect_index,
+                        );
 
                         ui.add_space(8.0);
                     });
@@ -838,119 +714,6 @@ impl SkillsEditor {
         changed
     }
 
-    fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
-        let mut changed = false;
-        match effect {
-            Effect::Hp {
-                target_type,
-                shape,
-                value,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_value_editor(ui, value, "HP 變化值:");
-            }
-            Effect::MaxHp {
-                target_type,
-                shape,
-                value,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_value_editor(ui, value, "最大 HP 變化值:");
-                changed |= show_duration_editor(ui, duration);
-            }
-            Effect::Initiative {
-                target_type,
-                shape,
-                value,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_value_editor(ui, value, "先攻變化值:");
-                changed |= show_duration_editor(ui, duration);
-            }
-            Effect::Evasion {
-                target_type,
-                shape,
-                value,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_value_editor(ui, value, "閃避數值變化：");
-                changed |= show_duration_editor(ui, duration);
-            }
-            Effect::Block {
-                target_type,
-                shape,
-                value,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_value_editor(ui, value, "格擋數值變化：");
-                changed |= show_duration_editor(ui, duration);
-            }
-            Effect::MovePoints {
-                target_type,
-                shape,
-                value,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_value_editor(ui, value, "移動點數變化值:");
-                changed |= show_duration_editor(ui, duration);
-            }
-            Effect::Burn {
-                target_type,
-                shape,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_duration_editor(ui, duration);
-            }
-            Effect::HitAndRun {
-                target_type,
-                shape,
-                duration,
-            } => {
-                changed |= show_target_type_editor(ui, target_type);
-                ui.horizontal(|ui| {
-                    ui.label("形狀:");
-                    changed |= show_shape_editor(ui, shape);
-                });
-                changed |= show_duration_editor(ui, duration);
-            }
-        }
-        changed
-    }
-
     /// 複製目前選取的技能，產生新 ID（自動加 "_copy" 並避免重複），並選取新技能
     fn copy_skill(&mut self) {
         let skill_id = match &self.selected_skill {
@@ -1187,6 +950,268 @@ fn tag_button_group(ui: &mut Ui, tags: &[Tag], skill: &mut Skill, selected: &mut
             }
         }
     });
+    changed
+}
+
+fn show_basic_skill_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
+    let mut changed = false;
+    if skill.tags.contains(&Tag::Racial) {
+        return changed;
+    }
+    ui.horizontal(|ui| {
+        ui.label("範圍:");
+        if ui
+            .add(DragValue::new(&mut skill.range.0).prefix("最小: "))
+            .changed()
+        {
+            changed = true;
+        }
+        if ui
+            .add(DragValue::new(&mut skill.range.1).prefix("最大: "))
+            .changed()
+        {
+            changed = true;
+        }
+    });
+
+    ui.horizontal(|ui| {
+        ui.label("消耗:");
+        if ui.add(DragValue::new(&mut skill.cost)).changed() {
+            changed = true;
+        }
+    });
+
+    ui.horizontal(|ui| {
+        ui.label("命中數值:");
+        let mut has_accuracy = skill.accuracy.is_some();
+        if ui.checkbox(&mut has_accuracy, "").changed() {
+            skill.accuracy = if has_accuracy { Some(100) } else { None };
+            changed = true;
+        }
+
+        if let Some(accuracy) = &mut skill.accuracy {
+            if ui
+                .add_enabled(has_accuracy, DragValue::new(accuracy).range(0..=i32::MAX))
+                .changed()
+            {
+                changed = true;
+            }
+        }
+    });
+
+    ui.horizontal(|ui| {
+        ui.label("爆擊率:");
+        let mut has_crit_rate = skill.crit_rate.is_some();
+        if ui.checkbox(&mut has_crit_rate, "").changed() {
+            skill.crit_rate = if has_crit_rate { Some(10) } else { None };
+            changed = true;
+        }
+
+        if let Some(crit_rate) = &mut skill.crit_rate {
+            if ui
+                .add_enabled(
+                    has_crit_rate,
+                    DragValue::new(crit_rate).range(0..=100).suffix("%"),
+                )
+                .changed()
+            {
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+fn show_skill_effect_editor(
+    ui: &mut Ui,
+    index: usize,
+    effect: &mut Effect,
+    is_racial_skill: bool,
+    effects_len: usize,
+    move_up_effect_index: &mut Option<usize>,
+    move_down_effect_index: &mut Option<usize>,
+    delete_effect_index: &mut Option<usize>,
+) -> bool {
+    let mut move_up_clicked = false;
+    let mut move_down_clicked = false;
+    let mut delete_effect_clicked = false;
+    let is_racial_effect = is_racial_skill && is_racial_effect(effect);
+
+    ui.horizontal(|ui| {
+        match effect {
+            Effect::Hp { .. } => ui.label("HP"),
+            Effect::MaxHp { .. } => ui.label("最大 HP"),
+            Effect::Initiative { .. } => ui.label("先攻值"),
+            Effect::Evasion { .. } => ui.label("閃避"),
+            Effect::Block { .. } => ui.label("格擋"),
+            Effect::MovePoints { .. } => ui.label("移動點數"),
+            Effect::Burn { .. } => ui.label("燃燒"),
+            Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
+        };
+        // 種族效果不顯示刪除、上下移動
+        if !is_racial_effect {
+            move_up_clicked = ui.add_enabled(index > 0, Button::new("↑")).clicked();
+            move_down_clicked = ui
+                .add_enabled(index + 1 < effects_len, Button::new("↓"))
+                .clicked();
+            delete_effect_clicked = ui.button("🗑").clicked();
+        }
+    });
+
+    if !is_racial_effect {
+        if move_up_clicked {
+            *move_up_effect_index = Some(index);
+        }
+        if move_down_clicked {
+            *move_down_effect_index = Some(index);
+        }
+        if delete_effect_clicked {
+            *delete_effect_index = Some(index);
+        }
+    }
+
+    // 效果編輯器：種族效果不顯示目標、形狀、持續回合
+    let mut changed = false;
+    ui.indent(format!("effect_{}", index), |ui| {
+        if !is_racial_effect {
+            if show_effect_editor(ui, effect) {
+                changed = true;
+            }
+        } else {
+            // 只顯示數值編輯器
+            match effect {
+                Effect::MaxHp { value, .. } => {
+                    changed = show_value_editor(ui, value, "");
+                }
+                Effect::Initiative { value, .. } => {
+                    changed = show_value_editor(ui, value, "");
+                }
+                Effect::Evasion { value, .. } => {
+                    changed = show_value_editor(ui, value, "");
+                }
+                Effect::Block { value, .. } => {
+                    changed = show_value_editor(ui, value, "");
+                }
+                Effect::MovePoints { value, .. } => {
+                    changed = show_value_editor(ui, value, "");
+                }
+                _ => {}
+            }
+        }
+    });
+    changed
+}
+
+fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
+    let mut changed = false;
+    match effect {
+        Effect::Hp {
+            target_type,
+            shape,
+            value,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "HP 變化值:");
+        }
+        Effect::MaxHp {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "最大 HP 變化值:");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Initiative {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "先攻變化值:");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Evasion {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "閃避數值變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Block {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "格擋數值變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::MovePoints {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "移動點數變化值:");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Burn {
+            target_type,
+            shape,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::HitAndRun {
+            target_type,
+            shape,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_duration_editor(ui, duration);
+        }
+    }
     changed
 }
 
