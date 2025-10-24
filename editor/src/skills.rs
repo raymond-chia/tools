@@ -8,12 +8,12 @@ use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 
-const RACIAL_TARGET_TYPE: TargetType = TargetType::Caster;
-const RACIAL_SHAPE: Shape = Shape::Point;
-const RACIAL_DURATION: i32 = -1;
+const BASIC_PASSIVE_TARGET_TYPE: TargetType = TargetType::Caster;
+const BASIC_PASSIVE_SHAPE: Shape = Shape::Point;
+const BASIC_PASSIVE_DURATION: i32 = -1;
 
 /// 判斷是否為種族技能五大效果
-fn is_racial_effect(effect: &Effect) -> bool {
+fn is_basic_passive_effect(effect: &Effect) -> bool {
     matches!(
         effect,
         Effect::MaxHp { .. }
@@ -71,20 +71,21 @@ impl SkillsData {
         }
 
         // 檢查標籤的互斥條件
-        // 條件1: active, passive, racial 只能擇一
+        // 條件1: active, passive, basic passive 只能擇一
         let mut count = 0;
-        for tag in [&Tag::Racial, &Tag::Passive, &Tag::Active] {
+        for tag in [&Tag::BasicPassive, &Tag::Passive, &Tag::Active] {
             if skill.tags.contains(tag) {
                 count += 1;
             }
         }
         if count != 1 {
             return Err(
-                "技能不能同時是種族 (Racial)、被動 (Passive)、主動 (Active) 標籤".to_string(),
+                "技能不能同時是基礎被動 (Basic Passive)、被動 (Passive)、主動 (Active) 標籤"
+                    .to_string(),
             );
         }
-        if skill.tags.contains(&Tag::Racial) {
-            if let Err(msg) = validate_racial_skill(skill) {
+        if skill.tags.contains(&Tag::BasicPassive) {
+            if let Err(msg) = validate_basic_passive_skill(skill) {
                 return Err(format!("種族說明技能格式錯誤: {}", msg));
             }
         }
@@ -324,25 +325,25 @@ impl SkillsEditor {
         ScrollArea::vertical().show(ui, |ui| {
             let mut active_skill_ids = Vec::new();
             let mut passive_skill_ids = Vec::new();
-            let mut racial_skill_ids = Vec::new();
+            let mut basic_passive_skill_ids = Vec::new();
             for (id, skill) in &self.skills_data.skills {
                 if skill.tags.contains(&Tag::Active) {
                     active_skill_ids.push(id.clone());
                 } else if skill.tags.contains(&Tag::Passive) {
                     passive_skill_ids.push(id.clone());
-                } else if skill.tags.contains(&Tag::Racial) {
-                    racial_skill_ids.push(id.clone());
+                } else if skill.tags.contains(&Tag::BasicPassive) {
+                    basic_passive_skill_ids.push(id.clone());
                 } else {
-                    panic!("技能 {} 必須有 Active or Passive or Racial 標籤", id);
+                    panic!("技能 {} 必須有 Active or Passive or Basic Passive 標籤", id);
                 }
             }
             active_skill_ids.sort();
             passive_skill_ids.sort();
-            racial_skill_ids.sort();
+            basic_passive_skill_ids.sort();
 
             self.show_skill_category(ui, "─── 主動技能 ───", &active_skill_ids);
             self.show_skill_category(ui, "─── 被動技能 ───", &passive_skill_ids);
-            self.show_skill_category(ui, "─── 種族技能 ───", &racial_skill_ids);
+            self.show_skill_category(ui, "─── 種族技能 ───", &basic_passive_skill_ids);
         });
     }
 
@@ -369,7 +370,7 @@ impl SkillsEditor {
         // 首先添加標題和按鈕（這些保持在固定位置）
         let mut delete_clicked = false;
         let mut copy_clicked = false;
-        let mut init_racial = false;
+        let mut init_basic_passive = false;
         let mut add_effect_clicked = false;
         let mut move_up_effect_index: Option<usize> = None;
         let mut move_down_effect_index: Option<usize> = None;
@@ -399,8 +400,8 @@ impl SkillsEditor {
             copy_clicked = ui.button("複製技能").clicked();
 
             // 新增「初始化種族說明技能」按鈕
-            if skill.tags.contains(&Tag::Racial) {
-                init_racial = ui.button("初始化種族說明技能").clicked();
+            if skill.tags.contains(&Tag::BasicPassive) {
+                init_basic_passive = ui.button("初始化種族說明技能").clicked();
             }
         });
 
@@ -448,7 +449,7 @@ impl SkillsEditor {
                             ui,
                             index,
                             effect,
-                            skill.tags.contains(&Tag::Racial),
+                            skill.tags.contains(&Tag::BasicPassive),
                             effects_len,
                             &mut move_up_effect_index,
                             &mut move_down_effect_index,
@@ -492,8 +493,8 @@ impl SkillsEditor {
         if copy_clicked {
             self.copy_skill();
         }
-        if init_racial {
-            self.init_racial_skill_effects(&new_skill_id);
+        if init_basic_passive {
+            self.init_basic_passive_skill_effects(&new_skill_id);
         }
 
         // 處理添加效果按鈕
@@ -647,14 +648,14 @@ impl SkillsEditor {
 
     fn show_tags_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
         let mut changed = false;
-        let active = [Tag::Racial, Tag::Passive, Tag::Active];
+        let active = [Tag::BasicPassive, Tag::Passive, Tag::Active];
         let area = [Tag::Single, Tag::Area];
         let range = [Tag::Caster, Tag::Melee, Tag::Ranged];
 
         ui.group(|ui| {
-            // 0: Racial, 1: Passive, 2: Active
-            let mut selected = if skill.tags.contains(&Tag::Racial) {
-                active.iter().position(|e| e == &Tag::Racial).unwrap()
+            // 0: Basic Passive, 1: Passive, 2: Active
+            let mut selected = if skill.tags.contains(&Tag::BasicPassive) {
+                active.iter().position(|e| e == &Tag::BasicPassive).unwrap()
             } else if skill.tags.contains(&Tag::Passive) {
                 active.iter().position(|e| e == &Tag::Passive).unwrap()
             } else {
@@ -743,39 +744,39 @@ impl SkillsEditor {
         self.set_status(format!("已複製技能為 {}", new_id), false);
     }
 
-    /// 初始化種族說明技能效果，符合 validate_racial_skill 規則
-    fn init_racial_skill_effects(&mut self, skill: &str) {
+    /// 初始化種族說明技能效果，符合 validate_basic_passive_skill 規則
+    fn init_basic_passive_skill_effects(&mut self, skill: &str) {
         // 定義五種效果的順序與型別
-        let racial_types: [fn(i32) -> Effect; 5] = [
+        let basic_passive_types: [fn(i32) -> Effect; 5] = [
             |value| Effect::MaxHp {
-                target_type: RACIAL_TARGET_TYPE,
-                shape: RACIAL_SHAPE,
+                target_type: BASIC_PASSIVE_TARGET_TYPE,
+                shape: BASIC_PASSIVE_SHAPE,
                 value,
-                duration: RACIAL_DURATION,
+                duration: BASIC_PASSIVE_DURATION,
             },
             |value| Effect::Initiative {
-                target_type: RACIAL_TARGET_TYPE,
-                shape: RACIAL_SHAPE,
+                target_type: BASIC_PASSIVE_TARGET_TYPE,
+                shape: BASIC_PASSIVE_SHAPE,
                 value,
-                duration: RACIAL_DURATION,
+                duration: BASIC_PASSIVE_DURATION,
             },
             |value| Effect::Evasion {
-                target_type: RACIAL_TARGET_TYPE,
-                shape: RACIAL_SHAPE,
+                target_type: BASIC_PASSIVE_TARGET_TYPE,
+                shape: BASIC_PASSIVE_SHAPE,
                 value,
-                duration: RACIAL_DURATION,
+                duration: BASIC_PASSIVE_DURATION,
             },
             |value| Effect::Block {
-                target_type: RACIAL_TARGET_TYPE,
-                shape: RACIAL_SHAPE,
+                target_type: BASIC_PASSIVE_TARGET_TYPE,
+                shape: BASIC_PASSIVE_SHAPE,
                 value,
-                duration: RACIAL_DURATION,
+                duration: BASIC_PASSIVE_DURATION,
             },
             |value| Effect::MovePoints {
-                target_type: RACIAL_TARGET_TYPE,
-                shape: RACIAL_SHAPE,
+                target_type: BASIC_PASSIVE_TARGET_TYPE,
+                shape: BASIC_PASSIVE_SHAPE,
                 value,
-                duration: RACIAL_DURATION,
+                duration: BASIC_PASSIVE_DURATION,
             },
         ];
 
@@ -802,15 +803,18 @@ impl SkillsEditor {
         }
 
         // 產生五種效果（保留 value，覆蓋其他欄位，缺少則補 0）
-        let mut new_racial_effects = Vec::with_capacity(5);
+        let mut new_basic_passive_effects = Vec::with_capacity(5);
         for i in 0..5 {
             let value = found[i].unwrap_or(0);
-            new_racial_effects.push(racial_types[i](value));
+            new_basic_passive_effects.push(basic_passive_types[i](value));
         }
 
-        // 依 validate_racial_skill 順序排列於最前面，其他效果保留順序在末尾
+        // 依 validate_basic_passive_skill 順序排列於最前面，其他效果保留順序在末尾
+        skill.tags = [Tag::BasicPassive, Tag::Single, Tag::Caster]
+            .into_iter()
+            .collect();
         skill.effects.clear();
-        skill.effects.extend(new_racial_effects);
+        skill.effects.extend(new_basic_passive_effects);
         skill.effects.extend(others);
 
         self.has_unsaved_changes_flag = true;
@@ -869,12 +873,31 @@ impl SkillsEditor {
     }
 }
 
-fn validate_racial_skill(skill: &Skill) -> Result<(), String> {
+fn validate_basic_passive_skill(skill: &Skill) -> Result<(), String> {
+    if skill.tags.len() != 3
+        || !skill.tags.contains(&Tag::BasicPassive)
+        || !skill.tags.contains(&Tag::Single)
+        || !skill.tags.contains(&Tag::Caster)
+    {
+        return Err("基礎被動標籤不對".to_string());
+    }
+    if skill.range != (0, 0) {
+        return Err("基礎被動不該有範圍".to_string());
+    }
+    if skill.cost != 0 {
+        return Err("基礎被動不該有消耗".to_string());
+    }
+    if skill.accuracy != None {
+        return Err("基礎被動不該有命中率".to_string());
+    }
+    if skill.crit_rate != None {
+        return Err("基礎被動不該有暴擊率".to_string());
+    }
     let mut effects = skill.effects.iter();
     let check = |effect: &Effect| {
-        effect.target_type() == &RACIAL_TARGET_TYPE
-            && effect.shape() == &RACIAL_SHAPE
-            && effect.duration() == RACIAL_DURATION
+        effect.target_type() == &BASIC_PASSIVE_TARGET_TYPE
+            && effect.shape() == &BASIC_PASSIVE_SHAPE
+            && effect.duration() == BASIC_PASSIVE_DURATION
     };
     let max_hp = effects
         .next()
@@ -955,7 +978,7 @@ fn tag_button_group(ui: &mut Ui, tags: &[Tag], skill: &mut Skill, selected: &mut
 
 fn show_basic_skill_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
     let mut changed = false;
-    if skill.tags.contains(&Tag::Racial) {
+    if skill.tags.contains(&Tag::BasicPassive) {
         return changed;
     }
     ui.horizontal(|ui| {
@@ -1026,7 +1049,7 @@ fn show_skill_effect_editor(
     ui: &mut Ui,
     index: usize,
     effect: &mut Effect,
-    is_racial_skill: bool,
+    is_basic_passive_skill: bool,
     effects_len: usize,
     move_up_effect_index: &mut Option<usize>,
     move_down_effect_index: &mut Option<usize>,
@@ -1035,7 +1058,7 @@ fn show_skill_effect_editor(
     let mut move_up_clicked = false;
     let mut move_down_clicked = false;
     let mut delete_effect_clicked = false;
-    let is_racial_effect = is_racial_skill && is_racial_effect(effect);
+    let is_basic_passive_effect = is_basic_passive_skill && is_basic_passive_effect(effect);
 
     ui.horizontal(|ui| {
         match effect {
@@ -1049,7 +1072,7 @@ fn show_skill_effect_editor(
             Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
         };
         // 種族效果不顯示刪除、上下移動
-        if !is_racial_effect {
+        if !is_basic_passive_effect {
             move_up_clicked = ui.add_enabled(index > 0, Button::new("↑")).clicked();
             move_down_clicked = ui
                 .add_enabled(index + 1 < effects_len, Button::new("↓"))
@@ -1058,7 +1081,7 @@ fn show_skill_effect_editor(
         }
     });
 
-    if !is_racial_effect {
+    if !is_basic_passive_effect {
         if move_up_clicked {
             *move_up_effect_index = Some(index);
         }
@@ -1073,7 +1096,7 @@ fn show_skill_effect_editor(
     // 效果編輯器：種族效果不顯示目標、形狀、持續回合
     let mut changed = false;
     ui.indent(format!("effect_{}", index), |ui| {
-        if !is_racial_effect {
+        if !is_basic_passive_effect {
             if show_effect_editor(ui, effect) {
                 changed = true;
             }

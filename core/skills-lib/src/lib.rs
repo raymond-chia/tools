@@ -39,7 +39,7 @@ pub struct Skill {
 #[strum(serialize_all = "snake_case")]
 pub enum Tag {
     // 主動; 被動
-    Racial,
+    BasicPassive,
     Passive,
     Active,
     // 範圍
