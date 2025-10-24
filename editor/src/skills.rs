@@ -12,6 +12,18 @@ const RACIAL_TARGET_TYPE: TargetType = TargetType::Caster;
 const RACIAL_SHAPE: Shape = Shape::Point;
 const RACIAL_DURATION: i32 = -1;
 
+/// 判斷是否為種族技能五大效果
+fn is_racial_effect(effect: &Effect) -> bool {
+    matches!(
+        effect,
+        Effect::MaxHp { .. }
+            | Effect::Initiative { .. }
+            | Effect::Evasion { .. }
+            | Effect::Block { .. }
+            | Effect::MovePoints { .. }
+    )
+}
+
 /// 技能資料集
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SkillsData {
@@ -416,70 +428,74 @@ impl SkillsEditor {
                 });
 
                 // 範圍編輯
-                ui.horizontal(|ui| {
-                    ui.label("範圍:");
-                    if ui
-                        .add(DragValue::new(&mut skill.range.0).prefix("最小: "))
-                        .changed()
-                    {
-                        self.has_unsaved_changes_flag = true;
-                    }
-                    if ui
-                        .add(DragValue::new(&mut skill.range.1).prefix("最大: "))
-                        .changed()
-                    {
-                        self.has_unsaved_changes_flag = true;
-                    }
-                });
-
-                // 消耗編輯
-                ui.horizontal(|ui| {
-                    ui.label("消耗:");
-                    if ui.add(DragValue::new(&mut skill.cost)).changed() {
-                        self.has_unsaved_changes_flag = true;
-                    }
-                });
-
-                // 命中數值編輯
-                ui.horizontal(|ui| {
-                    ui.label("命中數值:");
-                    let mut has_accuracy = skill.accuracy.is_some();
-                    if ui.checkbox(&mut has_accuracy, "").changed() {
-                        skill.accuracy = if has_accuracy { Some(100) } else { None };
-                        self.has_unsaved_changes_flag = true;
-                    }
-
-                    if let Some(accuracy) = &mut skill.accuracy {
+                // 若為種族技能，隱藏範圍、消耗、命中、爆擊
+                let is_racial = skill.tags.contains(&Tag::Racial);
+                if !is_racial {
+                    ui.horizontal(|ui| {
+                        ui.label("範圍:");
                         if ui
-                            .add_enabled(has_accuracy, DragValue::new(accuracy).range(0..=i32::MAX))
+                            .add(DragValue::new(&mut skill.range.0).prefix("最小: "))
                             .changed()
                         {
                             self.has_unsaved_changes_flag = true;
                         }
-                    }
-                });
-
-                // 爆擊率編輯
-                ui.horizontal(|ui| {
-                    ui.label("爆擊率:");
-                    let mut has_crit_rate = skill.crit_rate.is_some();
-                    if ui.checkbox(&mut has_crit_rate, "").changed() {
-                        skill.crit_rate = if has_crit_rate { Some(10) } else { None };
-                        self.has_unsaved_changes_flag = true;
-                    }
-
-                    if let Some(crit_rate) = &mut skill.crit_rate {
                         if ui
-                            .add_enabled(
-                                has_crit_rate,
-                                DragValue::new(crit_rate).range(0..=100).suffix("%"),
-                            )
+                            .add(DragValue::new(&mut skill.range.1).prefix("最大: "))
                             .changed()
                         {
                             self.has_unsaved_changes_flag = true;
                         }
-                    }
-                });
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("消耗:");
+                        if ui.add(DragValue::new(&mut skill.cost)).changed() {
+                            self.has_unsaved_changes_flag = true;
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("命中數值:");
+                        let mut has_accuracy = skill.accuracy.is_some();
+                        if ui.checkbox(&mut has_accuracy, "").changed() {
+                            skill.accuracy = if has_accuracy { Some(100) } else { None };
+                            self.has_unsaved_changes_flag = true;
+                        }
+
+                        if let Some(accuracy) = &mut skill.accuracy {
+                            if ui
+                                .add_enabled(
+                                    has_accuracy,
+                                    DragValue::new(accuracy).range(0..=i32::MAX),
+                                )
+                                .changed()
+                            {
+                                self.has_unsaved_changes_flag = true;
+                            }
+                        }
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("爆擊率:");
+                        let mut has_crit_rate = skill.crit_rate.is_some();
+                        if ui.checkbox(&mut has_crit_rate, "").changed() {
+                            skill.crit_rate = if has_crit_rate { Some(10) } else { None };
+                            self.has_unsaved_changes_flag = true;
+                        }
+
+                        if let Some(crit_rate) = &mut skill.crit_rate {
+                            if ui
+                                .add_enabled(
+                                    has_crit_rate,
+                                    DragValue::new(crit_rate).range(0..=100).suffix("%"),
+                                )
+                                .changed()
+                            {
+                                self.has_unsaved_changes_flag = true;
+                            }
+                        }
+                    });
+                }
 
                 ui.add_space(8.0);
                 ui.add(Separator::default());
@@ -497,6 +513,9 @@ impl SkillsEditor {
                         let mut move_up_clicked = false;
                         let mut move_down_clicked = false;
                         let mut delete_effect_clicked = false;
+                        let is_racial_effect = is_racial && is_racial_effect(effect);
+
+                        // 效果標籤
                         ui.horizontal(|ui| {
                             match effect {
                                 Effect::Hp { .. } => ui.label("HP"),
@@ -508,26 +527,55 @@ impl SkillsEditor {
                                 Effect::Burn { .. } => ui.label("燃燒"),
                                 Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
                             };
-                            move_up_clicked = ui.add_enabled(index > 0, Button::new("↑")).clicked();
-                            move_down_clicked = ui
-                                .add_enabled(index + 1 < effects_len, Button::new("↓"))
-                                .clicked();
-                            delete_effect_clicked = ui.button("🗑").clicked();
+                            // 種族效果不顯示刪除、上下移動
+                            if !is_racial_effect {
+                                move_up_clicked =
+                                    ui.add_enabled(index > 0, Button::new("↑")).clicked();
+                                move_down_clicked = ui
+                                    .add_enabled(index + 1 < effects_len, Button::new("↓"))
+                                    .clicked();
+                                delete_effect_clicked = ui.button("🗑").clicked();
+                            }
                         });
 
-                        if move_up_clicked {
-                            move_up_effect_index = Some(index);
-                        }
-                        if move_down_clicked {
-                            move_down_effect_index = Some(index);
-                        }
-                        if delete_effect_clicked {
-                            delete_effect_index = Some(index);
+                        if !is_racial_effect {
+                            if move_up_clicked {
+                                move_up_effect_index = Some(index);
+                            }
+                            if move_down_clicked {
+                                move_down_effect_index = Some(index);
+                            }
+                            if delete_effect_clicked {
+                                delete_effect_index = Some(index);
+                            }
                         }
 
+                        // 效果編輯器：種族效果不顯示目標、形狀、持續回合
                         ui.indent(format!("effect_{}", index), |ui| {
-                            if Self::show_effect_editor(ui, effect) {
-                                self.has_unsaved_changes_flag = true;
+                            if !is_racial_effect {
+                                if Self::show_effect_editor(ui, effect) {
+                                    self.has_unsaved_changes_flag = true;
+                                }
+                            } else {
+                                // 只顯示數值編輯器
+                                match effect {
+                                    Effect::MaxHp { value, .. } => {
+                                        show_value_editor(ui, value, "");
+                                    }
+                                    Effect::Initiative { value, .. } => {
+                                        show_value_editor(ui, value, "");
+                                    }
+                                    Effect::Evasion { value, .. } => {
+                                        show_value_editor(ui, value, "");
+                                    }
+                                    Effect::Block { value, .. } => {
+                                        show_value_editor(ui, value, "");
+                                    }
+                                    Effect::MovePoints { value, .. } => {
+                                        show_value_editor(ui, value, "");
+                                    }
+                                    _ => {}
+                                }
                             }
                         });
 
