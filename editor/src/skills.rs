@@ -28,7 +28,7 @@ fn is_basic_passive_effect(effect: &Effect) -> bool {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SkillsData {
     #[serde(flatten)]
-    pub skills: HashMap<String, Skill>,
+    pub skills: HashMap<SkillID, Skill>,
 }
 
 impl SkillsData {
@@ -206,8 +206,8 @@ pub struct SkillsEditor {
     current_file_path: Option<PathBuf>,
     status_message: Option<(String, bool)>, // message, is_error
     //
-    new_skill_id: String,
-    selected_skill: Option<String>,
+    new_skill_id: SkillID,
+    selected_skill: Option<SkillID>,
     //
     show_add_effect_popup: bool,
     show_confirmation_dialog: bool,
@@ -242,8 +242,8 @@ impl SkillsEditor {
 #[derive(Debug, Clone)]
 enum ConfirmationAction {
     None,
-    DeleteSkill(String),
-    DeleteEffect(String, usize),
+    DeleteSkill(SkillID),
+    DeleteEffect(SkillID, usize),
 }
 
 impl Default for SkillsEditor {
@@ -323,32 +323,61 @@ impl SkillsEditor {
         ui.add_space(10.0);
 
         ScrollArea::vertical().show(ui, |ui| {
-            let mut active_skill_ids = Vec::new();
-            let mut passive_skill_ids = Vec::new();
+            /// 三層 tag 分組 helper
+            fn group_by_tags<'a>(
+                skills: &HashMap<SkillID, Skill>,
+                primary: &[Tag],
+                secondary: &[Tag],
+                tertiary: &[Tag],
+            ) -> (BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>, Vec<SkillID>) {
+                let mut map = BTreeMap::new();
+                let mut unmatched = Vec::new();
+                for (id, skill) in skills {
+                    let p = primary.iter().find(|t| skill.tags.contains(t)).cloned();
+                    let s = secondary.iter().find(|t| skill.tags.contains(t)).cloned();
+                    let t = tertiary.iter().find(|t| skill.tags.contains(t)).cloned();
+                    if let (Some(p), Some(s), Some(t)) = (p, s, t) {
+                        map.entry((p, s, t))
+                            .or_insert_with(Vec::new)
+                            .push(id.clone());
+                    } else {
+                        unmatched.push(id.clone());
+                    }
+                }
+                (map, unmatched)
+            }
+
+            let primary = [Tag::Active, Tag::Passive];
+            let secondary = [Tag::Physical, Tag::Magical];
+            let tertiary = [Tag::Caster, Tag::Melee, Tag::Ranged];
+            let (grouped, unmatched) =
+                group_by_tags(&self.skills_data.skills, &primary, &secondary, &tertiary);
+            // 種族技能
             let mut basic_passive_skill_ids = Vec::new();
             for (id, skill) in &self.skills_data.skills {
-                if skill.tags.contains(&Tag::Active) {
-                    active_skill_ids.push(id.clone());
-                } else if skill.tags.contains(&Tag::Passive) {
-                    passive_skill_ids.push(id.clone());
-                } else if skill.tags.contains(&Tag::BasicPassive) {
+                if skill.tags.contains(&Tag::BasicPassive) {
                     basic_passive_skill_ids.push(id.clone());
-                } else {
-                    panic!("技能 {} 必須有 Active or Passive or Basic Passive 標籤", id);
                 }
             }
-            active_skill_ids.sort();
-            passive_skill_ids.sort();
-            basic_passive_skill_ids.sort();
 
-            self.show_skill_category(ui, "─── 主動技能 ───", &active_skill_ids);
-            self.show_skill_category(ui, "─── 被動技能 ───", &passive_skill_ids);
+            for ((p, s, t), skill_ids) in grouped {
+                let title = format!("─── {:?}-{:?}-{:?}技能 ───", p, s, t);
+                self.show_skill_category(ui, &title, &skill_ids);
+            }
             self.show_skill_category(ui, "─── 種族技能 ───", &basic_passive_skill_ids);
+            // 顯示未完全分組的技能
+            let unmatched: Vec<SkillID> = unmatched
+                .into_iter()
+                .filter(|id| !basic_passive_skill_ids.contains(id))
+                .collect();
+            if !unmatched.is_empty() {
+                self.show_skill_category(ui, "─── 未分類技能 ───", &unmatched);
+            }
         });
     }
 
     /// 類別技能顯示（可直接操作 self.selected_skill）
-    fn show_skill_category(&mut self, ui: &mut Ui, title: &str, skill_ids: &[String]) {
+    fn show_skill_category(&mut self, ui: &mut Ui, title: &str, skill_ids: &[SkillID]) {
         ui.label(title);
         for skill_id in skill_ids {
             let selected = self.selected_skill.as_ref() == Some(skill_id);
@@ -651,6 +680,7 @@ impl SkillsEditor {
         let active = [Tag::BasicPassive, Tag::Passive, Tag::Active];
         let area = [Tag::Single, Tag::Area];
         let range = [Tag::Caster, Tag::Melee, Tag::Ranged];
+        let pm_group = [Tag::Physical, Tag::Magical];
 
         ui.group(|ui| {
             // 0: Basic Passive, 1: Passive, 2: Active
@@ -662,8 +692,7 @@ impl SkillsEditor {
                 // 默認為 Active
                 active.iter().position(|e| e == &Tag::Active).unwrap()
             };
-
-            tag_button_group(ui, &active, skill, &mut selected);
+            changed |= tag_button_group(ui, &active, skill, &mut selected);
         });
 
         ui.group(|ui| {
@@ -673,8 +702,7 @@ impl SkillsEditor {
                 // 默認為 Single
                 area.iter().position(|e| e == &Tag::Single).unwrap()
             };
-
-            tag_button_group(ui, &area, skill, &mut selected);
+            changed |= tag_button_group(ui, &area, skill, &mut selected);
         });
 
         ui.group(|ui| {
@@ -686,14 +714,33 @@ impl SkillsEditor {
                 // 默認為 Melee
                 range.iter().position(|e| e == &Tag::Melee).unwrap()
             };
-
-            tag_button_group(ui, &range, skill, &mut selected);
+            changed |= tag_button_group(ui, &range, skill, &mut selected);
         });
 
         ui.group(|ui| {
+            for tag in pm_group.iter() {
+                let tag_str = format!("{:?}", tag).to_lowercase();
+                let mut checked = skill.tags.contains(tag);
+                if ui.checkbox(&mut checked, tag_str).changed() {
+                    if checked {
+                        skill.tags.insert(tag.clone());
+                    } else {
+                        skill.tags.remove(tag);
+                    }
+                    changed = true;
+                }
+            }
+        });
+
+        // 其他 tag 多選
+        ui.group(|ui| {
             ui.horizontal_wrapped(|ui| {
                 for tag in Tag::iter() {
-                    if active.contains(&tag) || area.contains(&tag) || range.contains(&tag) {
+                    if active.contains(&tag)
+                        || area.contains(&tag)
+                        || range.contains(&tag)
+                        || pm_group.contains(&tag)
+                    {
                         continue;
                     }
                     let tag_str = format!("{:?}", tag).to_lowercase();

@@ -49,6 +49,9 @@ pub enum Tag {
     Caster,
     Melee,
     Ranged,
+    // 物理或者魔法
+    Physical,
+    Magical,
     // 特性
     Attack,
     Beneficial,
