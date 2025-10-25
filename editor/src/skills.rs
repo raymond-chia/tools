@@ -248,6 +248,12 @@ impl SkillsData {
 
         // effect 跟 tag 需要一起存在
         let checklist = [
+            // 雖然不是 effect, 但是條件跟標籤要一起存在
+            (
+                skill.cost > 0,
+                Tag::Magical,
+                "有魔力標籤的技能必須消耗魔力（cost > 0）",
+            ),
             (
                 skill.effects.iter().any(|e| match e {
                     Effect::Hp { value, .. } => *value < 0,
