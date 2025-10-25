@@ -96,7 +96,18 @@ pub enum Effect {
         shape: Shape,
         value: i32,
     },
+    Mp {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,
+    },
     MaxHp {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,
+        duration: i32, // -1 代表永久
+    },
+    MaxMp {
         target_type: TargetType,
         shape: Shape,
         value: i32,
@@ -155,7 +166,9 @@ impl Effect {
     pub fn target_type(&self) -> &TargetType {
         match self {
             Effect::Hp { target_type, .. } => target_type,
+            Effect::Mp { target_type, .. } => target_type,
             Effect::MaxHp { target_type, .. } => target_type,
+            Effect::MaxMp { target_type, .. } => target_type,
             Effect::Initiative { target_type, .. } => target_type,
             Effect::Evasion { target_type, .. } => target_type,
             Effect::Block { target_type, .. } => target_type,
@@ -179,7 +192,9 @@ impl Effect {
     pub fn shape(&self) -> &Shape {
         match self {
             Effect::Hp { shape, .. } => shape,
+            Effect::Mp { shape, .. } => shape,
             Effect::MaxHp { shape, .. } => shape,
+            Effect::MaxMp { shape, .. } => shape,
             Effect::Initiative { shape, .. } => shape,
             Effect::Evasion { shape, .. } => shape,
             Effect::Block { shape, .. } => shape,
@@ -192,6 +207,7 @@ impl Effect {
     pub fn duration(&self) -> i32 {
         match self {
             Effect::MaxHp { duration, .. } => *duration,
+            Effect::MaxMp { duration, .. } => *duration,
             Effect::Initiative { duration, .. } => *duration,
             Effect::Evasion { duration, .. } => *duration,
             Effect::Block { duration, .. } => *duration,
@@ -199,7 +215,7 @@ impl Effect {
             Effect::Burn { duration, .. } => *duration,
             Effect::HitAndRun { duration, .. } => *duration,
             // 立即生效、立即結束
-            Effect::Hp { .. } => 0,
+            Effect::Hp { .. } | Effect::Mp { .. } => 0,
         }
     }
 }

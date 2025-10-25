@@ -37,6 +37,8 @@ pub struct Unit {
     pub has_cast_skill_this_turn: bool,
     pub hp: i32,
     pub max_hp: i32,
+    pub mp: i32,
+    pub max_mp: i32,
     pub skills: BTreeSet<String>,
 }
 
@@ -72,6 +74,7 @@ impl Unit {
             .collect();
         let skills = skills?;
         let max_hp = skills_to_max_hp(&skills);
+        let max_mp = skills_to_max_mp(&skills);
         Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
@@ -81,6 +84,8 @@ impl Unit {
             has_cast_skill_this_turn: false,
             hp: max_hp,
             max_hp,
+            mp: max_mp,
+            max_mp,
             skills: template.skills.clone(),
         })
     }
@@ -102,6 +107,20 @@ pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::MaxHp { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
+pub fn skills_to_max_mp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+    skills
+        .iter()
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::MaxMp { value, .. } = effect {
                 Some(*value)
             } else {
                 None
@@ -273,6 +292,8 @@ mod tests {
             has_cast_skill_this_turn: true,
             hp: i32::MIN,
             max_hp: i32::MAX,
+            mp: i32::MIN,
+            max_mp: i32::MAX,
             skills: ["超級技能".to_string()].iter().cloned().collect(),
         };
         assert_eq!(unit.id, 999);

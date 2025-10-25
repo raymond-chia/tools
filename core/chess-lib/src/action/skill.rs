@@ -571,9 +571,13 @@ mod inner {
                 }
                 None
             }
+            Effect::Mp { value, .. } => Some(format!("[未實作] Mp {value}",)),
             Effect::MaxHp {
                 duration, value, ..
             } => Some(format!("[未實作] MaxHp {value}, 持續 {duration} 回合",)),
+            Effect::MaxMp {
+                duration, value, ..
+            } => Some(format!("[未實作] MaxMp {value}, 持續 {duration} 回合",)),
             Effect::Initiative {
                 duration, value, ..
             } => Some(format!("[未實作] Initiative {value}, 持續 {duration} 回合",)),

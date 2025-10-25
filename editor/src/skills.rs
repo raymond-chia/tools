@@ -563,7 +563,9 @@ impl SkillsEditor {
                 for effect in Effect::iter() {
                     let flag = match effect {
                         Effect::Hp { .. } => ui.button("新增 HP 效果").clicked(),
+                        Effect::Mp { .. } => ui.button("新增 MP 效果").clicked(),
                         Effect::MaxHp { .. } => ui.button("新增最大 HP 效果").clicked(),
+                        Effect::MaxMp { .. } => ui.button("新增最大 MP 效果").clicked(),
                         Effect::Initiative { .. } => ui.button("新增先攻值效果").clicked(),
                         Effect::Evasion { .. } => ui.button("新增閃避效果").clicked(),
                         Effect::Block { .. } => ui.button("新增格擋效果").clicked(),
@@ -1110,7 +1112,9 @@ fn show_skill_effect_editor(
     ui.horizontal(|ui| {
         match effect {
             Effect::Hp { .. } => ui.label("HP"),
+            Effect::Mp { .. } => ui.label("MP"),
             Effect::MaxHp { .. } => ui.label("最大 HP"),
+            Effect::MaxMp { .. } => ui.label("最大 MP"),
             Effect::Initiative { .. } => ui.label("先攻值"),
             Effect::Evasion { .. } => ui.label("閃避"),
             Effect::Block { .. } => ui.label("格擋"),
@@ -1187,6 +1191,18 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
             });
             changed |= show_value_editor(ui, value, "HP 變化值:");
         }
+        Effect::Mp {
+            target_type,
+            shape,
+            value,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "MP 變化值:");
+        }
         Effect::MaxHp {
             target_type,
             shape,
@@ -1199,6 +1215,20 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 changed |= show_shape_editor(ui, shape);
             });
             changed |= show_value_editor(ui, value, "最大 HP 變化值:");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::MaxMp {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_value_editor(ui, value, "最大 MP 變化值:");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Initiative {
