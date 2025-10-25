@@ -12,16 +12,106 @@ const BASIC_PASSIVE_TARGET_TYPE: TargetType = TargetType::Caster;
 const BASIC_PASSIVE_SHAPE: Shape = Shape::Point;
 const BASIC_PASSIVE_DURATION: i32 = -1;
 
-/// 判斷是否為種族技能五大效果
+/// [重要] 若需新增 basic passive 效果，請同步更新 BASIC_PASSIVE_EFFECTS meta 陣列，所有初始化、驗證、顯示流程皆自動引用。
+#[derive(Clone)]
+struct BasicPassiveEffectMeta {
+    name: &'static str,
+    make: fn(i32) -> Effect,
+    validate: fn(&Effect) -> bool,
+    extract_value_mut: fn(&mut Effect) -> Option<&mut i32>,
+}
+const BASIC_PASSIVE_EFFECTS: &[BasicPassiveEffectMeta] = &[
+    BasicPassiveEffectMeta {
+        name: "max_hp",
+        make: |value| Effect::MaxHp {
+            target_type: BASIC_PASSIVE_TARGET_TYPE,
+            shape: BASIC_PASSIVE_SHAPE,
+            value,
+            duration: BASIC_PASSIVE_DURATION,
+        },
+        validate: |e| matches!(e, Effect::MaxHp { .. }),
+        extract_value_mut: |e| match e {
+            Effect::MaxHp { value, .. } => Some(value),
+            _ => None,
+        },
+    },
+    BasicPassiveEffectMeta {
+        name: "max_mp",
+        make: |value| Effect::MaxMp {
+            target_type: BASIC_PASSIVE_TARGET_TYPE,
+            shape: BASIC_PASSIVE_SHAPE,
+            value,
+            duration: BASIC_PASSIVE_DURATION,
+        },
+        validate: |e| matches!(e, Effect::MaxMp { .. }),
+        extract_value_mut: |e| match e {
+            Effect::MaxMp { value, .. } => Some(value),
+            _ => None,
+        },
+    },
+    BasicPassiveEffectMeta {
+        name: "initiative",
+        make: |value| Effect::Initiative {
+            target_type: BASIC_PASSIVE_TARGET_TYPE,
+            shape: BASIC_PASSIVE_SHAPE,
+            value,
+            duration: BASIC_PASSIVE_DURATION,
+        },
+        validate: |e| matches!(e, Effect::Initiative { .. }),
+        extract_value_mut: |e| match e {
+            Effect::Initiative { value, .. } => Some(value),
+            _ => None,
+        },
+    },
+    BasicPassiveEffectMeta {
+        name: "evasion",
+        make: |value| Effect::Evasion {
+            target_type: BASIC_PASSIVE_TARGET_TYPE,
+            shape: BASIC_PASSIVE_SHAPE,
+            value,
+            duration: BASIC_PASSIVE_DURATION,
+        },
+        validate: |e| matches!(e, Effect::Evasion { .. }),
+        extract_value_mut: |e| match e {
+            Effect::Evasion { value, .. } => Some(value),
+            _ => None,
+        },
+    },
+    BasicPassiveEffectMeta {
+        name: "block",
+        make: |value| Effect::Block {
+            target_type: BASIC_PASSIVE_TARGET_TYPE,
+            shape: BASIC_PASSIVE_SHAPE,
+            value,
+            duration: BASIC_PASSIVE_DURATION,
+        },
+        validate: |e| matches!(e, Effect::Block { .. }),
+        extract_value_mut: |e| match e {
+            Effect::Block { value, .. } => Some(value),
+            _ => None,
+        },
+    },
+    BasicPassiveEffectMeta {
+        name: "move_points",
+        make: |value| Effect::MovePoints {
+            target_type: BASIC_PASSIVE_TARGET_TYPE,
+            shape: BASIC_PASSIVE_SHAPE,
+            value,
+            duration: BASIC_PASSIVE_DURATION,
+        },
+        validate: |e| matches!(e, Effect::MovePoints { .. }),
+        extract_value_mut: |e| match e {
+            Effect::MovePoints { value, .. } => Some(value),
+            _ => None,
+        },
+    },
+];
+
+// 判斷是否為 basic passive 效果（依 meta 陣列 validate 規則）
 fn is_basic_passive_effect(effect: &Effect) -> bool {
-    matches!(
-        effect,
-        Effect::MaxHp { .. }
-            | Effect::Initiative { .. }
-            | Effect::Evasion { .. }
-            | Effect::Block { .. }
-            | Effect::MovePoints { .. }
-    )
+    BASIC_PASSIVE_EFFECTS
+        .iter()
+        .any(|meta| (meta.validate)(effect))
 }
 
 /// 技能資料集
@@ -533,15 +623,14 @@ impl SkillsEditor {
 
         // 處理刪除效果
         if delete_effect_index.is_some() && self.selected_skill.is_some() {
-            let skill_id = self
-                .selected_skill
-                .clone()
-                .expect("selected skill in race condition");
-            let index = delete_effect_index
-                .take()
-                .expect("delete effect in race condition");
-            self.confirmation_action = ConfirmationAction::DeleteEffect(skill_id, index);
-            self.show_confirmation_dialog = true;
+            let skill_id_opt = self.selected_skill.clone();
+            let index_opt = delete_effect_index.take();
+            if let (Some(skill_id), Some(index)) = (skill_id_opt, index_opt) {
+                self.confirmation_action = ConfirmationAction::DeleteEffect(skill_id, index);
+                self.show_confirmation_dialog = true;
+            } else {
+                self.set_status("刪除效果時狀態不同步，請重新操作。".to_string(), true);
+            }
         }
     }
 
@@ -793,44 +882,10 @@ impl SkillsEditor {
         self.set_status(format!("已複製技能為 {}", new_id), false);
     }
 
-    /// 初始化種族說明技能效果，符合 validate_basic_passive_skill 規則
+    /// 初始化種族說明技能效果
     fn init_basic_passive_skill_effects(&mut self, skill: &str) {
-        // 定義五種效果的順序與型別
-        let basic_passive_types: [fn(i32) -> Effect; 5] = [
-            |value| Effect::MaxHp {
-                target_type: BASIC_PASSIVE_TARGET_TYPE,
-                shape: BASIC_PASSIVE_SHAPE,
-                value,
-                duration: BASIC_PASSIVE_DURATION,
-            },
-            |value| Effect::Initiative {
-                target_type: BASIC_PASSIVE_TARGET_TYPE,
-                shape: BASIC_PASSIVE_SHAPE,
-                value,
-                duration: BASIC_PASSIVE_DURATION,
-            },
-            |value| Effect::Evasion {
-                target_type: BASIC_PASSIVE_TARGET_TYPE,
-                shape: BASIC_PASSIVE_SHAPE,
-                value,
-                duration: BASIC_PASSIVE_DURATION,
-            },
-            |value| Effect::Block {
-                target_type: BASIC_PASSIVE_TARGET_TYPE,
-                shape: BASIC_PASSIVE_SHAPE,
-                value,
-                duration: BASIC_PASSIVE_DURATION,
-            },
-            |value| Effect::MovePoints {
-                target_type: BASIC_PASSIVE_TARGET_TYPE,
-                shape: BASIC_PASSIVE_SHAPE,
-                value,
-                duration: BASIC_PASSIVE_DURATION,
-            },
-        ];
-
-        // 先收集現有五種效果的 value
-        let mut found: [Option<i32>; 5] = [None, None, None, None, None];
+        let mut found: [Option<i32>; BASIC_PASSIVE_EFFECTS.len()] =
+            [None; BASIC_PASSIVE_EFFECTS.len()];
         let mut others: Vec<Effect> = Vec::new();
 
         let skill = match self.skills_data.skills.get_mut(skill) {
@@ -840,29 +895,36 @@ impl SkillsEditor {
             }
             Some(skill) => skill,
         };
-        for eff in &skill.effects {
-            match eff {
-                Effect::MaxHp { value, .. } => found[0] = Some(*value),
-                Effect::Initiative { value, .. } => found[1] = Some(*value),
-                Effect::Evasion { value, .. } => found[2] = Some(*value),
-                Effect::Block { value, .. } => found[3] = Some(*value),
-                Effect::MovePoints { value, .. } => found[4] = Some(*value),
-                _ => others.push(eff.clone()),
+        for eff in skill.effects.iter() {
+            let mut matched = false;
+            // 對每個效果，檢查它是否匹配任何一個 basic passive meta
+            for (i, meta) in BASIC_PASSIVE_EFFECTS.iter().enumerate() {
+                if (meta.validate)(eff) {
+                    // 這裡我們知道效果匹配第 i 個 meta，所以可以安全地使用索引 i
+                    if let Some(value) = (meta.extract_value_mut)(&mut eff.clone()) {
+                        found[i] = Some(*value);
+                        matched = true;
+                        break; // 找到匹配就跳出，一個效果只能匹配一個 meta
+                    }
+                }
+            }
+            if !matched {
+                others.push(eff.clone());
             }
         }
 
-        // 產生五種效果（保留 value，覆蓋其他欄位，缺少則補 0）
-        let mut new_basic_passive_effects = Vec::with_capacity(5);
-        for i in 0..5 {
+        // （保留 value，覆蓋其他欄位，缺少則補 0）
+        let mut new_basic_passive_effects = Vec::with_capacity(BASIC_PASSIVE_EFFECTS.len());
+        for (i, meta) in BASIC_PASSIVE_EFFECTS.iter().enumerate() {
             let value = found[i].unwrap_or(0);
-            new_basic_passive_effects.push(basic_passive_types[i](value));
+            new_basic_passive_effects.push((meta.make)(value));
         }
 
-        // 依 validate_basic_passive_skill 順序排列於最前面，其他效果保留順序在末尾
         skill.tags = [Tag::BasicPassive, Tag::Single, Tag::Caster]
             .into_iter()
             .collect();
         skill.effects.clear();
+        // 依順序排列於最前面，其他效果保留順序在末尾
         skill.effects.extend(new_basic_passive_effects);
         skill.effects.extend(others);
 
@@ -873,7 +935,7 @@ impl SkillsEditor {
     fn save_file(&mut self, path: PathBuf) {
         for (skill_id, skill) in &self.skills_data.skills {
             if let Err(err) = SkillsData::validate(skill) {
-                self.set_status(format!("技能 {} 驗證失敗: {}", skill_id, err), true);
+                self.set_status(format!("[驗證失敗] 技能 {}: {}", skill_id, err), true);
                 return;
             }
         }
@@ -884,7 +946,7 @@ impl SkillsEditor {
                 self.set_status(format!("成功儲存檔案"), false);
             }
             Err(err) => {
-                self.set_status(format!("儲存檔案失敗: {}", err), true);
+                self.set_status(format!("[IO失敗] 儲存檔案失敗: {}", err), true);
             }
         }
     }
@@ -901,7 +963,12 @@ impl SkillsEditor {
                 self.set_status(format!("成功載入檔案"), false);
             }
             Err(err) => {
-                self.set_status(format!("載入檔案失敗: {}", err), true);
+                let err_msg = err.to_string();
+                if err_msg.contains("No such file") || err_msg.contains("Permission denied") {
+                    self.set_status(format!("[IO失敗] 載入檔案失敗: {}", err_msg), true);
+                } else {
+                    self.set_status(format!("[資料格式錯誤] 載入檔案失敗: {}", err_msg), true);
+                }
             }
         }
     }
@@ -942,66 +1009,22 @@ fn validate_basic_passive_skill(skill: &Skill) -> Result<(), String> {
     if skill.crit_rate != None {
         return Err("基礎被動不該有暴擊率".to_string());
     }
-    let mut effects = skill.effects.iter();
     let check = |effect: &Effect| {
         effect.target_type() == &BASIC_PASSIVE_TARGET_TYPE
             && effect.shape() == &BASIC_PASSIVE_SHAPE
             && effect.duration() == BASIC_PASSIVE_DURATION
     };
-    let max_hp = effects
-        .next()
-        .ok_or_else(|| "max_hp not found".to_string())?;
-    match max_hp {
-        Effect::MaxHp { .. } => {
-            if !check(max_hp) {
-                return Err("hp max 設定有問題".to_string());
-            }
+    for (i, meta) in BASIC_PASSIVE_EFFECTS.iter().enumerate() {
+        let effect = skill
+            .effects
+            .get(i)
+            .ok_or_else(|| format!("{} not found", meta.name))?;
+        if !(meta.validate)(effect) {
+            return Err(format!("第 {} 項必須是 {}", i + 1, meta.name));
         }
-        _ => return Err("first effect must be max_hp".to_string()),
-    }
-    let initiative = effects
-        .next()
-        .ok_or_else(|| "initiative not found".to_string())?;
-    match initiative {
-        Effect::Initiative { .. } => {
-            if !check(initiative) {
-                return Err("initiative 設定有問題".to_string());
-            }
+        if !check(effect) {
+            return Err(format!("{} 設定有問題", meta.name));
         }
-        _ => return Err("second effect must be initiative".to_string()),
-    }
-    let evasion = effects
-        .next()
-        .ok_or_else(|| "evasion not found".to_string())?;
-    match evasion {
-        Effect::Evasion { .. } => {
-            if !check(evasion) {
-                return Err("evasion 設定有問題".to_string());
-            }
-        }
-        _ => return Err("third effect must be evasion".to_string()),
-    }
-    let block = effects
-        .next()
-        .ok_or_else(|| "block not found".to_string())?;
-    match block {
-        Effect::Block { .. } => {
-            if !check(block) {
-                return Err("block 設定有問題".to_string());
-            }
-        }
-        _ => return Err("fourth effect must be block".to_string()),
-    }
-    let move_points = effects
-        .next()
-        .ok_or_else(|| "move_points not found".to_string())?;
-    match move_points {
-        Effect::MovePoints { .. } => {
-            if !check(move_points) {
-                return Err("move_points 設定有問題".to_string());
-            }
-        }
-        _ => return Err("fifth effect must be move_points".to_string()),
     }
     Ok(())
 }
@@ -1107,7 +1130,9 @@ fn show_skill_effect_editor(
     let mut move_up_clicked = false;
     let mut move_down_clicked = false;
     let mut delete_effect_clicked = false;
-    let is_basic_passive_effect = is_basic_passive_skill && is_basic_passive_effect(effect);
+    let is_basic_passive_effect = is_basic_passive_skill
+        && is_basic_passive_effect(effect)
+        && index < BASIC_PASSIVE_EFFECTS.len();
 
     ui.horizontal(|ui| {
         match effect {
@@ -1152,24 +1177,16 @@ fn show_skill_effect_editor(
                 changed = true;
             }
         } else {
-            // 只顯示數值編輯器
-            match effect {
-                Effect::MaxHp { value, .. } => {
-                    changed = show_value_editor(ui, value, "");
+            let mut found = false;
+            for meta in BASIC_PASSIVE_EFFECTS {
+                if let Some(value) = (meta.extract_value_mut)(effect) {
+                    changed |= show_value_editor(ui, value, "");
+                    found = true;
+                    break;
                 }
-                Effect::Initiative { value, .. } => {
-                    changed = show_value_editor(ui, value, "");
-                }
-                Effect::Evasion { value, .. } => {
-                    changed = show_value_editor(ui, value, "");
-                }
-                Effect::Block { value, .. } => {
-                    changed = show_value_editor(ui, value, "");
-                }
-                Effect::MovePoints { value, .. } => {
-                    changed = show_value_editor(ui, value, "");
-                }
-                _ => {}
+            }
+            if !found {
+                unreachable!("不合理的 basic passive effect: {:?}", effect);
             }
         }
     });
