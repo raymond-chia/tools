@@ -2,15 +2,14 @@ use crate::{common::*, skills::SkillsData};
 use chess_lib::{UnitTemplate, UnitTemplateType};
 use egui::*;
 use skills_lib::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io;
 
 #[derive(Default)]
 pub struct UnitsEditor {
     // 需要指定順序
     unit_templates: Vec<UnitTemplate>,
-    active_skill_ids: Vec<String>,
-    passive_skill_ids: Vec<String>,
+    skill_groups: BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>,
     selected_unit: Option<UnitTemplateType>,
     selected_skill: String,
     has_unsaved_changes: bool,
@@ -53,24 +52,36 @@ impl UnitsEditor {
         // 重新載入 skills，並分類主動/被動
         match SkillsData::from_file(skills_file()) {
             Ok(skills_data) => {
-                let mut active_skill_ids = Vec::new();
-                let mut passive_skill_ids = Vec::new();
-                for (id, skill) in &skills_data.skills {
-                    if skill.tags.contains(&skills_lib::Tag::Active) {
-                        active_skill_ids.push(id.clone());
-                    } else if skill.tags.contains(&skills_lib::Tag::Passive) {
-                        passive_skill_ids.push(id.clone());
+                let (matched, unmatched) = group_skills_by_tags(&skills_data.skills);
+                let mut skill_groups = matched;
+                let mut basic_passive_skill_ids = Vec::new();
+                for id in &unmatched {
+                    if let Some(skill) = skills_data.skills.get(id) {
+                        if skill.tags.contains(&Tag::BasicPassive) {
+                            basic_passive_skill_ids.push(id.clone());
+                        } else {
+                            println!(
+                                "Warning: Skill ID '{}' has unmatched tags: {:?}",
+                                id, skill.tags
+                            );
+                        }
+                    } else {
+                        println!("Warning: Skill ID '{}' not found in skills data.", id);
                     }
                 }
-                active_skill_ids.sort();
-                passive_skill_ids.sort();
-                self.active_skill_ids = active_skill_ids;
-                self.passive_skill_ids = passive_skill_ids;
+                if !basic_passive_skill_ids.is_empty() {
+                    skill_groups.insert(
+                        (Tag::BasicPassive, Tag::Single, Tag::Caster),
+                        basic_passive_skill_ids,
+                    );
+                }
+                self.skill_groups = skill_groups;
+
                 // 維持選取行為
                 let all_skills: Vec<String> = self
-                    .active_skill_ids
-                    .iter()
-                    .chain(self.passive_skill_ids.iter())
+                    .skill_groups
+                    .values()
+                    .flat_map(|ids| ids.iter())
                     .cloned()
                     .collect();
                 if all_skills.is_empty() {
@@ -199,6 +210,7 @@ impl UnitsEditor {
 
         // 先取得不存在的技能，避免 self 的可變借用衝突
         let missing_skills = self.validate_skills_exist_in_units();
+        let grouped_skills = self.grouped_unit_skills(&self.unit_templates[idx]);
 
         let unit = &mut self.unit_templates[idx];
         ui.heading("單位編輯");
@@ -210,66 +222,39 @@ impl UnitsEditor {
         ComboBox::from_id_salt("add_skill_combo")
             .selected_text(format!("選擇技能: {}", &self.selected_skill))
             .show_ui(ui, |ui| {
-                ui.label("─── 主動技能 ───");
-                for skill in &self.active_skill_ids {
-                    if ui.button(skill).clicked() {
-                        self.selected_skill = skill.clone();
+                for ((p, s, t), skill_ids) in &self.skill_groups {
+                    let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
+                    ui.label(title);
+                    for skill in skill_ids {
+                        if ui.button(skill).clicked() {
+                            self.selected_skill = skill.clone();
+                        }
                     }
-                }
-                ui.separator();
-                ui.label("─── 被動技能 ───");
-                for skill in &self.passive_skill_ids {
-                    if ui.button(skill).clicked() {
-                        self.selected_skill = skill.clone();
-                    }
+                    ui.separator();
                 }
             });
         if ui.button("新增技能").clicked() {
             unit.skills.insert(self.selected_skill.clone());
             self.has_unsaved_changes = true;
         }
-        // 主動技能區塊
-        ui.label("【主動技能】");
-        let mut deleted_active = None;
-        // 主動技能顯示區塊支援左右捲動
-        ScrollArea::horizontal()
-            .id_salt("active_skills_scroll")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for skill in &unit.skills {
-                        if self.active_skill_ids.contains(skill) {
+        let mut deleted_skill = None;
+        for ((p, s, t), skill_ids) in &grouped_skills {
+            let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
+            ui.label(&title);
+            ScrollArea::horizontal()
+                .id_salt(format!("skills_scroll-{}", &title))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        for skill in skill_ids {
                             ui.label(skill);
                             if ui.button("移除").clicked() {
-                                deleted_active = Some(skill.clone());
+                                deleted_skill = Some(skill.clone());
                             }
                         }
-                    }
+                    });
                 });
-            });
-        if let Some(deleted) = deleted_active {
-            unit.skills.remove(&deleted);
-            self.has_unsaved_changes = true;
         }
-
-        // 被動技能區塊
-        ui.label("【被動技能】");
-        let mut deleted_passive = None;
-        // 被動技能顯示區塊支援左右捲動
-        ScrollArea::horizontal()
-            .id_salt("passive_skills_scroll")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    for skill in &unit.skills {
-                        if self.passive_skill_ids.contains(skill) {
-                            ui.label(skill);
-                            if ui.button("移除").clicked() {
-                                deleted_passive = Some(skill.clone());
-                            }
-                        }
-                    }
-                });
-            });
-        if let Some(deleted) = deleted_passive {
+        if let Some(deleted) = deleted_skill {
             unit.skills.remove(&deleted);
             self.has_unsaved_changes = true;
         }
@@ -301,15 +286,21 @@ impl UnitsEditor {
         }
     }
 
-    fn save_unit_templates<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), io::Error> {
-        #[derive(serde::Serialize)]
-        struct UnitTemplatesConfig<'a> {
-            unit_templates: &'a Vec<UnitTemplate>,
+    /// 依三層 Tag 分組單位技能
+    fn grouped_unit_skills(&self, unit: &UnitTemplate) -> BTreeMap<(Tag, Tag, Tag), Vec<SkillID>> {
+        let mut result = BTreeMap::new();
+        for ((p, s, t), skill_ids) in &self.skill_groups {
+            let filtered: Vec<SkillID> = unit
+                .skills
+                .iter()
+                .filter(|id| skill_ids.contains(id))
+                .cloned()
+                .collect();
+            if !filtered.is_empty() {
+                result.insert((p.clone(), s.clone(), t.clone()), filtered);
+            }
         }
-        let config = UnitTemplatesConfig {
-            unit_templates: &self.unit_templates,
-        };
-        return to_file(path, &config);
+        result
     }
 
     /// 檢查所有單位模板中的技能是否存在於技能清單
@@ -319,9 +310,9 @@ impl UnitsEditor {
         &self,
     ) -> Result<(), HashMap<UnitTemplateType, Vec<SkillID>>> {
         let all_skills: HashSet<&String> = self
-            .active_skill_ids
-            .iter()
-            .chain(self.passive_skill_ids.iter())
+            .skill_groups
+            .values()
+            .flat_map(|ids| ids.iter())
             .collect();
         let mut missing = HashMap::new();
         for unit in &self.unit_templates {
@@ -340,6 +331,17 @@ impl UnitsEditor {
         } else {
             Err(missing)
         }
+    }
+
+    fn save_unit_templates<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), io::Error> {
+        #[derive(serde::Serialize)]
+        struct UnitTemplatesConfig<'a> {
+            unit_templates: &'a Vec<UnitTemplate>,
+        }
+        let config = UnitTemplatesConfig {
+            unit_templates: &self.unit_templates,
+        };
+        return to_file(path, &config);
     }
 
     pub fn set_status(&mut self, msg: String, is_error: bool) {

@@ -3,7 +3,7 @@ use egui::*;
 use rfd::FileDialog;
 use serde::{Serialize, de::DeserializeOwned};
 use skills_lib::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -225,4 +225,29 @@ pub fn load_skills<P: AsRef<Path>>(
             return Err(err);
         }
     }
+}
+
+pub fn group_skills_by_tags(
+    skills: &HashMap<SkillID, Skill>,
+) -> (BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>, Vec<SkillID>) {
+    const PRIMARY: [Tag; 2] = [Tag::Active, Tag::Passive];
+    const SECONDARY: [Tag; 2] = [Tag::Physical, Tag::Magical];
+    const TERTIARY: [Tag; 3] = [Tag::Caster, Tag::Melee, Tag::Ranged];
+
+    let mut matched = BTreeMap::new();
+    let mut unmatched = Vec::new();
+    for (id, skill) in skills {
+        let p = PRIMARY.iter().find(|t| skill.tags.contains(t)).cloned();
+        let s = SECONDARY.iter().find(|t| skill.tags.contains(t)).cloned();
+        let t = TERTIARY.iter().find(|t| skill.tags.contains(t)).cloned();
+        if let (Some(p), Some(s), Some(t)) = (p, s, t) {
+            matched
+                .entry((p, s, t))
+                .or_insert_with(Vec::new)
+                .push(id.clone());
+        } else {
+            unmatched.push(id.clone());
+        }
+    }
+    (matched, unmatched)
 }

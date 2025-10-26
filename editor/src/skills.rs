@@ -423,35 +423,7 @@ impl SkillsEditor {
         ui.add_space(10.0);
 
         ScrollArea::vertical().show(ui, |ui| {
-            /// 三層 tag 分組 helper
-            fn group_by_tags<'a>(
-                skills: &HashMap<SkillID, Skill>,
-                primary: &[Tag],
-                secondary: &[Tag],
-                tertiary: &[Tag],
-            ) -> (BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>, Vec<SkillID>) {
-                let mut map = BTreeMap::new();
-                let mut unmatched = Vec::new();
-                for (id, skill) in skills {
-                    let p = primary.iter().find(|t| skill.tags.contains(t)).cloned();
-                    let s = secondary.iter().find(|t| skill.tags.contains(t)).cloned();
-                    let t = tertiary.iter().find(|t| skill.tags.contains(t)).cloned();
-                    if let (Some(p), Some(s), Some(t)) = (p, s, t) {
-                        map.entry((p, s, t))
-                            .or_insert_with(Vec::new)
-                            .push(id.clone());
-                    } else {
-                        unmatched.push(id.clone());
-                    }
-                }
-                (map, unmatched)
-            }
-
-            let primary = [Tag::Active, Tag::Passive];
-            let secondary = [Tag::Physical, Tag::Magical];
-            let tertiary = [Tag::Caster, Tag::Melee, Tag::Ranged];
-            let (grouped, unmatched) =
-                group_by_tags(&self.skills_data.skills, &primary, &secondary, &tertiary);
+            let (grouped, unmatched) = group_skills_by_tags(&self.skills_data.skills);
             // 種族技能
             let mut basic_passive_skill_ids = Vec::new();
             for (id, skill) in &self.skills_data.skills {
@@ -461,7 +433,7 @@ impl SkillsEditor {
             }
 
             for ((p, s, t), skill_ids) in grouped {
-                let title = format!("─── {:?}-{:?}-{:?}技能 ───", p, s, t);
+                let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
                 self.show_skill_category(ui, &title, &skill_ids);
             }
             self.show_skill_category(ui, "─── 種族技能 ───", &basic_passive_skill_ids);
