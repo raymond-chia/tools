@@ -13,7 +13,7 @@ pub struct Skill {
     #[serde(default)]
     pub range: (usize, usize),
     #[serde(default)]
-    pub cost: u16,
+    pub cost: i32,
     #[serde(default)]
     pub accuracy: Option<i32>,
     #[serde(default)]

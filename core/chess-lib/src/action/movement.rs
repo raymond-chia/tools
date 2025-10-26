@@ -144,7 +144,7 @@ pub fn move_unit_along_path(
     };
     if unit.has_cast_skill_this_turn && !has_hit_and_run_skill(unit, skills_map) {
         // 若無「打帶跑」則禁止移動
-        return Err(Error::NotEnoughPoints { func });
+        return Err(Error::NotEnoughAP { func });
     }
     let mut actor = *actor;
     for next in path {
@@ -247,7 +247,7 @@ mod inner {
         };
         let cost = movement_cost(terrain);
         if active_unit.moved + cost > active_unit.move_points * 2 {
-            return Err(Error::NotEnoughPoints { func });
+            return Err(Error::NotEnoughAP { func });
         }
         active_unit.moved += cost;
         if result.is_ok() {
@@ -484,7 +484,7 @@ mod tests {
             assert!(
                 matches!(
                     res,
-                    Err(Error::NotEnoughPoints {
+                    Err(Error::NotEnoughAP {
                         func: "move_unit_along_path"
                     })
                 ),

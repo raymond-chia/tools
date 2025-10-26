@@ -156,6 +156,10 @@ impl SkillsData {
             return Err("技能必須至少有一個效果".to_string());
         }
 
+        if skill.cost > 0 {
+            return Err("技能消耗不能大於零".to_string());
+        }
+
         if skill.range.0 > skill.range.1 {
             return Err("技能範圍的最小值不能大於最大值".to_string());
         }
@@ -250,9 +254,9 @@ impl SkillsData {
         let checklist = [
             // 雖然不是 effect, 但是條件跟標籤要一起存在
             (
-                skill.cost > 0,
+                skill.cost < 0,
                 Tag::Magical,
-                "有魔力標籤的技能必須消耗魔力（cost > 0）",
+                "有魔力標籤的技能必須消耗魔力（cost < 0）",
             ),
             (
                 skill.effects.iter().any(|e| match e {
@@ -1077,7 +1081,10 @@ fn show_basic_skill_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
 
     ui.horizontal(|ui| {
         ui.label("消耗:");
-        if ui.add(DragValue::new(&mut skill.cost)).changed() {
+        if ui
+            .add(DragValue::new(&mut skill.cost).range(i32::MIN..=0))
+            .changed()
+        {
             changed = true;
         }
     });

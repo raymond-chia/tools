@@ -60,7 +60,16 @@ pub enum Error {
 
     // 使用技能、移動單位
     #[error("`{func}`: 行動點數不足")]
-    NotEnoughPoints { func: &'static str },
+    NotEnoughAP { func: &'static str },
+
+    #[error("`{func}`: 魔力不足，{unit_type} 施放技能 {skill_id} 需要 {cost} MP，現有 {mp} MP")]
+    NotEnoughMp {
+        func: &'static str,
+        skill_id: SkillID,
+        unit_type: String,
+        mp: i32,
+        cost: i32,
+    },
 
     // 移動單位
     #[error("`{func}`: 單位 {unit_id} 不在 {pos:?}")]

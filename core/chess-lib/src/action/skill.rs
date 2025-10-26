@@ -21,7 +21,6 @@ impl SkillSelection {
     }
 
     /// 施放技能主流程
-    /// 回傳 Ok(訊息列表) 或 Err(錯誤)
     pub fn cast_skill(
         &self,
         board: &mut Board,
@@ -59,7 +58,6 @@ impl SkillSelection {
             })
         })?;
 
-        // skill_affect_area 會檢查移動距離
         let affect_area = self.skill_affect_area(board, skills, caster, target);
         if affect_area.is_empty() {
             return Err(Error::SkillAffectEmpty {
@@ -67,6 +65,29 @@ impl SkillSelection {
                 skill_id: skill_id.clone(),
                 pos: target,
             });
+        }
+        // 魔力消耗檢查與扣除
+        if skill.cost < 0 {
+            let unit = match board.units.get_mut(&caster) {
+                Some(unit) => unit,
+                None => {
+                    return Err(Error::NoActingUnit {
+                        func,
+                        unit_id: caster,
+                    });
+                }
+            };
+            let mp = unit.mp + skill.cost;
+            if mp < 0 {
+                return Err(Error::NotEnoughMp {
+                    func,
+                    unit_type: unit.unit_template_type.clone(),
+                    skill_id: skill_id.clone(),
+                    mp: unit.mp,
+                    cost: skill.cost,
+                });
+            }
+            unit.mp = mp;
         }
         let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
 
@@ -202,10 +223,10 @@ pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
     let func = "is_able_to_cast";
 
     if unit.has_cast_skill_this_turn {
-        return Err(Error::NotEnoughPoints { func });
+        return Err(Error::NotEnoughAP { func });
     }
     if unit.moved > unit.move_points {
-        return Err(Error::NotEnoughPoints { func });
+        return Err(Error::NotEnoughAP { func });
     }
     Ok(())
 }
@@ -770,7 +791,7 @@ mod tests {
         assert!(
             matches!(
                 root_error(result2.as_ref().unwrap_err()),
-                Error::NotEnoughPoints { .. }
+                Error::NotEnoughAP { .. }
             ),
             "{:?}",
             result2
@@ -954,7 +975,7 @@ mod tests {
         unit.moved = 0;
         assert!(matches!(
             is_able_to_cast(unit),
-            Err(Error::NotEnoughPoints { .. })
+            Err(Error::NotEnoughAP { .. })
         ));
 
         // 移動超過點數
@@ -963,7 +984,7 @@ mod tests {
         unit.move_points = 2;
         assert!(matches!(
             is_able_to_cast(unit),
-            Err(Error::NotEnoughPoints { .. })
+            Err(Error::NotEnoughAP { .. })
         ));
     }
 
