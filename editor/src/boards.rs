@@ -38,8 +38,7 @@ pub struct BoardsEditor {
     camera: Camera2D,
     unit_templates: IndexMap<UnitTemplateType, UnitTemplate>,
     skills: BTreeMap<SkillID, Skill>,
-    active_skill_ids: Vec<SkillID>,
-    passive_skill_ids: Vec<SkillID>,
+    skill_groups: SkillByTags,
     player_progression: PlayerProgressionData,
     ai_config: AIConfig,
     // status
@@ -112,18 +111,24 @@ impl BoardsEditor {
                 return;
             }
         }
-        match load_skills(skills_file()) {
-            Ok((skills, active_skill_ids, passive_skill_ids)) => {
-                self.skills = skills;
-                self.active_skill_ids = active_skill_ids;
-                self.passive_skill_ids = passive_skill_ids;
-            }
+        match from_file::<_, BTreeMap<SkillID, Skill>>(skills_file()) {
             Err(err) => {
                 self.skills = BTreeMap::new();
-                self.active_skill_ids = Vec::new();
-                self.passive_skill_ids = Vec::new();
+                self.skill_groups = BTreeMap::new();
                 self.set_status(format!("載入技能失敗: {}", err), true);
                 return;
+            }
+            Ok(skills) => {
+                let grouped = match must_group_skills_by_tags(&skills) {
+                    Err(msg) => {
+                        self.set_status(format!("解析技能標籤失敗: {}", msg), true);
+                        return;
+                    }
+                    Ok(res) => res,
+                };
+
+                self.skills = skills;
+                self.skill_groups = grouped;
             }
         }
         // 載入 AI 設定
@@ -367,7 +372,12 @@ impl BoardsEditor {
             // 以繁體中文註解：只顯示技能影響範圍（座標列表），不顯示移動範圍與路徑
 
             // 只允許施放主動技能
-            if !self.active_skill_ids.contains(skill_id) {
+            if !self
+                .skills
+                .get(skill_id)
+                .map(|s| s.tags.contains(&Tag::Active))
+                .unwrap_or(false)
+            {
                 self.set_status("被動技能無法施放".to_string(), true);
                 return;
             }
@@ -819,10 +829,15 @@ impl BoardsEditor {
         ui.label("單位擁有的技能：");
         // 技能選擇下拉選單（無「未選擇技能」選項），selected_idx = -1 表示未選擇技能
         // 依主/被動分類技能顯示
-        let skill_ids: Vec<&SkillID> = unit
+        let active_skill_ids: Vec<&SkillID> = unit
             .skills
             .iter()
-            .filter(|id| self.active_skill_ids.contains(*id))
+            .filter(|id| {
+                self.skills
+                    .get(*id)
+                    .map(|s| s.tags.contains(&Tag::Active))
+                    .unwrap_or(false)
+            })
             .collect();
         // 滑鼠右鍵點擊時取消技能選取
         if ui.ctx().input(|i| i.pointer.secondary_clicked()) {
@@ -832,12 +847,12 @@ impl BoardsEditor {
             .skill_selection
             .selected_skill
             .as_ref()
-            .and_then(|id| skill_ids.iter().position(|x| x == &id))
+            .and_then(|id| active_skill_ids.iter().position(|x| x == &id))
             .map(|idx| idx as i32)
             .unwrap_or(-1);
         egui::ComboBox::from_id_salt("unit_skill_select_combo")
             .selected_text(if selected_idx >= 0 {
-                skill_ids
+                active_skill_ids
                     .get(selected_idx as usize)
                     .map(|s| s.as_str())
                     .unwrap_or("")
@@ -846,11 +861,11 @@ impl BoardsEditor {
             })
             .show_ui(ui, |ui| {
                 ui.label("─── 主動技能 ───");
-                for (i, name) in skill_ids.iter().enumerate() {
+                for (i, name) in active_skill_ids.iter().enumerate() {
                     let response = ui.selectable_value(&mut selected_idx, i as i32, *name);
                     if response.changed() {
                         if selected_idx >= 0 {
-                            if let Some(skill_id) = skill_ids.get(selected_idx as usize) {
+                            if let Some(skill_id) = active_skill_ids.get(selected_idx as usize) {
                                 self.skill_selection
                                     .select_skill(Some(skill_id.to_string()));
                             }
@@ -1323,12 +1338,10 @@ fn override_player_unit(
     // 3. 覆蓋資料
     for (key, board_unit) in board_map.iter_mut() {
         let roster_unit = roster_map.get(key).unwrap();
-        // skills = active_skills + passive_skills
         board_unit.skills = roster_unit
-            .active_skills
+            .skills
             .iter()
-            .chain(&roster_unit.passive_skills)
-            .cloned()
+            .flat_map(|(_, skill_set)| skill_set.clone())
             .collect();
     }
     Ok(())

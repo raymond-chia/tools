@@ -1,12 +1,14 @@
+use chess_lib::*;
 use eframe::egui;
 use egui::*;
 use rfd::FileDialog;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned};
 use skills_lib::*;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Error, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 /// 取得跨平台對話資料路徑
 pub fn dialogs_file() -> PathBuf {
@@ -202,39 +204,57 @@ pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
     });
 }
 
-pub fn load_skills<P: AsRef<Path>>(
-    path: P,
-) -> io::Result<(BTreeMap<SkillID, Skill>, Vec<SkillID>, Vec<SkillID>)> {
-    match from_file::<_, BTreeMap<SkillID, Skill>>(path) {
-        Ok(skills) => {
-            // 分類主動/被動技能
-            let mut active_skill_ids = Vec::new();
-            let mut passive_skill_ids = Vec::new();
-            for (id, skill) in &skills {
-                if skill.tags.contains(&skills_lib::Tag::Active) {
-                    active_skill_ids.push(id.clone());
-                } else if skill.tags.contains(&skills_lib::Tag::Passive) {
-                    passive_skill_ids.push(id.clone());
-                }
-            }
-            active_skill_ids.sort();
-            passive_skill_ids.sort();
-            return Ok((skills, active_skill_ids, passive_skill_ids));
-        }
-        Err(err) => {
-            return Err(err);
+pub type SkillByTags = BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>;
+
+pub fn grouped_unit_skills(skill_group: &SkillByTags, unit: &UnitTemplate) -> SkillByTags {
+    let mut result = BTreeMap::new();
+    for (tags, skill_ids) in skill_group {
+        let filtered: Vec<SkillID> = unit
+            .skills
+            .iter()
+            .filter(|id| skill_ids.contains(id))
+            .cloned()
+            .collect();
+        if !filtered.is_empty() {
+            result.insert(tags.clone(), filtered);
         }
     }
+    result
 }
 
-pub fn group_skills_by_tags(
-    skills: &HashMap<SkillID, Skill>,
-) -> (BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>, Vec<SkillID>) {
+pub fn must_group_skills_by_tags(skills: &BTreeMap<SkillID, Skill>) -> Result<SkillByTags, String> {
+    let (mut matched, unmatched) = group_non_basic_skills_by_tags(&skills);
+    let mut basic_passive_skill_ids = Vec::new();
+    for id in &unmatched {
+        let skill = skills
+            .get(id)
+            .ok_or_else(|| format!("Skill ID '{}' not found in skills data.", id))?;
+        if skill.tags.contains(&Tag::BasicPassive) {
+            basic_passive_skill_ids.push(id.clone());
+        } else {
+            return Err(format!(
+                "Warning: Skill ID '{}' has unmatched tags: {:?}",
+                id, skill.tags
+            ));
+        }
+    }
+    if !basic_passive_skill_ids.is_empty() {
+        matched.insert(
+            (Tag::BasicPassive, Tag::Single, Tag::Caster),
+            basic_passive_skill_ids,
+        );
+    }
+    return Ok(matched);
+}
+
+pub fn group_non_basic_skills_by_tags(
+    skills: &BTreeMap<SkillID, Skill>,
+) -> (SkillByTags, Vec<SkillID>) {
     const PRIMARY: [Tag; 2] = [Tag::Active, Tag::Passive];
     const SECONDARY: [Tag; 2] = [Tag::Physical, Tag::Magical];
     const TERTIARY: [Tag; 3] = [Tag::Caster, Tag::Melee, Tag::Ranged];
 
-    let mut matched = BTreeMap::new();
+    let mut matched = SkillByTags::new();
     let mut unmatched = Vec::new();
     for (id, skill) in skills {
         let p = PRIMARY.iter().find(|t| skill.tags.contains(t)).cloned();
@@ -250,4 +270,46 @@ pub fn group_skills_by_tags(
         }
     }
     (matched, unmatched)
+}
+
+pub mod skill_by_tags_key_map {
+    use super::*;
+
+    pub fn serialize<S>(map: &SkillByTags, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let string_map: BTreeMap<String, &Vec<SkillID>> = map
+            .iter()
+            .map(|(k, v)| {
+                let key_str = format!("{}-{}-{}", k.0, k.1, k.2);
+                (key_str, v)
+            })
+            .collect();
+        string_map.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<SkillByTags, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let string_map: BTreeMap<String, Vec<SkillID>> =
+            BTreeMap::<String, Vec<SkillID>>::deserialize(deserializer)?;
+        string_map
+            .into_iter()
+            .map(|(k, v)| {
+                let tags: Vec<&str> = k.split('-').collect();
+                if tags.len() != 3 {
+                    return Err(serde::de::Error::custom(format!(
+                        "Key must have 3 tags: {}",
+                        k
+                    )));
+                }
+                let tag0 = Tag::from_str(tags[0]).map_err(serde::de::Error::custom)?;
+                let tag1 = Tag::from_str(tags[1]).map_err(serde::de::Error::custom)?;
+                let tag2 = Tag::from_str(tags[2]).map_err(serde::de::Error::custom)?;
+                Ok(((tag0, tag1, tag2), v))
+            })
+            .collect()
+    }
 }

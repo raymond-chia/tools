@@ -5,7 +5,7 @@ use egui::*;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, HashSet};
 use std::io;
 
 /// 每個戰場對應的玩家進度（roster）
@@ -21,12 +21,12 @@ pub struct PlayerProgress {
 }
 
 /// 玩家在某戰場的 roster 狀態（可依需求擴充）
-/// 玩家單位資料，技能分為主動與被動
+/// 玩家單位資料，技能依 tag 分類
 #[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct Unit {
     pub unit_type: UnitTemplateType,
-    pub active_skills: BTreeSet<SkillID>,
-    pub passive_skills: BTreeSet<SkillID>,
+    #[serde(with = "skill_by_tags_key_map")]
+    pub skills: SkillByTags,
 }
 
 #[derive(Debug, Default)]
@@ -34,8 +34,7 @@ pub struct PlayerProgressionEditor {
     // 其他編輯器的資料
     unit_templates: IndexMap<UnitTemplateType, UnitTemplate>,
     skills: BTreeMap<SkillID, Skill>,
-    active_skill_ids: Vec<SkillID>,
-    passive_skill_ids: Vec<SkillID>,
+    skill_group: SkillByTags,
     // 本編輯器的資料
     selected_board: Option<BoardID>,
     // 新增單位暫存欄位
@@ -91,18 +90,25 @@ impl PlayerProgressionEditor {
         };
 
         // 6. 載入 skills（參考 boards.rs）
-        match load_skills(skills_file()) {
-            Ok((skills, active_skill_ids, passive_skill_ids)) => {
-                self.skills = skills;
-                self.active_skill_ids = active_skill_ids;
-                self.passive_skill_ids = passive_skill_ids;
-            }
+        match from_file::<_, BTreeMap<SkillID, Skill>>(skills_file()) {
             Err(err) => {
                 self.skills = BTreeMap::new();
-                self.active_skill_ids = Vec::new();
-                self.passive_skill_ids = Vec::new();
+                self.skill_group = SkillByTags::new();
                 self.set_status(format!("載入技能失敗: {}", err), true);
                 return;
+            }
+            Ok(skills) => {
+                let skill_group = match must_group_skills_by_tags(&skills) {
+                    Err(err) => {
+                        self.skills = BTreeMap::new();
+                        self.skill_group = SkillByTags::new();
+                        self.set_status(format!("解析技能分類失敗: {}", err), true);
+                        return;
+                    }
+                    Ok(skill_group) => skill_group,
+                };
+                self.skills = skills;
+                self.skill_group = skill_group;
             }
         }
 
@@ -236,95 +242,77 @@ impl PlayerProgressionEditor {
                         }
                     });
 
-                    // 主動技能換行
-                    ui.vertical(|ui| {
-                        if unit.active_skills.is_empty() {
-                            ui.label("主動: -");
-                        } else {
-                            ui.label("主動:");
+                    for (tag_tuple, all_skill_ids) in self.skill_group.iter() {
+                        let empty_vec: Vec<SkillID> = Vec::new();
+                        let skill_ids = unit.skills.get(tag_tuple).unwrap_or(&empty_vec);
+                        ui.vertical(|ui| {
+                            let label = format!(
+                                "分類: ─── {:?}-{:?}-{:?} ───",
+                                tag_tuple.0, tag_tuple.1, tag_tuple.2
+                            );
+                            ui.label(label);
+                            // 已有技能列表 + 移除技能
                             egui::ScrollArea::horizontal()
-                                .id_salt(format!("active_skills_scroll_{}", typ))
+                                .id_salt(format!(
+                                    "skills_scroll_{:?}_{:?}_{:?}_{}",
+                                    tag_tuple.0, tag_tuple.1, tag_tuple.2, typ
+                                ))
                                 .max_height(32.0)
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
-                                        for skill in unit.active_skills.iter() {
-                                            ui.label(skill.as_str());
+                                        for (idx, skill) in skill_ids.iter().enumerate() {
+                                            ui.label(skill);
                                             if ui
                                                 .small_button("x")
-                                                .on_hover_text("移除主動技能")
+                                                .on_hover_text("移除技能")
                                                 .clicked()
                                             {
                                                 let mut new_unit = unit.clone();
-                                                new_unit.active_skills.remove(skill);
+                                                if let Some(new_unit_skills) =
+                                                    new_unit.skills.get_mut(tag_tuple)
+                                                {
+                                                    new_unit_skills.remove(idx);
+                                                    if new_unit_skills.is_empty() {
+                                                        new_unit.skills.remove(tag_tuple);
+                                                    }
+                                                }
                                                 to_edit_unit = Some(new_unit);
                                             }
                                         }
                                     });
                                 });
-                        }
-                        let mut add_active_skill: Option<SkillID> = None;
-                        egui::ComboBox::from_id_salt(format!("unit_active_skill_combo_{}", typ))
-                            .selected_text("新增主動技能")
+                            // 可新增技能選項
+                            let owned_skill_ids: HashSet<&SkillID> =
+                                unit.skills.values().flat_map(|v| v).collect();
+                            let unowned_skill_ids: Vec<SkillID> = all_skill_ids
+                                .iter()
+                                .filter(|skill_id| !owned_skill_ids.contains(skill_id))
+                                .cloned()
+                                .collect();
+                            let mut add_skill: Option<SkillID> = None;
+                            egui::ComboBox::from_id_salt(format!(
+                                "unit_skill_combo_{:?}_{:?}_{:?}_{}",
+                                tag_tuple.0, tag_tuple.1, tag_tuple.2, typ
+                            ))
+                            .selected_text("新增技能")
                             .show_ui(ui, |ui| {
-                                for skill_id in self.active_skill_ids.iter() {
-                                    if ui.selectable_label(false, skill_id.as_str()).clicked() {
-                                        add_active_skill = Some(skill_id.clone());
+                                for skill_id in unowned_skill_ids.iter() {
+                                    if ui.selectable_label(false, skill_id).clicked() {
+                                        add_skill = Some(skill_id.clone());
                                     }
                                 }
                             });
-                        if let Some(skill_id) = add_active_skill {
-                            if !unit.active_skills.contains(&skill_id) {
+                            if let Some(skill_id) = add_skill {
                                 let mut new_unit = unit.clone();
-                                new_unit.active_skills.insert(skill_id);
+                                new_unit
+                                    .skills
+                                    .entry(tag_tuple.clone())
+                                    .or_insert_with(Vec::new)
+                                    .push(skill_id);
                                 to_edit_unit = Some(new_unit);
                             }
-                        }
-                    });
-
-                    // 被動技能換行
-                    ui.vertical(|ui| {
-                        if unit.passive_skills.is_empty() {
-                            ui.label("被動: -");
-                        } else {
-                            ui.label("被動:");
-                            egui::ScrollArea::horizontal()
-                                .id_salt(format!("passive_skills_scroll_{}", typ))
-                                .max_height(32.0)
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        for skill in unit.passive_skills.iter() {
-                                            ui.label(skill.as_str());
-                                            if ui
-                                                .small_button("x")
-                                                .on_hover_text("移除被動技能")
-                                                .clicked()
-                                            {
-                                                let mut new_unit = unit.clone();
-                                                new_unit.passive_skills.remove(skill);
-                                                to_edit_unit = Some(new_unit);
-                                            }
-                                        }
-                                    });
-                                });
-                        }
-                        let mut add_passive_skill: Option<SkillID> = None;
-                        egui::ComboBox::from_id_salt(format!("unit_passive_skill_combo_{}", typ))
-                            .selected_text("新增被動技能")
-                            .show_ui(ui, |ui| {
-                                for skill_id in self.passive_skill_ids.iter() {
-                                    if ui.selectable_label(false, skill_id.as_str()).clicked() {
-                                        add_passive_skill = Some(skill_id.clone());
-                                    }
-                                }
-                            });
-                        if let Some(skill_id) = add_passive_skill {
-                            if !unit.passive_skills.contains(&skill_id) {
-                                let mut new_unit = unit.clone();
-                                new_unit.passive_skills.insert(skill_id);
-                                to_edit_unit = Some(new_unit);
-                            }
-                        }
-                    });
+                        });
+                    }
                 });
             }
             if let Some(typ) = to_remove_unit {
@@ -345,9 +333,11 @@ impl PlayerProgressionEditor {
         let mut missing: Vec<(String, String, String)> = Vec::new();
         for (board_id, progress) in &self.data.boards {
             for (unit_type, unit) in &progress.roster {
-                for skill_id in unit.active_skills.iter().chain(unit.passive_skills.iter()) {
-                    if !self.skills.contains_key(skill_id) {
-                        missing.push((board_id.clone(), unit_type.clone(), skill_id.clone()));
+                for skill_ids in unit.skills.values() {
+                    for skill_id in skill_ids {
+                        if !self.skills.contains_key(skill_id) {
+                            missing.push((board_id.clone(), unit_type.clone(), skill_id.clone()));
+                        }
                     }
                 }
             }

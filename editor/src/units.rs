@@ -2,14 +2,14 @@ use crate::{common::*, skills::SkillsData};
 use chess_lib::{UnitTemplate, UnitTemplateType};
 use egui::*;
 use skills_lib::*;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::io;
 
 #[derive(Default)]
 pub struct UnitsEditor {
     // 需要指定順序
     unit_templates: Vec<UnitTemplate>,
-    skill_groups: BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>,
+    skill_groups: SkillByTags,
     selected_unit: Option<UnitTemplateType>,
     selected_skill: String,
     has_unsaved_changes: bool,
@@ -51,48 +51,31 @@ impl UnitsEditor {
         }
         // 重新載入 skills，並分類主動/被動
         match SkillsData::from_file(skills_file()) {
-            Ok(skills_data) => {
-                let (matched, unmatched) = group_skills_by_tags(&skills_data.skills);
-                let mut skill_groups = matched;
-                let mut basic_passive_skill_ids = Vec::new();
-                for id in &unmatched {
-                    if let Some(skill) = skills_data.skills.get(id) {
-                        if skill.tags.contains(&Tag::BasicPassive) {
-                            basic_passive_skill_ids.push(id.clone());
-                        } else {
-                            println!(
-                                "Warning: Skill ID '{}' has unmatched tags: {:?}",
-                                id, skill.tags
-                            );
-                        }
-                    } else {
-                        println!("Warning: Skill ID '{}' not found in skills data.", id);
-                    }
-                }
-                if !basic_passive_skill_ids.is_empty() {
-                    skill_groups.insert(
-                        (Tag::BasicPassive, Tag::Single, Tag::Caster),
-                        basic_passive_skill_ids,
-                    );
-                }
-                self.skill_groups = skill_groups;
-
-                // 維持選取行為
-                let all_skills: Vec<String> = self
-                    .skill_groups
-                    .values()
-                    .flat_map(|ids| ids.iter())
-                    .cloned()
-                    .collect();
-                if all_skills.is_empty() {
-                    self.selected_skill.clear();
-                } else if !all_skills.contains(&self.selected_skill) {
-                    self.selected_skill = all_skills.first().cloned().unwrap_or_default();
-                }
-            }
             Err(err) => {
                 self.set_status(format!("載入技能失敗: {}", err), true);
                 return;
+            }
+            Ok(skills_data) => {
+                let grouped = match must_group_skills_by_tags(&skills_data.skills) {
+                    Err(msg) => {
+                        let msg = format!("解析技能標籤失敗: {}", msg);
+                        println!("{}", msg);
+                        self.set_status(msg, true);
+                        return;
+                    }
+                    Ok(grouped) => grouped,
+                };
+
+                self.skill_groups = grouped;
+                let all_skills: Vec<String> = self
+                    .skill_groups
+                    .values()
+                    .flat_map(|ids| ids)
+                    .cloned()
+                    .collect();
+                if !all_skills.contains(&self.selected_skill) {
+                    self.selected_skill = all_skills.first().cloned().unwrap_or_default();
+                }
             }
         }
         self.set_status("已重新載入 unit_templates 與 skills".to_string(), false);
@@ -210,7 +193,7 @@ impl UnitsEditor {
 
         // 先取得不存在的技能，避免 self 的可變借用衝突
         let missing_skills = self.validate_skills_exist_in_units();
-        let grouped_skills = self.grouped_unit_skills(&self.unit_templates[idx]);
+        let grouped_skills = grouped_unit_skills(&self.skill_groups, &self.unit_templates[idx]);
 
         let unit = &mut self.unit_templates[idx];
         ui.heading("單位編輯");
@@ -284,23 +267,6 @@ impl UnitsEditor {
                 self.has_unsaved_changes = true;
             }
         }
-    }
-
-    /// 依三層 Tag 分組單位技能
-    fn grouped_unit_skills(&self, unit: &UnitTemplate) -> BTreeMap<(Tag, Tag, Tag), Vec<SkillID>> {
-        let mut result = BTreeMap::new();
-        for ((p, s, t), skill_ids) in &self.skill_groups {
-            let filtered: Vec<SkillID> = unit
-                .skills
-                .iter()
-                .filter(|id| skill_ids.contains(id))
-                .cloned()
-                .collect();
-            if !filtered.is_empty() {
-                result.insert((p.clone(), s.clone(), t.clone()), filtered);
-            }
-        }
-        result
     }
 
     /// 檢查所有單位模板中的技能是否存在於技能清單

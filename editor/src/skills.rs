@@ -3,7 +3,7 @@ use eframe::{Frame, egui};
 use egui::{Button, DragValue, ScrollArea, Separator, Ui};
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
@@ -118,7 +118,7 @@ fn is_basic_passive_effect(effect: &Effect) -> bool {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct SkillsData {
     #[serde(flatten)]
-    pub skills: HashMap<SkillID, Skill>,
+    pub skills: BTreeMap<SkillID, Skill>,
 }
 
 impl SkillsData {
@@ -350,7 +350,7 @@ impl Default for SkillsEditor {
     fn default() -> Self {
         Self {
             skills_data: SkillsData {
-                skills: HashMap::new(),
+                skills: BTreeMap::new(),
             },
             has_unsaved_changes_flag: false,
             current_file_path: None,
@@ -423,25 +423,12 @@ impl SkillsEditor {
         ui.add_space(10.0);
 
         ScrollArea::vertical().show(ui, |ui| {
-            let (grouped, unmatched) = group_skills_by_tags(&self.skills_data.skills);
-            // 種族技能
-            let mut basic_passive_skill_ids = Vec::new();
-            for (id, skill) in &self.skills_data.skills {
-                if skill.tags.contains(&Tag::BasicPassive) {
-                    basic_passive_skill_ids.push(id.clone());
-                }
-            }
-
+            let (grouped, unmatched) = group_non_basic_skills_by_tags(&self.skills_data.skills);
             for ((p, s, t), skill_ids) in grouped {
                 let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
                 self.show_skill_category(ui, &title, &skill_ids);
             }
-            self.show_skill_category(ui, "─── 種族技能 ───", &basic_passive_skill_ids);
             // 顯示未完全分組的技能
-            let unmatched: Vec<SkillID> = unmatched
-                .into_iter()
-                .filter(|id| !basic_passive_skill_ids.contains(id))
-                .collect();
             if !unmatched.is_empty() {
                 self.show_skill_category(ui, "─── 未分類技能 ───", &unmatched);
             }
