@@ -60,7 +60,7 @@ pub struct BoardsEditor {
 #[derive(Debug, Default, PartialEq, Clone, Copy)]
 enum BrushMode {
     #[default]
-    None,
+    BoardSettings,
     Terrain,
     Object,
     Unit,
@@ -390,7 +390,7 @@ impl BoardsEditor {
                     self.has_unsaved_changes = true;
                 }
             }
-            BrushMode::Team | BrushMode::Sim | BrushMode::None => {}
+            BrushMode::Team | BrushMode::Sim | BrushMode::BoardSettings => {}
         }
         self.set_status(err_msg, true);
     }
@@ -553,7 +553,7 @@ impl BoardsEditor {
             let mut changed = false;
             ui.horizontal_wrapped(|ui| {
                 for (mode, label) in [
-                    (BrushMode::None, "戰場設定"),
+                    (BrushMode::BoardSettings, "戰場設定"),
                     (BrushMode::Terrain, "地形筆刷"),
                     (BrushMode::Object, "物件筆刷"),
                     (BrushMode::Unit, "單位筆刷"),
@@ -575,7 +575,7 @@ impl BoardsEditor {
             });
 
             match self.brush {
-                BrushMode::None => {
+                BrushMode::BoardSettings => {
                     self.show_board_settings(ui);
                 }
                 BrushMode::Terrain => {

@@ -2,6 +2,8 @@
 
 - 請使用繁體中文
 - 請記得更新程式碼的註解，但是不要刪除仍然正確的註解
+- 註解不要紀錄太瑣碎的細節
+- use 請放在檔案頂端，不要放在 function 內部
 - 強化 data-driven、型別安全、錯誤處理、完整註解等工程標準
 - Rust idiomatic、最佳實踐、嚴格型別檢查
 - 禁止 magic number，magic string
