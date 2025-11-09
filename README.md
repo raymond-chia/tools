@@ -1,5 +1,3 @@
-TO AI: 請查看 AI.md
-
 # Character
 
 - pixel art 要點: https://www.youtube.com/watch?v=Z8earctNBxg

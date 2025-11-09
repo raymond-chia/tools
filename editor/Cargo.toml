@@ -8,9 +8,9 @@ skills-lib = { path = "../core/skills-lib" }
 dialogs-lib = { path = "../core/dialogs-lib" }
 chess-lib = { path = "../core/chess-lib" }
 
-eframe = "0.31.1"
-egui = "0.31.1"
-egui_extras = "0.31.1"
+eframe = { workspace = true }
+egui = { workspace = true }
+egui_extras = { workspace = true }
 rfd = "0.15.3"
 serde = { workspace = true }
 toml = { workspace = true }

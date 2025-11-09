@@ -39,51 +39,8 @@ struct EditorApp {
     show_mode_switch_confirmation: bool,
 }
 
-impl EditorApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // 設定字體以支援繁體中文
-        let mut fonts = FontDefinitions::default();
-
-        // 嘗試載入專案內的中文字型（如 fonts/NotoSans.ttf）
-        match std::fs::read("fonts/NotoSans.ttf") {
-            Ok(font_data) => {
-                fonts.font_data.insert(
-                    "noto_sans".to_owned(),
-                    FontData::from_owned(font_data).into(),
-                );
-
-                // 將中文字體添加到 Proportional 字體族中的首位
-                fonts
-                    .families
-                    .get_mut(&FontFamily::Proportional)
-                    .unwrap()
-                    .insert(0, "noto_sans".to_owned());
-            }
-            Err(err) => {
-                println!("無法載入中文字體: {}", err);
-                // 這裡可以加載備用字體或繼續使用預設字體
-            }
-        }
-
-        // 設置字體
-        cc.egui_ctx.set_fonts(fonts);
-
-        // 設定初始字型大小和樣式
-        let mut style = (*cc.egui_ctx.style()).clone();
-        style.text_styles.insert(
-            egui::TextStyle::Body,
-            egui::FontId::new(24.0, egui::FontFamily::Proportional),
-        );
-        style.text_styles.insert(
-            egui::TextStyle::Heading,
-            egui::FontId::new(32.0, egui::FontFamily::Proportional),
-        );
-        style.text_styles.insert(
-            egui::TextStyle::Button,
-            egui::FontId::new(24.0, egui::FontFamily::Proportional),
-        );
-        cc.egui_ctx.set_style(style);
-
+impl Default for EditorApp {
+    fn default() -> Self {
         Self {
             editor_mode: EditorMode::Skills, // 默認為技能編輯器
             skills_editor: SkillsEditor::new(),
@@ -96,7 +53,9 @@ impl EditorApp {
             show_mode_switch_confirmation: false,
         }
     }
+}
 
+impl EditorApp {
     fn show_mode_selector(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             for (mode, label) in [
@@ -236,6 +195,51 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "遊戲編輯器",
         options,
-        Box::new(|cc| Ok(Box::new(EditorApp::new(cc)))),
+        Box::new(|cc| {
+            // 設定字體以支援繁體中文
+            let mut fonts = FontDefinitions::default();
+
+            // 嘗試載入專案內的中文字型（如 fonts/NotoSans.ttf）
+            match std::fs::read("fonts/NotoSans.ttf") {
+                Ok(font_data) => {
+                    fonts.font_data.insert(
+                        "noto_sans".to_owned(),
+                        FontData::from_owned(font_data).into(),
+                    );
+
+                    // 將中文字體添加到 Proportional 字體族中的首位
+                    fonts
+                        .families
+                        .get_mut(&FontFamily::Proportional)
+                        .unwrap()
+                        .insert(0, "noto_sans".to_owned());
+                }
+                Err(err) => {
+                    println!("無法載入中文字體: {}", err);
+                    // 這裡可以加載備用字體或繼續使用預設字體
+                }
+            }
+
+            // 設置字體
+            cc.egui_ctx.set_fonts(fonts);
+
+            // 設定初始字型大小和樣式
+            let mut style = (*cc.egui_ctx.style()).clone();
+            style.text_styles.insert(
+                egui::TextStyle::Body,
+                egui::FontId::new(24.0, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Heading,
+                egui::FontId::new(32.0, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Button,
+                egui::FontId::new(24.0, egui::FontFamily::Proportional),
+            );
+            cc.egui_ctx.set_style(style);
+
+            Ok(Box::new(EditorApp::default()))
+        }),
     )
 }
