@@ -160,6 +160,8 @@ pub struct HeightMapApp {
     seed: u32,
     /// 最低高度
     min_height: i32,
+    /// 最高高度
+    max_height: i32,
     /// 低頻層縮放
     low_scale: f64,
     /// 中頻層縮放
@@ -194,6 +196,7 @@ impl Default for HeightMapApp {
         let seed = 0;
         // 推薦參數
         let min_height = -2000;
+        let max_height = HIGHEST_MOUNTAIN;
         let low_scale = 80.0;
         let mid_scale = 50.0;
         let high_scale = 10.0;
@@ -206,6 +209,7 @@ impl Default for HeightMapApp {
             tab: HeightMapTab::Noise,
             seed,
             min_height,
+            max_height,
             low_scale,
             mid_scale,
             high_scale,
@@ -264,7 +268,7 @@ impl HeightMapApp {
 
     /// 將 0.0~1.0 的高度轉換為真實高度
     fn to_real_height(&self, h: f64) -> f64 {
-        h * (HIGHEST_MOUNTAIN - self.min_height) as f64 + self.min_height as f64
+        h * (self.max_height - self.min_height) as f64 + self.min_height as f64
     }
 }
 
@@ -314,10 +318,6 @@ impl HeightMapApp {
     fn ui_parameter_controls(&mut self, ui: &mut egui::Ui) -> bool {
         let mut regen = false;
 
-        // 種子參數
-        ui.label("Seed:");
-        regen |= ui.add(egui::DragValue::new(&mut self.seed)).changed();
-
         // 地圖尺寸
         ui.label("Width:");
         regen |= ui
@@ -329,10 +329,23 @@ impl HeightMapApp {
             .changed();
 
         ui.separator();
+
+        // 種子參數
+        ui.label("Seed:");
+        regen |= ui.add(egui::DragValue::new(&mut self.seed)).changed();
+
+        ui.separator();
+
         ui.label("最低高度:");
         regen |= ui
             .add(egui::DragValue::new(&mut self.min_height).speed(10))
             .changed();
+        ui.label("最高高度:");
+        regen |= ui
+            .add(egui::DragValue::new(&mut self.max_height).speed(10))
+            .changed();
+
+        ui.separator();
 
         ui.label("低頻層\n(大尺度地形):");
         ui.label("Scale:");
