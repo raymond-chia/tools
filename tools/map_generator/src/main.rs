@@ -1,6 +1,18 @@
 use egui::{FontData, FontDefinitions, FontFamily};
 use noise::{NoiseFn, Perlin};
 
+/// 地形分級（依據高度）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerrainType {
+    DeepWater,    // 深水
+    ShallowWater, // 淺水
+    WadingZone,   // 可涉水通過
+    Plain,        // 平原
+    Hill,         // 丘陵
+    Mountain,     // 山地
+    HighMountain, // 高山
+}
+
 /// 柯本氣候分類
 #[derive(Debug)]
 pub enum KoppenClimate {
@@ -14,6 +26,9 @@ pub enum KoppenClimate {
     EF,  // 極地冰原氣候
 }
 
+/// 人類攜帶氧氣筒最深抵達 332 米
+const LOWEST_HUMAN_REACHABLE: i32 = -300;
+const LOWEST_WADING_ZONE: i32 = -1;
 const SEA_LEVEL: i32 = 0;
 const LOWEST_HILL: i32 = 300;
 const LOWEST_MOUNTAIN: i32 = 600;
@@ -385,7 +400,7 @@ impl HeightMapApp {
         )
     }
 
-    /// 顯示地形（陸地/海洋）二值圖
+    /// 顯示地形分級顏色圖
     fn ui_terrain_display(&self, ui: &mut egui::Ui) -> egui::Response {
         let image = egui::ColorImage::from_rgb(
             [self.width, self.height],
@@ -394,13 +409,8 @@ impl HeightMapApp {
                 .iter()
                 .map(|&h| {
                     let real_height = self.to_real_height(h);
-                    if real_height < SEA_LEVEL as f64 {
-                        // 海洋：藍色
-                        [40u8, 120u8, 220u8]
-                    } else {
-                        // 陸地：綠色
-                        [60u8, 180u8, 80u8]
-                    }
+                    let terrain = TerrainType::height_to_terrain_type(real_height);
+                    TerrainType::terrain_type_to_color(terrain)
                 })
                 .flatten()
                 .collect::<Vec<_>>(),
@@ -443,6 +453,43 @@ impl HeightMapApp {
             ui.label(format!("對應實際高度: {:.1}", real_height));
         } else {
             ui.label("尚未選取任何點");
+        }
+    }
+}
+
+impl TerrainType {
+    /// 將實際高度對應到地形分級
+    fn height_to_terrain_type(height: f64) -> Self {
+        if height < LOWEST_HUMAN_REACHABLE as f64 {
+            Self::DeepWater
+        } else if height < LOWEST_WADING_ZONE as f64 {
+            Self::ShallowWater
+        } else if height < SEA_LEVEL as f64 {
+            Self::WadingZone
+        } else if height < LOWEST_HILL as f64 {
+            Self::Plain
+        } else if height < LOWEST_MOUNTAIN as f64 {
+            Self::Hill
+        } else if height < HIGHEST_HUMAN_REACHABLE as f64 {
+            Self::Mountain
+        } else {
+            Self::HighMountain
+        }
+    }
+
+    /// 地形分級對應顏色（RGB）
+    fn terrain_type_to_color(terrain: Self) -> [u8; 3] {
+        match terrain {
+            // 深水：更深更偏紫藍，提升與淺水對比
+            Self::DeepWater => [0x1A, 0x23, 0x7E], // #009 深紫藍
+            // 淺水：偏青綠，與深水、涉水區拉開色差
+            Self::ShallowWater => [0x4D, 0xD0, 0xE1], // #00F 青綠
+            // 涉水區：灰藍，與平原綠色明顯區隔
+            Self::WadingZone => [0x90, 0xA4, 0xAE], // #0FF 灰藍
+            Self::Plain => [0x6C, 0xBF, 0x3C],      // #0F0 綠
+            Self::Hill => [0xE1, 0xC1, 0x6E],       // #AA0 黃褐
+            Self::Mountain => [0xA0, 0x52, 0x2D],   // #A60 棕
+            Self::HighMountain => [0xFF, 0xFF, 0xFF], // #FFF 白
         }
     }
 }
