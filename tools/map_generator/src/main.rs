@@ -182,8 +182,10 @@ pub struct HeightMapApp {
     /// 地圖高度
     height: usize,
 
-    /// 高度資料（線性陣列，長度為 width*height）
-    heights: Vec<f64>,
+    /// 原始 Perlin 噪聲高度（0~1）
+    noise_heights: Vec<f64>,
+    /// 實際高度
+    terrain_heights: Vec<f64>,
 
     /// 使用者選取的點 (x, y, 高度)
     selected: Option<(usize, usize, f64)>,
@@ -219,7 +221,8 @@ impl Default for HeightMapApp {
             is_center_mask_enabled,
             width,
             height,
-            heights: vec![0.0; width * height],
+            noise_heights: vec![0.0; width * height],
+            terrain_heights: vec![0.0; width * height],
             selected: None,
         };
         app.regenerate();
@@ -252,7 +255,8 @@ impl HeightMapApp {
             self.high_weight,
         );
 
-        self.heights = (0..self.width * self.height)
+        // 產生 noise heights（0~1）
+        self.noise_heights = (0..self.width * self.height)
             .map(|i| {
                 let x = (i % self.width) as f64;
                 let y = (i / self.width) as f64;
@@ -263,6 +267,13 @@ impl HeightMapApp {
                 };
                 generator.get_height_with_mask(x, y, mask)
             })
+            .collect();
+
+        // 產生實際高度 vec（根據 min_height/max_height）
+        self.terrain_heights = self
+            .noise_heights
+            .iter()
+            .map(|&h| self.to_real_height(h))
             .collect();
     }
 
@@ -280,7 +291,8 @@ impl eframe::App for HeightMapApp {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 let regen = self.ui_parameter_controls(ui);
                 if regen {
-                    self.heights = vec![0.0; self.width * self.height];
+                    self.noise_heights = vec![0.0; self.width * self.height];
+                    self.terrain_heights = vec![0.0; self.width * self.height];
                     self.regenerate();
                     self.selected = None;
                 }
@@ -389,7 +401,7 @@ impl HeightMapApp {
         let image = egui::ColorImage::from_rgb(
             [self.width, self.height],
             &self
-                .heights
+                .noise_heights
                 .iter()
                 .flat_map(|&h| {
                     let v = (h * 255.0).clamp(0.0, 255.0) as u8;
@@ -418,11 +430,10 @@ impl HeightMapApp {
         let image = egui::ColorImage::from_rgb(
             [self.width, self.height],
             &self
-                .heights
+                .terrain_heights
                 .iter()
                 .map(|&h| {
-                    let real_height = self.to_real_height(h);
-                    let terrain = TerrainType::height_to_terrain_type(real_height);
+                    let terrain = TerrainType::height_to_terrain_type(h);
                     TerrainType::terrain_type_to_color(terrain)
                 })
                 .flatten()
@@ -450,7 +461,7 @@ impl HeightMapApp {
                 let py = ((pos.y - response.rect.top()) / MAP_POINT_SIZE).floor() as usize;
                 if px < self.width && py < self.height {
                     let idx = py * self.width + px;
-                    let h = self.heights[idx];
+                    let h = self.noise_heights[idx];
                     self.selected = Some((px, py, h));
                 }
             }
