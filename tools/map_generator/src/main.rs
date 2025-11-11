@@ -149,6 +149,7 @@ impl HeightGenerator {
 #[derive(PartialEq)]
 pub enum HeightMapTab {
     Noise,
+    LandWater,
     Terrain,
 }
 
@@ -187,38 +188,27 @@ pub struct HeightMapApp {
     /// 實際高度
     terrain_heights: Vec<f64>,
 
-    /// 使用者選取的點 (x, y, 高度)
-    selected: Option<(usize, usize, f64)>,
+    /// 使用者選取的點 (x, y)
+    selected: Option<(usize, usize)>,
 }
 
 impl Default for HeightMapApp {
     fn default() -> Self {
         let width = 375;
         let height = 240;
-        let seed = 0;
-        // 推薦參數
-        let min_height = -2000;
-        let max_height = HIGHEST_MOUNTAIN;
-        let low_scale = 80.0;
-        let mid_scale = 50.0;
-        let high_scale = 10.0;
-        let low_weight: u8 = 80;
-        let mid_weight: u8 = 15;
-        let high_weight: u8 = 5;
-        let is_center_mask_enabled = true; // 預設啟用中央遮罩
 
         let mut app = Self {
             tab: HeightMapTab::Noise,
-            seed,
-            min_height,
-            max_height,
-            low_scale,
-            mid_scale,
-            high_scale,
-            low_weight,
-            mid_weight,
-            high_weight,
-            is_center_mask_enabled,
+            seed: 0,
+            min_height: -2000,
+            max_height: HIGHEST_MOUNTAIN,
+            low_scale: 80.0,
+            mid_scale: 50.0,
+            high_scale: 10.0,
+            low_weight: 80,
+            mid_weight: 15,
+            high_weight: 5,
+            is_center_mask_enabled: true,
             width,
             height,
             noise_heights: vec![0.0; width * height],
@@ -231,10 +221,21 @@ impl Default for HeightMapApp {
 }
 
 impl HeightMapApp {
+    fn get(&self, vec: &Vec<f64>, x: usize, y: usize) -> Option<f64> {
+        if x < self.width && y < self.height {
+            Some(vec[y * self.width + x])
+        } else {
+            None
+        }
+    }
+
     /// 計算中央遮罩值（可模組化擴充）
-    fn center_mask(x: f64, y: f64, width: usize, height: usize) -> f64 {
-        let cx = width as f64 / 2.0;
-        let cy = height as f64 / 2.0;
+    fn center_mask(&self, x: f64, y: f64) -> f64 {
+        if !self.is_center_mask_enabled {
+            return 1.0;
+        }
+        let cx = self.width as f64 / 2.0;
+        let cy = self.height as f64 / 2.0;
         let r = cx.min(cy) * 0.8;
         let p = 2.0; // 遮罩指數，2.0 為平滑過渡
         let dx = x - cx;
@@ -260,11 +261,7 @@ impl HeightMapApp {
             .map(|i| {
                 let x = (i % self.width) as f64;
                 let y = (i / self.width) as f64;
-                let mask = if self.is_center_mask_enabled {
-                    Self::center_mask(x, y, self.width, self.height)
-                } else {
-                    1.0
-                };
+                let mask = self.center_mask(x, y);
                 generator.get_height_with_mask(x, y, mask)
             })
             .collect();
@@ -275,6 +272,10 @@ impl HeightMapApp {
             .iter()
             .map(|&h| self.to_real_height(h))
             .collect();
+    }
+
+    fn is_land(&self, noise: f64) -> bool {
+        self.to_real_height(noise) >= SEA_LEVEL as f64
     }
 
     /// 將 0.0~1.0 的高度轉換為真實高度
@@ -307,6 +308,7 @@ impl eframe::App for HeightMapApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, HeightMapTab::Noise, "噪音");
+                ui.selectable_value(&mut self.tab, HeightMapTab::LandWater, "海陸");
                 ui.selectable_value(&mut self.tab, HeightMapTab::Terrain, "地形");
             });
             match self.tab {
@@ -314,6 +316,10 @@ impl eframe::App for HeightMapApp {
                     // 顯示高度圖並取得互動回應
                     let response = self.ui_heightmap_display(ui);
                     // 處理點擊選取
+                    self.handle_selection(&response);
+                }
+                HeightMapTab::LandWater => {
+                    let response = self.ui_landwater_display(ui);
                     self.handle_selection(&response);
                 }
                 HeightMapTab::Terrain => {
@@ -395,23 +401,15 @@ impl HeightMapApp {
         regen
     }
 
-    /// 顯示高度圖，回傳 egui::Response 以供互動
-    fn ui_heightmap_display(&self, ui: &mut egui::Ui) -> egui::Response {
-        // 高度圖
-        let image = egui::ColorImage::from_rgb(
-            [self.width, self.height],
-            &self
-                .noise_heights
-                .iter()
-                .flat_map(|&h| {
-                    let v = (h * 255.0).clamp(0.0, 255.0) as u8;
-                    vec![v, v, v]
-                })
-                .collect::<Vec<_>>(),
-        );
+    fn ui_display(
+        &self,
+        ui: &mut egui::Ui,
+        map_name: &str,
+        image: egui::ColorImage,
+    ) -> egui::Response {
         let texture = ui
             .ctx()
-            .load_texture("heightmap", image, egui::TextureOptions::NEAREST);
+            .load_texture(map_name, image, egui::TextureOptions::NEAREST);
 
         // 支援點擊選取
         let img_size = [
@@ -425,32 +423,52 @@ impl HeightMapApp {
         )
     }
 
-    /// 顯示地形分級顏色圖
+    fn ui_heightmap_display(&self, ui: &mut egui::Ui) -> egui::Response {
+        let image = egui::ColorImage::from_rgb(
+            [self.width, self.height],
+            &self
+                .noise_heights
+                .iter()
+                .flat_map(|&h| {
+                    let v = (h * 255.0).clamp(0.0, 255.0) as u8;
+                    vec![v, v, v]
+                })
+                .collect::<Vec<_>>(),
+        );
+        self.ui_display(ui, "noisemap", image)
+    }
+
+    fn ui_landwater_display(&self, ui: &mut egui::Ui) -> egui::Response {
+        let image = egui::ColorImage::from_rgb(
+            [self.width, self.height],
+            &self
+                .noise_heights
+                .iter()
+                .flat_map(|&h| {
+                    if self.is_land(h) {
+                        TerrainType::terrain_type_to_color(TerrainType::Mountain)
+                    } else {
+                        TerrainType::terrain_type_to_color(TerrainType::ShallowWater)
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+        self.ui_display(ui, "landwatermap", image)
+    }
+
     fn ui_terrain_display(&self, ui: &mut egui::Ui) -> egui::Response {
         let image = egui::ColorImage::from_rgb(
             [self.width, self.height],
             &self
                 .terrain_heights
                 .iter()
-                .map(|&h| {
+                .flat_map(|&h| {
                     let terrain = TerrainType::height_to_terrain_type(h);
                     TerrainType::terrain_type_to_color(terrain)
                 })
-                .flatten()
                 .collect::<Vec<_>>(),
         );
-        let texture = ui
-            .ctx()
-            .load_texture("terrainmap", image, egui::TextureOptions::NEAREST);
-        let img_size = [
-            self.width as f32 * MAP_POINT_SIZE,
-            self.height as f32 * MAP_POINT_SIZE,
-        ];
-        ui.add(
-            egui::Image::new(&texture)
-                .fit_to_exact_size(img_size.into())
-                .sense(egui::Sense::click()),
-        )
+        self.ui_display(ui, "terrainmap", image)
     }
 
     /// 處理高度圖點擊選取，更新 self.selected
@@ -460,9 +478,7 @@ impl HeightMapApp {
                 let px = ((pos.x - response.rect.left()) / MAP_POINT_SIZE).floor() as usize;
                 let py = ((pos.y - response.rect.top()) / MAP_POINT_SIZE).floor() as usize;
                 if px < self.width && py < self.height {
-                    let idx = py * self.width + px;
-                    let h = self.noise_heights[idx];
-                    self.selected = Some((px, py, h));
+                    self.selected = Some((px, py));
                 }
             }
         }
@@ -470,11 +486,11 @@ impl HeightMapApp {
 
     /// 顯示目前選取點的資訊
     fn ui_selected_info(&self, ui: &mut egui::Ui) {
-        if let Some((x, y, h)) = self.selected {
-            ui.separator();
-            ui.label(format!("選取座標: ({}, {})，數值: {:.3}", x, y, h));
-            let real_height = self.to_real_height(h);
-            ui.label(format!("對應實際高度: {:.1}", real_height));
+        if let Some((x, y)) = self.selected {
+            let noise = self
+                .get(&self.noise_heights, x, y)
+                .expect("程式碼邏輯問題: 非法座標");
+            ui.label(format!("選取座標: ({}, {})，數值: {:.3}", x, y, noise));
         } else {
             ui.label("尚未選取任何點");
         }
