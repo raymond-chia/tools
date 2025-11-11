@@ -1,488 +1,471 @@
 use egui::{FontData, FontDefinitions, FontFamily};
-use noise::{Fbm, NoiseFn, Perlin};
-use rand::Rng;
-use serde::{Deserialize, Serialize};
+use noise::{NoiseFn, Perlin};
 
 /// 柯本氣候分類
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug)]
 pub enum KoppenClimate {
     Af,  // 熱帶雨林
-    Am,  // 熱帶季風
-    Aw,  // 熱帶草原
-    BWh, // 熱帶沙漠
-    BWk, // 溫帶沙漠
-    BSh, // 熱帶半乾旱
-    BSk, // 溫帶半乾旱
-    Csa, // 地中海式溫暖夏
-    Csb, // 地中海式溫和夏
-    Cwa, // 副熱帶季風溫暖夏
-    Cwb, // 副熱帶季風溫和夏
-    Cfa, // 副熱帶濕潤溫暖夏
-    Cfb, // 海洋性溫和夏
-    Dfa, // 大陸性溫暖夏
-    Dfb, // 大陸性溫和夏
-    Dfc, // 大陸性涼夏
-    Dfd, // 大陸性極端涼夏
-    Dwa, // 大陸性季風溫暖夏
-    Dwb, // 大陸性季風溫和夏
-    Dwc, // 大陸性季風涼夏
-    Dwd, // 大陸性季風極端涼夏
-    ET,  // 凍原
-    EF,  // 冰川
+    Aw,  // 熱帶乾濕季氣候
+    BWh, // 熱帶沙漠氣候
+    BWk, // 溫帶沙漠氣候
+    Cw,  // 溫帶海洋性季風氣候
+    Df,  // 暖溫帶濕潤氣候
+    ET,  // 苔原氣候
+    EF,  // 極地冰原氣候
 }
 
-/// 地圖格子
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Tile {
-    pub height: f64,        // 高度，0-1
-    pub temperature: f64,   // 溫度，攝氏度
-    pub precipitation: f64, // 降雨量，mm/年
-    pub climate: KoppenClimate,
-    pub is_ocean: bool, // 是否為海洋
+const SEA_LEVEL: i32 = 0;
+const LOWEST_HILL: i32 = 300;
+const LOWEST_MOUNTAIN: i32 = 600;
+const HIGHEST_HUMAN_REACHABLE: i32 = 4000;
+const HIGHEST_MOUNTAIN: i32 = 8000;
+
+/// 圖顯示縮放倍率（畫素放大用）
+const MAP_POINT_SIZE: f32 = 3.0;
+
+/// 多層 Perlin 噪聲高度產生器
+/// 使用三層獨立 Perlin 噪聲（低、中、高頻）搭配權重，產生更自然的海島地形
+pub struct HeightGenerator {
+    /// 低頻層（大尺度地形：海洋盆地、大陸）
+    perlin_low: Perlin,
+    /// 中頻層（中尺度地形：島嶼、山脈）
+    perlin_mid: Perlin,
+    /// 高頻層（小尺度細節：山峰紋理）
+    perlin_high: Perlin,
+
+    /// 低頻層的縮放係數，數值越大地形越平坦
+    low_scale: f64,
+    /// 中頻層的縮放係數
+    mid_scale: f64,
+    /// 高頻層的縮放係數
+    high_scale: f64,
+
+    /// 低頻層的權重（0-100，使用 u8 表示）
+    low_weight: u8,
+    /// 中頻層的權重（0-100）
+    mid_weight: u8,
+    /// 高頻層的權重（0-100）
+    high_weight: u8,
 }
 
-/// 地圖
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Map {
-    pub width: usize,
-    pub height: usize,
-    pub tiles: Vec<Tile>,
-    pub min_lat: f64, // 最小緯度
-    pub max_lat: f64, // 最大緯度
-}
+impl HeightGenerator {
+    /// 建立新的高度產生器
+    ///
+    /// # 參數
+    /// - `seed`: 隨機種子（用於初始化所有 Perlin 層）
+    /// - `low_scale`: 低頻層縮放（推薦 150-250）
+    /// - `mid_scale`: 中頻層縮放（推薦 40-80）
+    /// - `high_scale`: 高頻層縮放（推薦 8-15）
+    /// - `low_weight`: 低頻權重（0-100，推薦 50-70）
+    /// - `mid_weight`: 中頻權重（0-100，推薦 20-40）
+    /// - `high_weight`: 高頻權重（0-100，推薦 5-15）
+    pub fn new(
+        seed: u32,
+        low_scale: f64,
+        mid_scale: f64,
+        high_scale: f64,
+        low_weight: u8,
+        mid_weight: u8,
+        high_weight: u8,
+    ) -> Self {
+        // 使用不同種子初始化各層，避免三層完全相同
+        let perlin_low = Perlin::new(seed);
+        let perlin_mid = Perlin::new(seed.wrapping_add(1));
+        let perlin_high = Perlin::new(seed.wrapping_add(2));
 
-const OCEAN_HEIGHT: f64 = 0.35;
-const MOUNTAIN_HEIGHT: f64 = 0.7;
-
-impl Map {
-    pub fn new(width: usize, height: usize, min_lat: f64, max_lat: f64) -> Self {
         Self {
+            perlin_low,
+            perlin_mid,
+            perlin_high,
+            low_scale,
+            mid_scale,
+            high_scale,
+            low_weight,
+            mid_weight,
+            high_weight,
+        }
+    }
+
+    /// 取得 (x, y) 座標的高度值，範圍為 0.0 ~ 1.0
+    ///
+    /// 使用加權疊加三層噪聲：
+    /// 高度 = 低頻 × low_weight + 中頻 × mid_weight + 高頻 × high_weight
+    /// 計算指定座標的高度值，允許對低頻層（大尺度地形）套用遮罩。
+    ///
+    /// - `x`, `y`：地圖座標。
+    /// - `low_mask`：低頻層遮罩（0.0~1.0，通常依距離中心遞減，僅影響大尺度地形分布）。
+    ///
+    /// 僅低頻層乘以遮罩，確保島嶼集中於中央但不強制圓形或中心最高。
+    /// 中頻與高頻層維持原噪聲，保留細節與隨機性。
+    /// 回傳值範圍為 0.0~1.0。
+    pub fn get_height_with_mask(&self, x: f64, y: f64, low_mask: f64) -> f64 {
+        let low = ((self
+            .perlin_low
+            .get([x / self.low_scale, y / self.low_scale])
+            + 1.0)
+            * 0.5)
+            .clamp(0.0, 1.0)
+            * low_mask;
+        let mid = ((self
+            .perlin_mid
+            .get([x / self.mid_scale, y / self.mid_scale])
+            + 1.0)
+            * 0.5)
+            .clamp(0.0, 1.0);
+        let high = ((self
+            .perlin_high
+            .get([x / self.high_scale, y / self.high_scale])
+            + 1.0)
+            * 0.5)
+            .clamp(0.0, 1.0);
+
+        let total_weight = (self.low_weight + self.mid_weight + self.high_weight) as f64;
+        let total_weight = total_weight.max(1.0);
+        let combined = (low * self.low_weight as f64
+            + mid * self.mid_weight as f64
+            + high * self.high_weight as f64)
+            / total_weight;
+
+        combined.clamp(0.0, 1.0)
+    }
+}
+
+/// egui App：高度地圖視覺化
+#[derive(PartialEq)]
+pub enum HeightMapTab {
+    Noise,
+    Terrain,
+}
+
+pub struct HeightMapApp {
+    /// 當前顯示的 tab
+    tab: HeightMapTab,
+
+    /// 隨機種子
+    seed: u32,
+    /// 最低高度
+    min_height: i32,
+    /// 低頻層縮放
+    low_scale: f64,
+    /// 中頻層縮放
+    mid_scale: f64,
+    /// 高頻層縮放
+    high_scale: f64,
+    /// 低頻權重（0-100）
+    low_weight: u8,
+    /// 中頻權重（0-100）
+    mid_weight: u8,
+    /// 高頻權重（0-100）
+    high_weight: u8,
+    /// 是否啟用中央遮罩（讓島嶼集中於中央）
+    is_center_mask_enabled: bool,
+
+    /// 地圖寬度
+    width: usize,
+    /// 地圖高度
+    height: usize,
+
+    /// 高度資料（線性陣列，長度為 width*height）
+    heights: Vec<f64>,
+
+    /// 使用者選取的點 (x, y, 高度)
+    selected: Option<(usize, usize, f64)>,
+}
+
+impl Default for HeightMapApp {
+    fn default() -> Self {
+        let width = 375;
+        let height = 240;
+        let seed = 0;
+        // 推薦參數
+        let min_height = -2000;
+        let low_scale = 80.0;
+        let mid_scale = 50.0;
+        let high_scale = 10.0;
+        let low_weight: u8 = 80;
+        let mid_weight: u8 = 15;
+        let high_weight: u8 = 5;
+        let is_center_mask_enabled = true; // 預設啟用中央遮罩
+
+        let mut app = Self {
+            tab: HeightMapTab::Noise,
+            seed,
+            min_height,
+            low_scale,
+            mid_scale,
+            high_scale,
+            low_weight,
+            mid_weight,
+            high_weight,
+            is_center_mask_enabled,
             width,
             height,
-            tiles: vec![
-                Tile {
-                    height: 0.0,
-                    temperature: 0.0,
-                    precipitation: 0.0,
-                    climate: KoppenClimate::Af,
-                    is_ocean: false,
+            heights: vec![0.0; width * height],
+            selected: None,
+        };
+        app.regenerate();
+        app
+    }
+}
+
+impl HeightMapApp {
+    /// 計算中央遮罩值（可模組化擴充）
+    fn center_mask(x: f64, y: f64, width: usize, height: usize) -> f64 {
+        let cx = width as f64 / 2.0;
+        let cy = height as f64 / 2.0;
+        let r = cx.min(cy) * 0.8;
+        let p = 2.0; // 遮罩指數，2.0 為平滑過渡
+        let dx = x - cx;
+        let dy = y - cy;
+        let d = (dx * dx + dy * dy).sqrt();
+        (1.0 - (d / r).powf(p)).clamp(0.0, 1.0)
+    }
+
+    /// 重新產生高度圖資料
+    fn regenerate(&mut self) {
+        let generator = HeightGenerator::new(
+            self.seed,
+            self.low_scale,
+            self.mid_scale,
+            self.high_scale,
+            self.low_weight,
+            self.mid_weight,
+            self.high_weight,
+        );
+
+        self.heights = (0..self.width * self.height)
+            .map(|i| {
+                let x = (i % self.width) as f64;
+                let y = (i / self.width) as f64;
+                let mask = if self.is_center_mask_enabled {
+                    Self::center_mask(x, y, self.width, self.height)
+                } else {
+                    1.0
                 };
-                width * height
-            ],
-            min_lat,
-            max_lat,
-        }
+                generator.get_height_with_mask(x, y, mask)
+            })
+            .collect();
     }
 
-    pub fn get(&self, x: usize, y: usize) -> &Tile {
-        &self.tiles[y * self.width + x]
-    }
-
-    pub fn get_mut(&mut self, x: usize, y: usize) -> &mut Tile {
-        &mut self.tiles[y * self.width + x]
-    }
-
-    /// 產生高度
-    pub fn generate_height(&mut self, seed: u32) {
-        let fbm = Fbm::<Perlin>::new(seed);
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let nx = x as f64 / self.width as f64 * 4.0;
-                let ny = y as f64 / self.height as f64 * 4.0;
-                let value = fbm.get([nx, ny]);
-                let height = (value + 1.0) / 2.0; // 0-1
-                let tile = self.get_mut(x, y);
-                tile.height = height;
-                tile.is_ocean = height < OCEAN_HEIGHT;
-            }
-        }
-    }
-
-    /// 計算緯度
-    /// 計算緯度：y=0 為地圖上方（最大緯度），y=height-1 為地圖下方（最小緯度）
-    fn latitude(&self, y: usize) -> f64 {
-        let lat_range = self.max_lat - self.min_lat;
-        self.max_lat - (y as f64 / (self.height - 1) as f64) * lat_range
-    }
-
-    /// 計算溫度
-    pub fn generate_temperature(&mut self) {
-        for y in 0..self.height {
-            let lat = self.latitude(y);
-            // 簡單線性緯度溫度模型：
-            // 30.0 表示赤道基準溫度（攝氏 30 度）
-            // 50.0 表示從赤道到極地（90 度）溫度遞減的幅度（總共降 50 度）
-            // 當 lat = 0（赤道）=> base_temp = 30.0
-            // 當 lat = ±90（極地）=> base_temp = -20.0
-            let base_temp = 30.0 - (lat.abs() / 90.0) * 50.0;
-            for x in 0..self.width {
-                let height_effect = -self.get(x, y).height * 20.0; // 高度降低溫度
-                let temp = base_temp + height_effect;
-                self.get_mut(x, y).temperature = temp;
-            }
-        }
-    }
-
-    /// 計算降雨
-    pub fn generate_precipitation(&mut self) {
-        // 簡單實作：距離海洋遠近
-        // 假設左邊和右邊是海洋
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let dist_to_left = x as f64;
-                let dist_to_right = (self.width - 1 - x) as f64;
-                let min_dist = dist_to_left.min(dist_to_right);
-                // 山脈阻擋：如果高度 > 0.7，阻擋降雨
-                let mut blocked = false;
-                if x < self.width / 2 {
-                    // 從左邊來
-                    for i in 0..x {
-                        if self.get(i, y).height > MOUNTAIN_HEIGHT {
-                            blocked = true;
-                            break;
-                        }
-                    }
-                } else {
-                    // 從右邊來
-                    for i in (x + 1)..self.width {
-                        if self.get(i, y).height > MOUNTAIN_HEIGHT {
-                            blocked = true;
-                            break;
-                        }
-                    }
-                }
-                let precip = if blocked {
-                    500.0
-                } else {
-                    2000.0 - min_dist * 50.0
-                };
-                self.get_mut(x, y).precipitation = precip.max(0.0);
-            }
-        }
-    }
-
-    /// 分類氣候
-    pub fn classify_climate(&mut self) {
-        for y in 0..self.height {
-            for x in 0..self.width {
-                let tile = self.get_mut(x, y);
-                let temp = tile.temperature;
-                let precip = tile.precipitation;
-
-                // 簡單柯本分類
-                if temp < -10.0 {
-                    tile.climate = KoppenClimate::EF;
-                } else if temp < 0.0 {
-                    tile.climate = KoppenClimate::ET;
-                } else if temp < 10.0 {
-                    if precip < 250.0 {
-                        tile.climate = KoppenClimate::BWk;
-                    } else {
-                        tile.climate = KoppenClimate::Dfc;
-                    }
-                } else if temp < 20.0 {
-                    if precip < 500.0 {
-                        tile.climate = KoppenClimate::BSk;
-                    } else if precip < 1000.0 {
-                        tile.climate = KoppenClimate::Cfb;
-                    } else {
-                        tile.climate = KoppenClimate::Cfa;
-                    }
-                } else {
-                    if precip < 500.0 {
-                        tile.climate = KoppenClimate::BWh;
-                    } else if precip < 1500.0 {
-                        tile.climate = KoppenClimate::Aw;
-                    } else {
-                        tile.climate = KoppenClimate::Af;
-                    }
-                }
-            }
-        }
-    }
-
-    /// 產生完整地圖
-    pub fn generate(&mut self, seed: u32) {
-        self.generate_height(seed);
-        self.generate_temperature();
-        self.generate_precipitation();
-        self.classify_climate();
+    /// 將 0.0~1.0 的高度轉換為真實高度
+    fn to_real_height(&self, h: f64) -> f64 {
+        h * (HIGHEST_MOUNTAIN - self.min_height) as f64 + self.min_height as f64
     }
 }
 
-/// 視圖模式
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ViewMode {
-    Koppen,
-    Height,
-    Temperature,
-    Precipitation,
-}
-
-/// 應用
-#[derive(Debug)]
-pub struct MapGeneratorApp {
-    pub map: Map,
-    pub seed: u32,
-    pub view_mode: ViewMode,
-    pub selected_tile: Option<(usize, usize)>,
-    pub min_lat_input: String,
-    pub max_lat_input: String,
-    pub width_input: String,
-    pub height_input: String,
-}
-
-impl MapGeneratorApp {
-    pub fn new() -> Self {
-        let width = 100;
-        let height = 100;
-        let min_lat = -60.0;
-        let max_lat = 60.0;
-        let mut map = Map::new(width, height, min_lat, max_lat);
-        let seed = rand::rng().random::<u32>();
-        map.generate(seed);
-        Self {
-            map,
-            seed,
-            view_mode: ViewMode::Koppen,
-            selected_tile: None,
-            min_lat_input: format!("{:.1}", min_lat),
-            max_lat_input: format!("{:.1}", max_lat),
-            width_input: format!("{}", width),
-            height_input: format!("{}", height),
-        }
-    }
-
-    /// 隨機產生新 seed
-    pub fn randomize_seed(&mut self) {
-        self.seed = rand::rng().random::<u32>();
-        self.map.generate(self.seed);
-        self.selected_tile = None;
-    }
-
-    /// 僅根據新設定重建地圖（同一 seed 下可切換不同緯度）
-    pub fn regenerate_with_current_seed(&mut self) {
-        let width_res = self.width_input.parse::<usize>();
-        let height_res = self.height_input.parse::<usize>();
-        let min_lat_res = self.min_lat_input.parse::<f64>();
-        let max_lat_res = self.max_lat_input.parse::<f64>();
-
-        if let (Ok(w), Ok(h), Ok(min_lat), Ok(max_lat)) =
-            (width_res, height_res, min_lat_res, max_lat_res)
-        {
-            if w > 0 && w <= 500 && h > 0 && h <= 500 && min_lat < max_lat {
-                self.map = Map::new(w, h, min_lat, max_lat);
-                self.map.generate(self.seed);
-                self.selected_tile = None;
-            }
-        }
-    }
-
-    /// 更新設定
-    pub fn update_settings(&mut self) {
-        let mut changed = false;
-        let mut new_width = self.map.width;
-        let mut new_height = self.map.height;
-        let mut new_min_lat = self.map.min_lat;
-        let mut new_max_lat = self.map.max_lat;
-
-        // 先全部 parse，再一起比較
-        let width_res = self.width_input.parse::<usize>();
-        let height_res = self.height_input.parse::<usize>();
-        let min_lat_res = self.min_lat_input.parse::<f64>();
-        let max_lat_res = self.max_lat_input.parse::<f64>();
-
-        if let (Ok(w), Ok(h), Ok(min_lat), Ok(max_lat)) =
-            (width_res, height_res, min_lat_res, max_lat_res)
-        {
-            if w > 0 && w <= 500 && h > 0 && h <= 500 && min_lat < max_lat {
-                new_width = w;
-                new_height = h;
-                new_min_lat = min_lat;
-                new_max_lat = max_lat;
-                changed = true;
-            }
-        }
-
-        if changed {
-            self.map = Map::new(new_width, new_height, new_min_lat, new_max_lat);
-            self.map.generate(self.seed);
-            self.selected_tile = None;
-        }
-    }
-
-    /// 獲取顏色
-    fn get_color(&self, x: usize, y: usize) -> egui::Color32 {
-        let tile = self.map.get(x, y);
-        if tile.is_ocean {
-            return egui::Color32::from_rgb(40, 100, 200); // 海洋藍
-        }
-        match self.view_mode {
-            ViewMode::Koppen => {
-                // 柯本氣候分類顏色
-                match tile.climate {
-                    KoppenClimate::Af => egui::Color32::from_rgb(0, 120, 0), // 熱帶雨林 深綠
-                    KoppenClimate::Am => egui::Color32::from_rgb(0, 180, 80), // 熱帶季風 淺綠
-                    KoppenClimate::Aw => egui::Color32::from_rgb(200, 220, 60), // 熱帶草原 黃綠
-                    KoppenClimate::BWh => egui::Color32::from_rgb(230, 200, 80), // 熱帶沙漠 黃
-                    KoppenClimate::BWk => egui::Color32::from_rgb(220, 180, 120), // 溫帶沙漠 淺黃
-                    KoppenClimate::BSh => egui::Color32::from_rgb(240, 220, 120), // 熱帶半乾旱
-                    KoppenClimate::BSk => egui::Color32::from_rgb(200, 200, 140), // 溫帶半乾旱
-                    KoppenClimate::Csa => egui::Color32::from_rgb(255, 160, 80), // 地中海式溫暖夏
-                    KoppenClimate::Csb => egui::Color32::from_rgb(255, 200, 120), // 地中海式溫和夏
-                    KoppenClimate::Cwa => egui::Color32::from_rgb(120, 200, 255), // 副熱帶季風溫暖夏
-                    KoppenClimate::Cwb => egui::Color32::from_rgb(160, 220, 255), // 副熱帶季風溫和夏
-                    KoppenClimate::Cfa => egui::Color32::from_rgb(80, 180, 255), // 副熱帶濕潤溫暖夏
-                    KoppenClimate::Cfb => egui::Color32::from_rgb(120, 200, 220), // 海洋性溫和夏
-                    KoppenClimate::Dfa => egui::Color32::from_rgb(255, 120, 120), // 大陸性溫暖夏
-                    KoppenClimate::Dfb => egui::Color32::from_rgb(255, 180, 180), // 大陸性溫和夏
-                    KoppenClimate::Dfc => egui::Color32::from_rgb(200, 200, 255), // 大陸性涼夏
-                    KoppenClimate::Dfd => egui::Color32::from_rgb(180, 180, 255), // 大陸性極端涼夏
-                    KoppenClimate::Dwa => egui::Color32::from_rgb(255, 160, 200), // 大陸性季風溫暖夏
-                    KoppenClimate::Dwb => egui::Color32::from_rgb(255, 200, 220), // 大陸性季風溫和夏
-                    KoppenClimate::Dwc => egui::Color32::from_rgb(200, 220, 255), // 大陸性季風涼夏
-                    KoppenClimate::Dwd => egui::Color32::from_rgb(180, 200, 255), // 大陸性季風極端涼夏
-                    KoppenClimate::ET => egui::Color32::from_rgb(180, 255, 255),  // 凍原
-                    KoppenClimate::EF => egui::Color32::from_rgb(255, 255, 255),  // 冰川
-                }
-            }
-            ViewMode::Height => {
-                let h = tile.height as f32;
-                egui::Color32::from_rgb((h * 255.0) as u8, (h * 255.0) as u8, (h * 255.0) as u8)
-            }
-            ViewMode::Temperature => {
-                let t = ((tile.temperature + 50.0) / 100.0).clamp(0.0, 1.0) as f32;
-                egui::Color32::from_rgb((t * 255.0) as u8, 0, ((1.0 - t) * 255.0) as u8)
-            }
-            ViewMode::Precipitation => {
-                let p = (tile.precipitation / 2000.0).clamp(0.0, 1.0) as f32;
-                egui::Color32::from_rgb(0, (p * 255.0) as u8, ((1.0 - p) * 255.0) as u8)
-            }
-        }
-    }
-}
-
-impl eframe::App for MapGeneratorApp {
+impl eframe::App for HeightMapApp {
+    /// 更新 UI，每一幀都會呼叫
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 右上角浮動按鈕區
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui.button("隨機 Seed").clicked() {
-                    self.randomize_seed();
-                }
-                if ui.button("同 Seed").clicked() {
-                    self.regenerate_with_current_seed();
-                }
-                ui.label(format!("Seed: {}", self.seed));
-                ui.add_space(16.0);
-                if ui.button("輸出 TOML").clicked() {
-                    let toml = toml::to_string(&self.map).unwrap();
-                    println!("{}", toml);
+        egui::SidePanel::left("left_panel").show(ctx, |ui| {
+            ui.heading("參數調整");
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                let regen = self.ui_parameter_controls(ui);
+                if regen {
+                    self.heights = vec![0.0; self.width * self.height];
+                    self.regenerate();
+                    self.selected = None;
                 }
             });
+        });
+
+        // 右側顯示選取點資訊
+        egui::SidePanel::right("right_panel").show(ctx, |ui| {
+            self.ui_selected_info(ui);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("寬度:");
-                ui.text_edit_singleline(&mut self.width_input);
-                ui.label("高度:");
-                ui.text_edit_singleline(&mut self.height_input);
-                ui.label("最小緯度");
-                ui.text_edit_singleline(&mut self.min_lat_input);
-                ui.label("最大緯度");
-                ui.text_edit_singleline(&mut self.max_lat_input);
-                if ui.button("更新設定").clicked() {
-                    self.update_settings();
+                ui.selectable_value(&mut self.tab, HeightMapTab::Noise, "噪音");
+                ui.selectable_value(&mut self.tab, HeightMapTab::Terrain, "地形");
+            });
+            match self.tab {
+                HeightMapTab::Noise => {
+                    // 顯示高度圖並取得互動回應
+                    let response = self.ui_heightmap_display(ui);
+                    // 處理點擊選取
+                    self.handle_selection(&response);
                 }
-            });
-
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.view_mode, ViewMode::Koppen, "柯本圖");
-                ui.selectable_value(&mut self.view_mode, ViewMode::Height, "高度圖");
-                ui.selectable_value(&mut self.view_mode, ViewMode::Temperature, "溫度圖");
-                ui.selectable_value(&mut self.view_mode, ViewMode::Precipitation, "降水圖");
-            });
-
-            // 主區域分上下：上方地圖，下方格子資訊
-            let info_height = 120.0;
-            let map_size = egui::Vec2::new(600.0, 600.0 - info_height);
-            let (rect, response) = ui.allocate_at_least(map_size, egui::Sense::click());
-            let painter = ui.painter();
-
-            let tile_size = map_size.x / self.map.width as f32;
-
-            for y in 0..self.map.height {
-                for x in 0..self.map.width {
-                    let pos =
-                        rect.min + egui::Vec2::new(x as f32 * tile_size, y as f32 * tile_size);
-                    let tile_rect = egui::Rect::from_min_size(pos, egui::Vec2::splat(tile_size));
-                    painter.rect_filled(tile_rect, 0.0, self.get_color(x, y));
+                HeightMapTab::Terrain => {
+                    let response = self.ui_terrain_display(ui);
+                    self.handle_selection(&response);
                 }
             }
-
-            // 點擊檢測
-            if response.clicked() {
-                if let Some(pointer) = response.interact_pointer_pos() {
-                    let pos = pointer - rect.min;
-                    let x = (pos.x / tile_size) as usize;
-                    let y = (pos.y / tile_size) as usize;
-                    if x < self.map.width && y < self.map.height {
-                        self.selected_tile = Some((x, y));
-                    }
-                }
-            }
-
-            // 下方資訊區塊
-            ui.add_space(8.0);
-            egui::Frame::none()
-                .fill(ui.visuals().panel_fill) // 使用與面板相同的背景色
-                .show(ui, |ui| {
-                    ui.set_min_height(info_height - 8.0);
-                    if let Some((x, y)) = self.selected_tile {
-                        let tile = self.map.get(x, y);
-                        let lat = self.map.latitude(y);
-                        ui.horizontal(|ui| {
-                            ui.label(format!("位置: ({}, {})", x, y));
-                            ui.label(format!("緯度: {:.2}°", lat));
-                            ui.label(format!("高度: {:.2}", tile.height));
-                            ui.label(format!("溫度: {:.1}°C", tile.temperature));
-                            ui.label(format!("降雨: {:.0} mm/年", tile.precipitation));
-                            ui.label(format!("氣候: {:?}", tile.climate));
-                            if tile.is_ocean {
-                                ui.label("地形: 海洋");
-                            } else {
-                                ui.label("地形: 陸地");
-                            }
-                        });
-                    } else {
-                        ui.label("請點擊地圖格子以檢視詳細資訊");
-                    }
-                });
-
-            // (已移至右上角浮動按鈕區)
         });
     }
 }
 
-fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions::default();
+impl HeightMapApp {
+    /// 參數調整 UI，回傳是否有變動需重生地圖
+    fn ui_parameter_controls(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut regen = false;
+
+        // 種子參數
+        ui.label("Seed:");
+        regen |= ui.add(egui::DragValue::new(&mut self.seed)).changed();
+
+        // 地圖尺寸
+        ui.label("Width:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.width, 16..=512))
+            .changed();
+        ui.label("Height:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.height, 16..=256))
+            .changed();
+
+        ui.separator();
+        ui.label("最低高度:");
+        regen |= ui
+            .add(egui::DragValue::new(&mut self.min_height).speed(10))
+            .changed();
+
+        ui.label("低頻層\n(大尺度地形):");
+        ui.label("Scale:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.low_scale, 80.0..=340.0).step_by(20.0))
+            .changed();
+        ui.label("Weight:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.low_weight, 0..=100).step_by(5.0))
+            .changed();
+        regen |= ui
+            .checkbox(&mut self.is_center_mask_enabled, "集中於中央")
+            .changed();
+
+        ui.label("中頻層\n(島嶼):");
+        ui.label("Scale:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.mid_scale, 30.0..=130.0).step_by(10.0))
+            .changed();
+        ui.label("Weight:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.mid_weight, 0..=100).step_by(5.0))
+            .changed();
+
+        ui.label("高頻層\n(細節):");
+        ui.label("Scale:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.high_scale, 10.0..=50.0).step_by(5.0))
+            .changed();
+        ui.label("Weight:");
+        regen |= ui
+            .add(egui::Slider::new(&mut self.high_weight, 0..=100).step_by(5.0))
+            .changed();
+
+        regen
+    }
+
+    /// 顯示高度圖，回傳 egui::Response 以供互動
+    fn ui_heightmap_display(&self, ui: &mut egui::Ui) -> egui::Response {
+        // 高度圖
+        let image = egui::ColorImage::from_rgb(
+            [self.width, self.height],
+            &self
+                .heights
+                .iter()
+                .flat_map(|&h| {
+                    let v = (h * 255.0).clamp(0.0, 255.0) as u8;
+                    vec![v, v, v]
+                })
+                .collect::<Vec<_>>(),
+        );
+        let texture = ui
+            .ctx()
+            .load_texture("heightmap", image, egui::TextureOptions::NEAREST);
+
+        // 支援點擊選取
+        let img_size = [
+            self.width as f32 * MAP_POINT_SIZE,
+            self.height as f32 * MAP_POINT_SIZE,
+        ];
+        ui.add(
+            egui::Image::new(&texture)
+                .fit_to_exact_size(img_size.into())
+                .sense(egui::Sense::click()),
+        )
+    }
+
+    /// 顯示地形（陸地/海洋）二值圖
+    fn ui_terrain_display(&self, ui: &mut egui::Ui) -> egui::Response {
+        let image = egui::ColorImage::from_rgb(
+            [self.width, self.height],
+            &self
+                .heights
+                .iter()
+                .map(|&h| {
+                    let real_height = self.to_real_height(h);
+                    if real_height < SEA_LEVEL as f64 {
+                        // 海洋：藍色
+                        [40u8, 120u8, 220u8]
+                    } else {
+                        // 陸地：綠色
+                        [60u8, 180u8, 80u8]
+                    }
+                })
+                .flatten()
+                .collect::<Vec<_>>(),
+        );
+        let texture = ui
+            .ctx()
+            .load_texture("terrainmap", image, egui::TextureOptions::NEAREST);
+        let img_size = [
+            self.width as f32 * MAP_POINT_SIZE,
+            self.height as f32 * MAP_POINT_SIZE,
+        ];
+        ui.add(
+            egui::Image::new(&texture)
+                .fit_to_exact_size(img_size.into())
+                .sense(egui::Sense::click()),
+        )
+    }
+
+    /// 處理高度圖點擊選取，更新 self.selected
+    fn handle_selection(&mut self, response: &egui::Response) {
+        if response.clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let px = ((pos.x - response.rect.left()) / MAP_POINT_SIZE).floor() as usize;
+                let py = ((pos.y - response.rect.top()) / MAP_POINT_SIZE).floor() as usize;
+                if px < self.width && py < self.height {
+                    let idx = py * self.width + px;
+                    let h = self.heights[idx];
+                    self.selected = Some((px, py, h));
+                }
+            }
+        }
+    }
+
+    /// 顯示目前選取點的資訊
+    fn ui_selected_info(&self, ui: &mut egui::Ui) {
+        if let Some((x, y, h)) = self.selected {
+            ui.separator();
+            ui.label(format!("選取座標: ({}, {})，數值: {:.3}", x, y, h));
+            let real_height = self.to_real_height(h);
+            ui.label(format!("對應實際高度: {:.1}", real_height));
+        } else {
+            ui.label("尚未選取任何點");
+        }
+    }
+}
+
+/// 主程式進入點，啟動 egui 視窗
+fn main() -> Result<(), eframe::Error> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 800.0]),
+        ..Default::default()
+    };
+
     eframe::run_native(
-        "奇幻戰棋地圖產生器",
+        "高度地圖產生器",
         options,
         Box::new(|cc| {
-            // 設定字體以支援繁體中文
+            // 參考 editor/src/main.rs，設定中文字型
             let mut fonts = FontDefinitions::default();
-
-            // 嘗試載入專案內的中文字型（如 fonts/NotoSans.ttf）
             match std::fs::read("../../fonts/NotoSans.ttf") {
                 Ok(font_data) => {
                     fonts.font_data.insert(
                         "noto_sans".to_owned(),
                         FontData::from_owned(font_data).into(),
                     );
-
-                    // 將中文字體添加到 Proportional 字體族中的首位
                     fonts
                         .families
                         .get_mut(&FontFamily::Proportional)
@@ -491,11 +474,8 @@ fn main() -> eframe::Result<()> {
                 }
                 Err(err) => {
                     println!("無法載入中文字體: {}", err);
-                    // 這裡可以加載備用字體或繼續使用預設字體
                 }
             }
-
-            // 設置字體
             cc.egui_ctx.set_fonts(fonts);
 
             // 設定初始字型大小和樣式
@@ -514,7 +494,7 @@ fn main() -> eframe::Result<()> {
             );
             cc.egui_ctx.set_style(style);
 
-            Ok(Box::new(MapGeneratorApp::new()))
+            Ok(Box::new(HeightMapApp::default()))
         }),
     )
 }
