@@ -55,12 +55,12 @@ pub struct HeightGenerator {
     /// 高頻層的縮放係數
     high_scale: f64,
 
-    /// 低頻層的權重（0-100，使用 u8 表示）
-    low_weight: u8,
+    /// 低頻層的權重（0-100，使用 u16 表示）
+    low_weight: u16,
     /// 中頻層的權重（0-100）
-    mid_weight: u8,
+    mid_weight: u16,
     /// 高頻層的權重（0-100）
-    high_weight: u8,
+    high_weight: u16,
 }
 
 impl HeightGenerator {
@@ -79,9 +79,9 @@ impl HeightGenerator {
         low_scale: f64,
         mid_scale: f64,
         high_scale: f64,
-        low_weight: u8,
-        mid_weight: u8,
-        high_weight: u8,
+        low_weight: u16,
+        mid_weight: u16,
+        high_weight: u16,
     ) -> Self {
         // 使用不同種子初始化各層，避免三層完全相同
         let perlin_low = Perlin::new(seed);
@@ -113,7 +113,7 @@ impl HeightGenerator {
     /// 僅低頻層乘以遮罩，確保島嶼集中於中央但不強制圓形或中心最高。
     /// 中頻與高頻層維持原噪聲，保留細節與隨機性。
     /// 回傳值範圍為 0.0~1.0。
-    pub fn get_height_with_mask(&self, x: f64, y: f64, low_mask: f64) -> f64 {
+    pub fn get_height(&self, x: f64, y: f64, low_mask: f64) -> f64 {
         let low = ((self
             .perlin_low
             .get([x / self.low_scale, y / self.low_scale])
@@ -163,6 +163,7 @@ pub struct HeightMapApp {
     min_height: i32,
     /// 最高高度
     max_height: i32,
+
     /// 低頻層縮放
     low_scale: f64,
     /// 中頻層縮放
@@ -170,11 +171,11 @@ pub struct HeightMapApp {
     /// 高頻層縮放
     high_scale: f64,
     /// 低頻權重（0-100）
-    low_weight: u8,
+    low_weight: u16,
     /// 中頻權重（0-100）
-    mid_weight: u8,
+    mid_weight: u16,
     /// 高頻權重（0-100）
-    high_weight: u8,
+    high_weight: u16,
     /// 是否啟用中央遮罩（讓島嶼集中於中央）
     is_center_mask_enabled: bool,
 
@@ -262,7 +263,7 @@ impl HeightMapApp {
                 let x = (i % self.width) as f64;
                 let y = (i / self.width) as f64;
                 let mask = self.center_mask(x, y);
-                generator.get_height_with_mask(x, y, mask)
+                generator.get_height(x, y, mask)
             })
             .collect();
 
@@ -336,7 +337,6 @@ impl HeightMapApp {
     fn ui_parameter_controls(&mut self, ui: &mut egui::Ui) -> bool {
         let mut regen = false;
 
-        // 地圖尺寸
         ui.label("Width:");
         regen |= ui
             .add(egui::Slider::new(&mut self.width, 16..=512))
@@ -348,7 +348,6 @@ impl HeightMapApp {
 
         ui.separator();
 
-        // 種子參數
         ui.label("Seed:");
         regen |= ui.add(egui::DragValue::new(&mut self.seed)).changed();
 
@@ -411,7 +410,6 @@ impl HeightMapApp {
             .ctx()
             .load_texture(map_name, image, egui::TextureOptions::NEAREST);
 
-        // 支援點擊選取
         let img_size = [
             self.width as f32 * MAP_POINT_SIZE,
             self.height as f32 * MAP_POINT_SIZE,
@@ -419,6 +417,7 @@ impl HeightMapApp {
         ui.add(
             egui::Image::new(&texture)
                 .fit_to_exact_size(img_size.into())
+                // 支援點擊選取
                 .sense(egui::Sense::click()),
         )
     }
@@ -520,16 +519,13 @@ impl TerrainType {
     /// 地形分級對應顏色（RGB）
     fn terrain_type_to_color(terrain: Self) -> [u8; 3] {
         match terrain {
-            // 深水：更深更偏紫藍，提升與淺水對比
-            Self::DeepWater => [0x1A, 0x23, 0x7E], // #009 深紫藍
-            // 淺水：偏青綠，與深水、涉水區拉開色差
-            Self::ShallowWater => [0x4D, 0xD0, 0xE1], // #00F 青綠
-            // 涉水區：灰藍，與平原綠色明顯區隔
-            Self::WadingZone => [0x90, 0xA4, 0xAE], // #0FF 灰藍
-            Self::Plain => [0x6C, 0xBF, 0x3C],      // #0F0 綠
-            Self::Hill => [0xE1, 0xC1, 0x6E],       // #AA0 黃褐
-            Self::Mountain => [0xA0, 0x52, 0x2D],   // #A60 棕
-            Self::HighMountain => [0xFF, 0xFF, 0xFF], // #FFF 白
+            Self::DeepWater => [0x00, 0x00, 0x99],    // #009
+            Self::ShallowWater => [0x00, 0x00, 0xFF], // #00F
+            Self::WadingZone => [0x00, 0xFF, 0xFF],   // #0FF
+            Self::Plain => [0x00, 0xFF, 0x00],        // #0F0
+            Self::Hill => [0xAA, 0xAA, 0x00],         // #AA0
+            Self::Mountain => [0xAA, 0x66, 0x00],     // #A60
+            Self::HighMountain => [0xFF, 0xFF, 0xFF], // #FFF
         }
     }
 }
