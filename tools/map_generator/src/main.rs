@@ -1,19 +1,19 @@
 use egui::{FontData, FontDefinitions, FontFamily};
 use noise::{NoiseFn, Perlin};
 
-/// 地形分級（依據高度）
+/** 地形分級（依高度） */
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TerrainType {
-    DeepWater,    // 深水
-    ShallowWater, // 淺水
-    WadingZone,   // 可涉水通過
-    Plain,        // 平原
-    Hill,         // 丘陵
-    Mountain,     // 山地
-    HighMountain, // 高山
+    DeepWater,
+    ShallowWater,
+    WadingZone, // 可涉水通過
+    Plain,
+    Hill,
+    Mountain,
+    HighMountain,
 }
 
-/// 柯本氣候分類
+/** 柯本氣候分類 */
 #[derive(Debug)]
 pub enum KoppenClimate {
     Af,  // 熱帶雨林
@@ -35,7 +35,7 @@ const LOWEST_MOUNTAIN: i32 = 600;
 const HIGHEST_HUMAN_REACHABLE: i32 = 4000;
 const HIGHEST_MOUNTAIN: i32 = 8000;
 
-/// 圖顯示縮放倍率（畫素放大用）
+/** 地圖顯示縮放倍率 */
 const MAP_POINT_SIZE: f32 = 3.0;
 
 /// 多層 Perlin 噪聲高度產生器
@@ -48,32 +48,19 @@ pub struct HeightGenerator {
     /// 高頻層（小尺度細節：山峰紋理）
     perlin_high: Perlin,
 
-    /// 低頻層的縮放係數，數值越大地形越平坦
+    /// 數值越大地形越平坦
     low_scale: f64,
-    /// 中頻層的縮放係數
     mid_scale: f64,
-    /// 高頻層的縮放係數
     high_scale: f64,
 
-    /// 低頻層的權重（0-100，使用 u16 表示）
+    /// 權重（0-100）
     low_weight: u16,
-    /// 中頻層的權重（0-100）
     mid_weight: u16,
-    /// 高頻層的權重（0-100）
     high_weight: u16,
 }
 
 impl HeightGenerator {
     /// 建立新的高度產生器
-    ///
-    /// # 參數
-    /// - `seed`: 隨機種子（用於初始化所有 Perlin 層）
-    /// - `low_scale`: 低頻層縮放（推薦 150-250）
-    /// - `mid_scale`: 中頻層縮放（推薦 40-80）
-    /// - `high_scale`: 高頻層縮放（推薦 8-15）
-    /// - `low_weight`: 低頻權重（0-100，推薦 50-70）
-    /// - `mid_weight`: 中頻權重（0-100，推薦 20-40）
-    /// - `high_weight`: 高頻權重（0-100，推薦 5-15）
     pub fn new(
         seed: u32,
         low_scale: f64,
@@ -83,7 +70,7 @@ impl HeightGenerator {
         mid_weight: u16,
         high_weight: u16,
     ) -> Self {
-        // 使用不同種子初始化各層，避免三層完全相同
+        // 各層使用不同種子
         let perlin_low = Perlin::new(seed);
         let perlin_mid = Perlin::new(seed.wrapping_add(1));
         let perlin_high = Perlin::new(seed.wrapping_add(2));
@@ -101,26 +88,18 @@ impl HeightGenerator {
         }
     }
 
-    /// 取得 (x, y) 座標的高度值，範圍為 0.0 ~ 1.0
-    ///
-    /// 使用加權疊加三層噪聲：
-    /// 高度 = 低頻 × low_weight + 中頻 × mid_weight + 高頻 × high_weight
-    /// 計算指定座標的高度值，允許對低頻層（大尺度地形）套用遮罩。
-    ///
-    /// - `x`, `y`：地圖座標。
-    /// - `low_mask`：低頻層遮罩（0.0~1.0，通常依距離中心遞減，僅影響大尺度地形分布）。
-    ///
-    /// 僅低頻層乘以遮罩，確保島嶼集中於中央但不強制圓形或中心最高。
-    /// 中頻與高頻層維持原噪聲，保留細節與隨機性。
-    /// 回傳值範圍為 0.0~1.0。
-    pub fn get_height(&self, x: f64, y: f64, low_mask: f64) -> f64 {
-        let low = ((self
+    /// 取得 (x, y) 座標的高度值（0.0~1.0），僅低頻層可套用遮罩。
+    /// low_masks: 遮罩函數陣列，依序作用於低頻層。
+    pub fn get_height(&self, x: f64, y: f64, low_masks: &[&dyn Fn(f64) -> f64]) -> f64 {
+        let mut low = ((self
             .perlin_low
             .get([x / self.low_scale, y / self.low_scale])
             + 1.0)
             * 0.5)
-            .clamp(0.0, 1.0)
-            * low_mask;
+            .clamp(0.0, 1.0);
+        for mask_fn in low_masks {
+            low = mask_fn(low);
+        }
         let mid = ((self
             .perlin_mid
             .get([x / self.mid_scale, y / self.mid_scale])
@@ -135,7 +114,7 @@ impl HeightGenerator {
             .clamp(0.0, 1.0);
 
         let total_weight = (self.low_weight + self.mid_weight + self.high_weight) as f64;
-        let total_weight = total_weight.max(1.0);
+        let total_weight = total_weight.max(1.0); // 避免除以零
         let combined = (low * self.low_weight as f64
             + mid * self.mid_weight as f64
             + high * self.high_weight as f64)
@@ -178,6 +157,8 @@ pub struct HeightMapApp {
     high_weight: u16,
     /// 是否啟用中央遮罩（讓島嶼集中於中央）
     is_center_mask_enabled: bool,
+    /// 地表高度上限
+    surface_height_limit: i32,
 
     /// 地圖寬度
     width: usize,
@@ -187,7 +168,7 @@ pub struct HeightMapApp {
     /// 原始 Perlin 噪聲高度（0~1）
     noise_heights: Vec<f64>,
     /// 實際高度
-    terrain_heights: Vec<f64>,
+    real_heights: Vec<i32>,
 
     /// 使用者選取的點 (x, y)
     selected: Option<(usize, usize)>,
@@ -210,10 +191,11 @@ impl Default for HeightMapApp {
             mid_weight: 15,
             high_weight: 5,
             is_center_mask_enabled: true,
+            surface_height_limit: HIGHEST_MOUNTAIN,
             width,
             height,
             noise_heights: vec![0.0; width * height],
-            terrain_heights: vec![0.0; width * height],
+            real_heights: vec![0; width * height],
             selected: None,
         };
         app.regenerate();
@@ -222,7 +204,7 @@ impl Default for HeightMapApp {
 }
 
 impl HeightMapApp {
-    fn get(&self, vec: &Vec<f64>, x: usize, y: usize) -> Option<f64> {
+    fn get<T: Copy>(&self, vec: &Vec<T>, x: usize, y: usize) -> Option<T> {
         if x < self.width && y < self.height {
             Some(vec[y * self.width + x])
         } else {
@@ -230,22 +212,26 @@ impl HeightMapApp {
         }
     }
 
-    /// 計算中央遮罩值（可模組化擴充）
-    fn center_mask(&self, x: f64, y: f64) -> f64 {
-        if !self.is_center_mask_enabled {
-            return 1.0;
-        }
+    /// 產生中心遮罩函數（僅處理 noise，依是否啟用自動判斷）
+    fn center_mask_fn(&self, x: f64, y: f64) -> impl Fn(f64) -> f64 {
+        let enabled = self.is_center_mask_enabled;
         let cx = self.width as f64 / 2.0;
         let cy = self.height as f64 / 2.0;
         let r = cx.min(cy) * 0.8;
-        let p = 2.0; // 遮罩指數，2.0 為平滑過渡
+        let p = 2.0;
         let dx = x - cx;
         let dy = y - cy;
         let d = (dx * dx + dy * dy).sqrt();
-        (1.0 - (d / r).powf(p)).clamp(0.0, 1.0)
+        let mask = (1.0 - (d / r).powf(p)).clamp(0.0, 1.0);
+        move |noise| {
+            if !enabled {
+                return noise;
+            }
+            noise * mask
+        }
     }
 
-    /// 重新產生高度圖資料
+    /// 重新產生高度圖
     fn regenerate(&mut self) {
         let generator = HeightGenerator::new(
             self.seed,
@@ -262,31 +248,33 @@ impl HeightMapApp {
             .map(|i| {
                 let x = (i % self.width) as f64;
                 let y = (i / self.width) as f64;
-                let mask = self.center_mask(x, y);
-                generator.get_height(x, y, mask)
+                let center_mask = self.center_mask_fn(x, y);
+                let masks: Vec<&dyn Fn(f64) -> f64> = vec![&center_mask];
+                generator.get_height(x, y, &masks)
             })
             .collect();
 
         // 產生實際高度 vec（根據 min_height/max_height）
-        self.terrain_heights = self
+        self.real_heights = self
             .noise_heights
             .iter()
-            .map(|&h| self.to_real_height(h))
+            .map(|&h| self.to_real_height(h).min(self.surface_height_limit))
             .collect();
     }
 
-    fn is_land(&self, noise: f64) -> bool {
-        self.to_real_height(noise) >= SEA_LEVEL as f64
+    fn to_real_height(&self, noise: f64) -> i32 {
+        let h = noise * (self.max_height - self.min_height) as f64;
+        let h = h as i32;
+        h + self.min_height
     }
 
-    /// 將 0.0~1.0 的高度轉換為真實高度
-    fn to_real_height(&self, h: f64) -> f64 {
-        h * (self.max_height - self.min_height) as f64 + self.min_height as f64
+    fn is_land(&self, h: i32) -> bool {
+        h >= SEA_LEVEL
     }
 }
 
 impl eframe::App for HeightMapApp {
-    /// 更新 UI，每一幀都會呼叫
+    /// 每幀更新 UI
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
             ui.heading("參數調整");
@@ -294,7 +282,7 @@ impl eframe::App for HeightMapApp {
                 let regen = self.ui_parameter_controls(ui);
                 if regen {
                     self.noise_heights = vec![0.0; self.width * self.height];
-                    self.terrain_heights = vec![0.0; self.width * self.height];
+                    self.real_heights = vec![0; self.width * self.height];
                     self.regenerate();
                     self.selected = None;
                 }
@@ -397,6 +385,19 @@ impl HeightMapApp {
             .add(egui::Slider::new(&mut self.high_weight, 0..=100).step_by(5.0))
             .changed();
 
+        ui.separator();
+
+        ui.label("地表高度上限:");
+        regen |= ui
+            .add(
+                egui::Slider::new(
+                    &mut self.surface_height_limit,
+                    self.min_height..=self.max_height,
+                )
+                .step_by(1.0),
+            )
+            .changed();
+
         regen
     }
 
@@ -441,7 +442,7 @@ impl HeightMapApp {
         let image = egui::ColorImage::from_rgb(
             [self.width, self.height],
             &self
-                .noise_heights
+                .real_heights
                 .iter()
                 .flat_map(|&h| {
                     if self.is_land(h) {
@@ -459,7 +460,7 @@ impl HeightMapApp {
         let image = egui::ColorImage::from_rgb(
             [self.width, self.height],
             &self
-                .terrain_heights
+                .real_heights
                 .iter()
                 .flat_map(|&h| {
                     let terrain = TerrainType::height_to_terrain_type(h);
@@ -470,7 +471,7 @@ impl HeightMapApp {
         self.ui_display(ui, "terrainmap", image)
     }
 
-    /// 處理高度圖點擊選取，更新 self.selected
+    /// 處理地圖點擊選取
     fn handle_selection(&mut self, response: &egui::Response) {
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
@@ -483,13 +484,18 @@ impl HeightMapApp {
         }
     }
 
-    /// 顯示目前選取點的資訊
+    /// 顯示選取點資訊
     fn ui_selected_info(&self, ui: &mut egui::Ui) {
         if let Some((x, y)) = self.selected {
             let noise = self
                 .get(&self.noise_heights, x, y)
                 .expect("程式碼邏輯問題: 非法座標");
-            ui.label(format!("選取座標: ({}, {})，數值: {:.3}", x, y, noise));
+            let height = self
+                .get(&self.real_heights, x, y)
+                .expect("程式碼邏輯問題: 非法座標");
+            ui.label(format!("選取座標: ({}, {})", x, y));
+            ui.label(format!("雜訊值: {:.3}", noise));
+            ui.label(format!("實際高度: {:.1} 米", height));
         } else {
             ui.label("尚未選取任何點");
         }
@@ -497,26 +503,26 @@ impl HeightMapApp {
 }
 
 impl TerrainType {
-    /// 將實際高度對應到地形分級
-    fn height_to_terrain_type(height: f64) -> Self {
-        if height < LOWEST_HUMAN_REACHABLE as f64 {
+    /// 實際高度對應地形分級
+    fn height_to_terrain_type(height: i32) -> Self {
+        if height < LOWEST_HUMAN_REACHABLE {
             Self::DeepWater
-        } else if height < LOWEST_WADING_ZONE as f64 {
+        } else if height < LOWEST_WADING_ZONE {
             Self::ShallowWater
-        } else if height < SEA_LEVEL as f64 {
+        } else if height < SEA_LEVEL {
             Self::WadingZone
-        } else if height < LOWEST_HILL as f64 {
+        } else if height < LOWEST_HILL {
             Self::Plain
-        } else if height < LOWEST_MOUNTAIN as f64 {
+        } else if height < LOWEST_MOUNTAIN {
             Self::Hill
-        } else if height < HIGHEST_HUMAN_REACHABLE as f64 {
+        } else if height < HIGHEST_HUMAN_REACHABLE {
             Self::Mountain
         } else {
             Self::HighMountain
         }
     }
 
-    /// 地形分級對應顏色（RGB）
+    /// 地形分級對應顏色
     fn terrain_type_to_color(terrain: Self) -> [u8; 3] {
         match terrain {
             Self::DeepWater => [0x00, 0x00, 0x99],    // #009
@@ -530,7 +536,7 @@ impl TerrainType {
     }
 }
 
-/// 主程式進入點，啟動 egui 視窗
+/** 主程式進入點 */
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 800.0]),
@@ -541,7 +547,7 @@ fn main() -> Result<(), eframe::Error> {
         "高度地圖產生器",
         options,
         Box::new(|cc| {
-            // 參考 editor/src/main.rs，設定中文字型
+            // 設定中文字型
             let mut fonts = FontDefinitions::default();
             match std::fs::read("../../fonts/NotoSans.ttf") {
                 Ok(font_data) => {
