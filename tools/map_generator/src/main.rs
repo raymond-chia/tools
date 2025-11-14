@@ -1,5 +1,5 @@
 use egui::{FontData, FontDefinitions, FontFamily};
-use noise::{NoiseFn, Perlin};
+use noise::{NoiseFn, Simplex};
 
 /** 地形分級（依高度） */
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,15 +38,15 @@ const HIGHEST_MOUNTAIN: i32 = 8000;
 /** 地圖顯示縮放倍率 */
 const MAP_POINT_SIZE: f32 = 3.0;
 
-/// 多層 Perlin 噪聲高度產生器
-/// 使用三層獨立 Perlin 噪聲（低、中、高頻）搭配權重，產生更自然的海島地形
+/// 多層噪聲高度產生器
+/// 使用三層獨立噪聲（低、中、高頻）搭配權重，產生更自然的海島地形
 pub struct HeightGenerator {
     /// 低頻層（大尺度地形：海洋盆地、大陸）
-    perlin_low: Perlin,
+    noise_low: Simplex,
     /// 中頻層（中尺度地形：島嶼、山脈）
-    perlin_mid: Perlin,
+    noise_mid: Simplex,
     /// 高頻層（小尺度細節：山峰紋理）
-    perlin_high: Perlin,
+    noise_high: Simplex,
 
     /// 數值越大地形越平坦
     low_scale: f64,
@@ -71,14 +71,14 @@ impl HeightGenerator {
         high_weight: u16,
     ) -> Self {
         // 各層使用不同種子
-        let perlin_low = Perlin::new(seed);
-        let perlin_mid = Perlin::new(seed.wrapping_add(1));
-        let perlin_high = Perlin::new(seed.wrapping_add(2));
+        let noise_low = Simplex::new(seed);
+        let noise_mid = Simplex::new(seed.wrapping_add(1));
+        let noise_high = Simplex::new(seed.wrapping_add(2));
 
         Self {
-            perlin_low,
-            perlin_mid,
-            perlin_high,
+            noise_low,
+            noise_mid,
+            noise_high,
             low_scale,
             mid_scale,
             high_scale,
@@ -91,23 +91,15 @@ impl HeightGenerator {
     /// 取得 (x, y) 座標的高度值（0.0~1.0），僅低頻層可套用遮罩。
     /// low_masks: 遮罩函數陣列，依序作用於低頻層。
     pub fn get_height(&self, x: f64, y: f64, low_masks: &[&dyn Fn(f64) -> f64]) -> f64 {
-        let mut low = ((self
-            .perlin_low
-            .get([x / self.low_scale, y / self.low_scale])
-            + 1.0)
-            * 0.5)
+        let mut low = ((self.noise_low.get([x / self.low_scale, y / self.low_scale]) + 1.0) * 0.5)
             .clamp(0.0, 1.0);
         for mask_fn in low_masks {
             low = mask_fn(low);
         }
-        let mid = ((self
-            .perlin_mid
-            .get([x / self.mid_scale, y / self.mid_scale])
-            + 1.0)
-            * 0.5)
+        let mid = ((self.noise_mid.get([x / self.mid_scale, y / self.mid_scale]) + 1.0) * 0.5)
             .clamp(0.0, 1.0);
         let high = ((self
-            .perlin_high
+            .noise_high
             .get([x / self.high_scale, y / self.high_scale])
             + 1.0)
             * 0.5)
@@ -165,7 +157,7 @@ pub struct HeightMapApp {
     /// 地圖高度
     height: usize,
 
-    /// 原始 Perlin 噪聲高度（0~1）
+    /// 原始噪聲高度（0~1）
     noise_heights: Vec<f64>,
     /// 實際高度
     real_heights: Vec<i32>,
