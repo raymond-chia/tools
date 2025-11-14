@@ -36,7 +36,7 @@ const HIGHEST_HUMAN_REACHABLE: i32 = 4000;
 const HIGHEST_MOUNTAIN: i32 = 8000;
 
 /** 地圖顯示縮放倍率 */
-const MAP_POINT_SIZE: f32 = 3.0;
+const MAP_POINT_SIZE: f32 = 2.0;
 
 /// 多層噪聲高度產生器
 /// 使用三層獨立噪聲（低、中、高頻）搭配權重，產生更自然的海島地形
@@ -168,8 +168,8 @@ pub struct HeightMapApp {
 
 impl Default for HeightMapApp {
     fn default() -> Self {
-        let width = 375;
-        let height = 240;
+        let width = 560;
+        let height = 360;
 
         let mut app = Self {
             tab: HeightMapTab::Noise,
@@ -315,82 +315,98 @@ impl eframe::App for HeightMapApp {
 impl HeightMapApp {
     /// 參數調整 UI，回傳是否有變動需重生地圖
     fn ui_parameter_controls(&mut self, ui: &mut egui::Ui) -> bool {
-        let mut regen = false;
-
+        let mut changed = false;
         ui.label("Width:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.width, 16..=512))
+        changed |= ui
+            .add(egui::Slider::new(&mut self.width, 16..=560))
             .changed();
         ui.label("Height:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.height, 16..=256))
+        changed |= ui
+            .add(egui::Slider::new(&mut self.height, 16..=360))
             .changed();
 
         ui.separator();
 
         ui.label("Seed:");
-        regen |= ui.add(egui::DragValue::new(&mut self.seed)).changed();
+        ui.horizontal(|ui| {
+            if ui.button("-").clicked() {
+                // 防止 seed 溢位
+                if self.seed > 0 {
+                    self.seed -= 1;
+                    changed = true;
+                }
+            }
+            changed |= ui.add(egui::DragValue::new(&mut self.seed)).changed();
+            if ui.button("+").clicked() {
+                // 防止溢位到 u32::MAX
+                if self.seed < u32::MAX {
+                    self.seed += 1;
+                    changed = true;
+                }
+            }
+        });
 
-        ui.separator();
+        egui::CollapsingHeader::new("參數調整")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.label("最低高度:");
+                changed |= ui
+                    .add(egui::DragValue::new(&mut self.min_height).speed(10))
+                    .changed();
+                ui.label("最高高度:");
+                changed |= ui
+                    .add(egui::DragValue::new(&mut self.max_height).speed(10))
+                    .changed();
 
-        ui.label("最低高度:");
-        regen |= ui
-            .add(egui::DragValue::new(&mut self.min_height).speed(10))
-            .changed();
-        ui.label("最高高度:");
-        regen |= ui
-            .add(egui::DragValue::new(&mut self.max_height).speed(10))
-            .changed();
+                ui.separator();
 
-        ui.separator();
+                ui.label("低頻層\n(大尺度地形):");
+                ui.label("Scale:");
+                changed |= ui
+                    .add(egui::Slider::new(&mut self.low_scale, 80.0..=340.0).step_by(20.0))
+                    .changed();
+                ui.label("Weight:");
+                changed |= ui
+                    .add(egui::Slider::new(&mut self.low_weight, 0..=100).step_by(5.0))
+                    .changed();
+                changed |= ui
+                    .checkbox(&mut self.is_center_mask_enabled, "集中於中央")
+                    .changed();
 
-        ui.label("低頻層\n(大尺度地形):");
-        ui.label("Scale:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.low_scale, 80.0..=340.0).step_by(20.0))
-            .changed();
-        ui.label("Weight:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.low_weight, 0..=100).step_by(5.0))
-            .changed();
-        regen |= ui
-            .checkbox(&mut self.is_center_mask_enabled, "集中於中央")
-            .changed();
+                ui.label("中頻層\n(島嶼):");
+                ui.label("Scale:");
+                changed |= ui
+                    .add(egui::Slider::new(&mut self.mid_scale, 30.0..=130.0).step_by(10.0))
+                    .changed();
+                ui.label("Weight:");
+                changed |= ui
+                    .add(egui::Slider::new(&mut self.mid_weight, 0..=100).step_by(5.0))
+                    .changed();
 
-        ui.label("中頻層\n(島嶼):");
-        ui.label("Scale:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.mid_scale, 30.0..=130.0).step_by(10.0))
-            .changed();
-        ui.label("Weight:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.mid_weight, 0..=100).step_by(5.0))
-            .changed();
+                ui.label("高頻層\n(細節):");
+                ui.label("Scale:");
+                changed |= ui
+                    .add(egui::Slider::new(&mut self.high_scale, 10.0..=50.0).step_by(5.0))
+                    .changed();
+                ui.label("Weight:");
+                changed |= ui
+                    .add(egui::Slider::new(&mut self.high_weight, 0..=100).step_by(5.0))
+                    .changed();
 
-        ui.label("高頻層\n(細節):");
-        ui.label("Scale:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.high_scale, 10.0..=50.0).step_by(5.0))
-            .changed();
-        ui.label("Weight:");
-        regen |= ui
-            .add(egui::Slider::new(&mut self.high_weight, 0..=100).step_by(5.0))
-            .changed();
+                ui.separator();
 
-        ui.separator();
-
-        ui.label("地表高度上限:");
-        regen |= ui
-            .add(
-                egui::Slider::new(
-                    &mut self.surface_height_limit,
-                    self.min_height..=self.max_height,
-                )
-                .step_by(1.0),
-            )
-            .changed();
-
-        regen
+                ui.label("地表高度上限:");
+                changed |= ui
+                    .add(
+                        egui::Slider::new(
+                            &mut self.surface_height_limit,
+                            self.min_height..=self.max_height,
+                        )
+                        .step_by(1.0),
+                    )
+                    .changed();
+            });
+        changed
     }
 
     fn ui_display(
@@ -438,7 +454,7 @@ impl HeightMapApp {
                 .iter()
                 .flat_map(|&h| {
                     if self.is_land(h) {
-                        TerrainType::terrain_type_to_color(TerrainType::Mountain)
+                        TerrainType::terrain_type_to_color(TerrainType::Plain)
                     } else {
                         TerrainType::terrain_type_to_color(TerrainType::ShallowWater)
                     }
