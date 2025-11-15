@@ -105,9 +105,9 @@ impl HeightGenerator {
     /// 取得 (x, y) 座標的高度值（0.0~1.0），可對低頻層套用遮罩。
     /// low_mask: 遮罩值（0.0~1.0），會乘以低頻層的值。
     pub fn get_height(&self, x: f64, y: f64, low_mask: f64) -> f64 {
-        let mut low = ((self.noise_low.get([x / self.low_scale, y / self.low_scale]) + 1.0) * 0.5)
+        let low = ((self.noise_low.get([x / self.low_scale, y / self.low_scale]) + 1.0) * 0.5)
             .clamp(0.0, 1.0);
-        low *= low_mask;
+        let low = low * low_mask;
 
         let mid = ((self.noise_mid.get([x / self.mid_scale, y / self.mid_scale]) + 1.0) * 0.5)
             .clamp(0.0, 1.0);
@@ -129,7 +129,7 @@ impl HeightGenerator {
 #[derive(PartialEq)]
 pub enum HeightMapTab {
     Noise,
-    LandWater,
+    Coastline,
     Terrain,
 }
 
@@ -329,18 +329,18 @@ impl eframe::App for HeightMapApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, HeightMapTab::Noise, "噪音");
-                ui.selectable_value(&mut self.tab, HeightMapTab::LandWater, "海陸");
+                ui.selectable_value(&mut self.tab, HeightMapTab::Coastline, "海岸線");
                 ui.selectable_value(&mut self.tab, HeightMapTab::Terrain, "地形");
             });
             match self.tab {
                 HeightMapTab::Noise => {
                     // 顯示高度圖並取得互動回應
-                    let response = self.ui_heightmap_display(ui);
+                    let response = self.ui_noisemap_display(ui);
                     // 處理點擊選取
                     self.handle_selection(&response);
                 }
-                HeightMapTab::LandWater => {
-                    let response = self.ui_landwater_display(ui);
+                HeightMapTab::Coastline => {
+                    let response = self.ui_coastline_display(ui);
                     self.handle_selection(&response);
                 }
                 HeightMapTab::Terrain => {
@@ -509,7 +509,7 @@ impl HeightMapApp {
         )
     }
 
-    fn ui_heightmap_display(&self, ui: &mut egui::Ui) -> egui::Response {
+    fn ui_noisemap_display(&self, ui: &mut egui::Ui) -> egui::Response {
         let mut pixels = Vec::with_capacity(self.width * self.height * 3);
         for &h in &self.noise_heights {
             let v = (h * 255.0).clamp(0.0, 255.0) as u8;
@@ -519,7 +519,7 @@ impl HeightMapApp {
         self.ui_display(ui, "noisemap", image)
     }
 
-    fn ui_landwater_display(&self, ui: &mut egui::Ui) -> egui::Response {
+    fn ui_coastline_display(&self, ui: &mut egui::Ui) -> egui::Response {
         let mut pixels = Vec::with_capacity(self.width * self.height * 3);
         for &h in &self.real_heights {
             let color = if self.is_land(h) {
@@ -530,7 +530,7 @@ impl HeightMapApp {
             pixels.extend_from_slice(&color);
         }
         let image = egui::ColorImage::from_rgb([self.width, self.height], &pixels);
-        self.ui_display(ui, "landwatermap", image)
+        self.ui_display(ui, "coastlinemap", image)
     }
 
     fn ui_terrain_display(&self, ui: &mut egui::Ui) -> egui::Response {
