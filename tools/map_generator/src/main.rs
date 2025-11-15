@@ -14,6 +14,7 @@ enum TerrainType {
 }
 
 /** 柯本氣候分類 */
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum KoppenClimate {
     Af,  // 熱帶雨林
@@ -54,9 +55,12 @@ pub struct HeightGenerator {
     high_scale: f64,
 
     /// 權重（0-100）
-    low_weight: u16,
-    mid_weight: u16,
-    high_weight: u16,
+    low_weight: f64,
+    mid_weight: f64,
+    high_weight: f64,
+
+    /// 快取的總權重（優化：避免重複計算）
+    total_weight: f64,
 }
 
 impl HeightGenerator {
@@ -75,6 +79,13 @@ impl HeightGenerator {
         let noise_mid = Simplex::new(seed.wrapping_add(1));
         let noise_high = Simplex::new(seed.wrapping_add(2));
 
+        // 預先計算總權重（優化：避免每個像素都計算）
+        let low_weight = low_weight as f64;
+        let mid_weight = mid_weight as f64;
+        let high_weight = high_weight as f64;
+        // max(1.0) 用來防止除以零
+        let total_weight = (low_weight + mid_weight + high_weight).max(1.0);
+
         Self {
             noise_low,
             noise_mid,
@@ -85,17 +96,17 @@ impl HeightGenerator {
             low_weight,
             mid_weight,
             high_weight,
+            total_weight,
         }
     }
 
-    /// 取得 (x, y) 座標的高度值（0.0~1.0），僅低頻層可套用遮罩。
-    /// low_masks: 遮罩函數陣列，依序作用於低頻層。
-    pub fn get_height(&self, x: f64, y: f64, low_masks: &[&dyn Fn(f64) -> f64]) -> f64 {
+    /// 取得 (x, y) 座標的高度值（0.0~1.0），可對低頻層套用遮罩。
+    /// low_mask: 遮罩值（0.0~1.0），會乘以低頻層的值。
+    pub fn get_height(&self, x: f64, y: f64, low_mask: f64) -> f64 {
         let mut low = ((self.noise_low.get([x / self.low_scale, y / self.low_scale]) + 1.0) * 0.5)
             .clamp(0.0, 1.0);
-        for mask_fn in low_masks {
-            low = mask_fn(low);
-        }
+        low *= low_mask;
+
         let mid = ((self.noise_mid.get([x / self.mid_scale, y / self.mid_scale]) + 1.0) * 0.5)
             .clamp(0.0, 1.0);
         let high = ((self
@@ -105,12 +116,8 @@ impl HeightGenerator {
             * 0.5)
             .clamp(0.0, 1.0);
 
-        let total_weight = (self.low_weight + self.mid_weight + self.high_weight) as f64;
-        let total_weight = total_weight.max(1.0); // 避免除以零
-        let combined = (low * self.low_weight as f64
-            + mid * self.mid_weight as f64
-            + high * self.high_weight as f64)
-            / total_weight;
+        let combined = (low * self.low_weight + mid * self.mid_weight + high * self.high_weight)
+            / self.total_weight;
 
         combined.clamp(0.0, 1.0)
     }
@@ -128,8 +135,10 @@ pub struct HeightMapApp {
     /// 當前顯示的 tab
     tab: HeightMapTab,
 
-    /// 隨機種子
+    /// 地形種子
     seed: u32,
+    /// 域扭曲種子
+    warp_seed: u32,
     /// 最低高度
     min_height: i32,
     /// 最高高度
@@ -149,6 +158,12 @@ pub struct HeightMapApp {
     high_weight: u16,
     /// 是否啟用中央遮罩（讓島嶼集中於中央）
     is_center_mask_enabled: bool,
+    /// 域扭曲用的噪聲產生器
+    warp_noise: Simplex,
+    /// 域扭曲縮放（噪聲頻率）
+    warp_scale: f64,
+    /// 域扭曲強度
+    warp_strength: f64,
     /// 地表高度上限
     surface_height_limit: i32,
 
@@ -174,6 +189,7 @@ impl Default for HeightMapApp {
         let mut app = Self {
             tab: HeightMapTab::Noise,
             seed: 0,
+            warp_seed: 0,
             min_height: -2000,
             max_height: HIGHEST_MOUNTAIN,
             low_scale: 80.0,
@@ -183,6 +199,9 @@ impl Default for HeightMapApp {
             mid_weight: 15,
             high_weight: 5,
             is_center_mask_enabled: true,
+            warp_noise: Simplex::new(0),
+            warp_scale: 0.001,
+            warp_strength: 50.0,
             surface_height_limit: HIGHEST_MOUNTAIN,
             width,
             height,
@@ -196,35 +215,53 @@ impl Default for HeightMapApp {
 }
 
 impl HeightMapApp {
-    fn get<T: Copy>(&self, vec: &Vec<T>, x: usize, y: usize) -> Option<T> {
+    fn get<T: Copy>(&self, slice: &[T], x: usize, y: usize) -> Option<T> {
         if x < self.width && y < self.height {
-            Some(vec[y * self.width + x])
+            Some(slice[y * self.width + x])
         } else {
             None
         }
     }
 
-    /// 產生中心遮罩函數（僅處理 noise，依是否啟用自動判斷）
-    fn center_mask_fn(&self, x: f64, y: f64) -> impl Fn(f64) -> f64 {
-        let enabled = self.is_center_mask_enabled;
+    /// 計算指定座標的中心遮罩值（0.0~1.0）
+    /// 使用域扭曲 (Domain Warping) 技術讓輪廓更有機、更自然
+    fn compute_center_mask(&self, x: f64, y: f64) -> f64 {
+        if !self.is_center_mask_enabled {
+            return 1.0; // 未啟用時返回 1.0（無遮罩效果）
+        }
+
         let cx = self.width as f64 / 2.0;
         let cy = self.height as f64 / 2.0;
         let r = cx.min(cy) * 0.8;
         let p = 2.0;
-        let dx = x - cx;
-        let dy = y - cy;
+
+        // 域扭曲：在計算距離前先扭曲座標空間
+        // 使用兩個獨立的噪聲採樣（X 和 Y 方向）
+        let warp_x = self
+            .warp_noise
+            .get([x * self.warp_scale, y * self.warp_scale])
+            * self.warp_strength;
+        let warp_y = self
+            .warp_noise
+            .get([x * self.warp_scale + 100.0, y * self.warp_scale + 100.0])
+            * self.warp_strength;
+
+        // 在扭曲後的空間計算距離
+        let warped_x = x + warp_x;
+        let warped_y = y + warp_y;
+        let dx = warped_x - cx;
+        let dy = warped_y - cy;
         let d = (dx * dx + dy * dy).sqrt();
-        let mask = (1.0 - (d / r).powf(p)).clamp(0.0, 1.0);
-        move |noise| {
-            if !enabled {
-                return noise;
-            }
-            noise * mask
-        }
+
+        // 返回遮罩值
+        (1.0 - (d / r).powf(p)).clamp(0.0, 1.0)
     }
 
     /// 重新產生高度圖
     fn regenerate(&mut self) {
+        // 更新域扭曲噪聲產生器
+        self.warp_noise = Simplex::new(self.warp_seed);
+
         let generator = HeightGenerator::new(
             self.seed,
             self.low_scale,
@@ -240,9 +277,12 @@ impl HeightMapApp {
             .map(|i| {
                 let x = (i % self.width) as f64;
                 let y = (i / self.width) as f64;
-                let center_mask = self.center_mask_fn(x, y);
-                let masks: Vec<&dyn Fn(f64) -> f64> = vec![&center_mask];
-                generator.get_height(x, y, &masks)
+
+                // 計算遮罩值
+                let mask = self.compute_center_mask(x, y);
+
+                // 取得高度（套用遮罩）
+                generator.get_height(x, y, mask)
             })
             .collect();
 
@@ -255,9 +295,7 @@ impl HeightMapApp {
     }
 
     fn to_real_height(&self, noise: f64) -> i32 {
-        let h = noise * (self.max_height - self.min_height) as f64;
-        let h = h as i32;
-        h + self.min_height
+        (noise * (self.max_height - self.min_height) as f64) as i32 + self.min_height
     }
 
     fn is_land(&self, h: i32) -> bool {
@@ -327,7 +365,7 @@ impl HeightMapApp {
 
         ui.separator();
 
-        ui.label("Seed:");
+        ui.label("Seed (地形):");
         ui.horizontal(|ui| {
             if ui.button("-").clicked() {
                 // 防止 seed 溢位
@@ -372,6 +410,38 @@ impl HeightMapApp {
                 changed |= ui
                     .checkbox(&mut self.is_center_mask_enabled, "集中於中央")
                     .changed();
+
+                // 域扭曲參數（僅在啟用中央遮罩時顯示）
+                if self.is_center_mask_enabled {
+                    ui.label("域扭曲:");
+                    ui.label("Seed:");
+                    ui.horizontal(|ui| {
+                        if ui.button("-").clicked() {
+                            if self.warp_seed > 0 {
+                                self.warp_seed -= 1;
+                                changed = true;
+                            }
+                        }
+                        changed |= ui.add(egui::DragValue::new(&mut self.warp_seed)).changed();
+                        if ui.button("+").clicked() {
+                            if self.warp_seed < u32::MAX {
+                                self.warp_seed += 1;
+                                changed = true;
+                            }
+                        }
+                    });
+                    ui.label("Scale (頻率):");
+                    changed |= ui
+                        .add(
+                            egui::Slider::new(&mut self.warp_scale, 0.0001..=0.005)
+                                .logarithmic(true),
+                        )
+                        .changed();
+                    ui.label("Strength (強度):");
+                    changed |= ui
+                        .add(egui::Slider::new(&mut self.warp_strength, 0.0..=100.0).step_by(5.0))
+                        .changed();
+                }
 
                 ui.label("中頻層\n(島嶼):");
                 ui.label("Scale:");
@@ -432,50 +502,37 @@ impl HeightMapApp {
     }
 
     fn ui_heightmap_display(&self, ui: &mut egui::Ui) -> egui::Response {
-        let image = egui::ColorImage::from_rgb(
-            [self.width, self.height],
-            &self
-                .noise_heights
-                .iter()
-                .flat_map(|&h| {
-                    let v = (h * 255.0).clamp(0.0, 255.0) as u8;
-                    vec![v, v, v]
-                })
-                .collect::<Vec<_>>(),
-        );
+        let mut pixels = Vec::with_capacity(self.width * self.height * 3);
+        for &h in &self.noise_heights {
+            let v = (h * 255.0).clamp(0.0, 255.0) as u8;
+            pixels.extend_from_slice(&[v, v, v]);
+        }
+        let image = egui::ColorImage::from_rgb([self.width, self.height], &pixels);
         self.ui_display(ui, "noisemap", image)
     }
 
     fn ui_landwater_display(&self, ui: &mut egui::Ui) -> egui::Response {
-        let image = egui::ColorImage::from_rgb(
-            [self.width, self.height],
-            &self
-                .real_heights
-                .iter()
-                .flat_map(|&h| {
-                    if self.is_land(h) {
-                        TerrainType::terrain_type_to_color(TerrainType::Plain)
-                    } else {
-                        TerrainType::terrain_type_to_color(TerrainType::ShallowWater)
-                    }
-                })
-                .collect::<Vec<_>>(),
-        );
+        let mut pixels = Vec::with_capacity(self.width * self.height * 3);
+        for &h in &self.real_heights {
+            let color = if self.is_land(h) {
+                TerrainType::terrain_type_to_color(TerrainType::Plain)
+            } else {
+                TerrainType::terrain_type_to_color(TerrainType::ShallowWater)
+            };
+            pixels.extend_from_slice(&color);
+        }
+        let image = egui::ColorImage::from_rgb([self.width, self.height], &pixels);
         self.ui_display(ui, "landwatermap", image)
     }
 
     fn ui_terrain_display(&self, ui: &mut egui::Ui) -> egui::Response {
-        let image = egui::ColorImage::from_rgb(
-            [self.width, self.height],
-            &self
-                .real_heights
-                .iter()
-                .flat_map(|&h| {
-                    let terrain = TerrainType::height_to_terrain_type(h);
-                    TerrainType::terrain_type_to_color(terrain)
-                })
-                .collect::<Vec<_>>(),
-        );
+        let mut pixels = Vec::with_capacity(self.width * self.height * 3);
+        for &h in &self.real_heights {
+            let terrain = TerrainType::height_to_terrain_type(h);
+            let color = TerrainType::terrain_type_to_color(terrain);
+            pixels.extend_from_slice(&color);
+        }
+        let image = egui::ColorImage::from_rgb([self.width, self.height], &pixels);
         self.ui_display(ui, "terrainmap", image)
     }
 
