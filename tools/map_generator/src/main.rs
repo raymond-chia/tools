@@ -137,14 +137,13 @@ pub struct HeightMapApp {
     /// 當前顯示的 tab
     tab: HeightMapTab,
 
-    /// 地形種子
-    seed: u32,
-    /// 域扭曲種子
-    warp_seed: u32,
     /// 最低高度
     min_height: i32,
     /// 最高高度
     max_height: i32,
+
+    /// 地形種子
+    seed: u32,
 
     /// 低頻層縮放
     low_scale: f64,
@@ -158,8 +157,11 @@ pub struct HeightMapApp {
     mid_weight: u16,
     /// 高頻權重（0-100）
     high_weight: u16,
+
     /// 是否啟用中央遮罩（讓島嶼集中於中央）
     is_center_mask_enabled: bool,
+    /// 域扭曲種子
+    warp_seed: u32,
     /// 域扭曲用的噪聲產生器
     warp_noise: Simplex,
     /// 域扭曲縮放（噪聲頻率）
@@ -177,6 +179,9 @@ pub struct HeightMapApp {
     /// 實際高度
     real_heights: Vec<i32>,
 
+    /// 高度中心點
+    height_focus: Option<(f64, f64)>,
+
     /// 使用者選取的點 (x, y)
     selected: Option<(usize, usize)>,
 }
@@ -188,10 +193,9 @@ impl Default for HeightMapApp {
 
         let mut app = Self {
             tab: HeightMapTab::Noise,
-            seed: 0,
-            warp_seed: 0,
             min_height: -2000,
             max_height: HIGHEST_MOUNTAIN,
+            seed: 0,
             low_scale: 80.0,
             mid_scale: 50.0,
             high_scale: 10.0,
@@ -199,6 +203,7 @@ impl Default for HeightMapApp {
             mid_weight: 15,
             high_weight: 5,
             is_center_mask_enabled: true,
+            warp_seed: 0,
             warp_noise: Simplex::new(0),
             warp_scale: 0.001,
             warp_strength: 50.0,
@@ -206,6 +211,7 @@ impl Default for HeightMapApp {
             height,
             noise_heights: vec![0.0; width * height],
             real_heights: vec![0; width * height],
+            height_focus: None,
             selected: None,
         };
         app.regenerate();
@@ -289,7 +295,28 @@ impl HeightMapApp {
         self.real_heights = self
             .noise_heights
             .iter()
-            .map(|&n| self.to_real_height(n))
+            .enumerate()
+            .map(|(i, &n)| {
+                let h = self.to_real_height(n);
+                if h <= SEA_LEVEL {
+                    return h;
+                }
+                // 若有設定高度中心點，根據距離降低高度
+                if let Some((fx, fy)) = self.height_focus {
+                    let x = (i % self.width) as f64;
+                    let y = (i / self.width) as f64;
+                    let dist = ((x - fx).powi(2) + (y - fy).powi(2)).sqrt();
+                    let max_dist =
+                        ((self.width as f64).powi(2) + (self.height as f64).powi(2)).sqrt() / 2.0;
+                    let factor = 1.0 - (dist / max_dist).clamp(0.0, 1.0);
+                    let h = self.to_real_height(n * factor.powi(2));
+                    if h > SEA_LEVEL {
+                        return h;
+                    }
+                    return 100;
+                }
+                h
+            })
             .collect();
     }
 
@@ -467,7 +494,30 @@ impl HeightMapApp {
                 changed |= ui
                     .add(egui::Slider::new(&mut self.high_weight, 0..=100).step_by(5.0))
                     .changed();
+
+                ui.separator();
+
+                ui.label("高度中心點 (點擊地圖設定):");
+                if let Some((fx, fy)) = self.height_focus {
+                    ui.label(format!("目前中心: ({:.1}, {:.1})", fx, fy));
+                    if ui.button("清除中心點").clicked() {
+                        self.height_focus = None;
+                        changed = true;
+                    }
+                } else {
+                    ui.label("尚未設定");
+                }
+                if ui.button("設為高度中心點").clicked() {
+                    if let Some((x, y)) = self.selected {
+                        self.height_focus = Some((x as f64, y as f64));
+                        changed = true;
+                    } else {
+                        self.height_focus = None;
+                        changed = true;
+                    }
+                }
             });
+
         changed
     }
 
