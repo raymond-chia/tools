@@ -166,8 +166,6 @@ pub struct HeightMapApp {
     warp_scale: f64,
     /// 域扭曲強度
     warp_strength: f64,
-    /// 地表高度上限
-    surface_height_limit: i32,
 
     /// 地圖寬度
     width: usize,
@@ -204,7 +202,6 @@ impl Default for HeightMapApp {
             warp_noise: Simplex::new(0),
             warp_scale: 0.001,
             warp_strength: 50.0,
-            surface_height_limit: HIGHEST_MOUNTAIN,
             width,
             height,
             noise_heights: vec![0.0; width * height],
@@ -292,7 +289,7 @@ impl HeightMapApp {
         self.real_heights = self
             .noise_heights
             .iter()
-            .map(|&h| self.to_real_height(h).min(self.surface_height_limit))
+            .map(|&n| self.to_real_height(n))
             .collect();
     }
 
@@ -469,19 +466,6 @@ impl HeightMapApp {
                 ui.label("Weight:");
                 changed |= ui
                     .add(egui::Slider::new(&mut self.high_weight, 0..=100).step_by(5.0))
-                    .changed();
-
-                ui.separator();
-
-                ui.label("地表高度上限:");
-                changed |= ui
-                    .add(
-                        egui::Slider::new(
-                            &mut self.surface_height_limit,
-                            self.min_height..=self.max_height,
-                        )
-                        .step_by(1.0),
-                    )
                     .changed();
             });
         changed
