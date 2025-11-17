@@ -38,6 +38,8 @@ const HIGHEST_MOUNTAIN: i32 = 8000;
 
 /** 地圖顯示縮放倍率 */
 const MAP_POINT_SIZE: f32 = 2.0;
+const MAP_DEFAULT_WIDTH: usize = 560;
+const MAP_DEFAULT_HEIGHT: usize = 360;
 
 /// 多層噪聲高度產生器
 /// 使用三層獨立噪聲（低、中、高頻）搭配權重，產生更自然的海島地形
@@ -183,8 +185,8 @@ pub struct HeightMapApp {
 
 impl Default for HeightMapApp {
     fn default() -> Self {
-        let width = 560;
-        let height = 360;
+        let width = MAP_DEFAULT_WIDTH;
+        let height = MAP_DEFAULT_HEIGHT;
 
         let mut app = Self {
             tab: HeightMapTab::Noise,
@@ -356,11 +358,17 @@ impl HeightMapApp {
         let mut changed = false;
         ui.label("Width:");
         changed |= ui
-            .add(egui::Slider::new(&mut self.width, 16..=560))
+            .add(egui::Slider::new(
+                &mut self.width,
+                16..=MAP_DEFAULT_WIDTH * 2,
+            ))
             .changed();
         ui.label("Height:");
         changed |= ui
-            .add(egui::Slider::new(&mut self.height, 16..=360))
+            .add(egui::Slider::new(
+                &mut self.height,
+                16..=MAP_DEFAULT_HEIGHT * 2,
+            ))
             .changed();
 
         ui.separator();
