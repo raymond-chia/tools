@@ -580,6 +580,35 @@ impl BoardsEditor {
     }
 
     fn show_object_brush(&mut self, ui: &mut Ui) {
+        ui.separator();
+        if ui.button("清除所有物件").clicked() {
+            self.clear_all_objects(ui);
+        }
+
+        ui.separator();
+
+        thread_local! {
+            static SHIFT_DX: RefCell<i32> = RefCell::new(0);
+            static SHIFT_DY: RefCell<i32> = RefCell::new(0);
+        }
+        let mut dx = SHIFT_DX.with(|d| *d.borrow());
+        let mut dy = SHIFT_DY.with(|d| *d.borrow());
+        ui.horizontal(|ui| {
+            ui.label("平移 dx:");
+            if ui.add(DragValue::new(&mut dx).speed(1)).changed() {
+                SHIFT_DX.with(|d| *d.borrow_mut() = dx);
+            }
+            ui.label("dy:");
+            if ui.add(DragValue::new(&mut dy).speed(1)).changed() {
+                SHIFT_DY.with(|d| *d.borrow_mut() = dy);
+            }
+            if ui.button("平移物件").clicked() {
+                self.shift_objects(ui, dx, dy);
+            }
+        });
+
+        ui.separator();
+
         ui.horizontal(|ui| {
             ui.label("放置方向:");
             for orientation in Orientation::iter() {
@@ -924,22 +953,65 @@ impl BoardsEditor {
         }
     }
 
-    fn clear_all_objects(&mut self) {
+    fn clear_all_objects(&mut self, ui: &mut Ui) {
         let board_id = match &self.selected_board {
             None => {
-                self.set_status("請先選擇戰場".to_string(), true);
+                ui.label("請先選擇戰場");
                 return;
             }
             Some(board_id) => board_id,
         };
         let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
-        for row in &mut board.tiles {
-            for tile in row {
-                tile.object = None;
-            }
-        }
+        clear_all_objects(board);
         self.has_unsaved_changes = true;
         self.set_status("已清除所有物件".to_string(), false);
+    }
+
+    fn shift_objects(&mut self, ui: &mut Ui, dx: i32, dy: i32) {
+        let board_id = match &self.selected_board {
+            None => {
+                ui.label("請先選擇戰場");
+                return;
+            }
+            Some(board_id) => board_id,
+        };
+        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+
+        // 收集所有物件位置
+        let mut objects = vec![];
+        for (y, row) in board.tiles.iter().enumerate() {
+            for (x, tile) in row.iter().enumerate() {
+                if tile.object.is_some() {
+                    objects.push((Pos { x, y }, tile.object.clone()));
+                }
+            }
+        }
+
+        // 清除所有物件
+        clear_all_objects(board);
+
+        // 重新放置到新位置
+        for (pos, obj) in objects {
+            let new_x = pos.x as i32 + dx;
+            let new_y = pos.y as i32 + dy;
+            if new_x >= 0
+                && new_y >= 0
+                && (new_x as usize) < board.width()
+                && (new_y as usize) < board.height()
+            {
+                let new_pos = Pos {
+                    x: new_x as usize,
+                    y: new_y as usize,
+                };
+                if let Some(tile) = board.get_tile_mut(new_pos) {
+                    tile.object = obj;
+                }
+            }
+            // 如果超出邊界，忽略
+        }
+
+        self.has_unsaved_changes = true;
+        self.set_status(format!("已平移物件 dx={}, dy={}", dx, dy), false);
     }
 
     fn show_status_message(&mut self, ctx: &Context) {
@@ -1288,6 +1360,14 @@ fn paint_unit(board: &mut BoardConfig, pos: Pos, unit: Option<UnitMarker>) -> Re
         }
     }
     Ok(())
+}
+
+fn clear_all_objects(board: &mut BoardConfig) {
+    for row in &mut board.tiles {
+        for tile in row {
+            tile.object = None;
+        }
+    }
 }
 
 fn terrain_color(tile: &Tile) -> Color32 {
