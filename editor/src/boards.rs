@@ -11,7 +11,8 @@ use std::io;
 use strum::IntoEnumIterator;
 
 const TILE_SIZE: f32 = 56.0;
-const TILE_OBJECT_SIZE: f32 = 10.0;
+const TILE_UNIT_SIZE: f32 = 10.0;
+const TILE_OBJECT_SIZE: f32 = 100.0;
 const TILE_SHRINK_SIZE: f32 = TILE_SIZE / 40.0;
 const TILE_ACTION_SHRINK_SIZE: f32 = TILE_SIZE / 5.0;
 const TILE_DEPLOYABLE_SIZE: f32 = 28.0;
@@ -923,6 +924,24 @@ impl BoardsEditor {
         }
     }
 
+    fn clear_all_objects(&mut self) {
+        let board_id = match &self.selected_board {
+            None => {
+                self.set_status("請先選擇戰場".to_string(), true);
+                return;
+            }
+            Some(board_id) => board_id,
+        };
+        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        for row in &mut board.tiles {
+            for tile in row {
+                tile.object = None;
+            }
+        }
+        self.has_unsaved_changes = true;
+        self.set_status("已清除所有物件".to_string(), false);
+    }
+
     fn show_status_message(&mut self, ctx: &Context) {
         if let Some((message, is_error)) = &self.status_message {
             show_status_message(ctx, message, *is_error);
@@ -1000,12 +1019,17 @@ fn show_tiles(
             };
             show_others(painter, camera, pos, rect);
             // 畫 tile object
+            let o = object_symbol(tile);
+            let o_len = o.len() as f32;
+            if o_len == 0.0 {
+                continue;
+            }
             painter.text(
                 rect.center(),
                 // 會在格子下半顯示
                 Align2::CENTER_TOP,
-                object_symbol(tile),
-                FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+                o,
+                FontId::proportional(TILE_OBJECT_SIZE / o_len * camera.zoom),
                 Color32::WHITE,
             );
         }
@@ -1042,7 +1066,7 @@ fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, 
             rect.center(),
             Align2::CENTER_CENTER,
             unit_symbol(&unit_template),
-            FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+            FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
             team_color,
         );
     }
@@ -1123,7 +1147,7 @@ fn show_unit(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect
         rect.center(),
         Align2::CENTER_CENTER,
         unit_symbol(&unit_template),
-        FontId::proportional(TILE_OBJECT_SIZE * camera.zoom),
+        FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
         team_color,
     );
 }
@@ -1185,7 +1209,7 @@ fn paint_object(
                 duration,
             })
         }
-        None | Some(Object::Wall) => {
+        None | Some(Object::Wall) | Some(Object::Tree) => {
             // 牆壁或無物件，直接設定
             board
                 .get_tile_mut(pos)
@@ -1280,6 +1304,7 @@ fn terrain_color(tile: &Tile) -> Color32 {
 fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
         Some(Object::Wall) => "█",
+        Some(Object::Tree) => "🌳",
         Some(Object::Tent2 { orientation, .. }) => match orientation {
             Orientation::Horizontal => "⛺→2",
             Orientation::Vertical => "⛺↓2",

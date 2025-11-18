@@ -29,6 +29,7 @@ pub enum Orientation {
 #[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
 pub enum Object {
     Wall,
+    Tree,
     Tent2 {
         orientation: Orientation,
         rel: Pos,
