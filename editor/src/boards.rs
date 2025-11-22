@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use rand::Rng;
 use skills_lib::*;
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 use strum::IntoEnumIterator;
 
@@ -805,10 +805,21 @@ impl BoardsEditor {
         ui.heading("隊伍設定");
 
         // 列出所有現有 teams
-        let mut to_delete: Option<String> = None;
+        let existing_team_ids: HashSet<TeamID> = board.teams.keys().cloned().collect();
+        let mut to_delete: Option<TeamID> = None;
+        let mut edited_team: Option<(TeamID, TeamID)> = None;
         for (team_id, team_cfg) in board.teams.iter_mut() {
             ui.horizontal(|ui| {
-                ui.label(format!("TeamID: {}", team_id));
+                // 可編輯的 TeamID
+                let mut id_buf = team_id.clone();
+                let resp = ui.text_edit_singleline(&mut id_buf);
+                if resp.changed()
+                    && !id_buf.is_empty()
+                    && id_buf != *team_id
+                    && !existing_team_ids.contains(&id_buf)
+                {
+                    edited_team = Some((team_id.clone(), id_buf.clone()));
+                }
                 // 顏色編輯器
                 let mut color32 = to_egui_color(team_cfg.color);
                 if ui.color_edit_button_srgba(&mut color32).changed() {
@@ -820,8 +831,32 @@ impl BoardsEditor {
                 }
             });
         }
+        // 處理重新命名
+        if let Some((old_id, new_id)) = edited_team {
+            if let Some(team) = board.teams.remove(&old_id) {
+                board.teams.insert(new_id.clone(), team);
+                // 更新 selected_team
+                if self.selected_team == old_id {
+                    self.selected_team = new_id.clone();
+                }
+                // 更新 units 中的 team
+                for unit in board.units.values_mut() {
+                    if unit.team == old_id {
+                        unit.team = new_id.clone();
+                    }
+                }
+                self.has_unsaved_changes = true;
+            }
+        }
+        // 處理刪除
         if let Some(team_id) = to_delete {
+            // 檢查是否有單位屬於該隊伍
+            board.units.retain(|_, u| u.team != team_id);
             board.teams.remove(&team_id);
+            // 更新 selected_team 如果刪除的是當前選擇的
+            if self.selected_team == team_id {
+                self.selected_team = board.teams.keys().next().cloned().unwrap_or_default();
+            }
             self.has_unsaved_changes = true;
         }
 
