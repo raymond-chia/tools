@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use strum_macros::{Display, EnumIter, EnumString};
 
 #[derive(Debug, Deserialize, Serialize, Default)]
@@ -7,7 +7,7 @@ pub struct Script {
     #[serde(default)]
     pub function_signatures: Vec<String>,
     #[serde(default)]
-    pub nodes: HashMap<String, Node>,
+    pub nodes: BTreeMap<String, Node>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone, Copy)]
@@ -93,21 +93,21 @@ pub struct ConditionCheckEntry {
 impl Node {
     pub fn pos(&self) -> Pos {
         match self {
-            Node::Dialogue { pos, .. } => *pos,
-            Node::Option { pos, .. } => *pos,
-            Node::Battle { pos, .. } => *pos,
-            Node::Condition { pos, .. } => *pos,
-            Node::End { pos } => *pos,
+            Node::Dialogue { pos, .. }
+            | Node::Option { pos, .. }
+            | Node::Battle { pos, .. }
+            | Node::Condition { pos, .. }
+            | Node::End { pos } => *pos,
         }
     }
 
     pub fn set_pos(&mut self, p: Pos) {
         match self {
-            Node::Dialogue { pos, .. } => *pos = p,
-            Node::Option { pos, .. } => *pos = p,
-            Node::Battle { pos, .. } => *pos = p,
-            Node::Condition { pos, .. } => *pos = p,
-            Node::End { pos } => *pos = p,
+            Node::Dialogue { pos, .. }
+            | Node::Option { pos, .. }
+            | Node::Battle { pos, .. }
+            | Node::Condition { pos, .. }
+            | Node::End { pos } => *pos = p,
         }
     }
 }

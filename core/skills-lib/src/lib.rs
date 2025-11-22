@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use strum_macros::{Display, EnumIter, EnumString};
 
-pub type DEGREE = u16;
+pub type Degree = u16;
 pub type SkillID = String;
 
 /// 技能資料結構
@@ -85,7 +85,7 @@ pub enum Shape {
     Point,
     Circle(usize),
     Line(usize),
-    Cone(usize, DEGREE),
+    Cone(usize, Degree),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, EnumIter, PartialEq)]
@@ -162,20 +162,29 @@ impl Default for Skill {
     }
 }
 
+// macro 產生 match-arm 用來取得某個欄位的參考
+// 使用 macro 以減少在多個 getter 中重複列出所有 enum 分支
+macro_rules! effect_field_ref {
+    ($self:expr, $field:ident) => {
+        match $self {
+            Effect::Hp { $field, .. } => $field,
+            Effect::Mp { $field, .. } => $field,
+            Effect::MaxHp { $field, .. } => $field,
+            Effect::MaxMp { $field, .. } => $field,
+            Effect::Initiative { $field, .. } => $field,
+            Effect::Evasion { $field, .. } => $field,
+            Effect::Block { $field, .. } => $field,
+            Effect::MovePoints { $field, .. } => $field,
+            Effect::Burn { $field, .. } => $field,
+            Effect::HitAndRun { $field, .. } => $field,
+        }
+    };
+}
+
 impl Effect {
     pub fn target_type(&self) -> &TargetType {
-        match self {
-            Effect::Hp { target_type, .. } => target_type,
-            Effect::Mp { target_type, .. } => target_type,
-            Effect::MaxHp { target_type, .. } => target_type,
-            Effect::MaxMp { target_type, .. } => target_type,
-            Effect::Initiative { target_type, .. } => target_type,
-            Effect::Evasion { target_type, .. } => target_type,
-            Effect::Block { target_type, .. } => target_type,
-            Effect::MovePoints { target_type, .. } => target_type,
-            Effect::Burn { target_type, .. } => target_type,
-            Effect::HitAndRun { target_type, .. } => target_type,
-        }
+        // 透過 macro 取得 target_type 的參考
+        effect_field_ref!(self, target_type)
     }
 
     pub fn is_targeting_unit(&self) -> bool {
@@ -190,31 +199,21 @@ impl Effect {
     }
 
     pub fn shape(&self) -> &Shape {
-        match self {
-            Effect::Hp { shape, .. } => shape,
-            Effect::Mp { shape, .. } => shape,
-            Effect::MaxHp { shape, .. } => shape,
-            Effect::MaxMp { shape, .. } => shape,
-            Effect::Initiative { shape, .. } => shape,
-            Effect::Evasion { shape, .. } => shape,
-            Effect::Block { shape, .. } => shape,
-            Effect::MovePoints { shape, .. } => shape,
-            Effect::Burn { shape, .. } => shape,
-            Effect::HitAndRun { shape, .. } => shape,
-        }
+        // 透過 macro 取得 shape 的參考
+        effect_field_ref!(self, shape)
     }
 
     pub fn duration(&self) -> i32 {
+        // 對於有 duration 欄位的 variant 回傳其值，其他（立即生效的 variant）回傳 0
         match self {
-            Effect::MaxHp { duration, .. } => *duration,
-            Effect::MaxMp { duration, .. } => *duration,
-            Effect::Initiative { duration, .. } => *duration,
-            Effect::Evasion { duration, .. } => *duration,
-            Effect::Block { duration, .. } => *duration,
-            Effect::MovePoints { duration, .. } => *duration,
-            Effect::Burn { duration, .. } => *duration,
-            Effect::HitAndRun { duration, .. } => *duration,
-            // 立即生效、立即結束
+            Effect::MaxHp { duration, .. }
+            | Effect::MaxMp { duration, .. }
+            | Effect::Initiative { duration, .. }
+            | Effect::Evasion { duration, .. }
+            | Effect::Block { duration, .. }
+            | Effect::MovePoints { duration, .. }
+            | Effect::Burn { duration, .. }
+            | Effect::HitAndRun { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } => 0,
         }
     }

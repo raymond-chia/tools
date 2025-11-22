@@ -658,7 +658,7 @@ impl BoardsEditor {
                         self.has_unsaved_changes = true;
                         self.set_status(
                             format!("填滿完成：成功 {} 格，跳過 {} 格", success, skipped),
-                            skipped>0,
+                            skipped > 0,
                         );
                     }
                     Err(err) => {
