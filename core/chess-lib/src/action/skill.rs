@@ -494,7 +494,7 @@ mod inner {
                 })
                 .unwrap_or_default();
             // 計算閃避值
-            let evasion = crate::unit::skills_to_evasion(&unit_skills);
+            let evasion = crate::unit::skills_to_evasion(unit_skills.iter().map(|(k, v)| (*k, *v)));
             // 閃避
             let evade_score = hit_score - evasion;
             if evade_score <= 0 {
@@ -505,7 +505,7 @@ mod inner {
             }
 
             // 計算格擋值
-            let block = crate::unit::skills_to_block(&unit_skills);
+            let block = crate::unit::skills_to_block(unit_skills.iter().map(|(k, v)| (*k, *v)));
             let block_reduction = 1;
             let block_score = hit_score - block - evasion;
             // 格擋

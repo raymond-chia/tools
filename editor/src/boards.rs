@@ -327,7 +327,7 @@ impl BoardsEditor {
                     if let Err(e) = paint_object(
                         board,
                         painted,
-                        self.selected_object.clone(),
+                        self.selected_object.as_ref(),
                         self.selected_orientation,
                         self.selected_object_duration,
                     ) {
@@ -458,7 +458,11 @@ impl BoardsEditor {
             if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
                 return;
             }
-            let unit = self.sim_board.units.get(&active_unit_id).unwrap();
+            let unit = self
+                .sim_board
+                .units
+                .get(&active_unit_id)
+                .expect("active unit not exist");
             if let Err(e) = is_able_to_cast(unit) {
                 self.set_status(e.to_string(), true);
                 return;
@@ -650,7 +654,7 @@ impl BoardsEditor {
                     board,
                     start,
                     end,
-                    self.selected_object.clone(),
+                    self.selected_object.as_ref(),
                     self.selected_orientation,
                     self.selected_object_duration,
                 ) {
@@ -896,12 +900,11 @@ impl BoardsEditor {
                     .units
                     .iter()
                     .map(|(&id, unit)| {
-                        let skill_refs: BTreeMap<&SkillID, &Skill> = unit
+                        let skill_refs = unit
                             .skills
                             .iter()
-                            .filter_map(|sid| self.skills.get(sid).map(|s| (sid, s)))
-                            .collect();
-                        let ini = calc_initiative(&mut rng, &skill_refs);
+                            .filter_map(|sid| self.skills.get(sid).map(|s| (sid, s)));
+                        let ini = calc_initiative(&mut rng, skill_refs);
                         (id, ini)
                     })
                     .collect::<Vec<_>>();
@@ -1024,7 +1027,7 @@ impl BoardsEditor {
             }
         }
 
-        if let Some(result) = self.ai_score_result.clone() {
+        if let Some(result) = &self.ai_score_result {
             ui.separator();
             ui.label("AI 評分結果：");
             egui::ScrollArea::vertical()
@@ -1147,11 +1150,38 @@ fn export_boards_to_files(boards: &BTreeMap<BoardID, BoardConfig>) -> Result<usi
     Ok(count)
 }
 
-// 避免 mut editor 出現太多次，只使用 editor 的 member
+// - draw_tile_border_and_background: 負責邊框與地形底色
+fn draw_tile_border_and_background(painter: &Painter, rect: Rect, tile: &Tile, zoom: f32) {
+    // 畫 tile 邊框與地形背景
+    painter.rect_filled(rect, 2.0, Color32::BLACK);
+    painter.rect_filled(
+        rect.shrink(TILE_SHRINK_SIZE * zoom),
+        2.0,
+        terrain_color(tile),
+    );
+}
+
+// - draw_tile_object: 負責在格子上繪製物件符號（若有）
+fn draw_tile_object(painter: &Painter, rect: Rect, tile: &Tile, zoom: f32) {
+    // 畫 tile object（若有）
+    let symbol = object_symbol(tile);
+    if symbol.is_empty() {
+        return;
+    }
+    let o_len = symbol.len() as f32;
+    painter.text(
+        rect.center(),
+        Align2::CENTER_TOP,
+        symbol,
+        FontId::proportional(TILE_OBJECT_SIZE / o_len * zoom),
+        Color32::WHITE,
+    );
+}
+
 fn show_tiles(
     ui: &mut Ui,
     camera: &mut Camera2D,
-    tiles: &Vec<Vec<Tile>>,
+    tiles: &[Vec<Tile>],
     show_others: impl Fn(&Painter, &Camera2D, Pos, Rect),
 ) {
     // 處理攝影機平移與縮放
@@ -1160,46 +1190,33 @@ fn show_tiles(
 
     // 先繪製格子內容
     let painter = ui.painter();
+    let zoom = camera.zoom;
+    let tile_size = vec2(TILE_SIZE, TILE_SIZE) * zoom;
     for (row_idx, row) in tiles.iter().enumerate() {
         for (col_idx, tile) in row.iter().enumerate() {
-            // 計算世界座標
+            // 計算世界座標與螢幕矩形
             let world_pos = Pos2::new(col_idx as f32, row_idx as f32) * TILE_SIZE;
             let screen_pos = camera.world_to_screen(world_pos);
-            let rect = Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * camera.zoom);
+            let rect = Rect::from_min_size(screen_pos, tile_size);
 
-            // 畫 tile 邊框
-            painter.rect_filled(rect, 2.0, Color32::BLACK);
-            // 畫 tile 地形
-            painter.rect_filled(
-                rect.shrink(TILE_SHRINK_SIZE * camera.zoom),
-                2.0,
-                terrain_color(tile),
-            );
-            // 畫 unit
+            // 辦理格子底色與邊框
+            draw_tile_border_and_background(painter, rect, tile, zoom);
+
+            // 顯示單位或其他 overlay（由呼叫端提供）
             let pos = Pos {
                 x: col_idx,
                 y: row_idx,
             };
             show_others(painter, camera, pos, rect);
-            // 畫 tile object
-            let o = object_symbol(tile);
-            let o_len = o.len() as f32;
-            if o_len == 0.0 {
-                continue;
-            }
-            painter.text(
-                rect.center(),
-                // 會在格子下半顯示
-                Align2::CENTER_TOP,
-                o,
-                FontId::proportional(TILE_OBJECT_SIZE / o_len * camera.zoom),
-                Color32::WHITE,
-            );
+
+            // 繪製格子上的物件（若有）
+            draw_tile_object(painter, rect, tile, zoom);
         }
     }
 }
 
 fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
+    // 回傳一個 closure 供 show_tiles 呼叫，負責在 BoardConfig 上繪製非地形的 overlay（例如部署格與單位）
     |painter, camera, pos, rect| {
         // 顯示部署格子（黃色圓圈）
         if board.deployable.contains(&pos) {
@@ -1211,60 +1228,94 @@ fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, 
                 Color32::LIGHT_BLUE,
             );
         }
-        // 顯示單位
-        let (unit_template, team) = match board
-            .units
-            .values()
-            .find(|u| u.pos == pos)
-            .map(|u| (&u.unit_template_type, &u.team))
-        {
-            None => return, // 該位置沒有單位
-            Some(v) => v,
-        };
-        let team_color = board
-            .teams
-            .get(team)
-            .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-        painter.text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            unit_symbol(&unit_template),
-            FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
-            team_color,
-        );
+        // 顯示單位（BoardConfig 沒有 pos_to_unit，因此以線性搜尋）
+        draw_unit_on_config(board, painter, camera, pos, rect);
     }
 }
 
+/// 針對 Board 的單位繪製共用實作
+fn draw_unit_on_board(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect: Rect) {
+    let Some(unit_id) = board.pos_to_unit(pos) else {
+        // 該位置沒有單位
+        return;
+    };
+    let (unit_template, team) = board
+        .units
+        .get(&unit_id)
+        .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
+    let team_color = board
+        .teams
+        .get(team)
+        .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        unit_symbol(&unit_template).as_ref(),
+        FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
+        team_color,
+    );
+}
+
+/// 針對 BoardConfig 的單位繪製（BoardConfig 沒有 pos_to_unit helper，因此以 values() 找到對應 pos）
+fn draw_unit_on_config(
+    board: &BoardConfig,
+    painter: &Painter,
+    camera: &Camera2D,
+    pos: Pos,
+    rect: Rect,
+) {
+    let (unit_template, team) = match board
+        .units
+        .values()
+        .find(|u| u.pos == pos)
+        .map(|u| (&u.unit_template_type, &u.team))
+    {
+        None => return, // 該位置沒有單位
+        Some(v) => v,
+    };
+    let team_color = board
+        .teams
+        .get(team)
+        .map_or(Color32::WHITE, |team| to_egui_color(team.color));
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        unit_symbol(&unit_template).as_ref(),
+        FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
+        team_color,
+    );
+}
+
+/// 顯示模擬模式下的 overlay：包含可移動範圍高亮與單位繪製
 fn show_sim_others(
     board: &Board,
     movable: &HashMap<Pos, (MovementCost, Pos)>,
     active_unit_id: &UnitID,
     path: &[Pos],
 ) -> impl Fn(&Painter, &Camera2D, Pos, Rect) {
+    // 回傳 closure 給 show_tiles 使用
     |painter, camera, pos, rect| {
-        // 可移動範圍
-        let show_movement = || {
-            let color = movement_tile_color(board, movable, active_unit_id, path, pos);
-            let Ok(color) = color else {
-                // 無法取得顏色，可能是因為不在可移動範圍
-                return;
-            };
-            let color = Color32::from_rgba_premultiplied(color.0, color.1, color.2, color.3);
-
+        // 可移動範圍（若該 pos 有 movement info，則畫半透明顏色）
+        if let Ok(color_tuple) = movement_tile_color(board, movable, active_unit_id, path, pos) {
+            let color = Color32::from_rgba_premultiplied(
+                color_tuple.0,
+                color_tuple.1,
+                color_tuple.2,
+                color_tuple.3,
+            );
             painter.rect_filled(
                 rect.shrink(TILE_ACTION_SHRINK_SIZE * camera.zoom),
                 2.0,
                 color,
             );
-        };
-        show_movement();
+        }
 
-        // 顯示單位
-        show_unit(board, painter, camera, pos, rect);
+        // 顯示單位（使用共用函式）
+        draw_unit_on_board(board, painter, camera, pos, rect);
     }
 }
 
-/// 顯示技能範圍（座標高亮），同時高亮可施放區域與技能預覽區域
+/// 顯示技能範圍的 overlay：高亮施放/預覽區域，並繪製單位
 fn show_skill_area_others(
     board: &Board,
     casting_area: &[Pos],
@@ -1288,31 +1339,9 @@ fn show_skill_area_others(
                 color,
             );
         }
-        // 顯示單位
-        show_unit(board, painter, camera, pos, rect);
+        // 顯示單位（使用共用函式）
+        draw_unit_on_board(board, painter, camera, pos, rect);
     }
-}
-
-fn show_unit(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect: Rect) {
-    let Some(unit_id) = board.pos_to_unit(pos) else {
-        // 該位置沒有單位
-        return;
-    };
-    let (unit_template, team) = board
-        .units
-        .get(&unit_id)
-        .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
-    let team_color = board
-        .teams
-        .get(team)
-        .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        unit_symbol(&unit_template),
-        FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
-        team_color,
-    );
 }
 
 /// 繪製選取範圍的外框線
@@ -1376,41 +1405,44 @@ fn paint_terrain(board: &mut BoardConfig, pos: Pos, terrain: Terrain) -> bool {
 fn paint_object(
     board: &mut BoardConfig,
     pos: Pos,
-    object: Option<Object>,
+    object: Option<&Object>,
     orientation: Orientation,
     duration: u32,
 ) -> Result<(), String> {
+    let mut apply_single = || {
+        board
+            .get_tile_mut(pos)
+            .unwrap_or_else(|| panic!("painting in race condition. {:?} in {:?}", object, pos))
+            .object = object.clone().cloned();
+        Ok(())
+    };
     match object {
-        Some(Object::Tent2 { .. }) => {
-            let (w, h) = match orientation {
-                Orientation::Horizontal => (2, 1),
-                Orientation::Vertical => (1, 2),
-            };
-            paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 {
-                orientation,
-                rel,
-                duration,
-            })
-        }
-        Some(Object::Tent15 { .. }) => {
-            let (w, h) = match orientation {
-                Orientation::Horizontal => (5, 3),
-                Orientation::Vertical => (3, 5),
-            };
-            paint_multiple_object(board, pos, (w, h), |rel| Object::Tent15 {
-                orientation,
-                rel,
-                duration,
-            })
-        }
-        None | Some(Object::Wall) | Some(Object::Tree) => {
-            // 牆壁或無物件，直接設定
-            board
-                .get_tile_mut(pos)
-                .unwrap_or_else(|| panic!("painting in race condition. {object:?} in {pos:?}"))
-                .object = object.clone();
-            Ok(())
-        }
+        Some(obj) => match obj {
+            Object::Tent2 { .. } => {
+                let (w, h) = match orientation {
+                    Orientation::Horizontal => (2, 1),
+                    Orientation::Vertical => (1, 2),
+                };
+                paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 {
+                    orientation,
+                    rel,
+                    duration,
+                })
+            }
+            Object::Tent15 { .. } => {
+                let (w, h) = match orientation {
+                    Orientation::Horizontal => (5, 3),
+                    Orientation::Vertical => (3, 5),
+                };
+                paint_multiple_object(board, pos, (w, h), |rel| Object::Tent15 {
+                    orientation,
+                    rel,
+                    duration,
+                })
+            }
+            Object::Wall | Object::Tree => apply_single(),
+        },
+        None => apply_single(),
     }
 }
 
@@ -1497,7 +1529,7 @@ fn fill_selected_area(
     board: &mut BoardConfig,
     rect_start: Pos,
     rect_end: Pos,
-    object: Option<Object>,
+    object: Option<&Object>,
     _orientation: Orientation,
     _duration: u32,
 ) -> Result<(usize, usize), String> {
@@ -1514,23 +1546,28 @@ fn fill_selected_area(
 
     let mut success = 0;
     let mut skipped = 0;
+    let mut apply_single = |pos| {
+        if let Some(tile) = board.get_tile_mut(pos) {
+            tile.object = object.clone().cloned();
+            success += 1;
+        } else {
+            skipped += 1;
+        }
+    };
+
     for y in min_y..=max_y {
         for x in min_x..=max_x {
             let pos = Pos { x, y };
             // 僅允許 Wall/Tree 或 None
             match object {
-                Some(Object::Wall) | Some(Object::Tree) | None => {
-                    if let Some(tile) = board.get_tile_mut(pos) {
-                        tile.object = object.clone();
-                        success += 1;
-                    } else {
-                        skipped += 1;
+                Some(obj) => match obj {
+                    Object::Wall | Object::Tree => apply_single(pos),
+                    Object::Tent2 { .. } | Object::Tent15 { .. } => {
+                        // 其他物件類型暫不支援
+                        return Err(format!("不支援多格物件類型：{:?}", obj));
                     }
-                }
-                Some(Object::Tent2 { .. }) | Some(Object::Tent15 { .. }) => {
-                    // 其他物件類型暫不支援
-                    return Err(format!("不支援多格物件類型：{:?}", object));
-                }
+                },
+                None => apply_single(pos),
             }
         }
     }
@@ -1564,8 +1601,14 @@ fn object_symbol(tile: &Tile) -> &'static str {
     }
 }
 
-fn unit_symbol(unit: &str) -> String {
-    unit.replace("_", "\n")
+fn unit_symbol<'a>(unit: &'a str) -> std::borrow::Cow<'a, str> {
+    // 若名稱包含 '_'，我們需要換行顯示，必須分配新 String；
+    // 若不包含 '_'，直接借用原字串以避免多餘分配。
+    if unit.contains('_') {
+        std::borrow::Cow::Owned(unit.replace('_', "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(unit)
+    }
 }
 
 fn to_team_color(color: Color32) -> RGB {
@@ -1609,7 +1652,7 @@ fn override_player_unit(
 
     // 3. 覆蓋資料
     for (key, board_unit) in board_map.iter_mut() {
-        let roster_unit = roster_map.get(key).unwrap();
+        let roster_unit = roster_map.get(key).expect("roster race condition");
         board_unit.skills = roster_unit
             .skills
             .iter()

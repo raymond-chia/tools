@@ -5,7 +5,7 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Team {
@@ -72,15 +72,15 @@ impl Unit {
                     })
             })
             .collect();
-        let skills = skills?;
-        let max_hp = skills_to_max_hp(&skills);
-        let max_mp = skills_to_max_mp(&skills);
+        let skills: HashMap<_, _> = skills?;
+        let max_hp = skills_to_max_hp(skills.iter().map(|(k, v)| (*k, *v)));
+        let max_mp = skills_to_max_mp(skills.iter().map(|(k, v)| (*k, *v)));
         Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
             team: marker.team.clone(),
             moved: 0,
-            move_points: skills_to_move_points(&skills),
+            move_points: skills_to_move_points(skills.iter().map(|(k, v)| (*k, *v))),
             has_cast_skill_this_turn: false,
             hp: max_hp,
             max_hp,
@@ -95,15 +95,17 @@ impl Unit {
 /// - 1D6 隨機
 /// - 技能 initiative 加總（i32）
 /// - 未來可擴充 buff/debuff、裝備等
-pub fn calc_initiative<R: rand::Rng>(rng: &mut R, skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+pub fn calc_initiative<'a>(
+    rng: &mut impl rand::Rng,
+    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+) -> i32 {
     let roll = rng.random_range(1..=6);
-    let skill_initiative = skills_to_initiative(&skills);
+    let skill_initiative = skills_to_initiative(skills);
     roll + skill_initiative
 }
 
-pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+pub fn skills_to_max_hp<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
     skills
-        .iter()
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::MaxHp { value, .. } = effect {
@@ -115,9 +117,8 @@ pub fn skills_to_max_hp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
         .sum()
 }
 
-pub fn skills_to_max_mp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+pub fn skills_to_max_mp<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
     skills
-        .iter()
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::MaxMp { value, .. } = effect {
@@ -131,9 +132,8 @@ pub fn skills_to_max_mp(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
 
 /// 計算單位 initiative 技能等級總和
 /// 尋找所有 effect 為 Effect::Initiative 的技能，並加總其 value
-pub fn skills_to_initiative(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+pub fn skills_to_initiative<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
     skills
-        .iter()
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::Initiative { value, .. } = effect {
@@ -147,9 +147,8 @@ pub fn skills_to_initiative(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
 
 /// 計算單位 evasion 技能等級總和
 /// 尋找所有 effect 為 Effect::Evasion 的技能，並加總其 value
-pub fn skills_to_evasion(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+pub fn skills_to_evasion<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
     skills
-        .iter()
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::Evasion { value, .. } = effect {
@@ -163,9 +162,8 @@ pub fn skills_to_evasion(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
 
 /// 計算單位 block 技能等級總和
 /// 尋找所有 effect 為 Effect::Block 的技能，並加總其 value
-pub fn skills_to_block(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
+pub fn skills_to_block<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
     skills
-        .iter()
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::Block { value, .. } = effect {
@@ -177,9 +175,10 @@ pub fn skills_to_block(skills: &BTreeMap<&SkillID, &Skill>) -> i32 {
         .sum()
 }
 
-pub fn skills_to_move_points(skills: &BTreeMap<&SkillID, &Skill>) -> MovementCost {
+pub fn skills_to_move_points<'a>(
+    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+) -> MovementCost {
     let points: i32 = skills
-        .iter()
         .flat_map(|(_, skill)| &skill.effects)
         .filter_map(|effect| {
             if let Effect::MovePoints { value, .. } = effect {
