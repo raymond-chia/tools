@@ -29,6 +29,10 @@ pub struct BoardsEditor {
     selected_orientation: Orientation,
     selected_unit: Option<UnitTemplateType>,
     selected_team: TeamID,
+    // 範圍選取狀態
+    selecting: bool,
+    selection_start: Option<Pos>,
+    selection_end: Option<Pos>,
     // 模擬
     sim_board: Board,
     sim_battle: Battle,
@@ -259,8 +263,44 @@ impl BoardsEditor {
             show_static_others(board),
         );
 
-        // 僅處理點擊
+        // 繪製選取範圍外框
+        if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+            draw_selection_outline(ui.painter(), &self.camera, start, end);
+        }
+
+        // 處理滑鼠選取（僅在 Object 筆刷且滑鼠在面板內啟用）
         let pointer_state = ui.ctx().input(|i| i.pointer.clone());
+        let is_panel_hover = ui.rect_contains_pointer(ui.max_rect());
+        if self.brush == BrushMode::Object && is_panel_hover {
+            // 如果已啟用「選取模式」（self.selecting 作為模式開關），使用滑鼠更新 selection，但不要改變 self.selecting
+            if self.selecting {
+                if pointer_state.primary_pressed() {
+                    if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
+                        // 開始新一次選取
+                        self.selection_start = Some(pos);
+                        self.selection_end = Some(pos);
+                    }
+                } else if pointer_state.primary_down() {
+                    // 按住拖曳中，持續更新終點（如果已開始選取）
+                    if let Some(_) = self.selection_start {
+                        if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
+                            self.selection_end = Some(pos);
+                        }
+                    }
+                } else if pointer_state.primary_released() {
+                    // 放開時，若有 hover 則更新終點（保留 selection），但不關閉選取模式
+                    if let Some(_) = self.selection_start {
+                        if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
+                            self.selection_end = Some(pos);
+                        }
+                    }
+                }
+            } else {
+                // 非選取模式：不在此處處理（正常點擊行為在下方）
+            }
+        }
+
+        // 僅處理點擊（其餘編輯互動）
         if !pointer_state.primary_down() {
             return;
         }
@@ -280,14 +320,19 @@ impl BoardsEditor {
                 paint_terrain(board, painted, self.selected_terrain);
             }
             BrushMode::Object => {
-                if let Err(e) = paint_object(
-                    board,
-                    painted,
-                    self.selected_object.clone(),
-                    self.selected_orientation,
-                    self.selected_object_duration,
-                ) {
-                    err_msg = format!("Error painting object: {}", e);
+                // 若目前為「選取模式」（self.selecting == true），拖曳/點擊不會立即在地圖寫入物件（只記錄 selection）
+                if self.selecting {
+                    // 不在此處執行 paint；選取邏輯已在上方處理
+                } else {
+                    if let Err(e) = paint_object(
+                        board,
+                        painted,
+                        self.selected_object.clone(),
+                        self.selected_orientation,
+                        self.selected_object_duration,
+                    ) {
+                        err_msg = format!("Error painting object: {}", e);
+                    }
                 }
             }
             BrushMode::Unit => {
@@ -493,6 +538,10 @@ impl BoardsEditor {
                 if ui.selectable_label(self.brush == mode, label).clicked() {
                     if self.brush != mode {
                         changed = true;
+                        // 切換 brush 時清空 selection
+                        self.selecting = false;
+                        self.selection_start = None;
+                        self.selection_end = None;
                     }
                     self.brush = mode;
                 }
@@ -587,6 +636,43 @@ impl BoardsEditor {
 
         ui.separator();
 
+        let can_fill = self.selection_start.is_some() && self.selection_end.is_some();
+        if ui
+            .add_enabled(can_fill, Button::new("填滿選取範圍（僅支援單格物件）"))
+            .clicked()
+        {
+            let Some(board_id) = &self.selected_board else {
+                return;
+            };
+            let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+            if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                match fill_selected_area(
+                    board,
+                    start,
+                    end,
+                    self.selected_object.clone(),
+                    self.selected_orientation,
+                    self.selected_object_duration,
+                ) {
+                    Ok((success, skipped)) => {
+                        self.has_unsaved_changes = true;
+                        self.set_status(
+                            format!("填滿完成：成功 {} 格，跳過 {} 格", success, skipped),
+                            skipped>0,
+                        );
+                    }
+                    Err(err) => {
+                        self.set_status(format!("填滿失敗：{}", err), true);
+                    }
+                }
+            }
+        }
+        if !can_fill {
+            ui.label(RichText::new("請拖曳選取範圍後再填滿").color(Color32::GRAY));
+        }
+
+        ui.separator();
+
         thread_local! {
             static SHIFT_DX: RefCell<i32> = RefCell::new(0);
             static SHIFT_DY: RefCell<i32> = RefCell::new(0);
@@ -623,6 +709,11 @@ impl BoardsEditor {
                 }
             }
         });
+        if ui.selectable_label(self.selecting, "選取").clicked() {
+            self.selecting = !self.selecting;
+            self.selection_start = None;
+            self.selection_end = None;
+        }
         if ui
             .selectable_label(self.selected_object.is_none(), "清除")
             .clicked()
@@ -1224,6 +1315,37 @@ fn show_unit(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect
     );
 }
 
+/// 繪製選取範圍的外框線
+fn draw_selection_outline(
+    painter: &Painter,
+    camera: &Camera2D,
+    selection_start: Pos,
+    selection_end: Pos,
+) {
+    // 計算選取範圍的邊界
+    let min_x = selection_start.x.min(selection_end.x);
+    let max_x = selection_start.x.max(selection_end.x);
+    let min_y = selection_start.y.min(selection_end.y);
+    let max_y = selection_start.y.max(selection_end.y);
+
+    // 計算矩形在螢幕上的位置
+    let top_left_world = Pos2::new(min_x as f32, min_y as f32) * TILE_SIZE;
+    let bottom_right_world = Pos2::new((max_x + 1) as f32, (max_y + 1) as f32) * TILE_SIZE;
+
+    let top_left_screen = camera.world_to_screen(top_left_world);
+    let bottom_right_screen = camera.world_to_screen(bottom_right_world);
+
+    let selection_rect = Rect::from_min_max(top_left_screen, bottom_right_screen);
+
+    // 繪製細框線（白色，2px 寬度）
+    painter.rect_stroke(
+        selection_rect,
+        0.0, // 圓角
+        Stroke::new(2.0, Color32::WHITE),
+        egui::StrokeKind::Middle,
+    );
+}
+
 fn cursor_to_pos(camera: &Camera2D, ui: &mut Ui) -> Result<Pos, String> {
     // 僅當滑鼠在面板內才偵測 hover
     if !ui.rect_contains_pointer(ui.max_rect()) {
@@ -1368,6 +1490,51 @@ fn clear_all_objects(board: &mut BoardConfig) {
             tile.object = None;
         }
     }
+}
+
+/// 填滿選取範圍（僅支援單格物件 Wall/Tree）
+fn fill_selected_area(
+    board: &mut BoardConfig,
+    rect_start: Pos,
+    rect_end: Pos,
+    object: Option<Object>,
+    _orientation: Orientation,
+    _duration: u32,
+) -> Result<(usize, usize), String> {
+    let (min_x, max_x) = if rect_start.x <= rect_end.x {
+        (rect_start.x, rect_end.x)
+    } else {
+        (rect_end.x, rect_start.x)
+    };
+    let (min_y, max_y) = if rect_start.y <= rect_end.y {
+        (rect_start.y, rect_end.y)
+    } else {
+        (rect_end.y, rect_start.y)
+    };
+
+    let mut success = 0;
+    let mut skipped = 0;
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let pos = Pos { x, y };
+            // 僅允許 Wall/Tree 或 None
+            match object {
+                Some(Object::Wall) | Some(Object::Tree) | None => {
+                    if let Some(tile) = board.get_tile_mut(pos) {
+                        tile.object = object.clone();
+                        success += 1;
+                    } else {
+                        skipped += 1;
+                    }
+                }
+                Some(Object::Tent2 { .. }) | Some(Object::Tent15 { .. }) => {
+                    // 其他物件類型暫不支援
+                    return Err(format!("不支援多格物件類型：{:?}", object));
+                }
+            }
+        }
+    }
+    Ok((success, skipped))
 }
 
 fn terrain_color(tile: &Tile) -> Color32 {
