@@ -4,7 +4,7 @@ REM 1. 先清空 towebai.rs
 REM 2. 遞迴尋找所有 .rs 檔案並依序附加內容
 
 set OUTPUT=towebai.rs
-cd /d "%~dp0"
+cd /d "%~dp0\.."
 
 REM 清空輸出檔案
 echo. > %OUTPUT%

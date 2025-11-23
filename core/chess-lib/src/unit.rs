@@ -75,12 +75,13 @@ impl Unit {
         let skills: HashMap<_, _> = skills?;
         let max_hp = skills_to_max_hp(skills.iter().map(|(k, v)| (*k, *v)));
         let max_mp = skills_to_max_mp(skills.iter().map(|(k, v)| (*k, *v)));
+        let move_points = skills_to_move_points(skills.iter().map(|(k, v)| (*k, *v)));
         Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
             team: marker.team.clone(),
             moved: 0,
-            move_points: skills_to_move_points(skills.iter().map(|(k, v)| (*k, *v))),
+            move_points,
             has_cast_skill_this_turn: false,
             hp: max_hp,
             max_hp,
@@ -88,6 +89,19 @@ impl Unit {
             max_mp,
             skills: template.skills.clone(),
         })
+    }
+
+    /// 使用當前 unit.skills 與技能表重算衍生屬性（move_points, max_hp, max_mp），並同步 hp/mp 到 max
+    pub fn recalc_from_skills(&mut self, skills: &BTreeMap<SkillID, Skill>) {
+        let skill_refs = self
+            .skills
+            .iter()
+            .filter_map(|id| skills.get(id).map(|s| (id, s)));
+        self.max_hp = skills_to_max_hp(skill_refs.clone());
+        self.hp = self.max_hp;
+        self.max_mp = skills_to_max_mp(skill_refs.clone());
+        self.mp = self.max_mp;
+        self.move_points = skills_to_move_points(skill_refs.clone());
     }
 }
 
@@ -330,7 +344,7 @@ mod tests {
     fn test_skills_to_max_hp() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_max_hp(&skills), 0);
+        assert_eq!(skills_to_max_hp(skills.iter()), 0);
 
         // 一個 MaxHp 技能
         let mut skill1 = Skill::default();
@@ -341,8 +355,8 @@ mod tests {
             duration: 0,
         }];
         let key_a = "a".to_string();
-        skills.insert(&key_a, &skill1);
-        assert_eq!(skills_to_max_hp(&skills), 10);
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_max_hp(skills.iter()), 10);
 
         // 多個 MaxHp 技能
         let mut skill2 = Skill::default();
@@ -353,8 +367,8 @@ mod tests {
             duration: 0,
         }];
         let key_b = "b".to_string();
-        skills.insert(&key_b, &skill2);
-        assert_eq!(skills_to_max_hp(&skills), 30);
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_max_hp(skills.iter()), 30);
 
         // 非 MaxHp 類型技能不影響
         let mut skill3 = Skill::default();
@@ -365,8 +379,8 @@ mod tests {
             duration: 0,
         }];
         let key_c = "c".to_string();
-        skills.insert(&key_c, &skill3);
-        assert_eq!(skills_to_max_hp(&skills), 30);
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_max_hp(skills.iter()), 30);
     }
 
     #[test]
@@ -374,7 +388,7 @@ mod tests {
         let mut rng = rand::rng();
         let mut skills = BTreeMap::new();
         // 無技能
-        let result = calc_initiative(&mut rng, &skills);
+        let result = calc_initiative(&mut rng, skills.iter());
         assert!(result >= 1 && result <= 6);
 
         // 有 initiative 技能
@@ -386,8 +400,8 @@ mod tests {
             duration: 0,
         }];
         let key = "test".to_string();
-        skills.insert(&key, &skill);
-        let result = calc_initiative(&mut rng, &skills);
+        skills.insert(key.clone(), skill);
+        let result = calc_initiative(&mut rng, skills.iter());
         assert!(result >= 4 && result <= 9);
 
         // 有 initiative 技能
@@ -407,8 +421,8 @@ mod tests {
             },
         ];
         let key = "test".to_string();
-        skills.insert(&key, &skill);
-        let result = calc_initiative(&mut rng, &skills);
+        skills.insert(key.clone(), skill);
+        let result = calc_initiative(&mut rng, skills.iter());
         assert!(result >= 6 && result <= 11);
     }
 
@@ -416,7 +430,7 @@ mod tests {
     fn test_skills_to_initiative() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_initiative(&skills), 0);
+        assert_eq!(skills_to_initiative(skills.iter()), 0);
 
         // 一個 initiative 技能
         let mut skill1 = Skill::default();
@@ -427,8 +441,8 @@ mod tests {
             duration: 0,
         }];
         let key_a = "a".to_string();
-        skills.insert(&key_a, &skill1);
-        assert_eq!(skills_to_initiative(&skills), 2);
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_initiative(skills.iter()), 2);
 
         // 多個 initiative 技能
         let mut skill2 = Skill::default();
@@ -439,8 +453,8 @@ mod tests {
             duration: 0,
         }];
         let key_b = "b".to_string();
-        skills.insert(&key_b, &skill2);
-        assert_eq!(skills_to_initiative(&skills), 5);
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_initiative(skills.iter()), 5);
 
         // 非 initiative 類型技能不影響
         let mut skill3 = Skill::default();
@@ -451,15 +465,15 @@ mod tests {
             duration: 0,
         }];
         let key_c = "c".to_string();
-        skills.insert(&key_c, &skill3);
-        assert_eq!(skills_to_initiative(&skills), 5);
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_initiative(skills.iter()), 5);
     }
 
     #[test]
     fn test_skills_to_evasion() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_evasion(&skills), 0);
+        assert_eq!(skills_to_evasion(skills.iter()), 0);
 
         // 一個 evasion 技能
         let mut skill1 = Skill::default();
@@ -470,8 +484,8 @@ mod tests {
             duration: 0,
         }];
         let key_a = "a".to_string();
-        skills.insert(&key_a, &skill1);
-        assert_eq!(skills_to_evasion(&skills), 2);
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_evasion(skills.iter()), 2);
 
         // 多個 evasion 技能
         let mut skill2 = Skill::default();
@@ -482,8 +496,8 @@ mod tests {
             duration: 0,
         }];
         let key_b = "b".to_string();
-        skills.insert(&key_b, &skill2);
-        assert_eq!(skills_to_evasion(&skills), 5);
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_evasion(skills.iter()), 5);
 
         // 非 evasion 類型技能不影響
         let mut skill3 = Skill::default();
@@ -494,15 +508,15 @@ mod tests {
             duration: 0,
         }];
         let key_c = "c".to_string();
-        skills.insert(&key_c, &skill3);
-        assert_eq!(skills_to_evasion(&skills), 5);
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_evasion(skills.iter()), 5);
     }
 
     #[test]
     fn test_skills_to_block() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_block(&skills), 0);
+        assert_eq!(skills_to_block(skills.iter()), 0);
 
         // 一個 block 技能
         let mut skill1 = Skill::default();
@@ -513,8 +527,8 @@ mod tests {
             duration: 0,
         }];
         let key_a = "a".to_string();
-        skills.insert(&key_a, &skill1);
-        assert_eq!(skills_to_block(&skills), 2);
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_block(skills.iter()), 2);
 
         // 多個 block 技能
         let mut skill2 = Skill::default();
@@ -525,8 +539,8 @@ mod tests {
             duration: 0,
         }];
         let key_b = "b".to_string();
-        skills.insert(&key_b, &skill2);
-        assert_eq!(skills_to_block(&skills), 5);
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_block(skills.iter()), 5);
 
         // 非 block 類型技能不影響
         let mut skill3 = Skill::default();
@@ -537,8 +551,8 @@ mod tests {
             duration: 0,
         }];
         let key_c = "c".to_string();
-        skills.insert(&key_c, &skill3);
-        assert_eq!(skills_to_block(&skills), 5);
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_block(skills.iter()), 5);
     }
 
     #[test]
@@ -553,8 +567,8 @@ mod tests {
             duration: 0,
         }];
         let key_a = "a".to_string();
-        skills.insert(&key_a, &skill1);
-        assert_eq!(skills_to_move_points(&skills), 0);
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_move_points(skills.iter()), 0);
 
         // 正負混合，總和為負，仍回傳 0
         let mut skill2 = Skill::default();
@@ -565,8 +579,8 @@ mod tests {
             duration: 0,
         }];
         let key_b = "b".to_string();
-        skills.insert(&key_b, &skill2);
-        assert_eq!(skills_to_move_points(&skills), 0);
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_move_points(skills.iter()), 0);
 
         // 正負混合，總和為正
         let mut skill3 = Skill::default();
@@ -577,7 +591,7 @@ mod tests {
             duration: 0,
         }];
         let key_c = "c".to_string();
-        skills.insert(&key_c, &skill3);
-        assert_eq!(skills_to_move_points(&skills), 15);
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_move_points(skills.iter()), 15);
     }
 }

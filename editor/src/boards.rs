@@ -929,7 +929,9 @@ impl BoardsEditor {
                         return;
                     }
                 };
-                if let Err(msg) = override_player_unit(&mut board, &progression.roster) {
+                if let Err(msg) =
+                    override_player_unit(&mut board, &progression.roster, &self.skills)
+                {
                     eprintln!("Error overriding player units: {}", msg);
                     self.set_status(msg, true);
                     return;
@@ -1687,6 +1689,7 @@ fn to_egui_color(rgb: RGB) -> Color32 {
 fn override_player_unit(
     board: &mut Board,
     roster_map: &BTreeMap<UnitTemplateType, ProgressionUnit>,
+    skills: &BTreeMap<SkillID, Skill>,
 ) -> Result<(), String> {
     // 1. 取得 board 上所有 team "player" 單位（map: unit_template_type → &mut Unit），若有重複則 set_status 跳錯並 return。
     let mut board_map: HashMap<UnitTemplateType, &mut Unit> = HashMap::new();
@@ -1722,6 +1725,8 @@ fn override_player_unit(
             .iter()
             .flat_map(|(_, skill_set)| skill_set.clone())
             .collect();
+        // 重算衍生屬性
+        board_unit.recalc_from_skills(skills);
     }
     Ok(())
 }
