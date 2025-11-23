@@ -905,6 +905,8 @@ impl BoardsEditor {
     }
 
     fn init_sim(&mut self, ui: &mut Ui) {
+        self.sim_board = Board::default();
+        self.sim_battle = Battle::default();
         // 1. 取得目前選擇的 BoardConfig
         let board_id = match &self.selected_board {
             None => {
