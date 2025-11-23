@@ -179,6 +179,11 @@ impl BoardsEditor {
                 self.reload();
             }
             if ui.button("儲存戰場").clicked() {
+                // 檢查所有單位是否有效
+                if let Some(invalid_units) = self.validate_units() {
+                    self.set_status(format!("儲存失敗：發現無效單位：{}", invalid_units), true);
+                    return;
+                }
                 if let Err(e) = save_boards(boards_file(), &self.boards) {
                     self.set_status(format!("儲存失敗: {}", e), true);
                 } else {
@@ -1141,6 +1146,30 @@ impl BoardsEditor {
 
         self.has_unsaved_changes = true;
         self.set_status(format!("已平移物件 dx={}, dy={}", dx, dy), false);
+    }
+
+    /// 驗證所有戰場中的單位是否都對應到有效的單位模板
+    /// 如果有無效單位，返回錯誤訊息，否則返回 None
+    fn validate_units(&self) -> Option<String> {
+        let mut invalid_units = Vec::new();
+        for (board_id, board) in &self.boards {
+            for (unit_id, unit_marker) in &board.units {
+                if !self
+                    .unit_templates
+                    .contains_key(&unit_marker.unit_template_type)
+                {
+                    invalid_units.push(format!(
+                        "戰場 '{}' 中的單位 ID {} (類型: {})",
+                        board_id, unit_id, unit_marker.unit_template_type
+                    ));
+                }
+            }
+        }
+        if invalid_units.is_empty() {
+            None
+        } else {
+            Some(invalid_units.join(", "))
+        }
     }
 
     fn show_status_message(&mut self, ctx: &Context) {

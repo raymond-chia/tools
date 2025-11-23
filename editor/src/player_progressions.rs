@@ -136,7 +136,7 @@ impl PlayerProgressionEditor {
                 self.reload();
             }
             if ui.button("儲存進度").clicked() {
-                match self.validate_skills_exist() {
+                match self.validate_data_exist() {
                     Ok(_) => match save_progression(&self.data) {
                         Ok(_) => {
                             self.set_status("儲存成功".to_string(), false);
@@ -223,20 +223,40 @@ impl PlayerProgressionEditor {
         });
 
         ui.heading("單位列表");
+        let mut to_remove_unit: Option<UnitTemplateType> = None;
+        let mut to_edit_unit: Option<Unit> = None;
+        let mut to_rename_unit: Option<(UnitTemplateType, UnitTemplateType)> = None;
+        let mut status_messages: Vec<(String, bool)> = Vec::new();
+
         egui::ScrollArea::vertical().show(ui, |ui| {
             if progress.roster.is_empty() {
                 ui.label("此戰場尚無單位");
                 return;
             }
-            let mut to_remove_unit: Option<UnitTemplateType> = None;
-            let mut to_edit_unit: Option<Unit> = None;
             for (typ, unit) in progress.roster.iter() {
                 // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
                 // 若需編輯，需複製出來再處理
 
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label(format!("種類: {}", typ));
+                        ui.label("種類:");
+                        // 顯示可編輯的單位名稱
+                        let mut new_name = typ.clone();
+                        let resp = ui.text_edit_singleline(&mut new_name);
+                        if resp.changed() && new_name != *typ {
+                            // 檢查新名稱是否有效
+                            if self.unit_templates.contains_key(&new_name)
+                                && !progress.roster.contains_key(&new_name)
+                            {
+                                to_rename_unit = Some((typ.clone(), new_name));
+                            } else if !self.unit_templates.contains_key(&new_name) {
+                                status_messages
+                                    .push((format!("單位模板 '{}' 不存在", new_name), true));
+                            } else {
+                                status_messages
+                                    .push((format!("單位名稱 '{}' 已經存在", new_name), true));
+                            }
+                        }
                         if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
                             to_remove_unit = Some(typ.clone());
                         }
@@ -315,44 +335,87 @@ impl PlayerProgressionEditor {
                     }
                 });
             }
-            if let Some(typ) = to_remove_unit {
-                progress.roster.remove(&typ);
-                self.has_unsaved_changes = true;
-            }
-            if let Some(new_unit) = to_edit_unit {
-                let typ = new_unit.unit_type.clone();
-                progress.roster.remove(&typ);
-                progress.roster.insert(typ, new_unit);
-                self.has_unsaved_changes = true;
-            }
         });
+
+        // 在 closure 外面處理修改
+        if let Some(typ) = to_remove_unit {
+            progress.roster.remove(&typ);
+            status_messages.push((format!("單位 '{}' 已經刪除", typ), false));
+            self.has_unsaved_changes = true;
+        }
+        if let Some(new_unit) = to_edit_unit {
+            let typ = new_unit.unit_type.clone();
+            progress.roster.remove(&typ);
+            progress.roster.insert(typ, new_unit);
+            self.has_unsaved_changes = true;
+        }
+        if let Some((old_name, new_name)) = to_rename_unit {
+            if let Some(unit) = progress.roster.remove(&old_name) {
+                let mut updated_unit = unit;
+                updated_unit.unit_type = new_name.clone();
+                progress.roster.insert(new_name.clone(), updated_unit);
+                self.has_unsaved_changes = true;
+                status_messages.push((
+                    format!("單位 '{}' 已重新命名為 '{}'", old_name, new_name),
+                    false,
+                ));
+            }
+        }
+        // 設定狀態訊息
+        for (msg, is_error) in status_messages {
+            self.set_status(msg, is_error);
+        }
     }
 
-    /// 檢查所有進度中的技能是否存在於 skills 資料表
-    fn validate_skills_exist(&self) -> Result<(), String> {
-        let mut missing: Vec<(String, String, String)> = Vec::new();
+    /// 檢查所有進度中的單位模板和技能是否存在
+    fn validate_data_exist(&self) -> Result<(), String> {
+        let mut missing_units: Vec<(BoardID, UnitTemplateType)> = Vec::new();
+        let mut missing_skills: Vec<(BoardID, UnitTemplateType, SkillID)> = Vec::new();
+
         for (board_id, progress) in &self.data.boards {
             for (unit_type, unit) in &progress.roster {
+                // 檢查單位模板是否存在
+                if !self.unit_templates.contains_key(unit_type) {
+                    missing_units.push((board_id.clone(), unit_type.clone()));
+                }
+                // 檢查技能是否存在
                 for skill_ids in unit.skills.values() {
                     for skill_id in skill_ids {
                         if !self.skills.contains_key(skill_id) {
-                            missing.push((board_id.clone(), unit_type.clone(), skill_id.clone()));
+                            missing_skills.push((
+                                board_id.clone(),
+                                unit_type.clone(),
+                                skill_id.clone(),
+                            ));
                         }
                     }
                 }
             }
         }
-        if !missing.is_empty() {
-            let mut msg = String::from("下列技能不存在：\n");
-            for (board, unit, skill) in missing {
+
+        let mut msg = String::new();
+
+        if !missing_units.is_empty() {
+            msg.push_str("下列單位模板不存在：\n");
+            for (board, unit) in missing_units {
+                msg.push_str(&format!("戰場: {}, 單位: {}\n", board, unit));
+            }
+        }
+
+        if !missing_skills.is_empty() {
+            if !msg.is_empty() {
+                msg.push('\n');
+            }
+            msg.push_str("下列技能不存在：\n");
+            for (board, unit, skill) in missing_skills {
                 msg.push_str(&format!(
                     "戰場: {}, 單位: {}, 技能: {}\n",
                     board, unit, skill
                 ));
             }
-            return Err(msg);
         }
-        Ok(())
+
+        if msg.is_empty() { Ok(()) } else { Err(msg) }
     }
 
     fn show_status_message(&mut self, ctx: &Context) {
