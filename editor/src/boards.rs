@@ -33,6 +33,10 @@ pub struct BoardsEditor {
     selecting: bool,
     selection_start: Option<Pos>,
     selection_end: Option<Pos>,
+    // drunkards walk 設定
+    drunkards_steps: usize,
+    drunkards_start_y: Option<usize>,
+    drunkards_weights: [usize; 4],
     // 模擬
     sim_board: Board,
     sim_battle: Battle,
@@ -66,6 +70,8 @@ enum BrushMode {
 impl BoardsEditor {
     pub fn new() -> Self {
         let mut editor = Self::default();
+        editor.drunkards_steps = 50;
+        editor.drunkards_weights = [20, 20, 10, 50];
         editor.reload();
         editor
     }
@@ -271,6 +277,14 @@ impl BoardsEditor {
         // 繪製選取範圍外框
         if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
             draw_selection_outline(ui.painter(), &self.camera, start, end);
+        }
+
+        if let (Some(start), Some(end), Some(start_y)) = (
+            self.selection_start,
+            self.selection_end,
+            self.drunkards_start_y,
+        ) {
+            draw_drunkard_start_indicator(ui.painter(), &self.camera, board, start, end, start_y);
         }
 
         // 處理滑鼠選取（僅在 Object 筆刷且滑鼠在面板內啟用）
@@ -533,56 +547,58 @@ impl BoardsEditor {
 
     fn show_right_panel(&mut self, ui: &mut Ui) {
         ui.heading("編輯工具與資訊");
-        let mut changed = false;
-        ui.horizontal_wrapped(|ui| {
-            for (mode, label) in [
-                (BrushMode::None, "戰場設定"),
-                (BrushMode::Terrain, "地形筆刷"),
-                (BrushMode::Object, "物件筆刷"),
-                (BrushMode::Unit, "單位筆刷"),
-                (BrushMode::Team, "隊伍編輯"),
-                (BrushMode::Deploy, "部署格子"),
-                (BrushMode::Sim, "模擬"),
-            ] {
-                if ui.selectable_label(self.brush == mode, label).clicked() {
-                    if self.brush != mode {
-                        changed = true;
-                        // 切換 brush 時清空 selection
-                        self.selecting = false;
-                        self.selection_start = None;
-                        self.selection_end = None;
+        ScrollArea::vertical().show(ui, |ui| {
+            let mut changed = false;
+            ui.horizontal_wrapped(|ui| {
+                for (mode, label) in [
+                    (BrushMode::None, "戰場設定"),
+                    (BrushMode::Terrain, "地形筆刷"),
+                    (BrushMode::Object, "物件筆刷"),
+                    (BrushMode::Unit, "單位筆刷"),
+                    (BrushMode::Team, "隊伍編輯"),
+                    (BrushMode::Deploy, "部署格子"),
+                    (BrushMode::Sim, "模擬"),
+                ] {
+                    if ui.selectable_label(self.brush == mode, label).clicked() {
+                        if self.brush != mode {
+                            changed = true;
+                            // 切換 brush 時清空 selection
+                            self.selecting = false;
+                            self.selection_start = None;
+                            self.selection_end = None;
+                        }
+                        self.brush = mode;
                     }
-                    self.brush = mode;
+                }
+            });
+
+            match self.brush {
+                BrushMode::None => {
+                    self.show_board_settings(ui);
+                }
+                BrushMode::Terrain => {
+                    self.show_terrain_brush(ui);
+                }
+                BrushMode::Object => {
+                    self.show_object_brush(ui);
+                }
+                BrushMode::Unit => {
+                    self.show_unit_brush(ui);
+                }
+                BrushMode::Team => {
+                    self.show_team_settings(ui);
+                }
+                BrushMode::Deploy => {
+                    ui.label("部署格子筆刷：點擊格子以切換是否可部署");
+                }
+                BrushMode::Sim => {
+                    if changed {
+                        self.init_sim(ui);
+                    }
+                    self.show_sim_status(ui);
                 }
             }
         });
-
-        match self.brush {
-            BrushMode::None => {
-                self.show_board_settings(ui);
-            }
-            BrushMode::Terrain => {
-                self.show_terrain_brush(ui);
-            }
-            BrushMode::Object => {
-                self.show_object_brush(ui);
-            }
-            BrushMode::Unit => {
-                self.show_unit_brush(ui);
-            }
-            BrushMode::Team => {
-                self.show_team_settings(ui);
-            }
-            BrushMode::Deploy => {
-                ui.label("部署格子筆刷：點擊格子以切換是否可部署");
-            }
-            BrushMode::Sim => {
-                if changed {
-                    self.init_sim(ui);
-                }
-                self.show_sim_status(ui);
-            }
-        }
     }
 
     fn show_board_settings(&mut self, ui: &mut Ui) {
@@ -646,15 +662,17 @@ impl BoardsEditor {
         ui.separator();
 
         let can_fill = self.selection_start.is_some() && self.selection_end.is_some();
-        if ui
-            .add_enabled(can_fill, Button::new("填滿選取範圍（僅支援單格物件）"))
-            .clicked()
-        {
-            let Some(board_id) = &self.selected_board else {
-                return;
-            };
+        if let (Some(board_id), Some(start), Some(end)) = (
+            &self.selected_board,
+            self.selection_start,
+            self.selection_end,
+        ) {
             let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
-            if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+            let mut status_msg = None;
+            if ui
+                .add_enabled(can_fill, Button::new("填滿選取範圍（僅支援單格物件）"))
+                .clicked()
+            {
                 match fill_selected_area(
                     board,
                     start,
@@ -665,15 +683,106 @@ impl BoardsEditor {
                 ) {
                     Ok((success, skipped)) => {
                         self.has_unsaved_changes = true;
-                        self.set_status(
+                        status_msg = Some((
                             format!("填滿完成：成功 {} 格，跳過 {} 格", success, skipped),
                             skipped > 0,
-                        );
+                        ));
                     }
                     Err(err) => {
-                        self.set_status(format!("填滿失敗：{}", err), true);
+                        status_msg = Some((format!("填滿失敗：{}", err), true));
                     }
                 }
+            }
+            ui.horizontal(|ui| {
+                ui.label("Drunkard's Walk 步數:");
+                ui.add(DragValue::new(&mut self.drunkards_steps).speed(1));
+            });
+            ui.horizontal(|ui| {
+                ui.label("權重 上:");
+                ui.add(
+                    DragValue::new(&mut self.drunkards_weights[0])
+                        .speed(1)
+                        .range(0..=100),
+                );
+                ui.label("下:");
+                ui.add(
+                    DragValue::new(&mut self.drunkards_weights[1])
+                        .speed(1)
+                        .range(0..=100),
+                );
+                ui.label("左:");
+                ui.add(
+                    DragValue::new(&mut self.drunkards_weights[2])
+                        .speed(1)
+                        .range(0..=100),
+                );
+                ui.label("右:");
+                ui.add(
+                    DragValue::new(&mut self.drunkards_weights[3])
+                        .speed(1)
+                        .range(0..=100),
+                );
+            });
+            ui.horizontal(|ui| {
+                ui.label("起始 Y:");
+                let mut y = self.drunkards_start_y.unwrap_or(0);
+                // 計算範圍限制
+                let (min_y, max_y) =
+                    if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                        let min_y = start.y.min(end.y);
+                        let max_y = start.y.max(end.y);
+                        (min_y, max_y)
+                    } else {
+                        (0, usize::MAX)
+                    };
+                let mut changed = false;
+                if ui.button("-").clicked() {
+                    y = y.saturating_sub(1);
+                    changed = true;
+                }
+                changed |= ui.add(DragValue::new(&mut y).speed(1)).changed();
+                if ui.button("+").clicked() {
+                    y += 1;
+                    changed = true;
+                }
+                // 限制 y 的值在範圍內
+                y = y.clamp(min_y, max_y);
+                if changed {
+                    self.drunkards_start_y = Some(y);
+                }
+                if ui.button("隨機").clicked() {
+                    self.drunkards_start_y = None;
+                }
+            });
+            if ui
+                .add_enabled(can_fill, Button::new("Drunkard's Walk 填滿選取範圍"))
+                .clicked()
+            {
+                match drunkards_walk_deploy(
+                    board,
+                    start,
+                    end,
+                    self.selected_object.as_ref(),
+                    self.selected_orientation,
+                    self.selected_object_duration,
+                    self.drunkards_steps,
+                    self.drunkards_start_y,
+                    self.drunkards_weights,
+                ) {
+                    Ok(placed) => {
+                        self.has_unsaved_changes = true;
+                        status_msg = Some((
+                            format!("Drunkard's Walk 部署完成：放置 {} 個物件", placed),
+                            false,
+                        ));
+                    }
+                    Err(err) => {
+                        status_msg = Some((format!("Drunkard's Walk 部署失敗：{}", err), true));
+                    }
+                }
+            }
+            if let Some((msg, is_error)) = status_msg {
+                self.set_status(msg, is_error);
             }
         }
         if !can_fill {
@@ -1443,6 +1552,30 @@ fn draw_selection_outline(
     );
 }
 
+fn draw_drunkard_start_indicator(
+    painter: &Painter,
+    camera: &Camera2D,
+    board: &BoardConfig,
+    start: Pos,
+    end: Pos,
+    start_y: usize,
+) {
+    let min_x = start.x.min(end.x);
+    let min_y = start.y.min(end.y);
+    let max_y = start.y.max(end.y);
+    let clamped_y = start_y.clamp(min_y, max_y);
+    let start_pos = Pos {
+        x: min_x,
+        y: clamped_y,
+    };
+    if board.get_tile(start_pos).is_some() {
+        let world_pos = Pos2::new(start_pos.x as f32, start_pos.y as f32) * TILE_SIZE;
+        let screen_pos = camera.world_to_screen(world_pos);
+        let rect = Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * camera.zoom);
+        painter.circle_filled(rect.center(), 10.0 * camera.zoom, Color32::RED);
+    }
+}
+
 fn cursor_to_pos(camera: &Camera2D, ui: &mut Ui) -> Result<Pos, String> {
     // 僅當滑鼠在面板內才偵測 hover
     if !ui.rect_contains_pointer(ui.max_rect()) {
@@ -1642,49 +1775,125 @@ fn fill_selected_area(
     Ok((success, skipped))
 }
 
-fn terrain_color(tile: &Tile) -> Color32 {
-    match tile.terrain {
-        Terrain::Plain => Color32::DARK_GREEN,
-        Terrain::Hill => Color32::from_rgb(90, 60, 30),
-        Terrain::Mountain => Color32::from_rgb(60, 30, 0),
-        Terrain::Forest => Color32::from_rgb(0, 60, 0),
-        Terrain::ShallowWater => Color32::from_rgb(60, 60, 199),
-        Terrain::DeepWater => Color32::DARK_BLUE,
-    }
-}
-
-fn object_symbol(tile: &Tile) -> &'static str {
-    match &tile.object {
-        Some(Object::Wall) => "█",
-        Some(Object::Tree) => "🌳",
-        Some(Object::Tent2 { orientation, .. }) => match orientation {
-            Orientation::Horizontal => "⛺→2",
-            Orientation::Vertical => "⛺↓2",
+/// 使用 drunkard's walk 演算法在選取範圍內部署物件
+/// 從最左側指定或隨機起點開始，偏向右走，放置單格物件
+fn drunkards_walk_deploy(
+    board: &mut BoardConfig,
+    rect_start: Pos,
+    rect_end: Pos,
+    object: Option<&Object>,
+    orientation: Orientation,
+    duration: u32,
+    steps: usize,
+    start_y: Option<usize>,
+    weights: [usize; 4],
+) -> Result<usize, String> {
+    // 僅支援單格物件或清除
+    match object {
+        Some(obj) => match obj {
+            Object::Wall | Object::Tree => {}
+            _ => return Err("Drunkard's walk 僅支援單格物件或清除".to_string()),
         },
-        Some(Object::Tent15 { orientation, .. }) => match orientation {
-            Orientation::Horizontal => "⛺→15",
-            Orientation::Vertical => "⛺↓15",
-        },
-        None => "",
+        None => {} // 允許清除
     }
-}
 
-fn unit_symbol<'a>(unit: &'a str) -> std::borrow::Cow<'a, str> {
-    // 若名稱包含 '_'，我們需要換行顯示，必須分配新 String；
-    // 若不包含 '_'，直接借用原字串以避免多餘分配。
-    if unit.contains('_') {
-        std::borrow::Cow::Owned(unit.replace('_', "\n"))
+    let (min_x, max_x) = if rect_start.x <= rect_end.x {
+        (rect_start.x, rect_end.x)
     } else {
-        std::borrow::Cow::Borrowed(unit)
+        (rect_end.x, rect_start.x)
+    };
+    let (min_y, max_y) = if rect_start.y <= rect_end.y {
+        (rect_start.y, rect_end.y)
+    } else {
+        (rect_end.y, rect_start.y)
+    };
+
+    let mut rng = rand::rng();
+    // 從最左側開始，指定或隨機選擇起點 y，在選取範圍內
+    let start_x = min_x;
+    let start_y = start_y.map_or_else(
+        || rng.random_range(min_y..=max_y),
+        |y| y.clamp(min_y, max_y),
+    );
+    let mut current_pos = Pos {
+        x: start_x,
+        y: start_y,
+    };
+
+    let mut placed = 0;
+
+    for _ in 0..steps {
+        // 如果位置在範圍內，放置或清除物件
+        if current_pos.x >= min_x
+            && current_pos.x <= max_x
+            && current_pos.y >= min_y
+            && current_pos.y <= max_y
+        {
+            if let Some(tile) = board.get_tile(current_pos) {
+                let should_act = match object {
+                    Some(_) => tile.object.is_none(),
+                    None => tile.object.is_some(),
+                };
+                if should_act {
+                    // 放置或清除物件
+                    paint_object(board, current_pos, object, orientation, duration)?;
+                    placed += 1;
+                }
+            }
+        }
+
+        // 動態調整方向權重，避免超出選取範圍
+        let mut weights = weights; // 上, 下, 左, 右
+        if current_pos.y == min_y {
+            weights[0] = 0; // 上
+        }
+        if current_pos.y == max_y {
+            weights[1] = 0; // 下
+        }
+        if current_pos.x == min_x {
+            weights[2] = 0; // 左
+        }
+        if current_pos.x == max_x {
+            // 如果已到最右邊，停止
+            break;
+        }
+        let total_weight: usize = weights.iter().sum();
+        if total_weight == 0 {
+            // 所有方向都被阻塞，停止
+            break;
+        }
+        let rand_val = rng.random_range(0..total_weight);
+        let mut cumulative = 0;
+        let dir = weights
+            .iter()
+            .enumerate()
+            .find_map(|(i, &w)| {
+                cumulative += w;
+                if rand_val < cumulative { Some(i) } else { None }
+            })
+            .expect("drunkard should find a direction");
+
+        match dir {
+            0 => {
+                // 上
+                current_pos.y -= 1;
+            }
+            1 => {
+                // 下
+                current_pos.y += 1;
+            }
+            2 => {
+                // 左
+                current_pos.x -= 1;
+            }
+            _ => {
+                // 右
+                current_pos.x += 1;
+            }
+        }
     }
-}
 
-fn to_team_color(color: Color32) -> RGB {
-    (color.r(), color.g(), color.b())
-}
-
-fn to_egui_color(rgb: RGB) -> Color32 {
-    Color32::from_rgb(rgb.0, rgb.1, rgb.2)
+    Ok(placed)
 }
 
 // 將玩家進度的 roster 覆蓋到 board 上 team "player" 的單位
@@ -1731,6 +1940,51 @@ fn override_player_unit(
         board_unit.recalc_from_skills(skills);
     }
     Ok(())
+}
+
+fn terrain_color(tile: &Tile) -> Color32 {
+    match tile.terrain {
+        Terrain::Plain => Color32::DARK_GREEN,
+        Terrain::Hill => Color32::from_rgb(90, 60, 30),
+        Terrain::Mountain => Color32::from_rgb(60, 30, 0),
+        Terrain::Forest => Color32::from_rgb(0, 60, 0),
+        Terrain::ShallowWater => Color32::from_rgb(60, 60, 199),
+        Terrain::DeepWater => Color32::DARK_BLUE,
+    }
+}
+
+fn object_symbol(tile: &Tile) -> &'static str {
+    match &tile.object {
+        Some(Object::Wall) => "█",
+        Some(Object::Tree) => "🌳",
+        Some(Object::Tent2 { orientation, .. }) => match orientation {
+            Orientation::Horizontal => "⛺→2",
+            Orientation::Vertical => "⛺↓2",
+        },
+        Some(Object::Tent15 { orientation, .. }) => match orientation {
+            Orientation::Horizontal => "⛺→15",
+            Orientation::Vertical => "⛺↓15",
+        },
+        None => "",
+    }
+}
+
+fn unit_symbol<'a>(unit: &'a str) -> std::borrow::Cow<'a, str> {
+    // 若名稱包含 '_'，我們需要換行顯示，必須分配新 String；
+    // 若不包含 '_'，直接借用原字串以避免多餘分配。
+    if unit.contains('_') {
+        std::borrow::Cow::Owned(unit.replace('_', "\n"))
+    } else {
+        std::borrow::Cow::Borrowed(unit)
+    }
+}
+
+fn to_team_color(color: Color32) -> RGB {
+    (color.r(), color.g(), color.b())
+}
+
+fn to_egui_color(rgb: RGB) -> Color32 {
+    Color32::from_rgb(rgb.0, rgb.1, rgb.2)
 }
 
 struct UnitTemplateMap<'a>(&'a IndexMap<UnitTemplateType, UnitTemplate>);
