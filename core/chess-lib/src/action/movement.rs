@@ -24,11 +24,19 @@ impl<'a> PathfindingBoard for MovableBoardView<'a> {
         self.board.get_tile(pos).is_some()
     }
 
-    /// 判斷座標是否可通行（不可超越兩倍移動力，不可穿越敵軍）
+    /// 判斷座標是否可通行（不可超越兩倍移動力，不可穿越敵軍，不可穿越障礙物）
     fn is_passable(&self, active_unit_pos: Pos, pos: Pos, total: MovementCost) -> bool {
         // 不能超越兩倍移動力
         if total > self.move_points * 2 - self.moved_distance {
             return false;
+        }
+        // 不能穿越障礙物（使用 Object 的 is_passable 方法）
+        if let Some(tile) = self.board.get_tile(pos) {
+            if let Some(object) = &tile.object {
+                if !object.is_passable() {
+                    return false;
+                }
+            }
         }
         // 不能穿越敵軍
         let Some(unit_id) = self.board.pos_to_unit(active_unit_pos) else {
@@ -539,5 +547,31 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_movable_area_blocked_by_tree() {
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let mut board = basic_board_and_unit(start, ally, enemy).0;
+
+        // 在 (1,1) 放置樹木
+        if let Some(tile) = board.get_tile_mut(Pos { x: 1, y: 1 }) {
+            tile.object = Some(Object::Tree);
+        }
+
+        let expect = BTreeSet::from([
+            Pos { x: 0, y: 0 },
+            Pos { x: 0, y: 1 },
+            Pos { x: 0, y: 2 },
+            Pos { x: 1, y: 2 },
+            // (1,1) 被樹木擋住，所以無法到達 (1,1), (2,1), (2,2)
+            // 1,0 被敵人擋住
+            // 2,0 因為敵人所以距離太遠
+        ]);
+        let area = movable_area(&board, start, &skills_map());
+        let area = area.keys().cloned().collect::<BTreeSet<_>>();
+        assert_eq!(area, expect);
     }
 }

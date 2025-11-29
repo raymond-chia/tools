@@ -42,6 +42,17 @@ pub enum Object {
     },
 }
 
+impl Object {
+    /// 是否允許通行：物件自身負責描述能否通行的規則
+    /// - Wall / Tree -> 阻擋（不可通行）
+    /// - 多格帳篷 / 其他 -> 允許通行（可視需求調整）
+    pub fn is_passable(&self) -> bool {
+        match self {
+            Object::Wall | Object::Tree | Object::Tent2 { .. } | Object::Tent15 { .. } => false,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Tile {
     pub terrain: Terrain,
