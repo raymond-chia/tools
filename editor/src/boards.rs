@@ -16,6 +16,8 @@ const TILE_OBJECT_SIZE: f32 = 100.0;
 const TILE_SHRINK_SIZE: f32 = TILE_SIZE / 40.0;
 const TILE_ACTION_SHRINK_SIZE: f32 = TILE_SIZE / 5.0;
 const TILE_DEPLOYABLE_SIZE: f32 = 28.0;
+const TILE_ACTIVE_UNIT_MARKER_SIZE: f32 = 10.0;
+const TILE_ACTIVE_UNIT_MARKER_STROKE_WIDTH: f32 = 2.0;
 
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
@@ -1487,6 +1489,27 @@ fn show_sim_others(
             );
         }
 
+        // 若此格為目前行動單位的位置，使用中空描邊圓（隊伍顏色）
+        if let Some(unit_id) = board.pos_to_unit(pos) {
+            if unit_id == *active_unit_id {
+                // 取得該單位的隊伍顏色，若找不到則回退為紅色
+                let team_color = board
+                    .units
+                    .get(&unit_id)
+                    .and_then(|u| board.teams.get(&u.team))
+                    .map(|team| to_egui_color(team.color))
+                    .unwrap_or(Color32::RED);
+                painter.circle_stroke(
+                    rect.center(),
+                    TILE_ACTIVE_UNIT_MARKER_SIZE * camera.zoom,
+                    Stroke::new(
+                        TILE_ACTIVE_UNIT_MARKER_STROKE_WIDTH * camera.zoom,
+                        team_color,
+                    ),
+                );
+            }
+        }
+
         // 顯示單位（使用共用函式）
         draw_unit_on_board(board, painter, camera, pos, rect);
     }
@@ -1572,7 +1595,11 @@ fn draw_drunkard_start_indicator(
         let world_pos = Pos2::new(start_pos.x as f32, start_pos.y as f32) * TILE_SIZE;
         let screen_pos = camera.world_to_screen(world_pos);
         let rect = Rect::from_min_size(screen_pos, vec2(TILE_SIZE, TILE_SIZE) * camera.zoom);
-        painter.circle_filled(rect.center(), 10.0 * camera.zoom, Color32::RED);
+        painter.circle_filled(
+            rect.center(),
+            TILE_ACTIVE_UNIT_MARKER_SIZE * camera.zoom,
+            Color32::RED,
+        );
     }
 }
 
