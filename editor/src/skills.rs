@@ -180,7 +180,7 @@ impl SkillsData {
         }
         if skill.tags.contains(&Tag::BasicPassive) {
             if let Err(msg) = validate_basic_passive_skill(skill) {
-                return Err(format!("種族說明技能格式錯誤: {}", msg));
+                return Err(format!("種族被動技能格式錯誤: {}", msg));
             }
         }
 
@@ -487,9 +487,9 @@ impl SkillsEditor {
             delete_clicked = ui.button("刪除技能").clicked();
             copy_clicked = ui.button("複製技能").clicked();
 
-            // 新增「初始化種族說明技能」按鈕
+            // 新增「初始化種族被動技能」按鈕
             if skill.tags.contains(&Tag::BasicPassive) {
-                init_basic_passive = ui.button("初始化種族說明技能").clicked();
+                init_basic_passive = ui.button("初始化種族被動技能").clicked();
             }
         });
 
@@ -531,21 +531,37 @@ impl SkillsEditor {
 
                 // 處理效果編輯
                 let effects_len = skill.effects.len();
-                for (index, effect) in skill.effects.iter_mut().enumerate() {
-                    ui.push_id(index, |ui| {
-                        self.has_unsaved_changes_flag |= show_skill_effect_editor(
-                            ui,
-                            index,
-                            effect,
-                            skill.tags.contains(&Tag::BasicPassive),
-                            effects_len,
-                            &mut move_up_effect_index,
-                            &mut move_down_effect_index,
-                            &mut delete_effect_index,
-                        );
+                let is_basic_passive_skill = skill.tags.contains(&Tag::BasicPassive);
+                let mut show_effects = |ui: &mut Ui| {
+                    for (index, effect) in skill.effects.iter_mut().enumerate() {
+                        ui.vertical(|ui| {
+                            ui.push_id(index, |ui| {
+                                let is_basic_passive_effect = is_basic_passive_skill
+                                    && is_basic_passive_effect(effect)
+                                    && index < BASIC_PASSIVE_EFFECTS.len();
+                                self.has_unsaved_changes_flag |= show_skill_effect_editor(
+                                    ui,
+                                    index,
+                                    effect,
+                                    is_basic_passive_effect,
+                                    effects_len,
+                                    &mut move_up_effect_index,
+                                    &mut move_down_effect_index,
+                                    &mut delete_effect_index,
+                                );
 
-                        ui.add_space(8.0);
+                                ui.add_space(8.0);
+                            });
+                        });
+                    }
+                };
+                if is_basic_passive_skill {
+                    ui.label("注意：種族被動技能建議使用「初始化種族被動技能」按鈕來重設效果。");
+                    ui.horizontal(|ui| {
+                        show_effects(ui);
                     });
+                } else {
+                    show_effects(ui);
                 }
             });
 
@@ -851,7 +867,7 @@ impl SkillsEditor {
         self.set_status(format!("已複製技能為 {}", new_id), false);
     }
 
-    /// 初始化種族說明技能效果
+    /// 初始化種族被動技能效果
     fn init_basic_passive_skill_effects(&mut self, skill: &str) {
         let mut found: [Option<i32>; BASIC_PASSIVE_EFFECTS.len()] =
             [None; BASIC_PASSIVE_EFFECTS.len()];
@@ -898,7 +914,7 @@ impl SkillsEditor {
         skill.effects.extend(others);
 
         self.has_unsaved_changes_flag = true;
-        self.set_status("已初始化種族說明技能效果".to_string(), false);
+        self.set_status("已初始化種族被動技能效果".to_string(), false);
     }
 
     fn save_file(&mut self, path: PathBuf) {
@@ -1093,7 +1109,7 @@ fn show_skill_effect_editor(
     ui: &mut Ui,
     index: usize,
     effect: &mut Effect,
-    is_basic_passive_skill: bool,
+    is_basic_passive_effect: bool,
     effects_len: usize,
     move_up_effect_index: &mut Option<usize>,
     move_down_effect_index: &mut Option<usize>,
@@ -1102,9 +1118,6 @@ fn show_skill_effect_editor(
     let mut move_up_clicked = false;
     let mut move_down_clicked = false;
     let mut delete_effect_clicked = false;
-    let is_basic_passive_effect = is_basic_passive_skill
-        && is_basic_passive_effect(effect)
-        && index < BASIC_PASSIVE_EFFECTS.len();
 
     ui.horizontal(|ui| {
         match effect {
