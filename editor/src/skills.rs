@@ -20,91 +20,31 @@ struct BasicPassiveEffectMeta {
     validate: fn(&Effect) -> bool,
     extract_value_mut: fn(&mut Effect) -> Option<&mut i32>,
 }
+macro_rules! basic_passive_effect_meta {
+    ($variant:ident, $name:expr) => {
+        BasicPassiveEffectMeta {
+            name: $name,
+            make: |value| Effect::$variant {
+                target_type: BASIC_PASSIVE_TARGET_TYPE,
+                shape: BASIC_PASSIVE_SHAPE,
+                value,
+                duration: BASIC_PASSIVE_DURATION,
+            },
+            validate: |e| matches!(e, Effect::$variant { .. }),
+            extract_value_mut: |e| match e {
+                Effect::$variant { value, .. } => Some(value),
+                _ => None,
+            },
+        }
+    };
+}
 const BASIC_PASSIVE_EFFECTS: &[BasicPassiveEffectMeta] = &[
-    BasicPassiveEffectMeta {
-        name: "max_hp",
-        make: |value| Effect::MaxHp {
-            target_type: BASIC_PASSIVE_TARGET_TYPE,
-            shape: BASIC_PASSIVE_SHAPE,
-            value,
-            duration: BASIC_PASSIVE_DURATION,
-        },
-        validate: |e| matches!(e, Effect::MaxHp { .. }),
-        extract_value_mut: |e| match e {
-            Effect::MaxHp { value, .. } => Some(value),
-            _ => None,
-        },
-    },
-    BasicPassiveEffectMeta {
-        name: "max_mp",
-        make: |value| Effect::MaxMp {
-            target_type: BASIC_PASSIVE_TARGET_TYPE,
-            shape: BASIC_PASSIVE_SHAPE,
-            value,
-            duration: BASIC_PASSIVE_DURATION,
-        },
-        validate: |e| matches!(e, Effect::MaxMp { .. }),
-        extract_value_mut: |e| match e {
-            Effect::MaxMp { value, .. } => Some(value),
-            _ => None,
-        },
-    },
-    BasicPassiveEffectMeta {
-        name: "initiative",
-        make: |value| Effect::Initiative {
-            target_type: BASIC_PASSIVE_TARGET_TYPE,
-            shape: BASIC_PASSIVE_SHAPE,
-            value,
-            duration: BASIC_PASSIVE_DURATION,
-        },
-        validate: |e| matches!(e, Effect::Initiative { .. }),
-        extract_value_mut: |e| match e {
-            Effect::Initiative { value, .. } => Some(value),
-            _ => None,
-        },
-    },
-    BasicPassiveEffectMeta {
-        name: "evasion",
-        make: |value| Effect::Evasion {
-            target_type: BASIC_PASSIVE_TARGET_TYPE,
-            shape: BASIC_PASSIVE_SHAPE,
-            value,
-            duration: BASIC_PASSIVE_DURATION,
-        },
-        validate: |e| matches!(e, Effect::Evasion { .. }),
-        extract_value_mut: |e| match e {
-            Effect::Evasion { value, .. } => Some(value),
-            _ => None,
-        },
-    },
-    BasicPassiveEffectMeta {
-        name: "block",
-        make: |value| Effect::Block {
-            target_type: BASIC_PASSIVE_TARGET_TYPE,
-            shape: BASIC_PASSIVE_SHAPE,
-            value,
-            duration: BASIC_PASSIVE_DURATION,
-        },
-        validate: |e| matches!(e, Effect::Block { .. }),
-        extract_value_mut: |e| match e {
-            Effect::Block { value, .. } => Some(value),
-            _ => None,
-        },
-    },
-    BasicPassiveEffectMeta {
-        name: "move_points",
-        make: |value| Effect::MovePoints {
-            target_type: BASIC_PASSIVE_TARGET_TYPE,
-            shape: BASIC_PASSIVE_SHAPE,
-            value,
-            duration: BASIC_PASSIVE_DURATION,
-        },
-        validate: |e| matches!(e, Effect::MovePoints { .. }),
-        extract_value_mut: |e| match e {
-            Effect::MovePoints { value, .. } => Some(value),
-            _ => None,
-        },
-    },
+    basic_passive_effect_meta!(MaxHp, "max_hp"),
+    basic_passive_effect_meta!(MaxMp, "max_mp"),
+    basic_passive_effect_meta!(Initiative, "initiative"),
+    basic_passive_effect_meta!(Evasion, "evasion"),
+    basic_passive_effect_meta!(Block, "block"),
+    basic_passive_effect_meta!(MovePoints, "move_points"),
 ];
 
 // 判斷是否為 basic passive 效果（依 meta 陣列 validate 規則）
@@ -869,8 +809,7 @@ impl SkillsEditor {
 
     /// 初始化種族被動技能效果
     fn init_basic_passive_skill_effects(&mut self, skill: &str) {
-        let mut found: [Option<i32>; BASIC_PASSIVE_EFFECTS.len()] =
-            [None; BASIC_PASSIVE_EFFECTS.len()];
+        let mut found: Vec<Option<i32>> = vec![None; BASIC_PASSIVE_EFFECTS.len()];
         let mut others: Vec<Effect> = Vec::new();
 
         let skill = match self.skills_data.skills.get_mut(skill) {

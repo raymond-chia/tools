@@ -88,8 +88,9 @@ pub enum Shape {
     Cone(usize, Degree),
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, EnumIter, PartialEq)]
+#[derive(Debug, Deserialize, Serialize, Clone, EnumIter, Display, PartialEq)]
 #[serde(rename_all = "snake_case", tag = "type")]
+#[strum(serialize_all = "snake_case")]
 pub enum Effect {
     Hp {
         target_type: TargetType,
