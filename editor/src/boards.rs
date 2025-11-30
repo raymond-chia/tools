@@ -1637,15 +1637,21 @@ fn paint_object(
     orientation: Orientation,
     duration: u32,
 ) -> Result<(), String> {
-    let mut apply_single = || {
+    // helper: 放置單格物件
+    let mut apply_single = |obj: Option<Object>| {
         board
             .get_tile_mut(pos)
-            .unwrap_or_else(|| panic!("painting in race condition. {:?} in {:?}", object, pos))
-            .object = object.clone().cloned();
+            .unwrap_or_else(|| panic!("painting in race condition. {:?} in {:?}", obj, pos))
+            .object = obj.clone();
         Ok(())
     };
+
     match object {
+        None => apply_single(None),
         Some(obj) => match obj {
+            Object::Wall => apply_single(Some(Object::Wall)),
+            Object::Tree => apply_single(Some(Object::Tree)),
+            Object::Cliff { .. } => apply_single(Some(Object::Cliff { orientation })),
             Object::Tent2 { .. } => {
                 let (w, h) = match orientation {
                     Orientation::Horizontal => (2, 1),
@@ -1668,9 +1674,7 @@ fn paint_object(
                     duration,
                 })
             }
-            Object::Wall | Object::Tree => apply_single(),
         },
-        None => apply_single(),
     }
 }
 
@@ -1758,7 +1762,7 @@ fn fill_selected_area(
     rect_start: Pos,
     rect_end: Pos,
     object: Option<&Object>,
-    _orientation: Orientation,
+    orientation: Orientation,
     _duration: u32,
 ) -> Result<(usize, usize), String> {
     let (min_x, max_x) = if rect_start.x <= rect_end.x {
@@ -1774,9 +1778,9 @@ fn fill_selected_area(
 
     let mut success = 0;
     let mut skipped = 0;
-    let mut apply_single = |pos| {
+    let mut apply_single = |pos, object| {
         if let Some(tile) = board.get_tile_mut(pos) {
-            tile.object = object.clone().cloned();
+            tile.object = object;
             success += 1;
         } else {
             skipped += 1;
@@ -1786,16 +1790,17 @@ fn fill_selected_area(
     for y in min_y..=max_y {
         for x in min_x..=max_x {
             let pos = Pos { x, y };
-            // 僅允許 Wall/Tree 或 None
+            // 根據 object 類型分別處理
             match object {
+                None => apply_single(pos, None),
                 Some(obj) => match obj {
-                    Object::Wall | Object::Tree => apply_single(pos),
+                    Object::Wall | Object::Tree => apply_single(pos, object.cloned()),
+                    Object::Cliff { .. } => apply_single(pos, Some(Object::Cliff { orientation })),
                     Object::Tent2 { .. } | Object::Tent15 { .. } => {
                         // 其他物件類型暫不支援
                         return Err(format!("不支援多格物件類型：{:?}", obj));
                     }
                 },
-                None => apply_single(pos),
             }
         }
     }
@@ -1984,6 +1989,10 @@ fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
         Some(Object::Wall) => "█",
         Some(Object::Tree) => "🌳",
+        Some(Object::Cliff { orientation }) => match orientation {
+            Orientation::Horizontal => "\\→",
+            Orientation::Vertical => "\\↓",
+        },
         Some(Object::Tent2 { orientation, .. }) => match orientation {
             Orientation::Horizontal => "⛺→2",
             Orientation::Vertical => "⛺↓2",

@@ -30,6 +30,9 @@ pub enum Orientation {
 pub enum Object {
     Wall,
     Tree,
+    Cliff {
+        orientation: Orientation,
+    },
     Tent2 {
         orientation: Orientation,
         rel: Pos,
@@ -48,7 +51,11 @@ impl Object {
     /// - 多格帳篷 / 其他 -> 允許通行（可視需求調整）
     pub fn is_passable(&self) -> bool {
         match self {
-            Object::Wall | Object::Tree | Object::Tent2 { .. } | Object::Tent15 { .. } => false,
+            Object::Wall
+            | Object::Tree
+            | Object::Cliff { .. }
+            | Object::Tent2 { .. }
+            | Object::Tent15 { .. } => false,
         }
     }
 }
