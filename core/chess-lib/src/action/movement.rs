@@ -11,6 +11,20 @@ const SECOND_MOVEMENT_COLOR: RGBA = (50, 50, 255, 150); // 深藍
 const FIRST_PATH_COLOR: RGBA = (125, 0, 125, 150); // 淺紫
 const SECOND_PATH_COLOR: RGBA = (100, 0, 100, 150); // 深紫
 
+/// 檢查位置的地形和物件是否可通行（不處理單位阻擋）
+pub fn is_tile_passable(board: &Board, pos: Pos) -> bool {
+    match board.get_tile(pos) {
+        None => false, // 地形不存在 -> 不可通行
+        Some(tile) => {
+            if let Some(object) = &tile.object {
+                object.is_passable() // 物件可通行
+            } else {
+                true // 無物件 -> 可通行
+            }
+        }
+    }
+}
+
 /// 提供移動邏輯用的棋盤視圖，實作 PathfindingBoard 供路徑搜尋演算法使用
 struct MovableBoardView<'a> {
     board: &'a Board,
@@ -30,15 +44,10 @@ impl<'a> PathfindingBoard for MovableBoardView<'a> {
         if total > self.move_points * 2 - self.moved_distance {
             return false;
         }
-        // 不能穿越障礙物（使用 Object 的 is_passable 方法）
-        if let Some(tile) = self.board.get_tile(pos) {
-            if let Some(object) = &tile.object {
-                if !object.is_passable() {
-                    return false;
-                }
-            }
+        // 檢查地形和物件阻擋
+        if !is_tile_passable(self.board, pos) {
+            return false;
         }
-        // 不能穿越敵軍
         let Some(unit_id) = self.board.pos_to_unit(active_unit_pos) else {
             // 不合理
             return false;
@@ -50,6 +59,7 @@ impl<'a> PathfindingBoard for MovableBoardView<'a> {
         match self.board.pos_to_unit(pos) {
             None => true, // 目標位置無單位
             Some(unit_id) => {
+                // 不能穿越敵軍
                 let target_team = self.board.units.get(&unit_id).map_or("", |unit| &unit.team);
                 active_team == target_team
             }

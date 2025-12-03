@@ -148,6 +148,11 @@ pub enum Effect {
         shape: Shape,
         duration: i32, // -1 代表永久
     },
+    Shove {
+        target_type: TargetType,
+        shape: Shape,
+        distance: usize,
+    },
 }
 
 impl Default for Skill {
@@ -178,6 +183,7 @@ macro_rules! effect_field_ref {
             Effect::MovePoints { $field, .. } => $field,
             Effect::Burn { $field, .. } => $field,
             Effect::HitAndRun { $field, .. } => $field,
+            Effect::Shove { $field, .. } => $field,
         }
     };
 }
@@ -215,7 +221,7 @@ impl Effect {
             | Effect::MovePoints { duration, .. }
             | Effect::Burn { duration, .. }
             | Effect::HitAndRun { duration, .. } => *duration,
-            Effect::Hp { .. } | Effect::Mp { .. } => 0,
+            Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
         }
     }
 }

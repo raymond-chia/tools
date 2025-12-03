@@ -1,5 +1,6 @@
 use crate::common::*;
 use eframe::{Frame, egui};
+use egui::emath::Numeric;
 use egui::{Button, DragValue, ScrollArea, Separator, Ui};
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
@@ -586,6 +587,7 @@ impl SkillsEditor {
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
                         Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::HitAndRun { .. } => ui.button("新增打帶跑效果").clicked(),
+                        Effect::Shove { .. } => ui.button("新增推擠效果").clicked(),
                     };
                     effects.push((flag, effect));
                 }
@@ -1070,6 +1072,7 @@ fn show_skill_effect_editor(
             Effect::MovePoints { .. } => ui.label("移動點數"),
             Effect::Burn { .. } => ui.label("燃燒"),
             Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
+            Effect::Shove { .. } => ui.label("推擠"),
         };
         // 種族效果不顯示刪除、上下移動
         if !is_basic_passive_effect {
@@ -1104,7 +1107,7 @@ fn show_skill_effect_editor(
             let mut found = false;
             for meta in BASIC_PASSIVE_EFFECTS {
                 if let Some(value) = (meta.extract_value_mut)(effect) {
-                    changed |= show_value_editor(ui, value, "");
+                    changed |= show_numeric_editor(ui, value, "");
                     found = true;
                     break;
                 }
@@ -1130,7 +1133,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "HP 變化值:");
+            changed |= show_numeric_editor(ui, value, "HP 變化值:");
         }
         Effect::Mp {
             target_type,
@@ -1142,7 +1145,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "MP 變化值:");
+            changed |= show_numeric_editor(ui, value, "MP 變化值:");
         }
         Effect::MaxHp {
             target_type,
@@ -1155,7 +1158,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "最大 HP 變化值:");
+            changed |= show_numeric_editor(ui, value, "最大 HP 變化值:");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::MaxMp {
@@ -1169,7 +1172,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "最大 MP 變化值:");
+            changed |= show_numeric_editor(ui, value, "最大 MP 變化值:");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Initiative {
@@ -1183,7 +1186,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "先攻變化值:");
+            changed |= show_numeric_editor(ui, value, "先攻變化值:");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Evasion {
@@ -1197,7 +1200,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "閃避數值變化：");
+            changed |= show_numeric_editor(ui, value, "閃避數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Block {
@@ -1211,7 +1214,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "格擋數值變化：");
+            changed |= show_numeric_editor(ui, value, "格擋數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::MovePoints {
@@ -1225,7 +1228,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
-            changed |= show_value_editor(ui, value, "移動點數變化值:");
+            changed |= show_numeric_editor(ui, value, "移動點數變化值:");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Burn {
@@ -1251,6 +1254,18 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 changed |= show_shape_editor(ui, shape);
             });
             changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Shove {
+            target_type,
+            shape,
+            distance,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_numeric_editor(ui, distance, "推擠距離:");
         }
     }
     changed
@@ -1384,7 +1399,11 @@ fn show_duration_editor(ui: &mut Ui, duration: &mut i32) -> bool {
 }
 
 // 共用數值編輯器（label 可參數化）
-fn show_value_editor(ui: &mut Ui, value: &mut i32, label: &str) -> bool {
+fn show_numeric_editor<T: Numeric + Copy + 'static>(
+    ui: &mut Ui,
+    value: &mut T,
+    label: &str,
+) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.label(label);

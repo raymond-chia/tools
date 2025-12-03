@@ -459,7 +459,7 @@ impl BoardsEditor {
                 self.skill_selection.skill_affect_area(
                     &self.sim_board,
                     &self.skills,
-                    active_unit_id,
+                    active_unit_pos,
                     to,
                 )
             } else {
