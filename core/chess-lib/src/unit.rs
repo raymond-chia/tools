@@ -7,13 +7,15 @@ use serde::{Deserialize, Serialize};
 use skills_lib::*;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+const MAX_INITIATIVE_RANDOM: i32 = 6;
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Team {
     pub id: TeamID,
     pub color: RGB,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Default, Clone, Deserialize, Serialize)]
 pub struct UnitTemplate {
     pub name: UnitTemplateType,
     pub skills: BTreeSet<String>,
@@ -40,15 +42,6 @@ pub struct Unit {
     pub mp: i32,
     pub max_mp: i32,
     pub skills: BTreeSet<String>,
-}
-
-impl Default for UnitTemplate {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            skills: BTreeSet::new(),
-        }
-    }
 }
 
 impl Unit {
@@ -106,14 +99,14 @@ impl Unit {
 }
 
 /// 計算單位本回合的 initiative 值
-/// - 1D6 隨機
+/// - 1D 隨機
 /// - 技能 initiative 加總（i32）
 /// - 未來可擴充 buff/debuff、裝備等
 pub fn calc_initiative<'a>(
     rng: &mut impl rand::Rng,
     skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
 ) -> i32 {
-    let roll = rng.random_range(1..=6);
+    let roll = rng.random_range(1..=MAX_INITIATIVE_RANDOM);
     let skill_initiative = skills_to_initiative(skills);
     roll + skill_initiative
 }
@@ -219,11 +212,13 @@ mod tests {
     fn test_deserialize_unit() {
         let data = include_str!("../tests/unit.json");
         let v: serde_json::Value = serde_json::from_str(data).unwrap();
-        // 從 skill_sprint.json 載入 sprint 技能
+        // 從 skill_sprint.json 載入 sprint 技能，並載入 max_hp / max_mp 技能以覆蓋對應欄位
         let sprint_data = include_str!("../tests/skill_sprint.json");
         let sprint_skill: Skill = serde_json::from_str(sprint_data).unwrap();
         let max_hp_data = include_str!("../tests/skill_max_hp.json");
         let max_hp_skill: Skill = serde_json::from_str(max_hp_data).unwrap();
+        let max_mp_data = include_str!("../tests/skill_max_mp.json");
+        let max_mp_skill: Skill = serde_json::from_str(max_mp_data).unwrap();
 
         // 測試 Team
         let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
@@ -248,6 +243,7 @@ mod tests {
         let skills_map = BTreeMap::from([
             ("sprint".to_string(), sprint_skill),
             ("max_hp".to_string(), max_hp_skill),
+            ("max_mp".to_string(), max_mp_skill),
         ]);
 
         fn with_skills(mut template: UnitTemplate, skills: &[&str]) -> UnitTemplate {
@@ -255,18 +251,25 @@ mod tests {
             template
         }
         let test_data = [
-            (vec![], HashMap::from([("move_points", 0), ("max_hp", 0)])),
+            (
+                vec![],
+                HashMap::from([("move_points", 0), ("max_hp", 0), ("max_mp", 0)]),
+            ),
             (
                 vec!["sprint"],
-                HashMap::from([("move_points", 30), ("max_hp", 0)]),
+                HashMap::from([("move_points", 30), ("max_hp", 0), ("max_mp", 0)]),
             ),
             (
                 vec!["max_hp"],
-                HashMap::from([("move_points", 0), ("max_hp", 10)]),
+                HashMap::from([("move_points", 0), ("max_hp", 10), ("max_mp", 0)]),
             ),
             (
-                vec!["sprint", "max_hp"],
-                HashMap::from([("move_points", 30), ("max_hp", 10)]),
+                vec!["max_mp"],
+                HashMap::from([("move_points", 0), ("max_hp", 0), ("max_mp", 5)]),
+            ),
+            (
+                vec!["sprint", "max_hp", "max_mp"],
+                HashMap::from([("move_points", 30), ("max_hp", 10), ("max_mp", 5)]),
             ),
         ];
 
@@ -278,8 +281,11 @@ mod tests {
             assert_eq!(unit.team, marker.team);
             assert_eq!(unit.moved, 0);
             assert_eq!(unit.move_points, expect["move_points"] as usize);
+            assert_eq!(unit.has_cast_skill_this_turn, false);
             assert_eq!(unit.hp, expect["max_hp"]);
             assert_eq!(unit.max_hp, expect["max_hp"]);
+            assert_eq!(unit.mp, expect["max_mp"]);
+            assert_eq!(unit.max_mp, expect["max_mp"]);
             assert_eq!(unit.skills.len(), skills.len());
             for skill in skills {
                 assert!(unit.skills.contains(skill));
@@ -317,6 +323,8 @@ mod tests {
         assert!(unit.has_cast_skill_this_turn);
         assert_eq!(unit.hp, i32::MIN);
         assert_eq!(unit.max_hp, i32::MAX);
+        assert_eq!(unit.mp, i32::MIN);
+        assert_eq!(unit.max_mp, i32::MAX);
         assert!(unit.skills.contains("超級技能"));
     }
 
@@ -338,6 +346,92 @@ mod tests {
             Err(Error::SkillNotFound { skill_id, .. }) => assert_eq!(skill_id, "not_exist_skill"),
             _ => panic!("Should return Error::SkillNotFound"),
         }
+    }
+
+    #[test]
+    fn test_skills_to_initiative() {
+        let mut skills = BTreeMap::new();
+        // 無技能
+        assert_eq!(skills_to_initiative(skills.iter()), 0);
+
+        // 一個 initiative 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::Initiative {
+            value: 2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_initiative(skills.iter()), 2);
+
+        // 多個 initiative 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::Initiative {
+            value: 3,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_initiative(skills.iter()), 5);
+
+        // 非 initiative 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxHp {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_initiative(skills.iter()), 5);
+    }
+
+    #[test]
+    fn test_calc_initiative() {
+        let mut rng = rand::rng();
+        let mut skills = BTreeMap::new();
+        // 無技能
+        let result = calc_initiative(&mut rng, skills.iter());
+        assert!(result >= 1 && result <= MAX_INITIATIVE_RANDOM);
+
+        // 有 initiative 技能
+        let mut skill = Skill::default();
+        skill.effects = vec![Effect::Initiative {
+            value: 3,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key = "test".to_string();
+        skills.insert(key.clone(), skill);
+        let result = calc_initiative(&mut rng, skills.iter());
+        assert!(result >= 4 && result <= 9);
+
+        // 有 initiative 技能
+        let mut skill = Skill::default();
+        skill.effects = vec![
+            Effect::Initiative {
+                value: 3,
+                target_type: Default::default(),
+                shape: Default::default(),
+                duration: 0,
+            },
+            Effect::Initiative {
+                value: 2,
+                target_type: Default::default(),
+                shape: Default::default(),
+                duration: 0,
+            },
+        ];
+        let key = "test".to_string();
+        skills.insert(key.clone(), skill);
+        let result = calc_initiative(&mut rng, skills.iter());
+        assert!(result >= 6 && result <= 11);
     }
 
     #[test]
@@ -384,81 +478,38 @@ mod tests {
     }
 
     #[test]
-    fn test_calc_initiative_with_and_without_skill() {
-        let mut rng = rand::rng();
+    fn test_skills_to_max_mp() {
         let mut skills = BTreeMap::new();
         // 無技能
-        let result = calc_initiative(&mut rng, skills.iter());
-        assert!(result >= 1 && result <= 6);
+        assert_eq!(skills_to_max_mp(skills.iter()), 0);
 
-        // 有 initiative 技能
-        let mut skill = Skill::default();
-        skill.effects = vec![Effect::Initiative {
-            value: 3,
-            target_type: Default::default(),
-            shape: Default::default(),
-            duration: 0,
-        }];
-        let key = "test".to_string();
-        skills.insert(key.clone(), skill);
-        let result = calc_initiative(&mut rng, skills.iter());
-        assert!(result >= 4 && result <= 9);
-
-        // 有 initiative 技能
-        let mut skill = Skill::default();
-        skill.effects = vec![
-            Effect::Initiative {
-                value: 3,
-                target_type: Default::default(),
-                shape: Default::default(),
-                duration: 0,
-            },
-            Effect::Initiative {
-                value: 2,
-                target_type: Default::default(),
-                shape: Default::default(),
-                duration: 0,
-            },
-        ];
-        let key = "test".to_string();
-        skills.insert(key.clone(), skill);
-        let result = calc_initiative(&mut rng, skills.iter());
-        assert!(result >= 6 && result <= 11);
-    }
-
-    #[test]
-    fn test_skills_to_initiative() {
-        let mut skills = BTreeMap::new();
-        // 無技能
-        assert_eq!(skills_to_initiative(skills.iter()), 0);
-
-        // 一個 initiative 技能
+        // 一個 MaxMp 技能
         let mut skill1 = Skill::default();
-        skill1.effects = vec![Effect::Initiative {
-            value: 2,
+        skill1.effects = vec![Effect::MaxMp {
+            value: 5,
             target_type: Default::default(),
             shape: Default::default(),
             duration: 0,
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_initiative(skills.iter()), 2);
+        assert_eq!(skills_to_max_mp(skills.iter()), 5);
 
-        // 多個 initiative 技能
+        // 多個 MaxMp 技能
         let mut skill2 = Skill::default();
-        skill2.effects = vec![Effect::Initiative {
-            value: 3,
+        skill2.effects = vec![Effect::MaxMp {
+            value: 10,
             target_type: Default::default(),
             shape: Default::default(),
             duration: 0,
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_initiative(skills.iter()), 5);
+        assert_eq!(skills_to_max_mp(skills.iter()), 15);
 
-        // 非 initiative 類型技能不影響
+        // 非 MaxMp 類型技能不影響
         let mut skill3 = Skill::default();
-        skill3.effects = vec![Effect::MaxHp {
+        skill3.effects = vec![Effect::Initiative {
             value: 99,
             target_type: Default::default(),
             shape: Default::default(),
@@ -466,7 +517,7 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_initiative(skills.iter()), 5);
+        assert_eq!(skills_to_max_mp(skills.iter()), 15);
     }
 
     #[test]
@@ -593,5 +644,88 @@ mod tests {
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
         assert_eq!(skills_to_move_points(skills.iter()), 15);
+    }
+
+    #[test]
+    fn test_recalc_from_skills_updates_stats() {
+        let mut skills = BTreeMap::new();
+        let mut s1 = Skill::default();
+        s1.effects = vec![Effect::MaxHp {
+            value: 20,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let mut s2 = Skill::default();
+        s2.effects = vec![Effect::MaxMp {
+            value: 5,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let mut s3 = Skill::default();
+        s3.effects = vec![Effect::MovePoints {
+            value: 7,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        skills.insert("a".to_string(), s1);
+        skills.insert("b".to_string(), s2);
+        skills.insert("c".to_string(), s3);
+
+        let mut unit = Unit {
+            id: 1,
+            unit_template_type: "t".to_string(),
+            team: "team".to_string(),
+            moved: 0,
+            move_points: 0,
+            has_cast_skill_this_turn: false,
+            hp: 0,
+            max_hp: 0,
+            mp: 0,
+            max_mp: 0,
+            skills: ["a".to_string(), "b".to_string(), "c".to_string()]
+                .iter()
+                .cloned()
+                .collect(),
+        };
+
+        unit.recalc_from_skills(&skills);
+        assert_eq!(unit.max_hp, 20);
+        assert_eq!(unit.hp, 20);
+        assert_eq!(unit.max_mp, 5);
+        assert_eq!(unit.mp, 5);
+        assert_eq!(unit.move_points, 7);
+    }
+
+    #[test]
+    fn test_recalc_from_skills_negative_move_points_sets_zero() {
+        let mut skills = BTreeMap::new();
+        let mut s1 = Skill::default();
+        s1.effects = vec![Effect::MovePoints {
+            value: -20,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        skills.insert("neg".to_string(), s1);
+
+        let mut unit = Unit {
+            id: 2,
+            unit_template_type: "t".to_string(),
+            team: "team".to_string(),
+            moved: 0,
+            move_points: 10, // initial value should be overwritten
+            has_cast_skill_this_turn: false,
+            hp: 1,
+            max_hp: 1,
+            mp: 1,
+            max_mp: 1,
+            skills: ["neg".to_string()].iter().cloned().collect(),
+        };
+
+        unit.recalc_from_skills(&skills);
+        assert_eq!(unit.move_points, 0);
     }
 }

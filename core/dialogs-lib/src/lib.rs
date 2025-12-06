@@ -111,3 +111,51 @@ impl Node {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_pos_and_set_pos() {
+        let mut node = Node::Dialogue {
+            pos: Pos { x: 1.0, y: 2.0 },
+            dialogues: vec![DialogueEntry {
+                speaker: "A".to_string(),
+                text: "Hello".to_string(),
+            }],
+            actions: None,
+            next_node: "next".to_string(),
+        };
+        let p = node.pos();
+        assert_eq!(p.x, 1.0);
+        assert_eq!(p.y, 2.0);
+
+        node.set_pos(Pos { x: 3.0, y: 4.0 });
+        let p2 = node.pos();
+        assert_eq!(p2.x, 3.0);
+        assert_eq!(p2.y, 4.0);
+    }
+
+    #[test]
+    fn test_node_option_pos_and_set_pos() {
+        let opt = Node::Option {
+            pos: Pos { x: -1.5, y: 0.5 },
+            options: vec![OptionEntry {
+                text: "opt".to_string(),
+                next_node: "n".to_string(),
+                conditions: None,
+                actions: None,
+            }],
+        };
+        let p = opt.pos();
+        assert_eq!(p.x, -1.5);
+        assert_eq!(p.y, 0.5);
+
+        let mut opt2 = opt;
+        opt2.set_pos(Pos { x: 2.5, y: -3.5 });
+        let p2 = opt2.pos();
+        assert_eq!(p2.x, 2.5);
+        assert_eq!(p2.y, -3.5);
+    }
+}

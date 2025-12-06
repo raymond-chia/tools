@@ -173,17 +173,17 @@ impl Default for Skill {
 macro_rules! effect_field_ref {
     ($self:expr, $field:ident) => {
         match $self {
-            Effect::Hp { $field, .. } => $field,
-            Effect::Mp { $field, .. } => $field,
-            Effect::MaxHp { $field, .. } => $field,
-            Effect::MaxMp { $field, .. } => $field,
-            Effect::Initiative { $field, .. } => $field,
-            Effect::Evasion { $field, .. } => $field,
-            Effect::Block { $field, .. } => $field,
-            Effect::MovePoints { $field, .. } => $field,
-            Effect::Burn { $field, .. } => $field,
-            Effect::HitAndRun { $field, .. } => $field,
-            Effect::Shove { $field, .. } => $field,
+            Effect::Hp { $field, .. }
+            | Effect::Mp { $field, .. }
+            | Effect::MaxHp { $field, .. }
+            | Effect::MaxMp { $field, .. }
+            | Effect::Initiative { $field, .. }
+            | Effect::Evasion { $field, .. }
+            | Effect::Block { $field, .. }
+            | Effect::MovePoints { $field, .. }
+            | Effect::Burn { $field, .. }
+            | Effect::HitAndRun { $field, .. }
+            | Effect::Shove { $field, .. } => $field,
         }
     };
 }
@@ -228,4 +228,215 @@ impl Effect {
 
 fn default_tags() -> BTreeSet<Tag> {
     BTreeSet::from([Tag::Active, Tag::Single, Tag::Melee])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 測試 1：覆蓋所有 TargetType 分支的 target_type() 與 is_targeting_unit()
+    #[test]
+    fn test_target_type_and_is_targeting_unit_all_targets() {
+        // 這些 target 應被視為「指向單位」
+        let unit_targets = [
+            TargetType::Caster,
+            TargetType::Ally,
+            TargetType::AllyExcludeCaster,
+            TargetType::Enemy,
+            TargetType::AnyUnit,
+        ];
+
+        for t in &unit_targets {
+            let e = Effect::Hp {
+                target_type: t.clone(),
+                shape: Shape::Point,
+                value: 1,
+            };
+            // target_type() 回傳參考，應等於原始值
+            assert_eq!(e.target_type(), t);
+            assert!(
+                e.is_targeting_unit(),
+                "Expected {:?} to be unit-targeting",
+                t
+            );
+        }
+
+        let unit_targets = [TargetType::Any];
+        for t in &unit_targets {
+            // Any 不應視為指向單位
+            let e_any = Effect::Mp {
+                target_type: t.clone(),
+                shape: Shape::Point,
+                value: 0,
+            };
+            assert_eq!(e_any.target_type(), t);
+            assert!(!e_any.is_targeting_unit());
+        }
+    }
+
+    // 測試 2：shape() 覆蓋 Point / Circle / Line / Cone 分支
+    #[test]
+    fn test_shape_variants() {
+        let s_point = Effect::Mp {
+            target_type: Default::default(),
+            shape: Shape::Point,
+            value: 1,
+        };
+        assert_eq!(s_point.shape(), &Shape::Point);
+
+        let s_circle = Effect::MaxMp {
+            target_type: Default::default(),
+            shape: Shape::Circle(3),
+            value: 5,
+            duration: 2,
+        };
+        assert_eq!(s_circle.shape(), &Shape::Circle(3));
+
+        let s_line = Effect::Initiative {
+            target_type: Default::default(),
+            shape: Shape::Line(4),
+            value: 2,
+            duration: 1,
+        };
+        assert_eq!(s_line.shape(), &Shape::Line(4));
+
+        let s_cone = Effect::Evasion {
+            target_type: Default::default(),
+            shape: Shape::Cone(2, 90),
+            value: 1,
+            duration: 3,
+        };
+        assert_eq!(s_cone.shape(), &Shape::Cone(2, 90));
+    }
+
+    // 測試 3：duration() 覆蓋所有有 duration 的變體，且沒有 duration 的變體回傳 0
+    #[test]
+    fn test_duration_for_all_variants() {
+        // 有 duration 欄位的變體
+        assert_eq!(
+            Effect::MaxHp {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 1,
+                duration: 7
+            }
+            .duration(),
+            7
+        );
+
+        assert_eq!(
+            Effect::MaxMp {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 1,
+                duration: -1
+            }
+            .duration(),
+            -1
+        );
+
+        assert_eq!(
+            Effect::Initiative {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 1,
+                duration: 0
+            }
+            .duration(),
+            0
+        );
+
+        assert_eq!(
+            Effect::Evasion {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 2,
+                duration: 5
+            }
+            .duration(),
+            5
+        );
+
+        assert_eq!(
+            Effect::Block {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 2,
+                duration: 4
+            }
+            .duration(),
+            4
+        );
+
+        assert_eq!(
+            Effect::MovePoints {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 3,
+                duration: 2
+            }
+            .duration(),
+            2
+        );
+
+        assert_eq!(
+            Effect::Burn {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                duration: 3
+            }
+            .duration(),
+            3
+        );
+
+        assert_eq!(
+            Effect::HitAndRun {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                duration: -1
+            }
+            .duration(),
+            -1
+        );
+
+        // 沒有 duration 欄位的變體應回傳 0
+        assert_eq!(
+            Effect::Hp {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 1
+            }
+            .duration(),
+            0
+        );
+
+        assert_eq!(
+            Effect::Mp {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                value: 1
+            }
+            .duration(),
+            0
+        );
+
+        assert_eq!(
+            Effect::Shove {
+                target_type: Default::default(),
+                shape: Shape::Point,
+                distance: 2
+            }
+            .duration(),
+            0
+        );
+    }
+
+    // 測試 4：default_tags 的內容檢查（保留原本意義）
+    #[test]
+    fn test_default_tags_contains_expected() {
+        let tags = default_tags();
+        assert!(tags.contains(&Tag::Active));
+        assert!(tags.contains(&Tag::Single));
+        assert!(tags.contains(&Tag::Melee));
+    }
 }

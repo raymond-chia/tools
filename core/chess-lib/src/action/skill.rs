@@ -895,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cast_skill_moving_too_far() {
+    fn test_cast_skill_double_moved() {
         // 準備棋盤、單位、技能
         let (mut board, unit_id, skills) =
             prepare_test_board(Pos { x: 2, y: 2 }, Some(vec![Pos { x: 2, y: 3 }]));
@@ -941,7 +941,7 @@ mod tests {
     #[test]
     fn test_skill_affect_area() {
         let caster_pos = Pos { x: 1, y: 1 };
-        let (board, unit_id, skills) = prepare_test_board(caster_pos, None);
+        let (board, _, skills) = prepare_test_board(caster_pos, None);
 
         let set = |v: &[Pos]| BTreeSet::from_iter(v.into_iter().copied());
 
@@ -1188,5 +1188,107 @@ mod tests {
         };
         let ok = is_targeting_valid_target(&board, "slash", &skill, unit_id, Pos { x: 1, y: 2 });
         assert!(ok.is_ok());
+    }
+
+    #[cfg(test)]
+    mod tests_apply_effect_to_pos {
+        use super::*;
+
+        #[test]
+        fn test_cast_skill_hp() {
+            // 準備棋盤、單位、技能
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            // 設置不同隊伍
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 創建必定命中的 HP 技能
+            let hp_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Hp {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    value: -20,
+                }],
+            };
+            skills.insert("hp".to_string(), hp_skill);
+
+            // 選擇 hp 技能
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("hp".to_string()));
+
+            // 施放技能到 (1,2)
+            let target = Pos { x: 1, y: 2 };
+
+            // 施放前 HP
+            let orig_hp = board.units.get(&target_unit_id).unwrap().hp;
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, target)
+                .unwrap();
+
+            // 檢查訊息包含施放
+            assert!(msgs.iter().any(|m| m.contains("hp 在 (1, 2) 施放")));
+
+            // 檢查 HP 變化
+            let new_hp = board.units.get(&target_unit_id).unwrap().hp;
+            assert_eq!(new_hp, orig_hp - 20);
+
+            // 檢查 has_cast_skill_this_turn
+            assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
+        }
+
+        #[test]
+        fn test_cast_skill_shove() {
+            // 準備棋盤、單位、技能，施法者與目標在不同隊伍
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            // 設置不同隊伍
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 創建 shove 技能
+            let shove_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Shove {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    distance: 1,
+                }],
+            };
+            skills.insert("shove".to_string(), shove_skill);
+
+            // 選擇 shove 技能
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("shove".to_string()));
+
+            // 施放 shove 技能到 (1,2)
+            let target = Pos { x: 1, y: 2 };
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, target)
+                .unwrap();
+
+            // 檢查訊息
+            assert!(msgs.iter().any(|m| m.contains("shove 在 (1, 2) 施放")));
+            assert!(msgs.iter().any(|m| m.contains("被推擠了 1 格 到 (1, 3)")));
+
+            // 檢查單位位置變化
+            let new_pos = board.unit_to_pos(target_unit_id).unwrap();
+            assert_eq!(new_pos, Pos { x: 1, y: 3 });
+
+            // 檢查 has_cast_skill_this_turn
+            assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
+        }
     }
 }

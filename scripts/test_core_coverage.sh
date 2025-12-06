@@ -6,7 +6,7 @@
 
 set -e
 
-cd "$(dirname "$0")"
+cd "$(dirname "$(dirname "$0")")"
 
 for dir in core/*; do
   if [ -d "$dir" ] && [ -f "$dir/Cargo.toml" ]; then
@@ -21,3 +21,5 @@ for dir in core/*; do
     fi
   fi
 done
+
+lcov --add-tracefile "coverage/lcov-*.info" -o coverage/lcov.info

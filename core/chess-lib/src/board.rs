@@ -411,13 +411,13 @@ mod tests {
 
         // 驗證
         assert_eq!(deser.len(), 2);
-        assert_eq!(deser[&42].unit_template_type, "TestTemplate");
-        assert_eq!(deser[&42].pos, Pos { x: 1, y: 2 });
         assert_eq!(deser[&42].id, 42);
+        assert_eq!(deser[&42].unit_template_type, "TestTemplate");
         assert_eq!(deser[&42].team, "t1");
-        assert_eq!(deser[&7].unit_template_type, "Another");
-        assert_eq!(deser[&7].pos, Pos { x: 0, y: 0 });
+        assert_eq!(deser[&42].pos, Pos { x: 1, y: 2 });
         assert_eq!(deser[&7].id, 7);
+        assert_eq!(deser[&7].unit_template_type, "Another");
         assert_eq!(deser[&7].team, "t2");
+        assert_eq!(deser[&7].pos, Pos { x: 0, y: 0 });
     }
 }

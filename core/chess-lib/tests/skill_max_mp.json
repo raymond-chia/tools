@@ -7,10 +7,10 @@
   "cost": 0,
   "effects": [
     {
-      "type": "max_hp",
+      "type": "max_mp",
       "target_type": "caster",
       "shape": "point",
-      "value": 10,
+      "value": 5,
       "duration": -1
     }
   ]
