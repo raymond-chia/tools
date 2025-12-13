@@ -596,8 +596,16 @@ mod inner {
         next_pos: Pos,
         step: (isize, isize),
         unit_type: &str,
-    ) -> Option<PushResult> {
-        let tile = board.get_tile(next_pos)?;
+    ) -> PushResult {
+        let tile = match board.get_tile(next_pos) {
+            Some(t) => t,
+            None => {
+                return PushResult::Stopped(format!(
+                    "單位 {} 被推到邊界並停止",
+                    unit_type
+                ));
+            }
+        };
 
         match &tile.object {
             Some(Object::Cliff { orientation }) => {
@@ -611,10 +619,10 @@ mod inner {
 
                 // 方向不一致，無法越過 Cliff
                 if !direction_matches {
-                    return Some(PushResult::Stopped(format!(
+                    return PushResult::Stopped(format!(
                         "單位 {} 被推到懸崖並停止",
                         unit_type
-                    )));
+                    ));
                 }
 
                 // 方向一致，越過 Cliff 到下一格
@@ -623,10 +631,10 @@ mod inner {
 
                 // 檢查左上邊界
                 if beyond_x < 0 || beyond_y < 0 {
-                    return Some(PushResult::Stopped(format!(
+                    return PushResult::Stopped(format!(
                             "單位 {} 越過懸崖後會到達邊界",
                         unit_type
-                    )));
+                    ));
                 }
 
                 let beyond_pos = Pos {
@@ -636,23 +644,23 @@ mod inner {
 
                 // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
                 if board.get_tile(beyond_pos).is_none() {
-                    return Some(PushResult::Stopped(format!(
+                    return PushResult::Stopped(format!(
                             "單位 {} 越過懸崖後會到達邊界",
                         unit_type
-                    )));
+                    ));
                 }
 
-                Some(PushResult::Destination(beyond_pos))
+                PushResult::Destination(beyond_pos)
             }
-            Some(Object::Pit) => Some(PushResult::Destination(next_pos)),
+            Some(Object::Pit) => PushResult::Destination(next_pos),
             _ => {
                 if !tile.object.as_ref().map_or(true, |obj| obj.is_passable()) {
-                    Some(PushResult::Stopped(format!(
+                    PushResult::Stopped(format!(
                         "單位 {} 被推到障礙物並停止",
                         unit_type
-                    )))
+                    ))
                 } else {
-                    Some(PushResult::Destination(next_pos))
+                    PushResult::Destination(next_pos)
                 }
             }
         }
@@ -690,7 +698,7 @@ mod inner {
             };
 
             // 決定最終位置
-            let final_pos = match determine_push_destination(board, next_pos, step, &unit_type)? {
+            let final_pos = match determine_push_destination(board, next_pos, step, &unit_type) {
                 PushResult::Destination(pos) => pos,
                 PushResult::Stopped(msg) => return Some(msg),
             };
