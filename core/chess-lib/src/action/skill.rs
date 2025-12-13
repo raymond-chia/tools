@@ -747,14 +747,8 @@ mod inner {
     ) -> Option<String> {
         match effect {
             Effect::Hp { value, .. } => {
-                let unit_id = match board.pos_to_unit(target_pos) {
-                    None => return None,
-                    Some(id) => id,
-                };
-                let unit = match board.units.get_mut(&unit_id) {
-                    None => return None,
-                    Some(unit) => unit,
-                };
+                let unit_id =  board.pos_to_unit(target_pos) ?;
+                let unit =  board.units.get_mut(&unit_id) ?;
                 let old_hp = unit.hp;
                 unit.hp += value;
                 if unit.hp > unit.max_hp {
@@ -766,7 +760,29 @@ mod inner {
                     &unit.unit_template_type,
                 ))
             }
-            Effect::Mp { value, .. } => Some(format!("[未實作] Mp {value}",)),
+            Effect::Mp { value, .. } => {
+                let unit_id = board.pos_to_unit(target_pos)?;
+                let unit = board.units.get_mut(&unit_id)?;
+                let old_mp = unit.mp;
+
+                unit.mp += value;
+
+                // MP 上限限制
+                if unit.mp > unit.max_mp {
+                    unit.mp = unit.max_mp;
+                }
+
+                // MP 下限限制
+                if unit.mp < 0 {
+                    unit.mp = 0;
+                }
+
+                let new_mp = unit.mp;
+                Some(format!(
+                    "單位 {} MP: {old_mp} → {new_mp}",
+                    &unit.unit_template_type,
+                ))
+            }
             Effect::MaxHp {
                 duration, value, ..
             } => Some(format!("[未實作] MaxHp {value}, 持續 {duration} 回合",)),
@@ -1334,6 +1350,127 @@ mod tests {
 
             // 檢查 has_cast_skill_this_turn
             assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
+        }
+
+        #[test]
+        fn test_cast_skill_mp() {
+            // 準備棋盤、單位、技能
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            // 設置不同隊伍
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 設置目標單位的 MP
+            board.units.get_mut(&target_unit_id).unwrap().mp = 50;
+            board.units.get_mut(&target_unit_id).unwrap().max_mp = 100;
+
+            // 創建 MP 恢復技能
+            let mp_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Mp {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    value: 30,
+                }],
+            };
+            skills.insert("mp".to_string(), mp_skill);
+
+            // 選擇 mp 技能
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("mp".to_string()));
+
+            // 施放技能到 (1,2)
+            let target = Pos { x: 1, y: 2 };
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, target)
+                .unwrap();
+
+            // 檢查訊息包含 MP 變化
+            assert!(msgs.iter().any(|m| m.contains("MP: 50 → 80")));
+
+            // 檢查 MP 變化
+            let new_mp = board.units.get(&target_unit_id).unwrap().mp;
+            assert_eq!(new_mp, 80);
+        }
+
+        #[test]
+        fn test_cast_skill_mp_overflow() {
+            // 測試 MP 超過上限
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+            board.units.get_mut(&target_unit_id).unwrap().mp = 90;
+            board.units.get_mut(&target_unit_id).unwrap().max_mp = 100;
+
+            let mp_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Mp {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    value: 50, // 會超過上限
+                }],
+            };
+            skills.insert("mp".to_string(), mp_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("mp".to_string()));
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // MP 應該被限制在上限
+            assert!(msgs.iter().any(|m| m.contains("MP: 90 → 100")));
+            assert_eq!(board.units.get(&target_unit_id).unwrap().mp, 100);
+        }
+
+        #[test]
+        fn test_cast_skill_mp_underflow() {
+            // 測試 MP 低於下限
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+            board.units.get_mut(&target_unit_id).unwrap().mp = 20;
+            board.units.get_mut(&target_unit_id).unwrap().max_mp = 100;
+
+            let mp_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Mp {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    value: -50, // 會低於 0
+                }],
+            };
+            skills.insert("mp".to_string(), mp_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("mp".to_string()));
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // MP 應該被限制在 0
+            assert!(msgs.iter().any(|m| m.contains("MP: 20 → 0")));
+            assert_eq!(board.units.get(&target_unit_id).unwrap().mp, 0);
         }
 
         #[test]
