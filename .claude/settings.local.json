@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/mnt/c/Users/renyu/.cargo/bin/cargo.exe check)",
+      "Bash(/mnt/c/Users/renyu/.cargo/bin/cargo.exe check:*)",
+      "Bash(/mnt/c/Users/renyu/.cargo/bin/cargo.exe test)",
+      "Bash(/mnt/c/Users/renyu/.cargo/bin/cargo.exe test --lib abilities)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

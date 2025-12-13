@@ -1,0 +1,16 @@
+[abilities]
+# 使用 enum 變體名稱作為鍵（與 Rust 程式碼對應）
+Strength = "Strength"
+Dexterity = "Dexterity"
+Constitution = "Constitution"
+Intelligence = "Intelligence"
+Wisdom = "Wisdom"
+Charisma = "Charisma"
+
+# 縮寫使用 "_abbr" 後綴
+Strength_abbr = "STR"
+Dexterity_abbr = "DEX"
+Constitution_abbr = "CON"
+Intelligence_abbr = "INT"
+Wisdom_abbr = "WIS"
+Charisma_abbr = "CHA"

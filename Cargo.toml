@@ -11,20 +11,19 @@ license = "MIT"
 [workspace.dependencies]
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.9.8"
+toml = "0.9"
 
 # Random
 rand = "0.9"
 
 # UI Framework
-eframe = "0.33.3"
-egui = "0.33.3"
-egui_extras = { version = "0.33.3", features = ["all_loaders"] }
+eframe = "0.32"
+egui = "0.32"
+egui_extras = { version = "0.32", features = ["all_loaders"] }
 
 # Utilities
 thiserror = "2.0"
 anyhow = "1.0"
 
 # PF2e Core
-pf2e_core = { path = "core" }
+core = { path = "core" }

@@ -1,0 +1,16 @@
+[abilities]
+# 繁體中文翻譯
+Strength = "力量"
+Dexterity = "敏捷"
+Constitution = "體質"
+Intelligence = "智力"
+Wisdom = "睿智"
+Charisma = "魅力"
+
+# 縮寫（中文可以直接使用完整名稱）
+Strength_abbr = "力量"
+Dexterity_abbr = "敏捷"
+Constitution_abbr = "體質"
+Intelligence_abbr = "智力"
+Wisdom_abbr = "睿智"
+Charisma_abbr = "魅力"
