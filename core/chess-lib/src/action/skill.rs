@@ -1382,5 +1382,239 @@ mod tests {
             // 檢查 has_cast_skill_this_turn
             assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
         }
+
+        #[test]
+        fn test_shove_into_pit() {
+            // 準備棋盤：施法者在 (1,1)，目標在 (1,2)，Pit 在 (1,3)
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            // 設置不同隊伍
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 在 (1,3) 放置 Pit
+            board.tiles[3][1].object = Some(Object::Pit);
+
+            // 創建 Shove 技能
+            let shove_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Shove {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    distance: 1,
+                }],
+            };
+            skills.insert("shove".to_string(), shove_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("shove".to_string()));
+
+            // 施放技能
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // 檢查訊息包含掉入坑洞
+            assert!(msgs.iter().any(|m| m.contains("被推入坑洞並墜落死亡")));
+
+            // 檢查單位位置在 Pit 上
+            let new_pos = board.unit_to_pos(target_unit_id).unwrap();
+            assert_eq!(new_pos, Pos { x: 1, y: 3 });
+
+            // 檢查單位 HP = 0
+            assert_eq!(board.units.get(&target_unit_id).unwrap().hp, 0);
+        }
+
+        #[test]
+        fn test_shove_over_cliff_into_pit() {
+            // 施法者在 (1,1)，目標在 (1,2)，Cliff 在 (1,3)，Pit 在 (1,4)
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 在 (1,3) 放置向下的 Cliff
+            board.tiles[3][1].object = Some(Object::Cliff {
+                orientation: Orientation::Down,
+            });
+
+            // 在 (1,4) 放置 Pit
+            board.tiles[4][1].object = Some(Object::Pit);
+
+            let shove_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Shove {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    distance: 1,
+                }],
+            };
+            skills.insert("shove".to_string(), shove_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("shove".to_string()));
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // 應該越過 Cliff 並掉入 Pit
+            assert!(msgs.iter().any(|m| m.contains("被推入坑洞並墜落死亡")));
+
+            // 單位應該在 (1,4)
+            let new_pos = board.unit_to_pos(target_unit_id).unwrap();
+            assert_eq!(new_pos, Pos { x: 1, y: 4 });
+
+            // HP = 0
+            assert_eq!(board.units.get(&target_unit_id).unwrap().hp, 0);
+        }
+
+        #[test]
+        fn test_shove_cliff_wrong_direction() {
+            // 施法者在 (1,1)，目標在 (1,2)，Cliff(Up) 在 (1,3)
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 在 (1,3) 放置向上的 Cliff（但推擠方向是向下）
+            board.tiles[3][1].object = Some(Object::Cliff {
+                orientation: Orientation::Up,
+            });
+
+            let shove_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Shove {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    distance: 1,
+                }],
+            };
+            skills.insert("shove".to_string(), shove_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("shove".to_string()));
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // 應該被 Cliff 阻擋
+            assert!(msgs.iter().any(|m| m.contains("被推到懸崖並停止")));
+
+            // 單位應該還在 (1,2)（沒有移動）
+            let new_pos = board.unit_to_pos(target_unit_id).unwrap();
+            assert_eq!(new_pos, Pos { x: 1, y: 2 });
+        }
+
+        #[test]
+        fn test_shove_over_cliff_collision() {
+            // 施法者在 (1,1)，目標在 (1,2)，Cliff 在 (1,3)，另一單位在 (1,4)
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }, Pos { x: 1, y: 4 }]));
+            let target_unit_id = unit_id + 1;
+
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 在 (1,3) 放置向下的 Cliff
+            board.tiles[3][1].object = Some(Object::Cliff {
+                orientation: Orientation::Down,
+            });
+
+            let shove_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Shove {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    distance: 1,
+                }],
+            };
+            skills.insert("shove".to_string(), shove_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("shove".to_string()));
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // 應該越過 Cliff 但與另一單位相撞
+            assert!(msgs.iter().any(|m| m.contains("相撞並停止")));
+
+            // 單位應該還在原位 (1,2)
+            let new_pos = board.unit_to_pos(target_unit_id).unwrap();
+            assert_eq!(new_pos, Pos { x: 1, y: 2 });
+        }
+
+        #[test]
+        fn test_shove_beyond_boundary() {
+            // 施法者在 (1,8)，目標在 (1,9)，推擠會超出邊界
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 8 }, Some(vec![Pos { x: 1, y: 9 }]));
+            let target_unit_id = unit_id + 1;
+
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            let shove_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Shove {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    distance: 1,
+                }],
+            };
+            skills.insert("shove".to_string(), shove_skill);
+
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("shove".to_string()));
+
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 9 })
+                .unwrap();
+
+            // 應該被邊界阻擋
+            assert!(msgs.iter().any(|m| m.contains("被推到邊界並停止")));
+
+            // 單位應該還在 (1,9)
+            let new_pos = board.unit_to_pos(target_unit_id).unwrap();
+            assert_eq!(new_pos, Pos { x: 1, y: 9 });
+        }
+
+        #[test]
+        fn test_pit_cannot_walk_into() {
+            // 測試單位不能自願走進 Pit
+            let (mut board, unit_id, _skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+
+            // 在 (1,2) 放置 Pit
+            board.tiles[2][1].object = Some(Object::Pit);
+
+            // 檢查 Pit 不可通行
+            let tile = board.get_tile(Pos { x: 1, y: 2 }).unwrap();
+            assert!(matches!(tile.object, Some(Object::Pit)));
+            assert!(!tile.object.as_ref().unwrap().is_passable());
+        }
     }
 }
