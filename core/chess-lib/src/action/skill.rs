@@ -448,7 +448,7 @@ mod inner {
 
         // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
         let mut rng = rand::rng();
-        let hit_random = rng.random_range(1..100);
+        let hit_random = rng.random_range(1..=100);
         let critical_failure = 5;
         let critical_success = 95;
         let hit_score = accuracy + hit_random;

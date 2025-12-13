@@ -278,8 +278,8 @@ Effect::Shove { distance, .. } => {
 你目前的百分比系統（不是骰子！）：
 
 ```rust
-// 1. 擲 1-99 的隨機數
-let hit_random = rng.random_range(1..100);
+// 1. 擲 1-100 的隨機數
+let hit_random = rng.random_range(1..=100);
 
 // 2. 計算命中分數
 let hit_score = accuracy + hit_random;
@@ -406,8 +406,8 @@ pub const MAGE_SKILLS: &[&str] = &[
 ```
 策略 A：直接攻擊（隨機）
     使用「重擊」(accuracy = 30)
-    hit_score = 30 + random(1-99) = 31-129
-    evade_score = hit_score - 50 = -19 到 79
+    hit_score = 30 + random(1-100) = 31-130
+    evade_score = hit_score - 50 = -19 到 80
     → 成功率約 60%（不穩定）
 
 策略 B：針對性策略（克服隨機性）
@@ -416,7 +416,7 @@ pub const MAGE_SKILLS: &[&str] = &[
     3. 利用「高地優勢」+10 accuracy（未來擴充）
 
     現在 accuracy = 70
-    evade_score = 70 + random(1-99) - 50 = 21-119
+    evade_score = 70 + random(1-100) - 50 = 21-120
     → 成功率約 95%（穩定！）
 
 策略 C：放棄攻擊，利用地形（完全克服隨機性）
