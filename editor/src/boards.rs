@@ -1649,13 +1649,14 @@ fn paint_object(
     match object {
         None => apply_single(None),
         Some(obj) => match obj {
-            Object::Wall => apply_single(Some(Object::Wall)),
             Object::Tree => apply_single(Some(Object::Tree)),
+            Object::Wall => apply_single(Some(Object::Wall)),
             Object::Cliff { .. } => apply_single(Some(Object::Cliff { orientation })),
+            Object::Pit => apply_single(Some(Object::Pit)),
             Object::Tent2 { .. } => {
                 let (w, h) = match orientation {
-                    Orientation::Horizontal => (2, 1),
-                    Orientation::Vertical => (1, 2),
+                    Orientation::Left | Orientation::Right => (2, 1),
+                    Orientation::Up | Orientation::Down => (1, 2),
                 };
                 paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 {
                     orientation,
@@ -1665,8 +1666,8 @@ fn paint_object(
             }
             Object::Tent15 { .. } => {
                 let (w, h) = match orientation {
-                    Orientation::Horizontal => (5, 3),
-                    Orientation::Vertical => (3, 5),
+                    Orientation::Left | Orientation::Right => (5, 3),
+                    Orientation::Up | Orientation::Down => (3, 5),
                 };
                 paint_multiple_object(board, pos, (w, h), |rel| Object::Tent15 {
                     orientation,
@@ -1794,7 +1795,7 @@ fn fill_selected_area(
             match object {
                 None => apply_single(pos, None),
                 Some(obj) => match obj {
-                    Object::Wall | Object::Tree => apply_single(pos, object.cloned()),
+                    Object::Tree | Object::Wall | Object::Pit => apply_single(pos, object.cloned()),
                     Object::Cliff { .. } => apply_single(pos, Some(Object::Cliff { orientation })),
                     Object::Tent2 { .. } | Object::Tent15 { .. } => {
                         // 其他物件類型暫不支援
@@ -1823,7 +1824,7 @@ fn drunkards_walk_deploy(
     // 僅支援單格物件或清除
     match object {
         Some(obj) => match obj {
-            Object::Wall | Object::Tree => {}
+            Object::Tree | Object::Wall | Object::Pit => {}
             _ => return Err("Drunkard's walk 僅支援單格物件或清除".to_string()),
         },
         None => {} // 允許清除
@@ -1987,19 +1988,22 @@ fn terrain_color(tile: &Tile) -> Color32 {
 
 fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
-        Some(Object::Wall) => "█",
         Some(Object::Tree) => "🌳",
+        Some(Object::Wall) => "█",
         Some(Object::Cliff { orientation }) => match orientation {
-            Orientation::Horizontal => "\\→",
-            Orientation::Vertical => "\\↓",
+            Orientation::Up => "\\↑",
+            Orientation::Down => "\\↓",
+            Orientation::Left => "\\←",
+            Orientation::Right => "\\→",
         },
+        Some(Object::Pit) => "🕳️",
         Some(Object::Tent2 { orientation, .. }) => match orientation {
-            Orientation::Horizontal => "⛺→2",
-            Orientation::Vertical => "⛺↓2",
+            Orientation::Left | Orientation::Right => "⛺→2",
+            Orientation::Up | Orientation::Down => "⛺↓2",
         },
         Some(Object::Tent15 { orientation, .. }) => match orientation {
-            Orientation::Horizontal => "⛺→15",
-            Orientation::Vertical => "⛺↓15",
+            Orientation::Left | Orientation::Right => "⛺→15",
+            Orientation::Up | Orientation::Down => "⛺↓15",
         },
         None => "",
     }

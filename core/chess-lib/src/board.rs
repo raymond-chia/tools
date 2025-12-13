@@ -22,17 +22,20 @@ pub enum Terrain {
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, Display, EnumIter, PartialEq)]
 pub enum Orientation {
     #[default]
-    Horizontal,
-    Vertical,
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
 pub enum Object {
-    Wall,
     Tree,
+    Wall,
     Cliff {
         orientation: Orientation,
     },
+    Pit,
     Tent2 {
         orientation: Orientation,
         rel: Pos,
@@ -47,13 +50,13 @@ pub enum Object {
 
 impl Object {
     /// 是否允許通行：物件自身負責描述能否通行的規則
-    /// - Wall / Tree -> 阻擋（不可通行）
-    /// - 多格帳篷 / 其他 -> 允許通行（可視需求調整）
+    /// - Tree / Wall / Cliff / Pit / 多格帳篷 -> 阻擋（不可通行）
     pub fn is_passable(&self) -> bool {
         match self {
-            Object::Wall
-            | Object::Tree
+            Object::Tree
+            | Object::Wall
             | Object::Cliff { .. }
+            | Object::Pit
             | Object::Tent2 { .. }
             | Object::Tent15 { .. } => false,
         }

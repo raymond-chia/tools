@@ -2,7 +2,6 @@
 //! - 負責技能效果、技能施放與解析邏輯。
 //! - 僅處理技能本身，不負責戰鬥流程、AI 決策或棋盤初始化。
 //! - 技能相關的資料結構與輔助函式應集中於此。
-use crate::action::movement::is_tile_passable;
 use crate::*;
 use rand::Rng;
 use skills_lib::*;
@@ -585,12 +584,166 @@ mod inner {
         Ok(msgs)
     }
 
+    /// 推擠結果
+    enum PushResult {
+        Destination(Pos), // 可以推到目標位置
+        Stopped(String),  // 停止推擠並回傳訊息
+    }
+
+    /// 判斷推擠目的地（處理 Cliff 越過邏輯）
+    fn determine_push_destination(
+        board: &Board,
+        next_pos: Pos,
+        step: (isize, isize),
+        unit_type: &str,
+    ) -> Option<PushResult> {
+        let tile = board.get_tile(next_pos)?;
+
+        match &tile.object {
+            Some(Object::Cliff { orientation }) => {
+                // 檢查推擠方向是否與 Cliff 方向一致
+                let direction_matches = match orientation {
+                    Orientation::Up => step.1 < 0,    // 往上推
+                    Orientation::Down => step.1 > 0,  // 往下推
+                    Orientation::Left => step.0 < 0,  // 往左推
+                    Orientation::Right => step.0 > 0, // 往右推
+                };
+
+                // 方向不一致，無法越過 Cliff
+                if !direction_matches {
+                    return Some(PushResult::Stopped(format!(
+                        "單位 {} 被推到懸崖並停止",
+                        unit_type
+                    )));
+                }
+
+                // 方向一致，越過 Cliff 到下一格
+                let beyond_x = next_pos.x as isize + step.0;
+                let beyond_y = next_pos.y as isize + step.1;
+
+                // 檢查左上邊界
+                if beyond_x < 0 || beyond_y < 0 {
+                    return Some(PushResult::Stopped(format!(
+                            "單位 {} 越過懸崖後會到達邊界",
+                        unit_type
+                    )));
+                }
+
+                let beyond_pos = Pos {
+                    x: beyond_x as usize,
+                    y: beyond_y as usize,
+                };
+
+                // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
+                if board.get_tile(beyond_pos).is_none() {
+                    return Some(PushResult::Stopped(format!(
+                            "單位 {} 越過懸崖後會到達邊界",
+                        unit_type
+                    )));
+                }
+
+                Some(PushResult::Destination(beyond_pos))
+            }
+            Some(Object::Pit) => Some(PushResult::Destination(next_pos)),
+            _ => {
+                if !tile.object.as_ref().map_or(true, |obj| obj.is_passable()) {
+                    Some(PushResult::Stopped(format!(
+                        "單位 {} 被推到障礙物並停止",
+                        unit_type
+                    )))
+                } else {
+                    Some(PushResult::Destination(next_pos))
+                }
+            }
+        }
+    }
+
+    /// 推擠效果的輔助函數
+    fn apply_shove_effect(
+        board: &mut Board,
+        caster_pos: Pos,
+        mut target_pos: Pos,
+        distance: &usize,
+    ) -> Option<String> {
+        // 只有在格子上有單位時才處理
+        let unit_id = board.pos_to_unit(target_pos)?;
+        let unit = board.units.get(&unit_id)?;
+        let unit_type = unit.unit_template_type.clone();
+
+        // 計算推擠方向
+        let step = calc_direction_manhattan(caster_pos, target_pos);
+        let mut pushed = 0usize;
+
+        for _ in 0..*distance {
+            let (next_x, next_y) = (
+                target_pos.x as isize + step.0,
+                target_pos.y as isize + step.1,
+            );
+
+            if next_x < 0 || next_y < 0 {
+                return Some(format!("單位 {} 被推到邊界並停止", unit_type));
+            }
+
+            let next_pos = Pos {
+                x: next_x as usize,
+                y: next_y as usize,
+            };
+
+            // 決定最終位置
+            let final_pos = match determine_push_destination(board, next_pos, step, &unit_type)? {
+                PushResult::Destination(pos) => pos,
+                PushResult::Stopped(msg) => return Some(msg),
+            };
+
+            // 檢查最終位置是否有其他單位
+            if let Some(other_id) = board.pos_to_unit(final_pos) {
+                let other_type = board
+                    .units
+                    .get(&other_id)
+                    .map(|u| u.unit_template_type.clone())
+                    .unwrap_or_default();
+                return Some(format!(
+                    "單位 {} 與 單位 {} 相撞並停止",
+                    unit_type, other_type
+                ));
+            }
+
+            // 執行移動
+            if let Err(e) = board.unit_map.move_unit(unit_id, target_pos, final_pos) {
+                // 無法移動（不應發生）
+                return Some(format!(
+                    "單位 {} 無法被移動並停止 (err: {:?})",
+                    unit_type, e
+                ));
+            }
+
+            target_pos = final_pos;
+            pushed += 1;
+
+            // 檢查掉落
+            if let Some(tile) = board.get_tile(final_pos) {
+                if matches!(tile.object, Some(Object::Pit)) {
+                    // 單位掉落坑洞，立即死亡
+                    if let Some(unit) = board.units.get_mut(&unit_id) {
+                        unit.hp = 0;
+                    }
+                    return Some(format!("單位 {} 被推入坑洞並墜落死亡！", unit_type));
+                }
+            }
+        }
+
+        Some(format!(
+            "單位 {} 被推擠了 {} 格 到 ({}, {})",
+            unit_type, pushed, target_pos.x, target_pos.y
+        ))
+    }
+
     /// 將單一效果套用到指定座標（單一 entry-point，方便後續擴充/重構）
     pub fn apply_effect_to_pos(
         board: &mut Board,
         effect: &Effect,
         caster_pos: Pos,
-        mut target_pos: Pos,
+        target_pos: Pos,
     ) -> Option<String> {
         match effect {
             Effect::Hp { value, .. } => {
@@ -641,68 +794,7 @@ mod inner {
             }
             Effect::HitAndRun { .. } => Some(format!("[未實作] 打帶跑")),
             Effect::Shove { distance, .. } => {
-                // 只有在格子上有單位時才處理
-                let unit_id = match board.pos_to_unit(target_pos) {
-                    None => return None,
-                    Some(id) => id,
-                };
-                // 被推單位資訊
-                let unit = match board.units.get(&unit_id) {
-                    None => return None,
-                    Some(unit) => unit,
-                };
-                let unit_type = unit.unit_template_type.clone();
-                // 計算推擠方向
-                let step = calc_direction_manhattan(caster_pos, target_pos);
-                let mut pushed = 0usize;
-                for _ in 0..*distance {
-                    let next_x = target_pos.x as isize + step.0;
-                    let next_y = target_pos.y as isize + step.1;
-                    if next_x < 0 || next_y < 0 {
-                        // 撞到邊界，停止推擠
-                        return Some(format!("單位 {} 被推到邊界並停止", unit_type));
-                    }
-                    let next_pos = Pos {
-                        x: next_x as usize,
-                        y: next_y as usize,
-                    };
-                    // 檢查地形和物件阻擋
-                    if !is_tile_passable(board, next_pos) {
-                        return Some(format!("單位 {} 被推到邊界或障礙物並停止", unit_type));
-                    }
-                    // 檢查是否有其他單位
-                    if let Some(other_id) = board.pos_to_unit(next_pos) {
-                        // 對撞：停止推擠
-                        return Some(format!(
-                            "單位 {} 與 單位 {} 相撞並停止",
-                            unit_type,
-                            board
-                                .units
-                                .get(&other_id)
-                                .map(|u| u.unit_template_type.clone())
-                                .unwrap_or_default()
-                        ));
-                    }
-                    // 空地且可通行，進行位移
-                    if let Err(e) = board
-                        .unit_map
-                        .move_unit(unit_id, target_pos, next_pos)
-                        .map_err(|e| e)
-                    {
-                        // 無法移動（不應發生）
-                        return Some(format!(
-                            "單位 {} 無法被移動並停止 (err: {:?})",
-                            unit_type, e
-                        ));
-                    }
-                    target_pos = next_pos;
-                    pushed += 1;
-                }
-                // 推擠成功，回傳總結訊息
-                Some(format!(
-                    "單位 {} 被推擠了 {} 格 到 ({}, {})",
-                    unit_type, pushed, target_pos.x, target_pos.y
-                ))
+                apply_shove_effect(board, caster_pos, target_pos, distance)
             }
         }
     }
