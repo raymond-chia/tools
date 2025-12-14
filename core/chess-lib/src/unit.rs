@@ -182,6 +182,23 @@ pub fn skills_to_block<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)
         .sum()
 }
 
+/// 計算單位 block reduction 技能等級總和
+/// 尋找所有 effect 為 Effect::BlockReduction 的技能，並加總其 value
+pub fn skills_to_block_reduction<'a>(
+    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+) -> i32 {
+    skills
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::BlockReduction { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
 pub fn skills_to_move_points<'a>(
     skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
 ) -> MovementCost {
@@ -604,6 +621,49 @@ mod tests {
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
         assert_eq!(skills_to_block(skills.iter()), 5);
+    }
+
+    #[test]
+    fn test_skills_to_block_reduction() {
+        let mut skills = BTreeMap::new();
+        // 無技能，應返回 0
+        assert_eq!(skills_to_block_reduction(skills.iter()), 0);
+
+        // 一個 BlockReduction 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::BlockReduction {
+            value: 20,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_block_reduction(skills.iter()), 20);
+
+        // 多個 BlockReduction 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::BlockReduction {
+            value: 30,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_block_reduction(skills.iter()), 50);
+
+        // 非 BlockReduction 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxHp {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_block_reduction(skills.iter()), 50);
     }
 
     #[test]

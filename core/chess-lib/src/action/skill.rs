@@ -524,10 +524,15 @@ mod inner {
                 continue;
             }
 
-            // 計算格擋值
+            // 計算格擋值（用於命中判定）
             let block = crate::unit::skills_to_block(unit_skills.iter().map(|(k, v)| (*k, *v)));
-            let block_reduction = 10;
             let block_score = hit_score - block - evasion;
+
+            // 計算格擋減傷百分比（用於傷害計算）
+                            // 格擋減傷百分比：基礎 10%，根據被動技能增加，最高 80%
+            let block_reduction =
+                crate::unit::skills_to_block_reduction(unit_skills.iter().map(|(k, v)| (*k, *v))).max(10).min(80);
+
             // 格擋（百分比減傷）
             if block_score <= 0 {
                 for effect in &skill.effects {
@@ -537,12 +542,10 @@ mod inner {
                             target_type,
                             shape,
                         } => {
-                            // 先套用倍率，再套用百分比減傷
-                            let base_damage = *value ;
-                            let block_percentage = (block_reduction.min(75) as f32) / 100.0;
+                            let block_percentage = (block_reduction as f32) / 100.0;
                             let damage_reduction =
-                                (base_damage.abs() as f32 * block_percentage).ceil() as i32;
-                            let final_value = base_damage + damage_reduction; // value 是負值
+                                (value.abs() as f32 * block_percentage).ceil() as i32;
+                            let final_value = *value + damage_reduction; // value 是負值
 
                             // 建立減傷後的 effect
                             let reduced_effect = Effect::Hp {
@@ -818,6 +821,11 @@ mod inner {
                 value, duration, ..
             } => Some(format!(
                 "[未實作] Block 效果 +{value}%, 持續 {duration} 回合"
+            )),
+            Effect::BlockReduction {
+                value, duration, ..
+            } => Some(format!(
+                "[未實作] BlockReduction 效果 +{value}%, 持續 {duration} 回合"
             )),
             Effect::MovePoints {
                 value, duration, ..
@@ -1824,7 +1832,7 @@ mod tests {
             // 設置不同隊伍
             board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
 
-            // 給目標單位添加格擋技能（block = 50）
+            // 給目標單位添加格擋技能（block = 200，用於命中判定）
             let block_skill = Skill {
                 tags: BTreeSet::new(),
                 range: (0, 0),
@@ -1839,12 +1847,35 @@ mod tests {
                 }],
             };
             skills.insert("block".to_string(), block_skill);
+
+            // 給目標單位添加格擋減傷技能（block_reduction = 50%）
+            let block_reduction_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (0, 0),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::BlockReduction {
+                    target_type: TargetType::Caster,
+                    shape: Shape::Point,
+                    value: 50,
+                    duration: 0,
+                }],
+            };
+            skills.insert("block_reduction".to_string(), block_reduction_skill);
+
             board
                 .units
                 .get_mut(&target_unit_id)
                 .unwrap()
                 .skills
                 .insert("block".to_string());
+            board
+                .units
+                .get_mut(&target_unit_id)
+                .unwrap()
+                .skills
+                .insert("block_reduction".to_string());
 
             // 創建必定爆擊但 accuracy 較低的技能（會被格擋）
             let crit_skill = Skill {
@@ -1874,9 +1905,9 @@ mod tests {
             // 檢查訊息包含格擋和爆擊
             assert!(msgs.iter().any(|m| m.contains("格擋") && m.contains("爆擊")));
 
-            // 檢查傷害：基礎 -20 × 2（爆擊）= -40，再被格擋減 10% = -36
+            // 檢查傷害：基礎 -20，格擋減 50% = -10，爆擊 ×2 = -20
             let new_hp = board.units.get(&target_unit_id).unwrap().hp;
-            assert_eq!(new_hp, orig_hp - 36);
+            assert_eq!(new_hp, orig_hp - 20);
         }
     }
 }

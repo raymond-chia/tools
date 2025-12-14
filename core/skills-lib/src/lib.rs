@@ -132,6 +132,12 @@ pub enum Effect {
         value: i32,    // 增加的格擋
         duration: i32, // -1 代表永久
     },
+    BlockReduction {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,    // 增加的格擋減傷百分比
+        duration: i32, // -1 代表永久
+    },
     MovePoints {
         target_type: TargetType,
         shape: Shape,
@@ -180,6 +186,7 @@ macro_rules! effect_field_ref {
             | Effect::Initiative { $field, .. }
             | Effect::Evasion { $field, .. }
             | Effect::Block { $field, .. }
+            | Effect::BlockReduction { $field, .. }
             | Effect::MovePoints { $field, .. }
             | Effect::Burn { $field, .. }
             | Effect::HitAndRun { $field, .. }
@@ -218,6 +225,7 @@ impl Effect {
             | Effect::Initiative { duration, .. }
             | Effect::Evasion { duration, .. }
             | Effect::Block { duration, .. }
+            | Effect::BlockReduction { duration, .. }
             | Effect::MovePoints { duration, .. }
             | Effect::Burn { duration, .. }
             | Effect::HitAndRun { duration, .. } => *duration,
