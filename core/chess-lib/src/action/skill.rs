@@ -107,10 +107,10 @@ impl SkillSelection {
         // 5. 命中結果（命中、閃避、格擋）皆可顯示訊息。
         match skill.accuracy {
             None => {
-                // 無命中數值，所有格子直接套用效果
+                // 無命中數值，所有格子直接套用效果（無爆擊）
                 for pos in affect_area {
                     for effect in &skill.effects {
-                        if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos) {
+                        if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, 1) {
                             msgs.push(msg);
                         }
                     }
@@ -459,7 +459,7 @@ mod inner {
                 // 無單位，直接套用效果
                 None => {
                     for effect in &skill.effects {
-                        if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos) {
+                        if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, 1) {
                             msgs.push(format!("空地 {pos:?} 受到效果：{msg}"));
                         }
                     }
@@ -483,12 +483,21 @@ mod inner {
                 ));
                 continue;
             }
+
+            // 爆擊判定（決定傷害倍率）
+            let is_critical = skill
+                .crit_rate
+                .map(|crit_rate| hit_random > (100 - crit_rate as i32))
+                .unwrap_or(false);
+            let multiplier = if is_critical { 2 } else { 1 };
+            let crit_msg = if is_critical { "爆擊" } else { "攻擊" };
+
             if hit_random > critical_success {
-                // 完全命中
+                // 完全命中（套用倍率）
                 for effect in &skill.effects {
-                    if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos) {
+                    if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, multiplier) {
                         msgs.push(format!(
-                            "亂數={hit_random} > {critical_success}%，單位 {unit_type} 被完全命中了：{msg}"
+                            "亂數={hit_random} > {critical_success}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
                         ));
                     }
                 }
@@ -510,16 +519,16 @@ mod inner {
             let evade_score = hit_score - evasion;
             if evade_score <= 0 {
                 msgs.push(format!(
-                    "單位 {unit_type} 閃避了攻擊！(accuracy={accuracy}, random={hit_random}, evade={evasion})",
+                    "單位 {unit_type} 閃避了{crit_msg}！(accuracy={accuracy}, random={hit_random}, evade={evasion})",
                 ));
                 continue;
             }
 
             // 計算格擋值
             let block = crate::unit::skills_to_block(unit_skills.iter().map(|(k, v)| (*k, *v)));
-            let block_reduction = 1;
+            let block_reduction = 10;
             let block_score = hit_score - block - evasion;
-            // 格擋
+            // 格擋（百分比減傷）
             if block_score <= 0 {
                 for effect in &skill.effects {
                     match effect {
@@ -528,42 +537,35 @@ mod inner {
                             target_type,
                             shape,
                         } => {
-                            let mut value = *value;
-                            if value < 0 {
-                                value += block_reduction;
-                            }
-                            let effect = Effect::Hp {
-                                value,
+                            // 先套用倍率，再套用百分比減傷
+                            let base_damage = *value ;
+                            let block_percentage = (block_reduction.min(75) as f32) / 100.0;
+                            let damage_reduction =
+                                (base_damage.abs() as f32 * block_percentage).ceil() as i32;
+                            let final_value = base_damage + damage_reduction; // value 是負值
+
+                            // 建立減傷後的 effect
+                            let reduced_effect = Effect::Hp {
+                                value: final_value,
                                 target_type: target_type.clone(),
                                 shape: shape.clone(),
                             };
-                            let old_hp = board
-                                .units
-                                .get_mut(&unit_id)
-                                .ok_or_else(|| Error::InvalidImplementation {
-                                    func,
-                                    detail: format!("unit not found 2: {unit_type}"),
-                                })?
-                                .hp;
-                            if let Some(msg) = apply_effect_to_pos(board, &effect, caster_pos, pos)
+
+                            if let Some(msg) =
+                                apply_effect_to_pos(board, &reduced_effect, caster_pos, pos, multiplier)
                             {
-                                let new_hp = board
-                                    .units
-                                    .get_mut(&unit_id)
-                                    .ok_or_else(|| Error::InvalidImplementation {
-                                        func,
-                                        detail: format!("unit not found 3: {unit_type}"),
-                                    })?
-                                    .hp;
                                 msgs.push(format!(
-                                    "單位 {unit_type} 格擋攻擊！HP: {old_hp} → {new_hp} (accuracy={accuracy}, random={hit_random}, evade={evasion}, block={block})：{msg}",
+                                    "單位 {unit_type} 格擋{crit_msg}！減傷 {damage_reduction} ({block_reduction}%)：{msg}"
                                 ));
                             }
                         }
                         _ => {
-                            if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos) {
+                            // 其他效果不受格擋影響，直接套用
+                            if let Some(msg) =
+                                apply_effect_to_pos(board, effect, caster_pos, pos, multiplier)
+                            {
                                 msgs.push(format!(
-                                    "單位 {unit_type} 格擋攻擊！(accuracy={accuracy}, random={hit_random}, evade={evasion}, block={block})。但是命中效果不受影響：{msg}",
+                                    "單位 {unit_type} 格擋{crit_msg}，但效果不受影響：{msg}"
                                 ));
                             }
                         }
@@ -572,11 +574,11 @@ mod inner {
                 continue;
             }
 
-            // 完全命中
+            // 完全命中（普通路徑，套用倍率）
             for effect in &skill.effects {
-                if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos) {
+                if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, multiplier) {
                     msgs.push(format!(
-                        "單位 {unit_type} 被完全命中 (accuracy={accuracy}, random={hit_random}, evade={evasion}, block={block})：{msg}"
+                        "單位 {unit_type} 被{crit_msg}了：{msg}"
                     ));
                 }
             }
@@ -752,16 +754,23 @@ mod inner {
         effect: &Effect,
         caster_pos: Pos,
         target_pos: Pos,
+        multiplier: i32,
     ) -> Option<String> {
         match effect {
             Effect::Hp { value, .. } => {
                 let unit_id =  board.pos_to_unit(target_pos) ?;
                 let unit =  board.units.get_mut(&unit_id) ?;
                 let old_hp = unit.hp;
-                unit.hp += value;
+
+                // 套用倍率（僅對 Hp 效果）
+                let modified_value = *value  * multiplier;
+                unit.hp += modified_value;
+
+                // HP 上限限制
                 if unit.hp > unit.max_hp {
                     unit.hp = unit.max_hp;
                 }
+
                 let new_hp = unit.hp;
                 Some(format!(
                     "單位 {} HP: {old_hp} → {new_hp}",
@@ -1760,6 +1769,114 @@ mod tests {
             let tile = board.get_tile(Pos { x: 1, y: 2 }).unwrap();
             assert!(matches!(tile.object, Some(Object::Pit)));
             assert!(!tile.object.as_ref().unwrap().is_passable());
+        }
+
+        #[test]
+        fn test_cast_skill_critical_hit() {
+            // 測試爆擊傷害為 2 倍
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            // 設置不同隊伍
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 創建必定爆擊的技能（crit_rate = 100）
+            let crit_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: Some(100), // 高命中確保命中
+                crit_rate: Some(100), // 100% 爆擊率
+                effects: vec![Effect::Hp {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    value: -20,
+                }],
+            };
+            skills.insert("crit".to_string(), crit_skill);
+
+            // 施放前 HP
+            let orig_hp = board.units.get(&target_unit_id).unwrap().hp;
+
+            // 選擇並施放技能
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("crit".to_string()));
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // 檢查訊息包含爆擊
+            assert!(msgs.iter().any(|m| m.contains("爆擊")));
+
+            // 檢查傷害為 2 倍（-20 × 2 = -40）
+            let new_hp = board.units.get(&target_unit_id).unwrap().hp;
+            assert_eq!(new_hp, orig_hp - 40);
+        }
+
+        #[test]
+        fn test_cast_skill_critical_with_block() {
+            // 測試爆擊傷害會被格擋減傷
+            let (mut board, unit_id, mut skills) =
+                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+            let target_unit_id = unit_id + 1;
+
+            // 設置不同隊伍
+            board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+            // 給目標單位添加格擋技能（block = 50）
+            let block_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (0, 0),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Block {
+                    target_type: TargetType::Caster,
+                    shape: Shape::Point,
+                    value: 200,
+                    duration: 0,
+                }],
+            };
+            skills.insert("block".to_string(), block_skill);
+            board
+                .units
+                .get_mut(&target_unit_id)
+                .unwrap()
+                .skills
+                .insert("block".to_string());
+
+            // 創建必定爆擊但 accuracy 較低的技能（會被格擋）
+            let crit_skill = Skill {
+                tags: BTreeSet::new(),
+                range: (1, 1),
+                cost: 0,
+                accuracy: Some(10), // 低命中，會被格擋
+                crit_rate: Some(100), // 100% 爆擊率
+                effects: vec![Effect::Hp {
+                    target_type: TargetType::Enemy,
+                    shape: Shape::Point,
+                    value: -20,
+                }],
+            };
+            skills.insert("crit".to_string(), crit_skill);
+
+            // 施放前 HP
+            let orig_hp = board.units.get(&target_unit_id).unwrap().hp;
+
+            // 選擇並施放技能
+            let mut sel = SkillSelection::default();
+            sel.select_skill(Some("crit".to_string()));
+            let msgs = sel
+                .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
+                .unwrap();
+
+            // 檢查訊息包含格擋和爆擊
+            assert!(msgs.iter().any(|m| m.contains("格擋") && m.contains("爆擊")));
+
+            // 檢查傷害：基礎 -20 × 2（爆擊）= -40，再被格擋減 10% = -36
+            let new_hp = board.units.get(&target_unit_id).unwrap().hp;
+            assert_eq!(new_hp, orig_hp - 36);
         }
     }
 }
