@@ -1996,7 +1996,7 @@ fn object_symbol(tile: &Tile) -> &'static str {
             Orientation::Left => "\\←",
             Orientation::Right => "\\→",
         },
-        Some(Object::Pit) => "🕳️",
+        Some(Object::Pit) => "💀",
         Some(Object::Tent2 { orientation, .. }) => match orientation {
             Orientation::Left | Orientation::Right => "⛺→2",
             Orientation::Up | Orientation::Down => "⛺↓2",

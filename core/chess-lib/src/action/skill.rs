@@ -495,7 +495,9 @@ mod inner {
             if hit_random > critical_success {
                 // 完全命中（套用倍率）
                 for effect in &skill.effects {
-                    if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, multiplier) {
+                    if let Some(msg) =
+                        apply_effect_to_pos(board, effect, caster_pos, pos, multiplier)
+                    {
                         msgs.push(format!(
                             "亂數={hit_random} > {critical_success}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
                         ));
@@ -529,9 +531,11 @@ mod inner {
             let block_score = hit_score - block - evasion;
 
             // 計算格擋減傷百分比（用於傷害計算）
-                            // 格擋減傷百分比：基礎 10%，根據被動技能增加，最高 80%
+            // 格擋減傷百分比：基礎 10%，根據被動技能增加，最高 80%
             let block_reduction =
-                crate::unit::skills_to_block_reduction(unit_skills.iter().map(|(k, v)| (*k, *v))).max(10).min(80);
+                crate::unit::skills_to_block_reduction(unit_skills.iter().map(|(k, v)| (*k, *v)))
+                    .max(10)
+                    .min(80);
 
             // 格擋（百分比減傷）
             if block_score <= 0 {
@@ -554,9 +558,13 @@ mod inner {
                                 shape: shape.clone(),
                             };
 
-                            if let Some(msg) =
-                                apply_effect_to_pos(board, &reduced_effect, caster_pos, pos, multiplier)
-                            {
+                            if let Some(msg) = apply_effect_to_pos(
+                                board,
+                                &reduced_effect,
+                                caster_pos,
+                                pos,
+                                multiplier,
+                            ) {
                                 msgs.push(format!(
                                     "單位 {unit_type} 格擋{crit_msg}！減傷 {damage_reduction} ({block_reduction}%)：{msg}"
                                 ));
@@ -580,9 +588,7 @@ mod inner {
             // 完全命中（普通路徑，套用倍率）
             for effect in &skill.effects {
                 if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, multiplier) {
-                    msgs.push(format!(
-                        "單位 {unit_type} 被{crit_msg}了：{msg}"
-                    ));
+                    msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
                 }
             }
         }
@@ -605,10 +611,7 @@ mod inner {
         let tile = match board.get_tile(next_pos) {
             Some(t) => t,
             None => {
-                return PushResult::Stopped(format!(
-                    "單位 {} 被推到邊界並停止",
-                    unit_type
-                ));
+                return PushResult::Stopped(format!("單位 {} 被推到邊界並停止", unit_type));
             }
         };
 
@@ -624,10 +627,7 @@ mod inner {
 
                 // 方向不一致，無法越過 Cliff
                 if !direction_matches {
-                    return PushResult::Stopped(format!(
-                        "單位 {} 被推到懸崖並停止",
-                        unit_type
-                    ));
+                    return PushResult::Stopped(format!("單位 {} 被推到懸崖並停止", unit_type));
                 }
 
                 // 方向一致，越過 Cliff 到下一格
@@ -636,10 +636,7 @@ mod inner {
 
                 // 檢查左上邊界
                 if beyond_x < 0 || beyond_y < 0 {
-                    return PushResult::Stopped(format!(
-                            "單位 {} 越過懸崖後會到達邊界",
-                        unit_type
-                    ));
+                    return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
                 }
 
                 let beyond_pos = Pos {
@@ -649,10 +646,7 @@ mod inner {
 
                 // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
                 if board.get_tile(beyond_pos).is_none() {
-                    return PushResult::Stopped(format!(
-                            "單位 {} 越過懸崖後會到達邊界",
-                        unit_type
-                    ));
+                    return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
                 }
 
                 PushResult::Destination(beyond_pos)
@@ -660,10 +654,7 @@ mod inner {
             Some(Object::Pit) => PushResult::Destination(next_pos),
             _ => {
                 if !tile.object.as_ref().map_or(true, |obj| obj.is_passable()) {
-                    PushResult::Stopped(format!(
-                        "單位 {} 被推到障礙物並停止",
-                        unit_type
-                    ))
+                    PushResult::Stopped(format!("單位 {} 被推到障礙物並停止", unit_type))
                 } else {
                     PushResult::Destination(next_pos)
                 }
@@ -761,12 +752,12 @@ mod inner {
     ) -> Option<String> {
         match effect {
             Effect::Hp { value, .. } => {
-                let unit_id =  board.pos_to_unit(target_pos) ?;
-                let unit =  board.units.get_mut(&unit_id) ?;
+                let unit_id = board.pos_to_unit(target_pos)?;
+                let unit = board.units.get_mut(&unit_id)?;
                 let old_hp = unit.hp;
 
                 // 套用倍率（僅對 Hp 效果）
-                let modified_value = *value  * multiplier;
+                let modified_value = *value * multiplier;
                 unit.hp += modified_value;
 
                 // HP 上限限制
@@ -1687,8 +1678,10 @@ mod tests {
         #[test]
         fn test_shove_over_cliff_collision() {
             // 施法者在 (1,1)，目標在 (1,2)，Cliff 在 (1,3)，另一單位在 (1,4)
-            let (mut board, unit_id, mut skills) =
-                prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }, Pos { x: 1, y: 4 }]));
+            let (mut board, unit_id, mut skills) = prepare_test_board(
+                Pos { x: 1, y: 1 },
+                Some(vec![Pos { x: 1, y: 2 }, Pos { x: 1, y: 4 }]),
+            );
             let target_unit_id = unit_id + 1;
 
             board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
@@ -1794,7 +1787,7 @@ mod tests {
                 tags: BTreeSet::new(),
                 range: (1, 1),
                 cost: 0,
-                accuracy: Some(100), // 高命中確保命中
+                accuracy: Some(100),  // 高命中確保命中
                 crit_rate: Some(100), // 100% 爆擊率
                 effects: vec![Effect::Hp {
                     target_type: TargetType::Enemy,
@@ -1882,7 +1875,7 @@ mod tests {
                 tags: BTreeSet::new(),
                 range: (1, 1),
                 cost: 0,
-                accuracy: Some(10), // 低命中，會被格擋
+                accuracy: Some(10),   // 低命中，會被格擋
                 crit_rate: Some(100), // 100% 爆擊率
                 effects: vec![Effect::Hp {
                     target_type: TargetType::Enemy,
@@ -1903,7 +1896,10 @@ mod tests {
                 .unwrap();
 
             // 檢查訊息包含格擋和爆擊
-            assert!(msgs.iter().any(|m| m.contains("格擋") && m.contains("爆擊")));
+            assert!(
+                msgs.iter()
+                    .any(|m| m.contains("格擋") && m.contains("爆擊"))
+            );
 
             // 檢查傷害：基礎 -20，格擋減 50% = -10，爆擊 ×2 = -20
             let new_hp = board.units.get(&target_unit_id).unwrap().hp;
