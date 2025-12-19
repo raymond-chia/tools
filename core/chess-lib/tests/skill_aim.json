@@ -1,0 +1,14 @@
+{
+  "tags": ["passive"],
+  "range": [0, 0],
+  "cost": 0,
+  "effects": [
+    {
+      "type": "accuracy",
+      "target_type": "caster",
+      "shape": "point",
+      "value": 20,
+      "duration": -1
+    }
+  ]
+}

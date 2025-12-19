@@ -120,6 +120,12 @@ pub enum Effect {
         value: i32,
         duration: i32, // -1 代表永久
     },
+    Accuracy {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,    // 增加的命中修正
+        duration: i32, // -1 代表永久
+    },
     Evasion {
         target_type: TargetType,
         shape: Shape,
@@ -184,6 +190,7 @@ macro_rules! effect_field_ref {
             | Effect::MaxHp { $field, .. }
             | Effect::MaxMp { $field, .. }
             | Effect::Initiative { $field, .. }
+            | Effect::Accuracy { $field, .. }
             | Effect::Evasion { $field, .. }
             | Effect::Block { $field, .. }
             | Effect::BlockReduction { $field, .. }
@@ -223,6 +230,7 @@ impl Effect {
             Effect::MaxHp { duration, .. }
             | Effect::MaxMp { duration, .. }
             | Effect::Initiative { duration, .. }
+            | Effect::Accuracy { duration, .. }
             | Effect::Evasion { duration, .. }
             | Effect::Block { duration, .. }
             | Effect::BlockReduction { duration, .. }

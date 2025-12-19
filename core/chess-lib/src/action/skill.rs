@@ -116,14 +116,35 @@ impl SkillSelection {
                     }
                 }
             }
-            Some(accuracy) => {
+            Some(skill_accuracy) => {
+                // 預先計算施法者的 accuracy 加成
+                let caster_unit = board
+                    .units
+                    .get(&caster)
+                    .ok_or_else(|| Error::NoActingUnit {
+                        func,
+                        unit_id: caster,
+                    })?;
+
+                let caster_skills: BTreeMap<_, _> = caster_unit
+                    .skills
+                    .iter()
+                    .filter_map(|skill_id| skills.get(skill_id).map(|s| (skill_id, s)))
+                    .collect();
+
+                let caster_accuracy =
+                    unit::skills_to_accuracy(caster_skills.iter().map(|(k, v)| (*k, *v)));
+
+                // 將技能 accuracy 與施法者 accuracy 加總
+                let total_accuracy = skill_accuracy + caster_accuracy;
+
                 msgs.extend(calc_hit_result(
                     board,
                     caster_pos,
                     skills,
                     skill,
                     affect_area,
-                    accuracy,
+                    total_accuracy,
                 )?);
             }
         }
@@ -803,6 +824,11 @@ mod inner {
             Effect::Initiative {
                 duration, value, ..
             } => Some(format!("[未實作] Initiative {value}, 持續 {duration} 回合",)),
+            Effect::Accuracy {
+                value, duration, ..
+            } => Some(format!(
+                "[未實作] Accuracy 效果 +{value}, 持續 {duration} 回合"
+            )),
             Effect::Evasion {
                 value, duration, ..
             } => Some(format!(

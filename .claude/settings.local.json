@@ -2,10 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(cat:*)",
-      "Bash(cargo build:*)",
-      "Bash(cargo test:*)",
-      "Bash(bash scripts/test_core.sh:*)",
-      "Bash(bash /mnt/d/Mega/prog/rust/tools/scripts/test_core.sh:*)"
+      "Bash(cargo.exe build:*)",
+      "Bash(cargo.exe test:*)"
     ],
     "deny": [],
     "ask": []

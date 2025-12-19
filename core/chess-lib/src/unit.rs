@@ -152,6 +152,21 @@ pub fn skills_to_initiative<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a S
         .sum()
 }
 
+/// 計算單位 accuracy 技能等級總和
+/// 尋找所有 effect 為 Effect::Accuracy 的技能，並加總其 value
+pub fn skills_to_accuracy<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
+    skills
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::Accuracy { value, .. } = effect {
+                Some(*value)
+            } else {
+                None
+            }
+        })
+        .sum()
+}
+
 /// 計算單位 evasion 技能等級總和
 /// 尋找所有 effect 為 Effect::Evasion 的技能，並加總其 value
 pub fn skills_to_evasion<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
