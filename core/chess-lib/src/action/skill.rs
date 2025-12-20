@@ -847,13 +847,35 @@ mod inner {
             Effect::MovePoints {
                 value, duration, ..
             } => Some(format!("[未實作] 單位移動 {value}, 持續 {duration} 回合")),
-            Effect::Burn { duration, .. } => {
-                Some(format!("[未實作] Burn 效果, 持續 {duration} 回合",))
-            }
             Effect::HitAndRun { .. } => Some(format!("[未實作] 打帶跑")),
             Effect::Shove { distance, .. } => {
                 apply_shove_effect(board, caster_pos, target_pos, distance)
             }
+            Effect::Potency {
+                value, duration, ..
+            } => Some(format!(
+                "[未實作] Potency 效果 +{value}, 持續 {duration} 回合"
+            )),
+            Effect::Resistance {
+                value,
+                duration,
+                save_type,
+                ..
+            } => Some(format!(
+                "[未實作] Resistance 效果（{:?}）+{value}, 持續 {duration} 回合",
+                save_type
+            )),
+            Effect::Burn { duration, .. } => {
+                Some(format!("[未實作] Burn 效果, 持續 {duration} 回合",))
+            }
+            Effect::Silence {
+                duration,
+                save_type,
+                ..
+            } => Some(format!(
+                "[未實作] Silence 效果（{:?} save）, 持續 {duration} 回合",
+                save_type
+            )),
         }
     }
 
@@ -1921,15 +1943,23 @@ mod tests {
                 .cast_skill(&mut board, &skills, unit_id, Pos { x: 1, y: 2 })
                 .unwrap();
 
-            // 檢查訊息包含格擋和爆擊
-            assert!(
-                msgs.iter()
-                    .any(|m| m.contains("格擋") && m.contains("爆擊"))
-            );
+            // 檢查訊息：如果是 critical failure（5% 機率），會完全閃避
+            let is_critical_failure = msgs.iter().any(|m| m.contains("完全閃避"));
+            if is_critical_failure {
+                // critical failure 情況，不檢查格擋和爆擊
+                let new_hp = board.units.get(&target_unit_id).unwrap().hp;
+                assert_eq!(new_hp, orig_hp); // HP 不變
+            } else {
+                // 正常情況，檢查格擋和爆擊
+                assert!(
+                    msgs.iter()
+                        .any(|m| m.contains("格擋") && m.contains("爆擊"))
+                );
 
-            // 檢查傷害：基礎 -20，格擋減 50% = -10，爆擊 ×2 = -20
-            let new_hp = board.units.get(&target_unit_id).unwrap().hp;
-            assert_eq!(new_hp, orig_hp - 20);
+                // 檢查傷害：基礎 -20，格擋減 50% = -10，爆擊 ×2 = -20
+                let new_hp = board.units.get(&target_unit_id).unwrap().hp;
+                assert_eq!(new_hp, orig_hp - 20);
+            }
         }
     }
 }

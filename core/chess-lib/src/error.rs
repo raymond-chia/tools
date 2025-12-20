@@ -58,6 +58,13 @@ pub enum Error {
         detail: String,
     },
 
+    #[error("`{func}`: 單位被 {effect}，無法使用 {skill_id}")]
+    StatusEffectBlocksSkill {
+        func: &'static str,
+        effect: Effect,
+        skill_id: SkillID,
+    },
+
     // 使用技能、移動單位
     #[error("`{func}`: 行動點數不足")]
     NotEnoughAP { func: &'static str },

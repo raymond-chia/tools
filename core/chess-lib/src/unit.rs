@@ -42,6 +42,7 @@ pub struct Unit {
     pub mp: i32,
     pub max_mp: i32,
     pub skills: BTreeSet<String>,
+    pub status_effects: Vec<Effect>,
 }
 
 impl Unit {
@@ -81,6 +82,7 @@ impl Unit {
             mp: max_mp,
             max_mp,
             skills: template.skills.clone(),
+            status_effects: Vec::new(),
         })
     }
 
@@ -234,6 +236,47 @@ pub fn skills_to_move_points<'a>(
     }
 }
 
+/// 計算單位對特定 Tag 的施法效力總和
+/// 尋找所有 effect 為 Effect::Potency 且 tag 匹配的技能，並加總其 value
+pub fn skills_to_potency<'a>(
+    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+    target_tag: &Tag,
+) -> i32 {
+    skills
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::Potency { value, tag, .. } = effect {
+                if tag == target_tag {
+                    return Some(*value);
+                }
+            }
+            None
+        })
+        .sum()
+}
+
+/// 計算單位對特定豁免類型的抗性總和
+/// 尋找所有 effect 為 Effect::Resistance 且 save_type 匹配的技能，並加總其 value
+pub fn skills_to_resistance<'a>(
+    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+    target_save_type: &SaveType,
+) -> i32 {
+    skills
+        .flat_map(|(_, skill)| &skill.effects)
+        .filter_map(|effect| {
+            if let Effect::Resistance {
+                value, save_type, ..
+            } = effect
+            {
+                if save_type == target_save_type {
+                    return Some(*value);
+                }
+            }
+            None
+        })
+        .sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +389,7 @@ mod tests {
             mp: i32::MIN,
             max_mp: i32::MAX,
             skills: ["超級技能".to_string()].iter().cloned().collect(),
+            status_effects: Vec::new(),
         };
         assert_eq!(unit.id, 999);
         assert_eq!(unit.unit_template_type, "超級戰士");
@@ -764,6 +808,7 @@ mod tests {
                 .iter()
                 .cloned()
                 .collect(),
+            status_effects: Vec::new(),
         };
 
         unit.recalc_from_skills(&skills);
@@ -798,9 +843,111 @@ mod tests {
             mp: 1,
             max_mp: 1,
             skills: ["neg".to_string()].iter().cloned().collect(),
+            status_effects: Vec::new(),
         };
 
         unit.recalc_from_skills(&skills);
         assert_eq!(unit.move_points, 0);
+    }
+
+    #[test]
+    fn test_skills_to_potency() {
+        let mut skills = BTreeMap::new();
+
+        // 技能 1：Fire Potency +15
+        let mut s1 = Skill::default();
+        s1.effects = vec![Effect::Potency {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            tag: Tag::Fire,
+            value: 15,
+            duration: -1,
+        }];
+        skills.insert("fire_pot1".to_string(), s1);
+
+        // 技能 2：Fire Potency +10
+        let mut s2 = Skill::default();
+        s2.effects = vec![Effect::Potency {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            tag: Tag::Fire,
+            value: 10,
+            duration: -1,
+        }];
+        skills.insert("fire_pot2".to_string(), s2);
+
+        // 技能 3：MindControl Potency +20
+        let mut s3 = Skill::default();
+        s3.effects = vec![Effect::Potency {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            tag: Tag::MindControl,
+            value: 20,
+            duration: -1,
+        }];
+        skills.insert("mind_pot".to_string(), s3);
+
+        // 測試 Fire tag 的 potency
+        let fire_potency = skills_to_potency(skills.iter().map(|(k, v)| (k, v)), &Tag::Fire);
+        assert_eq!(fire_potency, 25);
+
+        // 測試 MindControl tag 的 potency
+        let mind_potency = skills_to_potency(skills.iter().map(|(k, v)| (k, v)), &Tag::MindControl);
+        assert_eq!(mind_potency, 20);
+
+        // 測試 Physical tag 的 potency（沒有）
+        let physical_potency =
+            skills_to_potency(skills.iter().map(|(k, v)| (k, v)), &Tag::Physical);
+        assert_eq!(physical_potency, 0);
+    }
+
+    #[test]
+    fn test_skills_to_resistance() {
+        let mut skills = BTreeMap::new();
+
+        // 技能 1：Fortitude +10
+        let mut s1 = Skill::default();
+        s1.effects = vec![Effect::Resistance {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Fortitude,
+            value: 10,
+            duration: -1,
+        }];
+        skills.insert("fort1".to_string(), s1);
+
+        // 技能 2：Fortitude +5
+        let mut s2 = Skill::default();
+        s2.effects = vec![Effect::Resistance {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Fortitude,
+            value: 5,
+            duration: -1,
+        }];
+        skills.insert("fort2".to_string(), s2);
+
+        // 技能 3：Will +20
+        let mut s3 = Skill::default();
+        s3.effects = vec![Effect::Resistance {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Will,
+            value: 20,
+            duration: -1,
+        }];
+        skills.insert("will1".to_string(), s3);
+
+        let fortitude_resistance =
+            skills_to_resistance(skills.iter().map(|(k, v)| (k, v)), &SaveType::Fortitude);
+        assert_eq!(fortitude_resistance, 15);
+
+        let will_resistance =
+            skills_to_resistance(skills.iter().map(|(k, v)| (k, v)), &SaveType::Will);
+        assert_eq!(will_resistance, 20);
+
+        let reflex_resistance =
+            skills_to_resistance(skills.iter().map(|(k, v)| (k, v)), &SaveType::Reflex);
+        assert_eq!(reflex_resistance, 0);
     }
 }

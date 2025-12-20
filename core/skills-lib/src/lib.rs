@@ -26,6 +26,7 @@ pub struct Skill {
     Debug,
     Deserialize,
     Serialize,
+    Default,
     Clone,
     EnumString,
     Display,
@@ -50,6 +51,7 @@ pub enum Tag {
     Melee,
     Ranged,
     // 物理或者魔法
+    #[default]
     Physical,
     Magical,
     // 特性
@@ -60,6 +62,19 @@ pub enum Tag {
     // 其他
     Heal,
     Fire,
+}
+
+/// 豁免檢定類型
+#[derive(
+    Debug, Deserialize, Serialize, Default, Clone, EnumString, Display, EnumIter, PartialEq,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SaveType {
+    #[default]
+    Fortitude, // 強韌：對抗毒素、疾病、物理效果
+    Reflex, // 反射：對抗範圍效果、需要閃避的效果
+    Will,   // 意志：對抗心靈控制、幻術
 }
 
 #[derive(
@@ -150,11 +165,6 @@ pub enum Effect {
         value: i32,
         duration: i32, // -1 代表永久
     },
-    Burn {
-        target_type: TargetType,
-        shape: Shape,
-        duration: i32, // -1 代表永久
-    },
     HitAndRun {
         target_type: TargetType,
         shape: Shape,
@@ -164,6 +174,32 @@ pub enum Effect {
         target_type: TargetType,
         shape: Shape,
         distance: usize,
+    },
+    Potency {
+        target_type: TargetType,
+        shape: Shape,
+        tag: Tag, // 提升哪種 Tag 技能的效力（如 Fire）
+        value: i32,
+        duration: i32, // -1 代表永久
+    },
+    Resistance {
+        target_type: TargetType,
+        shape: Shape,
+        save_type: SaveType,
+        value: i32,
+        duration: i32, // -1 代表永久
+    },
+    Burn {
+        target_type: TargetType,
+        shape: Shape,
+        save_type: SaveType,
+        duration: i32, // -1 代表永久
+    },
+    Silence {
+        target_type: TargetType,
+        shape: Shape,
+        save_type: SaveType,
+        duration: i32, // -1 代表永久
     },
 }
 
@@ -195,9 +231,12 @@ macro_rules! effect_field_ref {
             | Effect::Block { $field, .. }
             | Effect::BlockReduction { $field, .. }
             | Effect::MovePoints { $field, .. }
-            | Effect::Burn { $field, .. }
             | Effect::HitAndRun { $field, .. }
-            | Effect::Shove { $field, .. } => $field,
+            | Effect::Shove { $field, .. }
+            | Effect::Potency { $field, .. }
+            | Effect::Resistance { $field, .. }
+            | Effect::Burn { $field, .. }
+            | Effect::Silence { $field, .. } => $field,
         }
     };
 }
@@ -235,8 +274,11 @@ impl Effect {
             | Effect::Block { duration, .. }
             | Effect::BlockReduction { duration, .. }
             | Effect::MovePoints { duration, .. }
+            | Effect::HitAndRun { duration, .. }
+            | Effect::Potency { duration, .. }
+            | Effect::Resistance { duration, .. }
             | Effect::Burn { duration, .. }
-            | Effect::HitAndRun { duration, .. } => *duration,
+            | Effect::Silence { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
         }
     }
@@ -399,7 +441,8 @@ mod tests {
             Effect::Burn {
                 target_type: Default::default(),
                 shape: Shape::Point,
-                duration: 3
+                save_type: SaveType::Reflex,
+                duration: 3,
             }
             .duration(),
             3
@@ -454,5 +497,78 @@ mod tests {
         assert!(tags.contains(&Tag::Active));
         assert!(tags.contains(&Tag::Single));
         assert!(tags.contains(&Tag::Melee));
+    }
+
+    // 測試 6：Resistance 和 Potency 的 duration
+    #[test]
+    fn test_resistance_and_potency_duration() {
+        let resistance = Effect::Resistance {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Fortitude,
+            value: 20,
+            duration: -1,
+        };
+        assert_eq!(resistance.duration(), -1);
+
+        let potency = Effect::Potency {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            tag: Tag::Fire,
+            value: 15,
+            duration: 5,
+        };
+        assert_eq!(potency.duration(), 5);
+    }
+
+    // 測試 5：Burn 和 Silence 的 save_type 和 duration
+    #[test]
+    fn test_burn_and_silence_with_save_type() {
+        let burn = Effect::Burn {
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+            duration: 3,
+            save_type: SaveType::Reflex,
+        };
+        assert_eq!(burn.duration(), 3);
+        assert_eq!(burn.target_type(), &TargetType::Enemy);
+
+        let silence = Effect::Silence {
+            target_type: TargetType::Enemy,
+            shape: Shape::Circle(2),
+            duration: 2,
+            save_type: SaveType::Will,
+        };
+        assert_eq!(silence.duration(), 2);
+        assert_eq!(silence.shape(), &Shape::Circle(2));
+    }
+
+    // 測試 8：測試 Effect 的 Display trait
+    #[test]
+    fn test_effect_display() {
+        let silence = Effect::Silence {
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+            duration: 2,
+            save_type: SaveType::Will,
+        };
+        assert_eq!(silence.to_string(), "silence");
+
+        let burn = Effect::Burn {
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+            duration: 3,
+            save_type: SaveType::Reflex,
+        };
+        assert_eq!(burn.to_string(), "burn");
+
+        let resistance = Effect::Resistance {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Fortitude,
+            value: 10,
+            duration: -1,
+        };
+        assert_eq!(resistance.to_string(), "resistance");
     }
 }
