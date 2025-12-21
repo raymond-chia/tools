@@ -5,6 +5,22 @@ use strum_macros::{Display, EnumIter, EnumString};
 pub type Degree = u16;
 pub type SkillID = String;
 
+/// 攻擊結果
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub enum AttackResult {
+    NoAttack, // 不需要攻擊判定
+    Normal,   // 普通命中（1x 傷害）
+    Critical, // 爆擊（2x 傷害）
+}
+
+/// 豁免結果
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub enum SaveResult {
+    NoSave,  // 不需要豁免
+    Success, // 豁免成功
+    Failure, // 豁免失敗
+}
+
 /// 技能資料結構
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct Skill {
@@ -280,6 +296,27 @@ impl Effect {
             | Effect::Burn { duration, .. }
             | Effect::Silence { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
+        }
+    }
+
+    /// 取得效果的豁免類型（如果需要豁免判定）
+    pub fn save_type(&self) -> Option<&SaveType> {
+        match self {
+            Effect::Burn { save_type, .. } | Effect::Silence { save_type, .. } => Some(save_type),
+            Effect::Hp { .. }
+            | Effect::Mp { .. }
+            | Effect::MaxHp { .. }
+            | Effect::MaxMp { .. }
+            | Effect::Initiative { .. }
+            | Effect::Accuracy { .. }
+            | Effect::Evasion { .. }
+            | Effect::Block { .. }
+            | Effect::BlockReduction { .. }
+            | Effect::MovePoints { .. }
+            | Effect::HitAndRun { .. }
+            | Effect::Shove { .. }
+            | Effect::Potency { .. }
+            | Effect::Resistance { .. } => None,
         }
     }
 }

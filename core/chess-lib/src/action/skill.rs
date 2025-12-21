@@ -110,7 +110,25 @@ impl SkillSelection {
                 // 無命中數值，所有格子直接套用效果（無爆擊）
                 for pos in affect_area {
                     for effect in &skill.effects {
-                        if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, 1) {
+                        // 只對有單位的目標進行豁免判定
+                        let save_result = match board.pos_to_unit(pos) {
+                            Some(target_id) => {
+                                calc_save_result(board, skills, caster, target_id, skill, effect)
+                                    .map_err(|e| Error::Wrap {
+                                        func,
+                                        source: Box::new(e),
+                                    })?
+                            }
+                            None => SaveResult::NoSave,
+                        };
+                        if let Some(msg) = apply_effect_to_pos(
+                            board,
+                            effect,
+                            caster_pos,
+                            pos,
+                            AttackResult::NoAttack,
+                            save_result,
+                        ) {
                             msgs.push(msg);
                         }
                     }
@@ -126,21 +144,18 @@ impl SkillSelection {
                         unit_id: caster,
                     })?;
 
-                let caster_skills: BTreeMap<_, _> = caster_unit
-                    .skills
-                    .iter()
-                    .filter_map(|skill_id| skills.get(skill_id).map(|s| (skill_id, s)))
-                    .collect();
-
-                let caster_accuracy =
-                    unit::skills_to_accuracy(caster_skills.iter().map(|(k, v)| (*k, *v)));
+                let caster_accuracy = unit::skills_to_accuracy(caster_unit.skills.iter(), skills)
+                    .map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?;
 
                 // 將技能 accuracy 與施法者 accuracy 加總
                 let total_accuracy = skill_accuracy + caster_accuracy;
 
                 msgs.extend(calc_hit_result(
                     board,
-                    caster_pos,
+                    (caster, caster_pos),
                     skills,
                     skill,
                     affect_area,
@@ -458,13 +473,14 @@ mod inner {
 
     pub fn calc_hit_result(
         board: &mut Board,
-        caster_pos: Pos,
+        caster: (UnitID, Pos),
         skills: &BTreeMap<SkillID, Skill>,
         skill: &Skill,
         affect_area: Vec<Pos>,
         accuracy: i32,
     ) -> Result<Vec<String>, Error> {
         let func = "calc_hit_result";
+        let (caster_id, caster_pos) = caster;
 
         // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
         let mut rng = rand::rng();
@@ -477,10 +493,17 @@ mod inner {
 
         for pos in affect_area {
             let unit_id = match board.pos_to_unit(pos) {
-                // 無單位，直接套用效果
+                // 無單位，直接套用效果（不需要豁免判定）
                 None => {
                     for effect in &skill.effects {
-                        if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, 1) {
+                        if let Some(msg) = apply_effect_to_pos(
+                            board,
+                            effect,
+                            caster_pos,
+                            pos,
+                            AttackResult::NoAttack,
+                            SaveResult::NoSave,
+                        ) {
                             msgs.push(format!("空地 {pos:?} 受到效果：{msg}"));
                         }
                     }
@@ -506,19 +529,36 @@ mod inner {
             }
 
             // 爆擊判定（決定傷害倍率）
-            let is_critical = skill
-                .crit_rate
-                .map(|crit_rate| hit_random > (100 - crit_rate as i32))
-                .unwrap_or(false);
-            let multiplier = if is_critical { 2 } else { 1 };
-            let crit_msg = if is_critical { "爆擊" } else { "攻擊" };
+            let attack_result = skill.crit_rate.map_or(AttackResult::NoAttack, |crit_rate| {
+                if hit_random > (100 - crit_rate as i32) {
+                    AttackResult::Critical
+                } else {
+                    AttackResult::Normal
+                }
+            });
+            let crit_msg = if matches!(attack_result, AttackResult::Critical) {
+                "爆擊"
+            } else {
+                "攻擊"
+            };
 
             if hit_random > critical_success {
                 // 完全命中（套用倍率）
                 for effect in &skill.effects {
-                    if let Some(msg) =
-                        apply_effect_to_pos(board, effect, caster_pos, pos, multiplier)
-                    {
+                    let save_result =
+                        calc_save_result(board, skills, caster_id, unit_id, skill, effect)
+                            .map_err(|e| Error::Wrap {
+                                func,
+                                source: Box::new(e),
+                            })?;
+                    if let Some(msg) = apply_effect_to_pos(
+                        board,
+                        effect,
+                        caster_pos,
+                        pos,
+                        attack_result,
+                        save_result,
+                    ) {
                         msgs.push(format!(
                             "亂數={hit_random} > {critical_success}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
                         ));
@@ -526,18 +566,23 @@ mod inner {
                 }
                 continue;
             }
-            let unit_skills: BTreeMap<_, _> = board
+            let unit_skills = board
                 .units
                 .get(&unit_id)
-                .map(|unit| {
-                    unit.skills
-                        .iter()
-                        .filter_map(|skill_id| skills.get(skill_id).map(|s| (skill_id, s)))
-                        .collect()
-                })
-                .unwrap_or_default();
+                .map(|unit| &unit.skills)
+                .ok_or_else(|| Error::InvalidImplementation {
+                    func,
+                    detail: "unit not found after pos_to_unit".to_string(),
+                })?;
+
             // 計算閃避值
-            let evasion = crate::unit::skills_to_evasion(unit_skills.iter().map(|(k, v)| (*k, *v)));
+            let evasion =
+                unit::skills_to_evasion(unit_skills.iter(), skills).map_err(|e| {
+                    Error::Wrap {
+                        func,
+                        source: Box::new(e),
+                    }
+                })?;
             // 閃避
             let evade_score = hit_score - evasion;
             if evade_score <= 0 {
@@ -548,13 +593,22 @@ mod inner {
             }
 
             // 計算格擋值（用於命中判定）
-            let block = crate::unit::skills_to_block(unit_skills.iter().map(|(k, v)| (*k, *v)));
+            let block = unit::skills_to_block(unit_skills.iter(), skills).map_err(|e| {
+                Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                }
+            })?;
             let block_score = hit_score - block - evasion;
 
             // 計算格擋減傷百分比（用於傷害計算）
             // 格擋減傷百分比：基礎 10%，根據被動技能增加，最高 80%
             let block_reduction =
-                crate::unit::skills_to_block_reduction(unit_skills.iter().map(|(k, v)| (*k, *v)))
+                unit::skills_to_block_reduction(unit_skills.iter(), skills)
+                    .map_err(|e| Error::Wrap {
+                        func,
+                        source: Box::new(e),
+                    })?
                     .max(10)
                     .min(80);
 
@@ -579,12 +633,25 @@ mod inner {
                                 shape: shape.clone(),
                             };
 
+                            let save_result = calc_save_result(
+                                board,
+                                skills,
+                                caster_id,
+                                unit_id,
+                                skill,
+                                &reduced_effect,
+                            )
+                            .map_err(|e| Error::Wrap {
+                                func,
+                                source: Box::new(e),
+                            })?;
                             if let Some(msg) = apply_effect_to_pos(
                                 board,
                                 &reduced_effect,
                                 caster_pos,
                                 pos,
-                                multiplier,
+                                attack_result,
+                                save_result,
                             ) {
                                 msgs.push(format!(
                                     "單位 {unit_type} 格擋{crit_msg}！減傷 {damage_reduction} ({block_reduction}%)：{msg}"
@@ -593,9 +660,20 @@ mod inner {
                         }
                         _ => {
                             // 其他效果不受格擋影響，直接套用
-                            if let Some(msg) =
-                                apply_effect_to_pos(board, effect, caster_pos, pos, multiplier)
-                            {
+                            let save_result =
+                                calc_save_result(board, skills, caster_id, unit_id, skill, effect)
+                                    .map_err(|e| Error::Wrap {
+                                        func,
+                                        source: Box::new(e),
+                                    })?;
+                            if let Some(msg) = apply_effect_to_pos(
+                                board,
+                                effect,
+                                caster_pos,
+                                pos,
+                                attack_result,
+                                save_result,
+                            ) {
                                 msgs.push(format!(
                                     "單位 {unit_type} 格擋{crit_msg}，但效果不受影響：{msg}"
                                 ));
@@ -608,12 +686,87 @@ mod inner {
 
             // 完全命中（普通路徑，套用倍率）
             for effect in &skill.effects {
-                if let Some(msg) = apply_effect_to_pos(board, effect, caster_pos, pos, multiplier) {
+                let save_result = calc_save_result(
+                    board, skills, caster_id, unit_id, skill, effect,
+                )
+                .map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?;
+                if let Some(msg) =
+                    apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
+                {
                     msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
                 }
             }
         }
         Ok(msgs)
+    }
+
+    /// 計算豁免檢定結果
+    /// - 只對有單位的目標進行豁免判定
+    /// - 調用前必須確保目標單位存在
+    pub fn calc_save_result(
+        board: &Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster_id: UnitID,
+        target_id: UnitID,
+        skill: &Skill,
+        effect: &Effect,
+    ) -> Result<SaveResult, Error> {
+        let func = "calc_save_result";
+
+        // 檢查效果是否需要豁免判定
+        let save_type = match effect.save_type() {
+            Some(st) => st,
+            None => return Ok(SaveResult::NoSave),
+        };
+
+        // 計算施法者的 potency（累加所有 skill tags 的 potency）
+        let caster_unit = board
+            .units
+            .get(&caster_id)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster_id,
+            })?;
+
+        let mut caster_potency = 0;
+        for tag in &skill.tags {
+            caster_potency += unit::skills_to_potency(caster_unit.skills.iter(), skills, tag)
+                .map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?;
+        }
+
+        // 計算目標的 resistance
+        let target = board
+            .units
+            .get(&target_id)
+            .ok_or_else(|| Error::InvalidImplementation {
+                func,
+                detail: format!(
+                    "target_id {} from pos_to_unit not found in units",
+                    target_id
+                ),
+            })?;
+
+        let target_resistance = unit::skills_to_resistance(target.skills.iter(), skills, save_type)
+            .map_err(|e| Error::Wrap {
+                func,
+                source: Box::new(e),
+            })?;
+
+        // 豁免檢定
+        let mut rng = rand::rng();
+        let save_score = target_resistance + rng.random_range(1..=100);
+
+        if save_score <= caster_potency {
+            Ok(SaveResult::Failure)
+        } else {
+            Ok(SaveResult::Success)
+        }
     }
 
     /// 推擠結果
@@ -769,8 +922,16 @@ mod inner {
         effect: &Effect,
         caster_pos: Pos,
         target_pos: Pos,
-        multiplier: i32,
+        attack_result: AttackResult,
+        save_result: SaveResult,
     ) -> Option<String> {
+        // 根據攻擊結果計算 multiplier
+        let multiplier = match attack_result {
+            AttackResult::NoAttack => 1,
+            AttackResult::Normal => 1,
+            AttackResult::Critical => 2,
+        };
+
         match effect {
             Effect::Hp { value, .. } => {
                 let unit_id = board.pos_to_unit(target_pos)?;
@@ -865,17 +1026,26 @@ mod inner {
                 "[未實作] Resistance 效果（{:?}）+{value}, 持續 {duration} 回合",
                 save_type
             )),
-            Effect::Burn { duration, .. } => {
-                Some(format!("[未實作] Burn 效果, 持續 {duration} 回合",))
+            Effect::Burn { duration, .. } | Effect::Silence { duration, .. } => {
+                match save_result {
+                    SaveResult::Success => {
+                        // 豁免成功，抵抗狀態
+                        Some(format!("豁免成功！抵抗了 {:?} 效果", effect))
+                    }
+                    SaveResult::Failure => {
+                        // 豁免失敗，施加狀態
+                        let target_unit_id = board.pos_to_unit(target_pos)?;
+                        let target = board.units.get_mut(&target_unit_id)?;
+                        target.status_effects.push(effect.clone());
+
+                        Some(format!("豁免失敗！{:?} 效果持續 {} 回合", effect, duration))
+                    }
+                    SaveResult::NoSave => {
+                        // 不應該發生（Burn/Silence 一定需要豁免）
+                        Some(format!("[錯誤] {:?} 效果需要豁免判定", effect))
+                    }
+                }
             }
-            Effect::Silence {
-                duration,
-                save_type,
-                ..
-            } => Some(format!(
-                "[未實作] Silence 效果（{:?} save）, 持續 {duration} 回合",
-                save_type
-            )),
         }
     }
 

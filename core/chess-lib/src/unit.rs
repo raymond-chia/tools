@@ -5,7 +5,7 @@
 use crate::*;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_INITIATIVE_RANDOM: i32 = 6;
 
@@ -53,23 +53,29 @@ impl Unit {
     ) -> Result<Self, Error> {
         let func = "Unit::from_template";
 
-        let skills: Result<_, _> = template
-            .skills
-            .iter()
-            .map(|id| {
-                skills
-                    .get(id)
-                    .map(|s| (id, s))
-                    .ok_or_else(|| Error::SkillNotFound {
-                        func,
-                        skill_id: id.clone(),
-                    })
-            })
-            .collect();
-        let skills: HashMap<_, _> = skills?;
-        let max_hp = skills_to_max_hp(skills.iter().map(|(k, v)| (*k, *v)));
-        let max_mp = skills_to_max_mp(skills.iter().map(|(k, v)| (*k, *v)));
-        let move_points = skills_to_move_points(skills.iter().map(|(k, v)| (*k, *v)));
+        // 驗證所有技能都存在
+        for skill_id in &template.skills {
+            if !skills.contains_key(skill_id) {
+                return Err(Error::SkillNotFound {
+                    func,
+                    skill_id: skill_id.clone(),
+                });
+            }
+        }
+
+        let max_hp = skills_to_max_hp(template.skills.iter(), skills).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+        let max_mp = skills_to_max_mp(template.skills.iter(), skills).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+        let move_points =
+            skills_to_move_points(template.skills.iter(), skills).map_err(|e| Error::Wrap {
+                func,
+                source: Box::new(e),
+            })?;
         Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
@@ -86,195 +92,174 @@ impl Unit {
         })
     }
 
-    /// 使用當前 unit.skills 與技能表重算衍生屬性（move_points, max_hp, max_mp），並同步 hp/mp 到 max
-    pub fn recalc_from_skills(&mut self, skills: &BTreeMap<SkillID, Skill>) {
-        let skill_refs = self
-            .skills
-            .iter()
-            .filter_map(|id| skills.get(id).map(|s| (id, s)));
-        self.max_hp = skills_to_max_hp(skill_refs.clone());
+    /// 使用當前 unit.skills 與技能表重算衍生屬性
+    pub fn recalc_from_skills(&mut self, skills: &BTreeMap<SkillID, Skill>) -> Result<(), Error> {
+        let func = "Unit::recalc_from_skills";
+        self.max_hp = skills_to_max_hp(self.skills.iter(), skills).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
         self.hp = self.max_hp;
-        self.max_mp = skills_to_max_mp(skill_refs.clone());
+        self.max_mp = skills_to_max_mp(self.skills.iter(), skills).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
         self.mp = self.max_mp;
-        self.move_points = skills_to_move_points(skill_refs.clone());
+        self.move_points =
+            skills_to_move_points(self.skills.iter(), skills).map_err(|e| Error::Wrap {
+                func,
+                source: Box::new(e),
+            })?;
+        Ok(())
     }
+}
+
+/// 簡單累加型態的 skills_to_xxx 函式生成 macro
+macro_rules! impl_simple_skills_stat {
+    ($(#[$meta:meta])* $fn_name:ident, $effect_variant:ident) => {
+        $(#[$meta])*
+        pub fn $fn_name(
+            skill_ids: impl Iterator<Item = impl AsRef<str>>,
+            skills: &BTreeMap<SkillID, Skill>,
+        ) -> Result<i32, Error> {
+            let func = stringify!($fn_name);
+            let mut total = 0;
+            for skill_id in skill_ids {
+                let skill = skills
+                    .get(skill_id.as_ref())
+                    .ok_or_else(|| Error::SkillNotFound {
+                        func,
+                        skill_id: skill_id.as_ref().to_string(),
+                    })?;
+                for effect in &skill.effects {
+                    if let Effect::$effect_variant { value, .. } = effect {
+                        total += value;
+                    }
+                }
+            }
+            Ok(total)
+        }
+    };
+}
+
+/// 通用的 skill effect 累加 helper function
+/// matcher 閉包對每個 effect 判斷是否匹配，匹配時返回 value，不匹配時返回 0
+fn aggregate_skill_effect<F>(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+    matcher: F,
+) -> Result<i32, Error>
+where
+    F: Fn(&Effect) -> i32,
+{
+    let func = "aggregate_skill_effect";
+    let sum: i32 = skill_ids
+        .map(|skill_id| {
+            skills
+                .get(skill_id.as_ref())
+                .ok_or_else(|| Error::SkillNotFound {
+                    func,
+                    skill_id: skill_id.as_ref().to_string(),
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()? // 先收集所有 Result，遇錯就返回
+        .iter()
+        .flat_map(|skill| skill.effects.iter())
+        .map(|effect| matcher(effect))
+        .sum();
+    Ok(sum)
 }
 
 /// 計算單位本回合的 initiative 值
 /// - 1D 隨機
 /// - 技能 initiative 加總（i32）
 /// - 未來可擴充 buff/debuff、裝備等
-pub fn calc_initiative<'a>(
+pub fn calc_initiative(
     rng: &mut impl rand::Rng,
-    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
-) -> i32 {
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+) -> Result<i32, Error> {
+    let func = "calc_initiative";
     let roll = rng.random_range(1..=MAX_INITIATIVE_RANDOM);
-    let skill_initiative = skills_to_initiative(skills);
-    roll + skill_initiative
+    let skill_initiative = skills_to_initiative(skill_ids, skills).map_err(|e| Error::Wrap {
+        func,
+        source: Box::new(e),
+    })?;
+    Ok(roll + skill_initiative)
 }
 
-pub fn skills_to_max_hp<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::MaxHp { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
+impl_simple_skills_stat!(skills_to_max_hp, MaxHp);
+impl_simple_skills_stat!(skills_to_max_mp, MaxMp);
+impl_simple_skills_stat!(skills_to_initiative, Initiative);
+impl_simple_skills_stat!(skills_to_accuracy, Accuracy);
+impl_simple_skills_stat!(skills_to_evasion, Evasion);
+impl_simple_skills_stat!(skills_to_block, Block);
+impl_simple_skills_stat!(skills_to_block_reduction, BlockReduction);
 
-pub fn skills_to_max_mp<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::MaxMp { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-/// 計算單位 initiative 技能等級總和
-/// 尋找所有 effect 為 Effect::Initiative 的技能，並加總其 value
-pub fn skills_to_initiative<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::Initiative { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-/// 計算單位 accuracy 技能等級總和
-/// 尋找所有 effect 為 Effect::Accuracy 的技能，並加總其 value
-pub fn skills_to_accuracy<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::Accuracy { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-/// 計算單位 evasion 技能等級總和
-/// 尋找所有 effect 為 Effect::Evasion 的技能，並加總其 value
-pub fn skills_to_evasion<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::Evasion { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-/// 計算單位 block 技能等級總和
-/// 尋找所有 effect 為 Effect::Block 的技能，並加總其 value
-pub fn skills_to_block<'a>(skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::Block { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-/// 計算單位 block reduction 技能等級總和
-/// 尋找所有 effect 為 Effect::BlockReduction 的技能，並加總其 value
-pub fn skills_to_block_reduction<'a>(
-    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
-) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::BlockReduction { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum()
-}
-
-pub fn skills_to_move_points<'a>(
-    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
-) -> MovementCost {
-    let points: i32 = skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::MovePoints { value, .. } = effect {
-                Some(*value)
-            } else {
-                None
-            }
-        })
-        .sum();
-    if points < 0 {
-        0
-    } else {
-        points as MovementCost
-    }
+pub fn skills_to_move_points(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+) -> Result<MovementCost, Error> {
+    let func = "skills_to_move_points";
+    let total = aggregate_skill_effect(skill_ids, skills, |effect| {
+        if let Effect::MovePoints { value, .. } = effect {
+            *value
+        } else {
+            0
+        }
+    })
+    .map_err(|e| Error::Wrap {
+        func,
+        source: Box::new(e),
+    })?;
+    Ok(if total < 0 { 0 } else { total as MovementCost })
 }
 
 /// 計算單位對特定 Tag 的施法效力總和
 /// 尋找所有 effect 為 Effect::Potency 且 tag 匹配的技能，並加總其 value
-pub fn skills_to_potency<'a>(
-    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+pub fn skills_to_potency(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
     target_tag: &Tag,
-) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::Potency { value, tag, .. } = effect {
-                if tag == target_tag {
-                    return Some(*value);
-                }
+) -> Result<i32, Error> {
+    let func = "skills_to_potency";
+    aggregate_skill_effect(skill_ids, skills, |effect| {
+        if let Effect::Potency { value, tag, .. } = effect {
+            if tag == target_tag {
+                return *value;
             }
-            None
-        })
-        .sum()
+        }
+        0
+    })
+    .map_err(|e| Error::Wrap {
+        func,
+        source: Box::new(e),
+    })
 }
 
 /// 計算單位對特定豁免類型的抗性總和
 /// 尋找所有 effect 為 Effect::Resistance 且 save_type 匹配的技能，並加總其 value
-pub fn skills_to_resistance<'a>(
-    skills: impl Iterator<Item = (&'a SkillID, &'a Skill)>,
+pub fn skills_to_resistance(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
     target_save_type: &SaveType,
-) -> i32 {
-    skills
-        .flat_map(|(_, skill)| &skill.effects)
-        .filter_map(|effect| {
-            if let Effect::Resistance {
-                value, save_type, ..
-            } = effect
-            {
-                if save_type == target_save_type {
-                    return Some(*value);
-                }
+) -> Result<i32, Error> {
+    let func = "skills_to_resistance";
+    aggregate_skill_effect(skill_ids, skills, |effect| {
+        if let Effect::Resistance {
+            value, save_type, ..
+        } = effect
+        {
+            if save_type == target_save_type {
+                return *value;
             }
-            None
-        })
-        .sum()
+        }
+        0
+    })
+    .map_err(|e| Error::Wrap {
+        func,
+        source: Box::new(e),
+    })
 }
 
 #[cfg(test)]
@@ -428,7 +413,7 @@ mod tests {
     fn test_skills_to_initiative() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_initiative(skills.iter()), 0);
+        assert_eq!(skills_to_initiative(skills.keys(), &skills).unwrap(), 0);
 
         // 一個 initiative 技能
         let mut skill1 = Skill::default();
@@ -440,7 +425,7 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_initiative(skills.iter()), 2);
+        assert_eq!(skills_to_initiative(skills.keys(), &skills).unwrap(), 2);
 
         // 多個 initiative 技能
         let mut skill2 = Skill::default();
@@ -452,7 +437,7 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_initiative(skills.iter()), 5);
+        assert_eq!(skills_to_initiative(skills.keys(), &skills).unwrap(), 5);
 
         // 非 initiative 類型技能不影響
         let mut skill3 = Skill::default();
@@ -464,7 +449,7 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_initiative(skills.iter()), 5);
+        assert_eq!(skills_to_initiative(skills.keys(), &skills).unwrap(), 5);
     }
 
     #[test]
@@ -472,7 +457,7 @@ mod tests {
         let mut rng = rand::rng();
         let mut skills = BTreeMap::new();
         // 無技能
-        let result = calc_initiative(&mut rng, skills.iter());
+        let result = calc_initiative(&mut rng, skills.keys(), &skills).unwrap();
         assert!(result >= 1 && result <= MAX_INITIATIVE_RANDOM);
 
         // 有 initiative 技能
@@ -485,7 +470,7 @@ mod tests {
         }];
         let key = "test".to_string();
         skills.insert(key.clone(), skill);
-        let result = calc_initiative(&mut rng, skills.iter());
+        let result = calc_initiative(&mut rng, skills.keys(), &skills).unwrap();
         assert!(result >= 4 && result <= 9);
 
         // 有 initiative 技能
@@ -506,7 +491,7 @@ mod tests {
         ];
         let key = "test".to_string();
         skills.insert(key.clone(), skill);
-        let result = calc_initiative(&mut rng, skills.iter());
+        let result = calc_initiative(&mut rng, skills.keys(), &skills).unwrap();
         assert!(result >= 6 && result <= 11);
     }
 
@@ -514,7 +499,7 @@ mod tests {
     fn test_skills_to_max_hp() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_max_hp(skills.iter()), 0);
+        assert_eq!(skills_to_max_hp(skills.keys(), &skills).unwrap(), 0);
 
         // 一個 MaxHp 技能
         let mut skill1 = Skill::default();
@@ -526,7 +511,7 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_max_hp(skills.iter()), 10);
+        assert_eq!(skills_to_max_hp(skills.keys(), &skills).unwrap(), 10);
 
         // 多個 MaxHp 技能
         let mut skill2 = Skill::default();
@@ -538,7 +523,7 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_max_hp(skills.iter()), 30);
+        assert_eq!(skills_to_max_hp(skills.keys(), &skills).unwrap(), 30);
 
         // 非 MaxHp 類型技能不影響
         let mut skill3 = Skill::default();
@@ -550,14 +535,14 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_max_hp(skills.iter()), 30);
+        assert_eq!(skills_to_max_hp(skills.keys(), &skills).unwrap(), 30);
     }
 
     #[test]
     fn test_skills_to_max_mp() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_max_mp(skills.iter()), 0);
+        assert_eq!(skills_to_max_mp(skills.keys(), &skills).unwrap(), 0);
 
         // 一個 MaxMp 技能
         let mut skill1 = Skill::default();
@@ -569,7 +554,7 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_max_mp(skills.iter()), 5);
+        assert_eq!(skills_to_max_mp(skills.keys(), &skills).unwrap(), 5);
 
         // 多個 MaxMp 技能
         let mut skill2 = Skill::default();
@@ -581,7 +566,7 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_max_mp(skills.iter()), 15);
+        assert_eq!(skills_to_max_mp(skills.keys(), &skills).unwrap(), 15);
 
         // 非 MaxMp 類型技能不影響
         let mut skill3 = Skill::default();
@@ -593,14 +578,14 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_max_mp(skills.iter()), 15);
+        assert_eq!(skills_to_max_mp(skills.keys(), &skills).unwrap(), 15);
     }
 
     #[test]
     fn test_skills_to_evasion() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_evasion(skills.iter()), 0);
+        assert_eq!(skills_to_evasion(skills.keys(), &skills).unwrap(), 0);
 
         // 一個 evasion 技能
         let mut skill1 = Skill::default();
@@ -612,7 +597,7 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_evasion(skills.iter()), 2);
+        assert_eq!(skills_to_evasion(skills.keys(), &skills).unwrap(), 2);
 
         // 多個 evasion 技能
         let mut skill2 = Skill::default();
@@ -624,7 +609,7 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_evasion(skills.iter()), 5);
+        assert_eq!(skills_to_evasion(skills.keys(), &skills).unwrap(), 5);
 
         // 非 evasion 類型技能不影響
         let mut skill3 = Skill::default();
@@ -636,14 +621,14 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_evasion(skills.iter()), 5);
+        assert_eq!(skills_to_evasion(skills.keys(), &skills).unwrap(), 5);
     }
 
     #[test]
     fn test_skills_to_block() {
         let mut skills = BTreeMap::new();
         // 無技能
-        assert_eq!(skills_to_block(skills.iter()), 0);
+        assert_eq!(skills_to_block(skills.keys(), &skills).unwrap(), 0);
 
         // 一個 block 技能
         let mut skill1 = Skill::default();
@@ -655,7 +640,7 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_block(skills.iter()), 2);
+        assert_eq!(skills_to_block(skills.keys(), &skills).unwrap(), 2);
 
         // 多個 block 技能
         let mut skill2 = Skill::default();
@@ -667,7 +652,7 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_block(skills.iter()), 5);
+        assert_eq!(skills_to_block(skills.keys(), &skills).unwrap(), 5);
 
         // 非 block 類型技能不影響
         let mut skill3 = Skill::default();
@@ -679,14 +664,17 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_block(skills.iter()), 5);
+        assert_eq!(skills_to_block(skills.keys(), &skills).unwrap(), 5);
     }
 
     #[test]
     fn test_skills_to_block_reduction() {
         let mut skills = BTreeMap::new();
         // 無技能，應返回 0
-        assert_eq!(skills_to_block_reduction(skills.iter()), 0);
+        assert_eq!(
+            skills_to_block_reduction(skills.keys(), &skills).unwrap(),
+            0
+        );
 
         // 一個 BlockReduction 技能
         let mut skill1 = Skill::default();
@@ -698,7 +686,10 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_block_reduction(skills.iter()), 20);
+        assert_eq!(
+            skills_to_block_reduction(skills.keys(), &skills).unwrap(),
+            20
+        );
 
         // 多個 BlockReduction 技能
         let mut skill2 = Skill::default();
@@ -710,7 +701,10 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_block_reduction(skills.iter()), 50);
+        assert_eq!(
+            skills_to_block_reduction(skills.keys(), &skills).unwrap(),
+            50
+        );
 
         // 非 BlockReduction 類型技能不影響
         let mut skill3 = Skill::default();
@@ -722,7 +716,10 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_block_reduction(skills.iter()), 50);
+        assert_eq!(
+            skills_to_block_reduction(skills.keys(), &skills).unwrap(),
+            50
+        );
     }
 
     #[test]
@@ -738,7 +735,7 @@ mod tests {
         }];
         let key_a = "a".to_string();
         skills.insert(key_a.clone(), skill1);
-        assert_eq!(skills_to_move_points(skills.iter()), 0);
+        assert_eq!(skills_to_move_points(skills.keys(), &skills).unwrap(), 0);
 
         // 正負混合，總和為負，仍回傳 0
         let mut skill2 = Skill::default();
@@ -750,7 +747,7 @@ mod tests {
         }];
         let key_b = "b".to_string();
         skills.insert(key_b.clone(), skill2);
-        assert_eq!(skills_to_move_points(skills.iter()), 0);
+        assert_eq!(skills_to_move_points(skills.keys(), &skills).unwrap(), 0);
 
         // 正負混合，總和為正
         let mut skill3 = Skill::default();
@@ -762,7 +759,7 @@ mod tests {
         }];
         let key_c = "c".to_string();
         skills.insert(key_c.clone(), skill3);
-        assert_eq!(skills_to_move_points(skills.iter()), 15);
+        assert_eq!(skills_to_move_points(skills.keys(), &skills).unwrap(), 15);
     }
 
     #[test]
@@ -811,7 +808,7 @@ mod tests {
             status_effects: Vec::new(),
         };
 
-        unit.recalc_from_skills(&skills);
+        unit.recalc_from_skills(&skills).unwrap();
         assert_eq!(unit.max_hp, 20);
         assert_eq!(unit.hp, 20);
         assert_eq!(unit.max_mp, 5);
@@ -846,7 +843,7 @@ mod tests {
             status_effects: Vec::new(),
         };
 
-        unit.recalc_from_skills(&skills);
+        unit.recalc_from_skills(&skills).unwrap();
         assert_eq!(unit.move_points, 0);
     }
 
@@ -888,17 +885,16 @@ mod tests {
         skills.insert("mind_pot".to_string(), s3);
 
         // 測試 Fire tag 的 potency
-        let fire_potency = skills_to_potency(skills.iter().map(|(k, v)| (k, v)), &Tag::Fire);
-        assert_eq!(fire_potency, 25);
+        let fire_potency = skills_to_potency(skills.keys(), &skills, &Tag::Fire);
+        assert_eq!(fire_potency.unwrap(), 25);
 
         // 測試 MindControl tag 的 potency
-        let mind_potency = skills_to_potency(skills.iter().map(|(k, v)| (k, v)), &Tag::MindControl);
-        assert_eq!(mind_potency, 20);
+        let mind_potency = skills_to_potency(skills.keys(), &skills, &Tag::MindControl);
+        assert_eq!(mind_potency.unwrap(), 20);
 
         // 測試 Physical tag 的 potency（沒有）
-        let physical_potency =
-            skills_to_potency(skills.iter().map(|(k, v)| (k, v)), &Tag::Physical);
-        assert_eq!(physical_potency, 0);
+        let physical_potency = skills_to_potency(skills.keys(), &skills, &Tag::Physical);
+        assert_eq!(physical_potency.unwrap(), 0);
     }
 
     #[test]
@@ -939,15 +935,13 @@ mod tests {
         skills.insert("will1".to_string(), s3);
 
         let fortitude_resistance =
-            skills_to_resistance(skills.iter().map(|(k, v)| (k, v)), &SaveType::Fortitude);
-        assert_eq!(fortitude_resistance, 15);
+            skills_to_resistance(skills.keys(), &skills, &SaveType::Fortitude);
+        assert_eq!(fortitude_resistance.unwrap(), 15);
 
-        let will_resistance =
-            skills_to_resistance(skills.iter().map(|(k, v)| (k, v)), &SaveType::Will);
-        assert_eq!(will_resistance, 20);
+        let will_resistance = skills_to_resistance(skills.keys(), &skills, &SaveType::Will);
+        assert_eq!(will_resistance.unwrap(), 20);
 
-        let reflex_resistance =
-            skills_to_resistance(skills.iter().map(|(k, v)| (k, v)), &SaveType::Reflex);
-        assert_eq!(reflex_resistance, 0);
+        let reflex_resistance = skills_to_resistance(skills.keys(), &skills, &SaveType::Reflex);
+        assert_eq!(reflex_resistance.unwrap(), 0);
     }
 }
