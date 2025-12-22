@@ -63,19 +63,13 @@ impl Unit {
             }
         }
 
-        let max_hp = skills_to_max_hp(template.skills.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
-        let max_mp = skills_to_max_mp(template.skills.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
-        let move_points =
-            skills_to_move_points(template.skills.iter(), skills).map_err(|e| Error::Wrap {
+        // 使用統一函數計算衍生值
+        let (max_hp, max_mp, move_points) = calculate_derived_stats(&template.skills, skills)
+            .map_err(|e| Error::Wrap {
                 func,
                 source: Box::new(e),
             })?;
+
         Ok(Unit {
             id: marker.id,
             unit_template_type: marker.unit_template_type.clone(),
@@ -95,21 +89,20 @@ impl Unit {
     /// 使用當前 unit.skills 與技能表重算衍生屬性
     pub fn recalc_from_skills(&mut self, skills: &BTreeMap<SkillID, Skill>) -> Result<(), Error> {
         let func = "Unit::recalc_from_skills";
-        self.max_hp = skills_to_max_hp(self.skills.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
-        self.hp = self.max_hp;
-        self.max_mp = skills_to_max_mp(self.skills.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
-        self.mp = self.max_mp;
-        self.move_points =
-            skills_to_move_points(self.skills.iter(), skills).map_err(|e| Error::Wrap {
+
+        // 使用統一函數計算衍生值
+        let (max_hp, max_mp, move_points) =
+            calculate_derived_stats(&self.skills, skills).map_err(|e| Error::Wrap {
                 func,
                 source: Box::new(e),
             })?;
+
+        self.max_hp = max_hp;
+        self.hp = max_hp; // 重置 HP 為新的最大值
+        self.max_mp = max_mp;
+        self.mp = max_mp; // 重置 MP 為新的最大值
+        self.move_points = move_points;
+
         Ok(())
     }
 }
@@ -260,6 +253,38 @@ pub fn skills_to_resistance(
         func,
         source: Box::new(e),
     })
+}
+
+use inner::*;
+mod inner {
+    use super::*;
+
+    /// 計算單位的所有衍生屬性
+    ///
+    /// 此函數提供統一的衍生值計算邏輯，被 from_template 和 recalc_from_skills 共同使用
+    pub fn calculate_derived_stats(
+        skill_ids: &BTreeSet<String>,
+        skills: &BTreeMap<SkillID, Skill>,
+    ) -> Result<(i32, i32, MovementCost), Error> {
+        let func = "calculate_derived_stats";
+        let max_hp = skills_to_max_hp(skill_ids.iter(), skills).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+
+        let max_mp = skills_to_max_mp(skill_ids.iter(), skills).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+
+        let move_points =
+            skills_to_move_points(skill_ids.iter(), skills).map_err(|e| Error::Wrap {
+                func,
+                source: Box::new(e),
+            })?;
+
+        Ok((max_hp, max_mp, move_points))
+    }
 }
 
 #[cfg(test)]

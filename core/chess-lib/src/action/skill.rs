@@ -7,6 +7,25 @@ use rand::Rng;
 use skills_lib::*;
 use std::{collections::BTreeMap, f64::consts::PI};
 
+// ============================================================================
+// 戰鬥系統常數
+// ============================================================================
+
+/// 大失敗門檻：擲骰 <= 此值時完全閃避
+const CRITICAL_FAILURE_THRESHOLD: i32 = 5;
+
+/// 大成功門檻：擲骰 > 此值時完全命中
+const CRITICAL_SUCCESS_THRESHOLD: i32 = 95;
+
+/// 爆擊傷害倍率（固定 2.0 倍）
+const CRITICAL_HIT_MULTIPLIER: i32 = 2;
+
+/// 格擋減傷基礎百分比（未裝備任何格擋減傷技能時）
+const MIN_BLOCK_REDUCTION_PERCENT: i32 = 0;
+
+/// 格擋減傷最大百分比（技能加成上限）
+const MAX_BLOCK_REDUCTION_PERCENT: i32 = 80;
+
 /// 技能選擇資料結構
 #[derive(Debug, Clone, Default)]
 pub struct SkillSelection {
@@ -97,6 +116,27 @@ impl SkillSelection {
             }
             unit.mp = mp;
         }
+
+        // 檢查施法者是否被 Silence（阻止 Magical 技能）
+        let caster_unit = board
+            .units
+            .get(&caster)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+        for effect in &caster_unit.status_effects {
+            if let Effect::Silence { .. } = effect {
+                if skill.tags.contains(&Tag::Magical) {
+                    return Err(Error::StatusEffectBlocksSkill {
+                        func,
+                        effect: effect.clone(),
+                        skill_id: skill_id.clone(),
+                    });
+                }
+            }
+        }
+
         let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
 
         // 命中機制最終設計摘要如下：
@@ -485,8 +525,6 @@ mod inner {
         // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
         let mut rng = rand::rng();
         let hit_random = rng.random_range(1..=100);
-        let critical_failure = 5;
-        let critical_success = 95;
         let hit_score = accuracy + hit_random;
 
         let mut msgs = vec![];
@@ -520,10 +558,10 @@ mod inner {
                         detail: "unit not found".to_string(),
                     })?;
             let unit_type = unit.unit_template_type.clone();
-            if hit_random <= critical_failure {
+            if hit_random <= CRITICAL_FAILURE_THRESHOLD {
                 // 完全閃避
                 msgs.push(format!(
-                    "亂數={hit_random} <= {critical_failure}%，單位 {unit_type} 完全閃避了攻擊！"
+                    "亂數={hit_random} <= {CRITICAL_FAILURE_THRESHOLD}%，單位 {unit_type} 完全閃避了攻擊！"
                 ));
                 continue;
             }
@@ -542,7 +580,7 @@ mod inner {
                 "攻擊"
             };
 
-            if hit_random > critical_success {
+            if hit_random > CRITICAL_SUCCESS_THRESHOLD {
                 // 完全命中（套用倍率）
                 for effect in &skill.effects {
                     let save_result =
@@ -560,7 +598,7 @@ mod inner {
                         save_result,
                     ) {
                         msgs.push(format!(
-                            "亂數={hit_random} > {critical_success}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
+                            "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
                         ));
                     }
                 }
@@ -577,11 +615,9 @@ mod inner {
 
             // 計算閃避值
             let evasion =
-                unit::skills_to_evasion(unit_skills.iter(), skills).map_err(|e| {
-                    Error::Wrap {
-                        func,
-                        source: Box::new(e),
-                    }
+                unit::skills_to_evasion(unit_skills.iter(), skills).map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
                 })?;
             // 閃避
             let evade_score = hit_score - evasion;
@@ -593,24 +629,22 @@ mod inner {
             }
 
             // 計算格擋值（用於命中判定）
-            let block = unit::skills_to_block(unit_skills.iter(), skills).map_err(|e| {
-                Error::Wrap {
+            let block =
+                unit::skills_to_block(unit_skills.iter(), skills).map_err(|e| Error::Wrap {
                     func,
                     source: Box::new(e),
-                }
-            })?;
+                })?;
             let block_score = hit_score - block - evasion;
 
             // 計算格擋減傷百分比（用於傷害計算）
-            // 格擋減傷百分比：基礎 10%，根據被動技能增加，最高 80%
-            let block_reduction =
-                unit::skills_to_block_reduction(unit_skills.iter(), skills)
-                    .map_err(|e| Error::Wrap {
-                        func,
-                        source: Box::new(e),
-                    })?
-                    .max(10)
-                    .min(80);
+            // 格擋減傷百分比：基礎值與最大值由常量定義
+            let block_reduction = unit::skills_to_block_reduction(unit_skills.iter(), skills)
+                .map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?
+                .max(MIN_BLOCK_REDUCTION_PERCENT)
+                .min(MAX_BLOCK_REDUCTION_PERCENT);
 
             // 格擋（百分比減傷）
             if block_score <= 0 {
@@ -929,7 +963,7 @@ mod inner {
         let multiplier = match attack_result {
             AttackResult::NoAttack => 1,
             AttackResult::Normal => 1,
-            AttackResult::Critical => 2,
+            AttackResult::Critical => CRITICAL_HIT_MULTIPLIER,
         };
 
         match effect {
@@ -2131,5 +2165,222 @@ mod tests {
                 assert_eq!(new_hp, orig_hp - 20);
             }
         }
+    }
+
+    #[test]
+    fn test_silence_blocks_magical_skill() {
+        // 準備棋盤、單位（包含目標）
+        let (mut board, caster_id, _) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+
+        // 將目標單位設定為敵對隊伍並清空技能
+        let target_id = caster_id + 1;
+        let target = board.units.get_mut(&target_id).unwrap();
+        target.team = "t2".to_string();
+        target.skills = BTreeSet::new(); // 清空技能列表
+        // 增加 t2 隊伍到 teams
+        board.teams.insert(
+            "t2".to_string(),
+            Team {
+                id: "t2".to_string(),
+                color: (0, 0, 255),
+            },
+        );
+
+        // 載入 magical_attack 技能
+        let magical_data = include_str!("../../tests/skill_magical_attack.json");
+        let magical_skill: Skill = serde_json::from_str(magical_data).unwrap();
+        let skills = BTreeMap::from([("magical_attack".to_string(), magical_skill)]);
+
+        // 給施法者增加 Silence 效果和足夠的 MP，並設定技能
+        let caster = board.units.get_mut(&caster_id).unwrap();
+        caster.skills = BTreeSet::from(["magical_attack".to_string()]); // 只保留測試用的技能
+        caster.mp = 100; // 確保有足夠的 MP
+        caster.status_effects.push(Effect::Silence {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Will,
+            duration: 2,
+        });
+
+        // 嘗試施放 Magical 技能
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("magical_attack".to_string()));
+        let target = Pos { x: 1, y: 2 };
+
+        let result = sel.cast_skill(&mut board, &skills, caster_id, target);
+
+        // 應該被 Silence 阻止
+        assert!(result.is_err(), "Expected error but got Ok");
+        match result {
+            Err(Error::StatusEffectBlocksSkill { effect, .. }) => {
+                assert!(matches!(effect, Effect::Silence { .. }));
+            }
+            Err(e) => panic!("Expected StatusEffectBlocksSkill error, got: {:?}", e),
+            Ok(_) => panic!("Expected error but got Ok"),
+        }
+    }
+
+    #[test]
+    fn test_silence_allows_physical_skill() {
+        // 準備棋盤、單位（包含目標）
+        let (mut board, caster_id, _) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+
+        // 將目標單位設定為敵對隊伍並清空技能
+        let target_id = caster_id + 1;
+        let target = board.units.get_mut(&target_id).unwrap();
+        target.team = "t2".to_string();
+        target.skills = BTreeSet::new(); // 清空技能列表
+        // 增加 t2 隊伍到 teams
+        board.teams.insert(
+            "t2".to_string(),
+            Team {
+                id: "t2".to_string(),
+                color: (0, 0, 255),
+            },
+        );
+
+        // 載入 physical_attack 技能
+        let physical_data = include_str!("../../tests/skill_physical_attack.json");
+        let physical_skill: Skill = serde_json::from_str(physical_data).unwrap();
+        let skills = BTreeMap::from([("physical_attack".to_string(), physical_skill)]);
+
+        // 給施法者增加 Silence 效果和足夠的 MP，並設定技能
+        let caster = board.units.get_mut(&caster_id).unwrap();
+        caster.skills = BTreeSet::from(["physical_attack".to_string()]); // 只保留測試用的技能
+        caster.mp = 100; // 確保有足夠的 MP
+        caster.status_effects.push(Effect::Silence {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            save_type: SaveType::Will,
+            duration: 2,
+        });
+
+        // 嘗試施放 Physical 技能
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("physical_attack".to_string()));
+        let target = Pos { x: 1, y: 2 };
+
+        let result = sel.cast_skill(&mut board, &skills, caster_id, target);
+
+        // 應該成功施放（Physical 技能不受 Silence 影響）
+        if let Err(e) = &result {
+            panic!("Expected Ok but got error: {:?}", e);
+        }
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_burn_duration_and_damage() {
+        use crate::battle::{process_status_effects_at_turn_end, remove_expired_status_effects};
+
+        // 準備單位
+        let data = include_str!("../../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let mut template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        // 清空技能列表以避免 SkillNotFound 錯誤
+        template.skills = BTreeSet::new();
+        let skills = BTreeMap::new();
+
+        let mut unit = Unit::from_template(&marker, &template, &skills).unwrap();
+        // 設定足夠的 HP 以便測試 Burn 傷害
+        unit.hp = 100;
+        unit.max_hp = 100;
+        let original_hp = unit.hp;
+
+        // 施加 Burn 效果（duration = 2）
+        unit.status_effects.push(Effect::Burn {
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+            save_type: SaveType::Fortitude,
+            duration: 2,
+        });
+
+        // 第一回合結束：應該扣 5 HP，duration 變成 1
+        process_status_effects_at_turn_end(&mut unit);
+        assert_eq!(unit.hp, original_hp - 5);
+        if let Some(Effect::Burn { duration, .. }) = unit.status_effects.first() {
+            assert_eq!(*duration, 1);
+        } else {
+            panic!("Expected Burn effect");
+        }
+
+        // 第二回合開始：duration = 1，不移除
+        remove_expired_status_effects(&mut unit);
+        assert_eq!(unit.status_effects.len(), 1);
+
+        // 第二回合結束：再扣 5 HP，duration 變成 0
+        process_status_effects_at_turn_end(&mut unit);
+        assert_eq!(unit.hp, original_hp - 10);
+        if let Some(Effect::Burn { duration, .. }) = unit.status_effects.first() {
+            assert_eq!(*duration, 0);
+        } else {
+            panic!("Expected Burn effect");
+        }
+
+        // 第三回合開始：duration = 0，移除效果
+        remove_expired_status_effects(&mut unit);
+        assert_eq!(unit.status_effects.len(), 0);
+    }
+
+    #[test]
+    fn test_status_effects_expiration() {
+        use crate::battle::{process_status_effects_at_turn_end, remove_expired_status_effects};
+
+        // 準備單位
+        let data = include_str!("../../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let mut template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        // 清空技能列表以避免 SkillNotFound 錯誤
+        template.skills = BTreeSet::new();
+        let skills = BTreeMap::new();
+
+        let mut unit = Unit::from_template(&marker, &template, &skills).unwrap();
+
+        // 施加多個效果：Burn (duration=1), Silence (duration=2), Evasion (duration=-1 永久)
+        unit.status_effects.push(Effect::Burn {
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+            save_type: SaveType::Fortitude,
+            duration: 1,
+        });
+        unit.status_effects.push(Effect::Silence {
+            target_type: TargetType::Enemy,
+            shape: Shape::Point,
+            save_type: SaveType::Will,
+            duration: 2,
+        });
+        unit.status_effects.push(Effect::Evasion {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            value: 10,
+            duration: -1, // 永久效果
+        });
+
+        assert_eq!(unit.status_effects.len(), 3);
+
+        // 第一回合結束：減少 duration（永久效果 -1 不減少）
+        process_status_effects_at_turn_end(&mut unit);
+        // Burn: 1 -> 0, Silence: 2 -> 1, Evasion: -1 保持不變
+
+        // 第二回合開始：移除 duration = 0 的效果
+        remove_expired_status_effects(&mut unit);
+        // 應該只移除 Burn，保留 Silence 和 Evasion
+        assert_eq!(unit.status_effects.len(), 2);
+
+        // 檢查剩餘效果類型
+        assert!(
+            unit.status_effects
+                .iter()
+                .any(|e| matches!(e, Effect::Silence { .. }))
+        );
+        assert!(
+            unit.status_effects
+                .iter()
+                .any(|e| matches!(e, Effect::Evasion { .. }))
+        );
     }
 }

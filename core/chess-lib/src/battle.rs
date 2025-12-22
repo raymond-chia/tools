@@ -3,6 +3,10 @@
 //! - 命中機制（HitContext、HitResult、resolve_hit 等）應放於此，並由呼叫端負責所有修正來源的加總與 context 組裝。
 //! - 不負責單位屬性衍生值（如先攻、移動力等）的計算。
 use crate::*;
+use skills_lib::Effect;
+
+/// Burn 效果每回合造成的固定傷害
+const BURN_DAMAGE_PER_TURN: i32 = 5;
 
 #[derive(Debug, Clone, Default)]
 pub struct Battle {
@@ -26,16 +30,53 @@ impl Battle {
         if self.turn_order.is_empty() {
             return;
         }
+
+        // 1. 處理當前單位的回合結束效果（Burn 傷害、duration 減少）
+        if let Some(current_unit_id) = self.get_current_unit_id().copied() {
+            if let Some(unit) = board.units.get_mut(&current_unit_id) {
+                process_status_effects_at_turn_end(unit);
+            }
+        }
+
+        // 2. 切換到下一個單位
         self.current_turn_index = (self.current_turn_index + 1) % self.turn_order.len();
 
-        // 歸零新回合角色的移動距離
-        if let Some(active_unit_id) = self.get_current_unit_id().copied() {
-            if let Some(unit) = board.units.get_mut(&active_unit_id) {
+        // 3. 移除新單位的過期效果並重置狀態
+        if let Some(current_unit_id) = self.get_current_unit_id().copied() {
+            if let Some(unit) = board.units.get_mut(&current_unit_id) {
+                remove_expired_status_effects(unit);
                 unit.moved = 0;
                 unit.has_cast_skill_this_turn = false;
             }
         }
         skill_selection.select_skill(None);
+    }
+}
+
+/// 在回合開始時移除過期狀態效果
+pub fn remove_expired_status_effects(unit: &mut Unit) {
+    // 移除 duration = 0 的效果（保留 -1 永久效果和 duration > 0 的效果）
+    unit.status_effects.retain(|effect| {
+        let d = effect.duration();
+        d != 0 // 保留 d > 0 和 d == -1
+    });
+}
+
+/// 在回合結束時處理狀態效果
+pub fn process_status_effects_at_turn_end(unit: &mut Unit) {
+    // 1. 處理持續傷害效果（Burn）
+    for effect in &unit.status_effects {
+        if let Effect::Burn { .. } = effect {
+            unit.hp -= BURN_DAMAGE_PER_TURN;
+            if unit.hp < 0 {
+                unit.hp = 0;
+            }
+        }
+    }
+
+    // 2. 減少所有狀態效果的 duration（永久效果 -1 不減少）
+    for effect in unit.status_effects.iter_mut() {
+        effect.decrease_duration();
     }
 }
 

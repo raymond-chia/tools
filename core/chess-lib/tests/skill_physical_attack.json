@@ -1,0 +1,14 @@
+{
+  "tags": ["active", "single", "melee", "physical"],
+  "range": [1, 1],
+  "cost": 0,
+  "accuracy": 80,
+  "effects": [
+    {
+      "type": "hp",
+      "target_type": "enemy",
+      "shape": "point",
+      "value": -10
+    }
+  ]
+}

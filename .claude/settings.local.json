@@ -3,7 +3,8 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(cargo.exe build:*)",
-      "Bash(cargo.exe test:*)"
+      "Bash(cargo.exe test:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

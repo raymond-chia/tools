@@ -279,6 +279,27 @@ impl Effect {
         effect_field_ref!(self, shape)
     }
 
+    /// 取得效果的豁免類型（如果需要豁免判定）
+    pub fn save_type(&self) -> Option<&SaveType> {
+        match self {
+            Effect::Burn { save_type, .. } | Effect::Silence { save_type, .. } => Some(save_type),
+            Effect::Hp { .. }
+            | Effect::Mp { .. }
+            | Effect::MaxHp { .. }
+            | Effect::MaxMp { .. }
+            | Effect::Initiative { .. }
+            | Effect::Accuracy { .. }
+            | Effect::Evasion { .. }
+            | Effect::Block { .. }
+            | Effect::BlockReduction { .. }
+            | Effect::MovePoints { .. }
+            | Effect::HitAndRun { .. }
+            | Effect::Shove { .. }
+            | Effect::Potency { .. }
+            | Effect::Resistance { .. } => None,
+        }
+    }
+
     pub fn duration(&self) -> i32 {
         // 對於有 duration 欄位的 variant 回傳其值，其他（立即生效的 variant）回傳 0
         match self {
@@ -299,24 +320,30 @@ impl Effect {
         }
     }
 
-    /// 取得效果的豁免類型（如果需要豁免判定）
-    pub fn save_type(&self) -> Option<&SaveType> {
+    /// 減少效果的持續時間（僅對 duration > 0 的效果，永久效果 -1 不減少）
+    pub fn decrease_duration(&mut self) {
         match self {
-            Effect::Burn { save_type, .. } | Effect::Silence { save_type, .. } => Some(save_type),
-            Effect::Hp { .. }
-            | Effect::Mp { .. }
-            | Effect::MaxHp { .. }
-            | Effect::MaxMp { .. }
-            | Effect::Initiative { .. }
-            | Effect::Accuracy { .. }
-            | Effect::Evasion { .. }
-            | Effect::Block { .. }
-            | Effect::BlockReduction { .. }
-            | Effect::MovePoints { .. }
-            | Effect::HitAndRun { .. }
-            | Effect::Shove { .. }
-            | Effect::Potency { .. }
-            | Effect::Resistance { .. } => None,
+            Effect::MaxHp { duration, .. }
+            | Effect::MaxMp { duration, .. }
+            | Effect::Initiative { duration, .. }
+            | Effect::Accuracy { duration, .. }
+            | Effect::Evasion { duration, .. }
+            | Effect::Block { duration, .. }
+            | Effect::BlockReduction { duration, .. }
+            | Effect::MovePoints { duration, .. }
+            | Effect::HitAndRun { duration, .. }
+            | Effect::Potency { duration, .. }
+            | Effect::Resistance { duration, .. }
+            | Effect::Burn { duration, .. }
+            | Effect::Silence { duration, .. } => {
+                // 只有 duration > 0 時才減少（永久效果 -1 不減少）
+                if *duration > 0 {
+                    *duration -= 1;
+                }
+            }
+            Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => {
+                // 這些效果沒有 duration，不需要處理
+            }
         }
     }
 }

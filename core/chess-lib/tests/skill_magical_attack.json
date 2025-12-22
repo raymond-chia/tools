@@ -1,0 +1,14 @@
+{
+  "tags": ["active", "single", "ranged", "magical"],
+  "range": [1, 3],
+  "cost": -5,
+  "accuracy": 70,
+  "effects": [
+    {
+      "type": "hp",
+      "target_type": "enemy",
+      "shape": "point",
+      "value": -10
+    }
+  ]
+}
