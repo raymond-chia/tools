@@ -49,164 +49,42 @@ impl SkillSelection {
     ) -> Result<Vec<String>, Error> {
         let func = "SkillSelection::cast_skill";
 
-        // 施放前必須找到 unit，否則不能施放技能
-        let unit = board
-            .units
-            .get(&caster)
-            .ok_or_else(|| Error::NoActingUnit {
-                func,
-                unit_id: caster,
-            })?;
-        is_able_to_cast(unit).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
-        let skill_id = self
-            .selected_skill
-            .as_ref()
-            .ok_or_else(|| Error::NoSkillSelected { func })?;
-        let skill = skills.get(skill_id).ok_or_else(|| Error::SkillNotFound {
+        // 1. 驗證施法前提條件
+        let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)?;
+
+        // 取得技能（驗證後再次取得引用）
+        let skill = skills.get(&skill_id).ok_or_else(|| Error::SkillNotFound {
             func,
             skill_id: skill_id.clone(),
         })?;
-        // 只判斷第一個 effect 的 target_type
-        is_targeting_valid_target(board, skill_id, skill, caster, target).or_else(|err| {
-            Err(Error::Wrap {
-                func,
-                source: Box::new(err),
-            })
-        })?;
 
-        // 取得施法者座標，用於像推人等需要方向資訊的效果
-        let caster_pos = board
-            .unit_to_pos(caster)
-            .ok_or_else(|| Error::NoActingUnit {
-                func,
-                unit_id: caster,
-            })?;
+        // 2. 計算影響區域
+        let (caster_pos, affect_area) =
+            self.get_affect_area_or_error(board, skills, caster, &skill_id, target)?;
 
-        let affect_area = self.skill_affect_area(board, skills, caster_pos, target);
-        if affect_area.is_empty() {
-            return Err(Error::SkillAffectEmpty {
-                func,
-                skill_id: skill_id.clone(),
-                pos: target,
-            });
-        }
-        // 魔力消耗檢查與扣除
-        if skill.cost < 0 {
-            let unit = match board.units.get_mut(&caster) {
-                Some(unit) => unit,
-                None => {
-                    return Err(Error::NoActingUnit {
-                        func,
-                        unit_id: caster,
-                    });
-                }
-            };
-            let mp = unit.mp + skill.cost;
-            if mp < 0 {
-                return Err(Error::NotEnoughMp {
-                    func,
-                    unit_type: unit.unit_template_type.clone(),
-                    skill_id: skill_id.clone(),
-                    mp: unit.mp,
-                    cost: skill.cost,
-                });
-            }
-            unit.mp = mp;
-        }
+        // 3. 魔力消耗檢查與扣除
+        consume_skill_mp(board, caster, &skill_id, skill)?;
 
-        // 檢查施法者是否被 Silence（阻止 Magical 技能）
-        let caster_unit = board
-            .units
-            .get(&caster)
-            .ok_or_else(|| Error::NoActingUnit {
-                func,
-                unit_id: caster,
-            })?;
-        for effect in &caster_unit.status_effects {
-            if let Effect::Silence { .. } = effect {
-                if skill.tags.contains(&Tag::Magical) {
-                    return Err(Error::StatusEffectBlocksSkill {
-                        func,
-                        effect: effect.clone(),
-                        skill_id: skill_id.clone(),
-                    });
-                }
-            }
-        }
+        // 4. 檢查狀態效果是否阻止施法
+        check_status_effects_block_skill(board, caster, &skill_id, skill)?;
 
-        let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
+        // 5. 應用技能效果到影響區域
+        let msgs = apply_skill_to_area(
+            board,
+            skills,
+            caster,
+            caster_pos,
+            &skill_id,
+            skill,
+            affect_area,
+            target,
+        )?;
 
-        // 命中機制最終設計摘要如下：
-        // 1. 技能命中數值（accuracy）僅計算一次，並套用於所有目標（僅計算命中數值，不進行閃避或格擋判定）。
-        // 2. 檢查每個目標是否為技能效果的合法套用對象（敵軍、友軍、自己等）。
-        // 3. 僅對符合效果目標的單位，進行閃避與格擋的判定。
-        // 4. 若目標被「閃避」則不套用效果；若為「命中」或「格擋」則都會套用效果，但格擋可影響效果強度（如減傷）。
-        // 5. 命中結果（命中、閃避、格擋）皆可顯示訊息。
-        match skill.accuracy {
-            None => {
-                // 無命中數值，所有格子直接套用效果（無爆擊）
-                for pos in affect_area {
-                    for effect in &skill.effects {
-                        // 只對有單位的目標進行豁免判定
-                        let save_result = match board.pos_to_unit(pos) {
-                            Some(target_id) => {
-                                calc_save_result(board, skills, caster, target_id, skill, effect)
-                                    .map_err(|e| Error::Wrap {
-                                        func,
-                                        source: Box::new(e),
-                                    })?
-                            }
-                            None => SaveResult::NoSave,
-                        };
-                        if let Some(msg) = apply_effect_to_pos(
-                            board,
-                            effect,
-                            caster_pos,
-                            pos,
-                            AttackResult::NoAttack,
-                            save_result,
-                        ) {
-                            msgs.push(msg);
-                        }
-                    }
-                }
-            }
-            Some(skill_accuracy) => {
-                // 預先計算施法者的 accuracy 加成
-                let caster_unit = board
-                    .units
-                    .get(&caster)
-                    .ok_or_else(|| Error::NoActingUnit {
-                        func,
-                        unit_id: caster,
-                    })?;
-
-                let caster_accuracy = unit::skills_to_accuracy(caster_unit.skills.iter(), skills)
-                    .map_err(|e| Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                })?;
-
-                // 將技能 accuracy 與施法者 accuracy 加總
-                let total_accuracy = skill_accuracy + caster_accuracy;
-
-                msgs.extend(calc_hit_result(
-                    board,
-                    (caster, caster_pos),
-                    skills,
-                    skill,
-                    affect_area,
-                    total_accuracy,
-                )?);
-            }
-        }
-
+        // 6. 設置施法標記
         if let Some(unit) = board.units.get_mut(&caster) {
             unit.has_cast_skill_this_turn = true;
         }
+
         Ok(msgs)
     }
 
@@ -260,6 +138,37 @@ impl SkillSelection {
         };
         // 計算範圍
         calc_shape_area(board, shape, from, to)
+    }
+
+    /// 取得施法者座標並計算技能影響區域
+    fn get_affect_area_or_error(
+        &self,
+        board: &Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster: UnitID,
+        skill_id: &SkillID,
+        target: Pos,
+    ) -> Result<(Pos, Vec<Pos>), Error> {
+        let func = "get_affect_area_or_error";
+
+        // 取得施法者座標，用於像推人等需要方向資訊的效果
+        let caster_pos = board
+            .unit_to_pos(caster)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+
+        let affect_area = self.skill_affect_area(board, skills, caster_pos, target);
+        if affect_area.is_empty() {
+            return Err(Error::SkillAffectEmpty {
+                func,
+                skill_id: skill_id.clone(),
+                pos: target,
+            });
+        }
+
+        Ok((caster_pos, affect_area))
     }
 }
 
@@ -411,6 +320,201 @@ use inner::*;
 mod inner {
     use super::*;
 
+    /// 驗證施法前提條件：施法者存在、能施法、技能選擇、目標有效
+    /// 返回技能 ID（克隆）
+    pub fn validate_skill_casting(
+        board: &Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster: UnitID,
+        selected_skill: &Option<SkillID>,
+        target: Pos,
+    ) -> Result<SkillID, Error> {
+        let func = "validate_skill_casting";
+
+        // 施放前必須找到 unit，否則不能施放技能
+        let unit = board
+            .units
+            .get(&caster)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+        is_able_to_cast(unit).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+
+        let skill_id = selected_skill
+            .as_ref()
+            .ok_or_else(|| Error::NoSkillSelected { func })?;
+        let skill = skills.get(skill_id).ok_or_else(|| Error::SkillNotFound {
+            func,
+            skill_id: skill_id.clone(),
+        })?;
+
+        // 只判斷第一個 effect 的 target_type
+        is_targeting_valid_target(board, skill_id, skill, caster, target).or_else(|err| {
+            Err(Error::Wrap {
+                func,
+                source: Box::new(err),
+            })
+        })?;
+
+        Ok(skill_id.clone())
+    }
+
+    /// 魔力消耗檢查與扣除
+    pub fn consume_skill_mp(
+        board: &mut Board,
+        caster: UnitID,
+        skill_id: &SkillID,
+        skill: &Skill,
+    ) -> Result<(), Error> {
+        let func = "consume_skill_mp";
+
+        // 魔力消耗檢查與扣除
+        if skill.cost < 0 {
+            let unit = match board.units.get_mut(&caster) {
+                Some(unit) => unit,
+                None => {
+                    return Err(Error::NoActingUnit {
+                        func,
+                        unit_id: caster,
+                    });
+                }
+            };
+            let mp = unit.mp + skill.cost;
+            if mp < 0 {
+                return Err(Error::NotEnoughMp {
+                    func,
+                    unit_type: unit.unit_template_type.clone(),
+                    skill_id: skill_id.clone(),
+                    mp: unit.mp,
+                    cost: skill.cost,
+                });
+            }
+            unit.mp = mp;
+        }
+
+        Ok(())
+    }
+
+    /// 檢查施法者的狀態效果是否阻止技能施放（例如 Silence 阻止 Magical 技能）
+    pub fn check_status_effects_block_skill(
+        board: &Board,
+        caster: UnitID,
+        skill_id: &SkillID,
+        skill: &Skill,
+    ) -> Result<(), Error> {
+        let func = "check_status_effects_block_skill";
+
+        // 檢查施法者是否被 Silence（阻止 Magical 技能）
+        let caster_unit = board
+            .units
+            .get(&caster)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+        for effect in &caster_unit.status_effects {
+            if let Effect::Silence { .. } = effect {
+                if skill.tags.contains(&Tag::Magical) {
+                    return Err(Error::StatusEffectBlocksSkill {
+                        func,
+                        effect: effect.clone(),
+                        skill_id: skill_id.clone(),
+                    });
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 應用技能效果到影響區域
+    /// 根據技能是否有命中數值，採用不同的應用邏輯
+    pub fn apply_skill_to_area(
+        board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster: UnitID,
+        caster_pos: Pos,
+        skill_id: &SkillID,
+        skill: &Skill,
+        affect_area: Vec<Pos>,
+        target: Pos,
+    ) -> Result<Vec<String>, Error> {
+        let func = "apply_skill_to_area";
+
+        let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
+
+        // 命中機制最終設計摘要如下：
+        // 1. 技能命中數值（accuracy）僅計算一次，並套用於所有目標（僅計算命中數值，不進行閃避或格擋判定）。
+        // 2. 檢查每個目標是否為技能效果的合法套用對象（敵軍、友軍、自己等）。
+        // 3. 僅對符合效果目標的單位，進行閃避與格擋的判定。
+        // 4. 若目標被「閃避」則不套用效果；若為「命中」或「格擋」則都會套用效果，但格擋可影響效果強度（如減傷）。
+        // 5. 命中結果（命中、閃避、格擋）皆可顯示訊息。
+        match skill.accuracy {
+            None => {
+                // 無命中數值，所有格子直接套用效果（無爆擊）
+                for pos in affect_area {
+                    for effect in &skill.effects {
+                        // 只對有單位的目標進行豁免判定
+                        let save_result = match board.pos_to_unit(pos) {
+                            Some(target_id) => {
+                                calc_save_result(board, skills, caster, target_id, skill, effect)
+                                    .map_err(|e| Error::Wrap {
+                                        func,
+                                        source: Box::new(e),
+                                    })?
+                            }
+                            None => SaveResult::NoSave,
+                        };
+                        if let Some(msg) = apply_effect_to_pos(
+                            board,
+                            effect,
+                            caster_pos,
+                            pos,
+                            AttackResult::NoAttack,
+                            save_result,
+                        ) {
+                            msgs.push(msg);
+                        }
+                    }
+                }
+            }
+            Some(skill_accuracy) => {
+                // 預先計算施法者的 accuracy 加成
+                let caster_unit = board
+                    .units
+                    .get(&caster)
+                    .ok_or_else(|| Error::NoActingUnit {
+                        func,
+                        unit_id: caster,
+                    })?;
+
+                let caster_accuracy = unit::skills_to_accuracy(caster_unit.skills.iter(), skills)
+                    .map_err(|e| Error::Wrap {
+                    func,
+                    source: Box::new(e),
+                })?;
+
+                // 將技能 accuracy 與施法者 accuracy 加總
+                let total_accuracy = skill_accuracy + caster_accuracy;
+
+                msgs.extend(calc_hit_result(
+                    board,
+                    (caster, caster_pos),
+                    skills,
+                    skill,
+                    affect_area,
+                    total_accuracy,
+                )?);
+            }
+        }
+
+        Ok(msgs)
+    }
+
     pub fn is_targeting_valid_target(
         board: &Board,
         skill_id: &str,
@@ -533,18 +637,7 @@ mod inner {
             let unit_id = match board.pos_to_unit(pos) {
                 // 無單位，直接套用效果（不需要豁免判定）
                 None => {
-                    for effect in &skill.effects {
-                        if let Some(msg) = apply_effect_to_pos(
-                            board,
-                            effect,
-                            caster_pos,
-                            pos,
-                            AttackResult::NoAttack,
-                            SaveResult::NoSave,
-                        ) {
-                            msgs.push(format!("空地 {pos:?} 受到效果：{msg}"));
-                        }
-                    }
+                    msgs.extend(apply_effects_to_empty_tile(board, skill, caster_pos, pos));
                     continue;
                 }
                 Some(unit_id) => unit_id,
@@ -582,25 +675,20 @@ mod inner {
 
             if hit_random > CRITICAL_SUCCESS_THRESHOLD {
                 // 完全命中（套用倍率）
-                for effect in &skill.effects {
-                    let save_result =
-                        calc_save_result(board, skills, caster_id, unit_id, skill, effect)
-                            .map_err(|e| Error::Wrap {
-                                func,
-                                source: Box::new(e),
-                            })?;
-                    if let Some(msg) = apply_effect_to_pos(
-                        board,
-                        effect,
-                        caster_pos,
-                        pos,
-                        attack_result,
-                        save_result,
-                    ) {
-                        msgs.push(format!(
-                            "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
-                        ));
-                    }
+                let effect_msgs = apply_all_effects(
+                    board,
+                    skills,
+                    caster_id,
+                    unit_id,
+                    caster_pos,
+                    pos,
+                    skill,
+                    attack_result,
+                )?;
+                for msg in effect_msgs {
+                    msgs.push(format!(
+                        "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
+                    ));
                 }
                 continue;
             }
@@ -648,93 +736,173 @@ mod inner {
 
             // 格擋（百分比減傷）
             if block_score <= 0 {
-                for effect in &skill.effects {
-                    match effect {
-                        Effect::Hp {
-                            value,
-                            target_type,
-                            shape,
-                        } => {
-                            let block_percentage = (block_reduction as f32) / 100.0;
-                            let damage_reduction =
-                                (value.abs() as f32 * block_percentage).ceil() as i32;
-                            let final_value = *value + damage_reduction; // value 是負值
+                let effect_results = apply_effects_with_block(
+                    board,
+                    skills,
+                    caster_id,
+                    unit_id,
+                    caster_pos,
+                    pos,
+                    skill,
+                    attack_result,
+                    block_reduction,
+                )?;
 
-                            // 建立減傷後的 effect
-                            let reduced_effect = Effect::Hp {
-                                value: final_value,
-                                target_type: target_type.clone(),
-                                shape: shape.clone(),
-                            };
-
-                            let save_result = calc_save_result(
-                                board,
-                                skills,
-                                caster_id,
-                                unit_id,
-                                skill,
-                                &reduced_effect,
-                            )
-                            .map_err(|e| Error::Wrap {
-                                func,
-                                source: Box::new(e),
-                            })?;
-                            if let Some(msg) = apply_effect_to_pos(
-                                board,
-                                &reduced_effect,
-                                caster_pos,
-                                pos,
-                                attack_result,
-                                save_result,
-                            ) {
-                                msgs.push(format!(
-                                    "單位 {unit_type} 格擋{crit_msg}！減傷 {damage_reduction} ({block_reduction}%)：{msg}"
-                                ));
-                            }
-                        }
-                        _ => {
-                            // 其他效果不受格擋影響，直接套用
-                            let save_result =
-                                calc_save_result(board, skills, caster_id, unit_id, skill, effect)
-                                    .map_err(|e| Error::Wrap {
-                                        func,
-                                        source: Box::new(e),
-                                    })?;
-                            if let Some(msg) = apply_effect_to_pos(
-                                board,
-                                effect,
-                                caster_pos,
-                                pos,
-                                attack_result,
-                                save_result,
-                            ) {
-                                msgs.push(format!(
-                                    "單位 {unit_type} 格擋{crit_msg}，但效果不受影響：{msg}"
-                                ));
-                            }
-                        }
-                    }
+                for msg in effect_results {
+                    msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！：{msg}"));
                 }
                 continue;
             }
 
             // 完全命中（普通路徑，套用倍率）
-            for effect in &skill.effects {
-                let save_result = calc_save_result(
-                    board, skills, caster_id, unit_id, skill, effect,
-                )
+            let effect_msgs = apply_all_effects(
+                board,
+                skills,
+                caster_id,
+                unit_id,
+                caster_pos,
+                pos,
+                skill,
+                attack_result,
+            )?;
+            for msg in effect_msgs {
+                msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
+            }
+        }
+        Ok(msgs)
+    }
+
+    /// 處理空地效果（無單位的位置）
+    fn apply_effects_to_empty_tile(
+        board: &mut Board,
+        skill: &Skill,
+        caster_pos: Pos,
+        pos: Pos,
+    ) -> Vec<String> {
+        let mut msgs = vec![];
+        for effect in &skill.effects {
+            if let Some(msg) = apply_effect_to_pos(
+                board,
+                effect,
+                caster_pos,
+                pos,
+                AttackResult::NoAttack,
+                SaveResult::NoSave,
+            ) {
+                msgs.push(format!("空地 {pos:?} 受到效果：{msg}"));
+            }
+        }
+        msgs
+    }
+
+    /// 套用所有效果並返回訊息（用於完全命中或普通命中）
+    fn apply_all_effects(
+        board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster_id: UnitID,
+        unit_id: UnitID,
+        caster_pos: Pos,
+        pos: Pos,
+        skill: &Skill,
+        attack_result: AttackResult,
+    ) -> Result<Vec<String>, Error> {
+        let func = "apply_all_effects";
+        let mut msgs = vec![];
+
+        for effect in &skill.effects {
+            let save_result = calc_save_result(board, skills, caster_id, unit_id, skill, effect)
                 .map_err(|e| Error::Wrap {
                     func,
                     source: Box::new(e),
                 })?;
-                if let Some(msg) =
-                    apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
-                {
-                    msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
+
+            if let Some(msg) =
+                apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
+            {
+                msgs.push(msg);
+            }
+        }
+
+        Ok(msgs)
+    }
+
+    /// 套用效果（格擋時 Hp 效果減傷，其他效果正常套用）
+    fn apply_effects_with_block(
+        board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster_id: UnitID,
+        unit_id: UnitID,
+        caster_pos: Pos,
+        pos: Pos,
+        skill: &Skill,
+        attack_result: AttackResult,
+        block_reduction: i32,
+    ) -> Result<Vec<String>, Error> {
+        let func = "apply_effects_with_block";
+        let mut results = vec![];
+
+        for effect in &skill.effects {
+            match effect {
+                Effect::Hp {
+                    value,
+                    target_type,
+                    shape,
+                } => {
+                    let block_percentage = (block_reduction as f32) / 100.0;
+                    let damage_reduction = (value.abs() as f32 * block_percentage).ceil() as i32;
+                    let final_value = *value + damage_reduction; // value 是負值
+
+                    // 建立減傷後的 effect
+                    let reduced_effect = Effect::Hp {
+                        value: final_value,
+                        target_type: target_type.clone(),
+                        shape: shape.clone(),
+                    };
+
+                    let save_result =
+                        calc_save_result(board, skills, caster_id, unit_id, skill, &reduced_effect)
+                            .map_err(|e| Error::Wrap {
+                                func,
+                                source: Box::new(e),
+                            })?;
+
+                    if let Some(msg) = apply_effect_to_pos(
+                        board,
+                        &reduced_effect,
+                        caster_pos,
+                        pos,
+                        attack_result,
+                        save_result,
+                    ) {
+                        results.push(format!(
+                            "減傷 {damage_reduction} ({block_reduction}%)：{msg}"
+                        ));
+                    }
+                }
+                _ => {
+                    // 其他效果不受格擋影響，直接套用
+                    let save_result =
+                        calc_save_result(board, skills, caster_id, unit_id, skill, effect)
+                            .map_err(|e| Error::Wrap {
+                                func,
+                                source: Box::new(e),
+                            })?;
+
+                    if let Some(msg) = apply_effect_to_pos(
+                        board,
+                        effect,
+                        caster_pos,
+                        pos,
+                        attack_result,
+                        save_result,
+                    ) {
+                        results.push(format!("但效果不受影響：{msg}"));
+                    }
                 }
             }
         }
-        Ok(msgs)
+
+        Ok(results)
     }
 
     /// 計算豁免檢定結果
