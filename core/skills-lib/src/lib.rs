@@ -211,12 +211,6 @@ pub enum Effect {
         save_type: SaveType,
         duration: i32, // -1 代表永久
     },
-    Silence {
-        target_type: TargetType,
-        shape: Shape,
-        save_type: SaveType,
-        duration: i32, // -1 代表永久
-    },
 }
 
 impl Default for Skill {
@@ -251,8 +245,7 @@ macro_rules! effect_field_ref {
             | Effect::Shove { $field, .. }
             | Effect::Potency { $field, .. }
             | Effect::Resistance { $field, .. }
-            | Effect::Burn { $field, .. }
-            | Effect::Silence { $field, .. } => $field,
+            | Effect::Burn { $field, .. } => $field,
         }
     };
 }
@@ -282,7 +275,7 @@ impl Effect {
     /// 取得效果的豁免類型（如果需要豁免判定）
     pub fn save_type(&self) -> Option<&SaveType> {
         match self {
-            Effect::Burn { save_type, .. } | Effect::Silence { save_type, .. } => Some(save_type),
+            Effect::Burn { save_type, .. } => Some(save_type),
             Effect::Hp { .. }
             | Effect::Mp { .. }
             | Effect::MaxHp { .. }
@@ -314,8 +307,7 @@ impl Effect {
             | Effect::HitAndRun { duration, .. }
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
-            | Effect::Burn { duration, .. }
-            | Effect::Silence { duration, .. } => *duration,
+            | Effect::Burn { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
         }
     }
@@ -334,8 +326,7 @@ impl Effect {
             | Effect::HitAndRun { duration, .. }
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
-            | Effect::Burn { duration, .. }
-            | Effect::Silence { duration, .. } => {
+            | Effect::Burn { duration, .. } => {
                 // 只有 duration > 0 時才減少（永久效果 -1 不減少）
                 if *duration > 0 {
                     *duration -= 1;
@@ -585,9 +576,9 @@ mod tests {
         assert_eq!(potency.duration(), 5);
     }
 
-    // 測試 5：Burn 和 Silence 的 save_type 和 duration
+    // 測試 5：Burn 的 save_type 和 duration
     #[test]
-    fn test_burn_and_silence_with_save_type() {
+    fn test_burn_with_save_type() {
         let burn = Effect::Burn {
             target_type: TargetType::Enemy,
             shape: Shape::Point,
@@ -596,28 +587,11 @@ mod tests {
         };
         assert_eq!(burn.duration(), 3);
         assert_eq!(burn.target_type(), &TargetType::Enemy);
-
-        let silence = Effect::Silence {
-            target_type: TargetType::Enemy,
-            shape: Shape::Circle(2),
-            duration: 2,
-            save_type: SaveType::Will,
-        };
-        assert_eq!(silence.duration(), 2);
-        assert_eq!(silence.shape(), &Shape::Circle(2));
     }
 
     // 測試 8：測試 Effect 的 Display trait
     #[test]
     fn test_effect_display() {
-        let silence = Effect::Silence {
-            target_type: TargetType::Enemy,
-            shape: Shape::Point,
-            duration: 2,
-            save_type: SaveType::Will,
-        };
-        assert_eq!(silence.to_string(), "silence");
-
         let burn = Effect::Burn {
             target_type: TargetType::Enemy,
             shape: Shape::Point,

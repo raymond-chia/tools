@@ -395,26 +395,24 @@ pub(super) fn apply_effect_to_pos(
             "[未實作] Resistance 效果（{:?}）+{value}, 持續 {duration} 回合",
             save_type
         )),
-        Effect::Burn { duration, .. } | Effect::Silence { duration, .. } => {
-            match save_result {
-                SaveResult::Success => {
-                    // 豁免成功，抵抗狀態
-                    Some(format!("豁免成功！抵抗了 {:?} 效果", effect))
-                }
-                SaveResult::Failure => {
-                    // 豁免失敗，施加狀態
-                    let target_unit_id = board.pos_to_unit(target_pos)?;
-                    let target = board.units.get_mut(&target_unit_id)?;
-                    target.status_effects.push(effect.clone());
-
-                    Some(format!("豁免失敗！{:?} 效果持續 {} 回合", effect, duration))
-                }
-                SaveResult::NoSave => {
-                    // 不應該發生（Burn/Silence 一定需要豁免）
-                    Some(format!("[錯誤] {:?} 效果需要豁免判定", effect))
-                }
+        Effect::Burn { duration, .. } => match save_result {
+            SaveResult::Success => {
+                // 豁免成功，抵抗狀態
+                Some(format!("豁免成功！抵抗了 {:?} 效果", effect))
             }
-        }
+            SaveResult::Failure => {
+                // 豁免失敗，施加狀態
+                let target_unit_id = board.pos_to_unit(target_pos)?;
+                let target = board.units.get_mut(&target_unit_id)?;
+                target.status_effects.push(effect.clone());
+
+                Some(format!("豁免失敗！{:?} 效果持續 {} 回合", effect, duration))
+            }
+            SaveResult::NoSave => {
+                // 不應該發生（Burn 一定需要豁免）
+                Some(format!("[錯誤] {:?} 效果需要豁免判定", effect))
+            }
+        },
     }
 }
 

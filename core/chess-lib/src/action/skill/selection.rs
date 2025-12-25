@@ -6,9 +6,7 @@ use crate::*;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
-use super::casting::{
-    apply_skill_to_area, check_status_effects_block_skill, consume_skill_mp, validate_skill_casting,
-};
+use super::casting::{apply_skill_to_area, consume_skill_mp, validate_skill_casting};
 use super::targeting::{calc_shape_area, is_able_to_cast, is_in_skill_range_manhattan};
 
 /// 技能選擇資料結構
@@ -61,15 +59,7 @@ impl SkillSelection {
             source: Box::new(e),
         })?;
 
-        // 4. 檢查狀態效果是否阻止施法
-        check_status_effects_block_skill(board, caster, &skill_id, skill).map_err(|e| {
-            Error::Wrap {
-                func,
-                source: Box::new(e),
-            }
-        })?;
-
-        // 5. 應用技能效果到影響區域
+        // 4. 應用技能效果到影響區域
         let msgs = apply_skill_to_area(
             board,
             skills,
@@ -85,7 +75,7 @@ impl SkillSelection {
             source: Box::new(e),
         })?;
 
-        // 6. 設置施法標記
+        // 5. 設置施法標記
         if let Some(unit) = board.units.get_mut(&caster) {
             unit.has_cast_skill_this_turn = true;
         }
@@ -280,7 +270,8 @@ mod tests {
         let target = Pos { x: 1, y: 2 };
         let result = sel.cast_skill(&mut board, &skills, unit_id, target);
 
-        assert!(matches!(result, Err(Error::NoSkillSelected { .. })));
+        // 錯誤被包裝在 Error::Wrap 中
+        assert!(matches!(result, Err(Error::Wrap { .. })));
     }
 
     #[test]

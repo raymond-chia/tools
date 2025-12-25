@@ -93,38 +93,6 @@ pub(super) fn consume_skill_mp(
     Ok(())
 }
 
-/// 檢查施法者的狀態效果是否阻止技能施放（例如 Silence 阻止 Magical 技能）
-pub(super) fn check_status_effects_block_skill(
-    board: &Board,
-    caster: UnitID,
-    skill_id: &SkillID,
-    skill: &Skill,
-) -> Result<(), Error> {
-    let func = "check_status_effects_block_skill";
-
-    // 檢查施法者是否被 Silence（阻止 Magical 技能）
-    let caster_unit = board
-        .units
-        .get(&caster)
-        .ok_or_else(|| Error::NoActingUnit {
-            func,
-            unit_id: caster,
-        })?;
-    for effect in &caster_unit.status_effects {
-        if let Effect::Silence { .. } = effect {
-            if skill.tags.contains(&Tag::Magical) {
-                return Err(Error::StatusEffectBlocksSkill {
-                    func,
-                    effect: effect.clone(),
-                    skill_id: skill_id.clone(),
-                });
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// 應用技能效果到影響區域
 /// 根據技能是否有命中數值，採用不同的應用邏輯
 pub(super) fn apply_skill_to_area(
@@ -313,73 +281,5 @@ mod tests {
         assert!(matches!(result, Err(Error::NotEnoughMp { .. })));
         // MP 不應該被扣除
         assert_eq!(board.units.get(&unit_id).unwrap().mp, 5);
-    }
-
-    #[test]
-    fn test_check_silence_blocks_magical_skill() {
-        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
-
-        // 添加 Silence 狀態
-        board
-            .units
-            .get_mut(&unit_id)
-            .unwrap()
-            .status_effects
-            .push(Effect::Silence {
-                target_type: TargetType::Enemy,
-                shape: Shape::Point,
-                duration: 2,
-                save_type: SaveType::Will,
-            });
-
-        // 創建 Magical 技能
-        let skill = Skill {
-            tags: BTreeSet::from([Tag::Magical]),
-            range: (1, 1),
-            cost: 0,
-            accuracy: Some(100),
-            crit_rate: None,
-            effects: vec![],
-        };
-
-        let result =
-            check_status_effects_block_skill(&board, unit_id, &"magic_skill".to_string(), &skill);
-        assert!(matches!(result, Err(Error::StatusEffectBlocksSkill { .. })));
-    }
-
-    #[test]
-    fn test_silence_allows_physical_skill() {
-        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
-
-        // 添加 Silence 狀態
-        board
-            .units
-            .get_mut(&unit_id)
-            .unwrap()
-            .status_effects
-            .push(Effect::Silence {
-                target_type: TargetType::Enemy,
-                shape: Shape::Point,
-                duration: 2,
-                save_type: SaveType::Will,
-            });
-
-        // 創建 Physical 技能（沒有 Magical tag）
-        let skill = Skill {
-            tags: BTreeSet::from([Tag::Physical]),
-            range: (1, 1),
-            cost: 0,
-            accuracy: Some(100),
-            crit_rate: None,
-            effects: vec![],
-        };
-
-        let result = check_status_effects_block_skill(
-            &board,
-            unit_id,
-            &"physical_skill".to_string(),
-            &skill,
-        );
-        assert!(result.is_ok());
     }
 }
