@@ -1055,11 +1055,8 @@ impl BoardsEditor {
                     .units
                     .iter()
                     .map(|(&id, unit)| {
-                        let skill_refs = unit
-                            .skills
-                            .iter()
-                            .filter_map(|sid| self.skills.get(sid).map(|s| (sid, s)));
-                        let ini = calc_initiative(&mut rng, skill_refs);
+                        let ini = calc_initiative(&mut rng, unit.skills.iter(), &self.skills)
+                            .unwrap_or(0); // 若失敗則使用 0 作為預設先攻值
                         (id, ini)
                     })
                     .collect::<Vec<_>>();
@@ -1970,7 +1967,7 @@ fn override_player_unit(
             .flat_map(|(_, skill_set)| skill_set.clone())
             .collect();
         // 重算衍生屬性
-        board_unit.recalc_from_skills(skills);
+        let _ = board_unit.recalc_from_skills(skills);
     }
     Ok(())
 }

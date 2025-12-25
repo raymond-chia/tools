@@ -582,6 +582,7 @@ impl SkillsEditor {
                         Effect::MaxHp { .. } => ui.button("新增最大 HP 效果").clicked(),
                         Effect::MaxMp { .. } => ui.button("新增最大 MP 效果").clicked(),
                         Effect::Initiative { .. } => ui.button("新增先攻值效果").clicked(),
+                        Effect::Accuracy { .. } => ui.button("新增命中效果").clicked(),
                         Effect::Evasion { .. } => ui.button("新增閃避效果").clicked(),
                         Effect::Block { .. } => ui.button("新增格擋效果").clicked(),
                         Effect::BlockReduction { .. } => ui.button("新增格擋減傷效果").clicked(),
@@ -589,6 +590,8 @@ impl SkillsEditor {
                         Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::HitAndRun { .. } => ui.button("新增打帶跑效果").clicked(),
                         Effect::Shove { .. } => ui.button("新增推擠效果").clicked(),
+                        Effect::Potency { .. } => ui.button("新增施法效力效果").clicked(),
+                        Effect::Resistance { .. } => ui.button("新增抗性效果").clicked(),
                     };
                     effects.push((flag, effect));
                 }
@@ -1068,6 +1071,7 @@ fn show_skill_effect_editor(
             Effect::MaxHp { .. } => ui.label("最大 HP"),
             Effect::MaxMp { .. } => ui.label("最大 MP"),
             Effect::Initiative { .. } => ui.label("先攻值"),
+            Effect::Accuracy { .. } => ui.label("命中"),
             Effect::Evasion { .. } => ui.label("閃避"),
             Effect::Block { .. } => ui.label("格擋"),
             Effect::BlockReduction { .. } => ui.label("格擋減傷"),
@@ -1075,6 +1079,8 @@ fn show_skill_effect_editor(
             Effect::Burn { .. } => ui.label("燃燒"),
             Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
             Effect::Shove { .. } => ui.label("推擠"),
+            Effect::Potency { .. } => ui.label("施法效力"),
+            Effect::Resistance { .. } => ui.label("抗性"),
         };
         // 種族效果不顯示刪除、上下移動
         if !is_basic_passive_effect {
@@ -1191,6 +1197,20 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
             changed |= show_numeric_editor(ui, value, "先攻變化值:");
             changed |= show_duration_editor(ui, duration);
         }
+        Effect::Accuracy {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_numeric_editor(ui, value, "命中數值變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
         Effect::Evasion {
             target_type,
             shape,
@@ -1250,6 +1270,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
         Effect::Burn {
             target_type,
             shape,
+            save_type,
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
@@ -1257,6 +1278,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
                 ui.label("形狀:");
                 changed |= show_shape_editor(ui, shape);
             });
+            changed |= show_save_type_editor(ui, save_type);
             changed |= show_duration_editor(ui, duration);
         }
         Effect::HitAndRun {
@@ -1283,6 +1305,38 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
             });
             changed |= show_numeric_editor(ui, distance, "推擠距離:");
         }
+        Effect::Potency {
+            target_type,
+            shape,
+            tag,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_tag_editor(ui, tag);
+            changed |= show_numeric_editor(ui, value, "施法效力變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Resistance {
+            target_type,
+            shape,
+            save_type,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_save_type_editor(ui, save_type);
+            changed |= show_numeric_editor(ui, value, "抗性數值變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
     }
     changed
 }
@@ -1305,6 +1359,40 @@ fn show_target_type_editor(ui: &mut Ui, target_type: &mut TargetType) -> bool {
                 ui.selectable_value(target_type, TargetType::Enemy, "敵人");
                 ui.selectable_value(target_type, TargetType::AnyUnit, "任何單位");
                 ui.selectable_value(target_type, TargetType::Any, "任何");
+            });
+        if response.response.changed() {
+            changed = true;
+        }
+    });
+    changed
+}
+
+fn show_save_type_editor(ui: &mut Ui, save_type: &mut SaveType) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label("豁免類型:");
+        let response = egui::ComboBox::new("save_type", "")
+            .selected_text(format!("{:?}", save_type.clone()).to_lowercase())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(save_type, SaveType::Fortitude, "強韌");
+                ui.selectable_value(save_type, SaveType::Reflex, "反射");
+                ui.selectable_value(save_type, SaveType::Will, "意志");
+            });
+        if response.response.changed() {
+            changed = true;
+        }
+    });
+    changed
+}
+
+fn show_tag_editor(ui: &mut Ui, tag: &mut Tag) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label("標籤:");
+        let response = egui::ComboBox::new("tag", "")
+            .selected_text(format!("{:?}", tag.clone()).to_lowercase())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(tag, Tag::Fire, "火焰");
             });
         if response.response.changed() {
             changed = true;
