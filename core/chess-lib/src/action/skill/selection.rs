@@ -34,10 +34,7 @@ impl SkillSelection {
 
         // 1. 驗證施法前提條件
         let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+            .wrap_context(func)?;
 
         // 取得技能（驗證後再次取得引用）
         let skill = skills.get(&skill_id).ok_or_else(|| Error::SkillNotFound {
@@ -48,16 +45,10 @@ impl SkillSelection {
         // 2. 計算影響區域
         let (caster_pos, affect_area) = self
             .get_affect_area_or_error(board, skills, caster, &skill_id, target)
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+            .wrap_context(func)?;
 
         // 3. 魔力消耗檢查與扣除
-        consume_skill_mp(board, caster, &skill_id, skill).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+        consume_skill_mp(board, caster, &skill_id, skill).wrap_context(func)?;
 
         // 4. 應用技能效果到影響區域
         let msgs = apply_skill_to_area(
@@ -70,10 +61,7 @@ impl SkillSelection {
             affect_area,
             target,
         )
-        .map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+        .wrap_context(func)?;
 
         // 5. 設置施法標記
         if let Some(unit) = board.units.get_mut(&caster) {
@@ -107,8 +95,6 @@ impl SkillSelection {
             Some(s) => s,
             None => return vec![],
         };
-        // 使用傳入的施法者座標
-        let from = caster_pos;
         // 取得單位物件，檢查移動點數
         let caster_id = match board.pos_to_unit(caster_pos) {
             Some(id) => id,
@@ -122,17 +108,17 @@ impl SkillSelection {
             return vec![];
         }
         // 判斷 to 是否在技能 range 內，超過則不顯示範圍
-        if !is_in_skill_range_manhattan(skill.range, from, to) {
+        if !is_in_skill_range_manhattan(skill.range, caster_pos, to) {
             return vec![];
         }
         // 取得技能範圍形狀（僅取第一個 effect 的 shape）
-        let shape = skill.effects.get(0).map(|e| e.shape());
+        let shape = skill.effects.first().map(|e| e.shape());
         let shape = match shape {
             Some(s) => s,
             None => return vec![],
         };
         // 計算範圍
-        calc_shape_area(board, shape, from, to)
+        calc_shape_area(board, shape, caster_pos, to)
     }
 
     /// 取得施法者座標並計算技能影響區域
@@ -149,7 +135,7 @@ impl SkillSelection {
         // 取得施法者座標，用於像推人等需要方向資訊的效果
         let caster_pos = board
             .unit_to_pos(caster)
-            .ok_or_else(|| Error::NoActingUnit {
+            .ok_or(Error::NoActingUnit {
                 func,
                 unit_id: caster,
             })?;

@@ -8,8 +8,8 @@ use skills_lib::*;
 use std::collections::BTreeMap;
 
 use super::{
-    CRITICAL_FAILURE_THRESHOLD, CRITICAL_HIT_MULTIPLIER, CRITICAL_SUCCESS_THRESHOLD,
-    MAX_BLOCK_REDUCTION_PERCENT, MIN_BLOCK_REDUCTION_PERCENT,
+    CRITICAL_FAILURE_THRESHOLD, CRITICAL_SUCCESS_THRESHOLD, MAX_BLOCK_REDUCTION_PERCENT,
+    MIN_BLOCK_REDUCTION_PERCENT,
 };
 use crate::action::skill::effect_application::{
     apply_all_effects, apply_effects_to_empty_tile, apply_effects_with_block,
@@ -62,12 +62,14 @@ pub fn calc_hit_result(
         };
         let unit = board
             .units
-            .get_mut(&unit_id)
+            .get(&unit_id)
             .ok_or_else(|| Error::InvalidImplementation {
                 func,
                 detail: "unit not found".to_string(),
             })?;
         let unit_type = unit.unit_template_type.clone();
+        let unit_skills = &unit.skills;
+
         if hit_random <= CRITICAL_FAILURE_THRESHOLD {
             // 完全閃避
             msgs.push(format!(
@@ -102,10 +104,7 @@ pub fn calc_hit_result(
                 skill,
                 attack_result,
             )
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+            .wrap_context(func)?;
             for msg in effect_msgs {
                 msgs.push(format!(
                     "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
@@ -113,21 +112,9 @@ pub fn calc_hit_result(
             }
             continue;
         }
-        let unit_skills = board
-            .units
-            .get(&unit_id)
-            .map(|unit| &unit.skills)
-            .ok_or_else(|| Error::InvalidImplementation {
-                func,
-                detail: "unit not found after pos_to_unit".to_string(),
-            })?;
 
         // 計算閃避值
-        let evasion =
-            unit::skills_to_evasion(unit_skills.iter(), skills).map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+        let evasion = unit::skills_to_evasion(unit_skills.iter(), skills).wrap_context(func)?;
         // 閃避
         let evade_score = hit_score - evasion;
         if evade_score <= 0 {
@@ -138,21 +125,14 @@ pub fn calc_hit_result(
         }
 
         // 計算格擋值（用於命中判定）
-        let block = unit::skills_to_block(unit_skills.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+        let block = unit::skills_to_block(unit_skills.iter(), skills).wrap_context(func)?;
         let block_score = hit_score - block - evasion;
 
         // 計算格擋減傷百分比（用於傷害計算）
         // 格擋減傷百分比：基礎值與最大值由常量定義
         let block_reduction = unit::skills_to_block_reduction(unit_skills.iter(), skills)
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?
-            .max(MIN_BLOCK_REDUCTION_PERCENT)
-            .min(MAX_BLOCK_REDUCTION_PERCENT);
+            .wrap_context(func)?
+            .clamp(MIN_BLOCK_REDUCTION_PERCENT, MAX_BLOCK_REDUCTION_PERCENT);
 
         // 格擋（百分比減傷）
         if block_score <= 0 {
@@ -167,10 +147,7 @@ pub fn calc_hit_result(
                 attack_result,
                 block_reduction,
             )
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+            .wrap_context(func)?;
 
             for msg in effect_results {
                 msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！：{msg}"));
@@ -189,10 +166,7 @@ pub fn calc_hit_result(
             skill,
             attack_result,
         )
-        .map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+        .wrap_context(func)?;
         for msg in effect_msgs {
             msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
         }
@@ -223,7 +197,7 @@ pub fn calc_save_result(
     let caster_unit = board
         .units
         .get(&caster_id)
-        .ok_or_else(|| Error::NoActingUnit {
+        .ok_or(Error::NoActingUnit {
             func,
             unit_id: caster_id,
         })?;
@@ -231,12 +205,7 @@ pub fn calc_save_result(
     let mut caster_potency = 0;
     for tag in &skill.tags {
         caster_potency +=
-            unit::skills_to_potency(caster_unit.skills.iter(), skills, tag).map_err(|e| {
-                Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                }
-            })?;
+            unit::skills_to_potency(caster_unit.skills.iter(), skills, tag).wrap_context(func)?;
     }
 
     // 計算目標的 resistance
@@ -251,11 +220,8 @@ pub fn calc_save_result(
             ),
         })?;
 
-    let target_resistance = unit::skills_to_resistance(target.skills.iter(), skills, save_type)
-        .map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+    let target_resistance =
+        unit::skills_to_resistance(target.skills.iter(), skills, save_type).wrap_context(func)?;
 
     // 豁免檢定
     let mut rng = rand::rng();

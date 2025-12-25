@@ -54,10 +54,7 @@ pub(super) fn apply_all_effects(
 
     for effect in &skill.effects {
         let save_result = calc_save_result(board, skills, caster_id, unit_id, skill, effect)
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+            .wrap_context(func)?;
 
         if let Some(msg) =
             apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
@@ -104,10 +101,7 @@ pub(super) fn apply_effects_with_block(
 
                 let save_result =
                     calc_save_result(board, skills, caster_id, unit_id, skill, &reduced_effect)
-                        .map_err(|e| Error::Wrap {
-                            func,
-                            source: Box::new(e),
-                        })?;
+                        .wrap_context(func)?;
 
                 if let Some(msg) = apply_effect_to_pos(
                     board,
@@ -124,13 +118,9 @@ pub(super) fn apply_effects_with_block(
             }
             _ => {
                 // 其他效果不受格擋影響，直接套用
-                let save_result = calc_save_result(
-                    board, skills, caster_id, unit_id, skill, effect,
-                )
-                .map_err(|e| Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                })?;
+                let save_result =
+                    calc_save_result(board, skills, caster_id, unit_id, skill, effect)
+                        .wrap_context(func)?;
 
                 if let Some(msg) =
                     apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
@@ -377,7 +367,7 @@ pub(super) fn apply_effect_to_pos(
         Effect::MovePoints {
             value, duration, ..
         } => Some(format!("[未實作] 單位移動 {value}, 持續 {duration} 回合")),
-        Effect::HitAndRun { .. } => Some(format!("[未實作] 打帶跑")),
+        Effect::HitAndRun { .. } => Some("[未實作] 打帶跑".to_string()),
         Effect::Shove { distance, .. } => {
             apply_shove_effect(board, caster_pos, target_pos, distance)
         }
@@ -419,7 +409,7 @@ pub(super) fn apply_effect_to_pos(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{BTreeSet, HashMap};
+    use std::collections::HashMap;
 
     fn prepare_test_board(
         pos: Pos,

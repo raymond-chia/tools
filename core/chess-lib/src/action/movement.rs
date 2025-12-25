@@ -32,7 +32,7 @@ struct MovableBoardView<'a> {
     moved_distance: MovementCost,
 }
 
-impl<'a> PathfindingBoard for MovableBoardView<'a> {
+impl PathfindingBoard for MovableBoardView<'_> {
     /// 判斷座標是否合法
     fn is_valid(&self, pos: Pos) -> bool {
         self.board.get_tile(pos).is_some()
@@ -148,7 +148,7 @@ pub fn move_unit_along_path(
 ) -> Result<(), Error> {
     let func = "move_unit_along_path";
 
-    let actor = path.get(0).ok_or(Error::InvalidParameter {
+    let actor = path.first().ok_or(Error::InvalidParameter {
         func,
         detail: "actor position not found".to_string(),
     })?;
@@ -172,12 +172,7 @@ pub fn move_unit_along_path(
                 actor = next;
             }
             Err(Error::AlliedUnitAtPos { .. }) => {}
-            Err(e) => {
-                return Err(Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                });
-            }
+            Err(e) => return Err(e).wrap_context(func),
         }
     }
     Ok(())
@@ -272,10 +267,7 @@ mod inner {
             board
                 .unit_map
                 .move_unit(unit_id, actor, to)
-                .map_err(|e| Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                })?;
+                .wrap_context(func)?;
         }
         result
     }

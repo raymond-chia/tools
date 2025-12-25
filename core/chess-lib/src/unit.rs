@@ -64,11 +64,8 @@ impl Unit {
         }
 
         // 使用統一函數計算衍生值
-        let (max_hp, max_mp, move_points) = calculate_derived_stats(&template.skills, skills)
-            .map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+        let (max_hp, max_mp, move_points) =
+            calculate_derived_stats(&template.skills, skills).wrap_context(func)?;
 
         Ok(Unit {
             id: marker.id,
@@ -92,10 +89,7 @@ impl Unit {
 
         // 使用統一函數計算衍生值
         let (max_hp, max_mp, move_points) =
-            calculate_derived_stats(&self.skills, skills).map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+            calculate_derived_stats(&self.skills, skills).wrap_context(func)?;
 
         self.max_hp = max_hp;
         self.hp = max_hp; // 重置 HP 為新的最大值
@@ -158,7 +152,7 @@ where
         .collect::<Result<Vec<_>, _>>()? // 先收集所有 Result，遇錯就返回
         .iter()
         .flat_map(|skill| skill.effects.iter())
-        .map(|effect| matcher(effect))
+        .map(matcher)
         .sum();
     Ok(sum)
 }
@@ -174,10 +168,7 @@ pub fn calc_initiative(
 ) -> Result<i32, Error> {
     let func = "calc_initiative";
     let roll = rng.random_range(1..=MAX_INITIATIVE_RANDOM);
-    let skill_initiative = skills_to_initiative(skill_ids, skills).map_err(|e| Error::Wrap {
-        func,
-        source: Box::new(e),
-    })?;
+    let skill_initiative = skills_to_initiative(skill_ids, skills).wrap_context(func)?;
     Ok(roll + skill_initiative)
 }
 
@@ -201,10 +192,7 @@ pub fn skills_to_move_points(
             0
         }
     })
-    .map_err(|e| Error::Wrap {
-        func,
-        source: Box::new(e),
-    })?;
+    .wrap_context(func)?;
     Ok(if total < 0 { 0 } else { total as MovementCost })
 }
 
@@ -224,10 +212,7 @@ pub fn skills_to_potency(
         }
         0
     })
-    .map_err(|e| Error::Wrap {
-        func,
-        source: Box::new(e),
-    })
+    .wrap_context(func)
 }
 
 /// 計算單位對特定豁免類型的抗性總和
@@ -249,10 +234,7 @@ pub fn skills_to_resistance(
         }
         0
     })
-    .map_err(|e| Error::Wrap {
-        func,
-        source: Box::new(e),
-    })
+    .wrap_context(func)
 }
 
 use inner::*;
@@ -267,21 +249,11 @@ mod inner {
         skills: &BTreeMap<SkillID, Skill>,
     ) -> Result<(i32, i32, MovementCost), Error> {
         let func = "calculate_derived_stats";
-        let max_hp = skills_to_max_hp(skill_ids.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+        let max_hp = skills_to_max_hp(skill_ids.iter(), skills).wrap_context(func)?;
 
-        let max_mp = skills_to_max_mp(skill_ids.iter(), skills).map_err(|e| Error::Wrap {
-            func,
-            source: Box::new(e),
-        })?;
+        let max_mp = skills_to_max_mp(skill_ids.iter(), skills).wrap_context(func)?;
 
-        let move_points =
-            skills_to_move_points(skill_ids.iter(), skills).map_err(|e| Error::Wrap {
-                func,
-                source: Box::new(e),
-            })?;
+        let move_points = skills_to_move_points(skill_ids.iter(), skills).wrap_context(func)?;
 
         Ok((max_hp, max_mp, move_points))
     }

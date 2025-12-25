@@ -4,13 +4,15 @@
 
 use crate::*;
 use skills_lib::*;
-use std::{collections::BTreeMap, f64::consts::PI};
+use std::f64::consts::PI;
 
 /// 計算單位周邊區域的技能施放範圍（根據 range，不含 shape）
 /// - board: 棋盤物件
 /// - from: 施放者座標
 /// - range: (min_range, max_range) 技能 range 設定
-/// 回傳：所有可施放座標
+///
+/// # Returns
+/// 所有可施放座標
 pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, usize)) -> Vec<Pos> {
     let unit_id = match board.pos_to_unit(active_unit_pos) {
         Some(id) => id,
@@ -161,7 +163,7 @@ pub fn is_targeting_valid_target(
     let func = "is_targeting_valid_target";
 
     // 只檢查第一個效果
-    let first_effect = skill.effects.get(0).ok_or_else(|| Error::InvalidSkill {
+    let first_effect = skill.effects.first().ok_or_else(|| Error::InvalidSkill {
         func,
         skill_id: skill_id.to_string(),
     })?;
@@ -173,13 +175,13 @@ pub fn is_targeting_valid_target(
     let caster_unit = board
         .units
         .get(&caster_id)
-        .ok_or_else(|| Error::NoActingUnit {
+        .ok_or(Error::NoActingUnit {
             func,
             unit_id: caster_id,
         })?;
     let target_id = board
         .pos_to_unit(target)
-        .ok_or_else(|| Error::SkillTargetNoUnit {
+        .ok_or(Error::SkillTargetNoUnit {
             func,
             skill_id: skill_id.to_string(),
             pos: target,
@@ -187,66 +189,71 @@ pub fn is_targeting_valid_target(
     let target_unit = board
         .units
         .get(&target_id)
-        .ok_or_else(|| Error::SkillTargetNoUnit {
+        .ok_or(Error::SkillTargetNoUnit {
             func,
             skill_id: skill_id.to_string(),
             pos: target,
         })?;
     let effect_target_type = first_effect.target_type();
-    let err_msg = match effect_target_type {
+    match effect_target_type {
         TargetType::Caster => {
             if caster_id != target_id {
-                "skill only affect caster".to_string()
-            } else {
-                "".to_string()
+                return Err(Error::SkillAffectWrongUnit {
+                    func,
+                    skill_id: skill_id.to_string(),
+                    detail: "skill only affect caster".to_string(),
+                });
             }
         }
         TargetType::Ally => {
             if caster_unit.team != target_unit.team {
-                format!(
-                    "skill only affect ally: caster team {}, target team {}",
-                    caster_unit.team, target_unit.team
-                )
-            } else {
-                "".to_string()
+                return Err(Error::SkillAffectWrongUnit {
+                    func,
+                    skill_id: skill_id.to_string(),
+                    detail: format!(
+                        "skill only affect ally: caster team {}, target team {}",
+                        caster_unit.team, target_unit.team
+                    ),
+                });
             }
         }
         TargetType::AllyExcludeCaster => {
             if caster_id == target_id {
-                "skill only affect ally `exclude caster`".to_string()
+                return Err(Error::SkillAffectWrongUnit {
+                    func,
+                    skill_id: skill_id.to_string(),
+                    detail: "skill only affect ally `exclude caster`".to_string(),
+                });
             } else if caster_unit.team != target_unit.team {
-                format!(
-                    "skill only affect `ally` exclude caster: caster team {}, target team {}",
-                    caster_unit.team, target_unit.team
-                )
-            } else {
-                "".to_string()
+                return Err(Error::SkillAffectWrongUnit {
+                    func,
+                    skill_id: skill_id.to_string(),
+                    detail: format!(
+                        "skill only affect `ally` exclude caster: caster team {}, target team {}",
+                        caster_unit.team, target_unit.team
+                    ),
+                });
             }
         }
         TargetType::Enemy => {
             if caster_unit.team == target_unit.team {
-                format!(
-                    "skill only affect enemy: caster team {}, target team {}",
-                    caster_unit.team, target_unit.team
-                )
-            } else {
-                "".to_string()
+                return Err(Error::SkillAffectWrongUnit {
+                    func,
+                    skill_id: skill_id.to_string(),
+                    detail: format!(
+                        "skill only affect enemy: caster team {}, target team {}",
+                        caster_unit.team, target_unit.team
+                    ),
+                });
             }
         }
-        TargetType::AnyUnit => "".to_string(), // 任何單位都可
+        TargetType::AnyUnit => {} // 任何單位都可
         TargetType::Any => {
             return Err(Error::InvalidImplementation {
                 func,
                 detail: "any target should not reach here".to_string(),
             });
         }
-    };
-    if err_msg.len() > 0 {
-        return Err(Error::SkillAffectWrongUnit {
-            func,
-            skill_id: skill_id.to_string(),
-            detail: err_msg,
-        });
     }
     Ok(())
 }
@@ -256,7 +263,9 @@ pub fn is_targeting_valid_target(
 /// - skill: 技能資料
 /// - from: 施放者座標
 /// - to: 目標座標
-/// 回傳：是否符合技能距離限制
+///
+/// # Returns
+/// 是否符合技能距離限制
 pub fn is_in_skill_range_manhattan(range: (usize, usize), from: Pos, to: Pos) -> bool {
     let dx = (from.x as isize - to.x as isize).abs();
     let dy = (from.y as isize - to.y as isize).abs();
@@ -291,7 +300,7 @@ pub fn clamp_pi(mut rad: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{BTreeSet, HashMap};
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
 
     fn prepare_test_board(
         pos: Pos,

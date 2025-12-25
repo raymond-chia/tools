@@ -100,7 +100,7 @@ impl Board {
     ) -> Result<Self, Error> {
         let func = "Board::from_config";
 
-        let teams = HashMap::from_iter(config.teams.into_iter());
+        let teams = HashMap::from_iter(config.teams);
 
         let mut units = HashMap::new();
         let mut unit_map = UnitMap::default();
@@ -111,11 +111,7 @@ impl Board {
                     func,
                     template_type: unit_config.unit_template_type.clone(),
                 })?;
-            let unit =
-                Unit::from_template(&unit_config, template, skills).map_err(|e| Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                })?;
+            let unit = Unit::from_template(&unit_config, template, skills).wrap_context(func)?;
             unit_map.insert(unit_id, unit_config.pos);
             units.insert(unit_id, unit);
         }

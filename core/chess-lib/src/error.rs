@@ -113,3 +113,18 @@ pub fn root_error(err: &Error) -> &Error {
     }
     err
 }
+
+/// Result 擴展 trait，用於在錯誤發生時包裝上下文資訊
+pub trait WrapContext<T> {
+    /// 將錯誤包裝在指定函數的上下文中
+    fn wrap_context(self, func: &'static str) -> Result<T, Error>;
+}
+
+impl<T> WrapContext<T> for Result<T, Error> {
+    fn wrap_context(self, func: &'static str) -> Result<T, Error> {
+        self.map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })
+    }
+}

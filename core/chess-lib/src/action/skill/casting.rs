@@ -10,7 +10,7 @@ use crate::*;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
-use super::effect_application::{apply_effect_to_pos, apply_effects_to_empty_tile};
+use super::effect_application::apply_effect_to_pos;
 use super::hit_resolution::{AttackResult, SaveResult, calc_hit_result, calc_save_result};
 use super::targeting::{is_able_to_cast, is_targeting_valid_target};
 
@@ -29,30 +29,22 @@ pub(super) fn validate_skill_casting(
     let unit = board
         .units
         .get(&caster)
-        .ok_or_else(|| Error::NoActingUnit {
+        .ok_or(Error::NoActingUnit {
             func,
             unit_id: caster,
         })?;
-    is_able_to_cast(unit).map_err(|e| Error::Wrap {
-        func,
-        source: Box::new(e),
-    })?;
+    is_able_to_cast(unit).wrap_context(func)?;
 
     let skill_id = selected_skill
         .as_ref()
-        .ok_or_else(|| Error::NoSkillSelected { func })?;
-    let skill = skills.get(skill_id).ok_or_else(|| Error::SkillNotFound {
+        .ok_or(Error::NoSkillSelected { func })?;
+    let skill = skills.get(skill_id).ok_or(Error::SkillNotFound {
         func,
         skill_id: skill_id.clone(),
     })?;
 
     // 只判斷第一個 effect 的 target_type
-    is_targeting_valid_target(board, skill_id, skill, caster, target).or_else(|err| {
-        Err(Error::Wrap {
-            func,
-            source: Box::new(err),
-        })
-    })?;
+    is_targeting_valid_target(board, skill_id, skill, caster, target).wrap_context(func)?;
 
     Ok(skill_id.clone())
 }
@@ -68,17 +60,15 @@ pub(super) fn consume_skill_mp(
 
     // 魔力消耗檢查與扣除
     if skill.cost < 0 {
-        let unit = match board.units.get_mut(&caster) {
-            Some(unit) => unit,
-            None => {
-                return Err(Error::NoActingUnit {
-                    func,
-                    unit_id: caster,
-                });
-            }
-        };
-        let mp = unit.mp + skill.cost;
-        if mp < 0 {
+        let unit = board
+            .units
+            .get_mut(&caster)
+            .ok_or(Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+
+        if unit.mp + skill.cost < 0 {
             return Err(Error::NotEnoughMp {
                 func,
                 unit_type: unit.unit_template_type.clone(),
@@ -87,7 +77,7 @@ pub(super) fn consume_skill_mp(
                 cost: skill.cost,
             });
         }
-        unit.mp = mp;
+        unit.mp += skill.cost;
     }
 
     Ok(())
@@ -109,12 +99,10 @@ pub(super) fn apply_skill_to_area(
 
     let mut msgs = vec![format!("{} 在 ({}, {}) 施放", skill_id, target.x, target.y)];
 
-    // 命中機制最終設計摘要如下：
-    // 1. 技能命中數值（accuracy）僅計算一次，並套用於所有目標（僅計算命中數值，不進行閃避或格擋判定）。
-    // 2. 檢查每個目標是否為技能效果的合法套用對象（敵軍、友軍、自己等）。
-    // 3. 僅對符合效果目標的單位，進行閃避與格擋的判定。
-    // 4. 若目標被「閃避」則不套用效果；若為「命中」或「格擋」則都會套用效果，但格擋可影響效果強度（如減傷）。
-    // 5. 命中結果（命中、閃避、格擋）皆可顯示訊息。
+    // 命中機制設計：
+    // - 無 accuracy：所有目標直接套用效果（可進行豁免判定）
+    // - 有 accuracy：計算命中數值後，對每個目標進行閃避/格擋判定
+    //   格擋時仍會套用效果，但可減免傷害；閃避時不套用效果
     match skill.accuracy {
         None => {
             // 無命中數值，所有格子直接套用效果（無爆擊）
@@ -124,10 +112,7 @@ pub(super) fn apply_skill_to_area(
                     let save_result = match board.pos_to_unit(pos) {
                         Some(target_id) => {
                             calc_save_result(board, skills, caster, target_id, skill, effect)
-                                .map_err(|e| Error::Wrap {
-                                    func,
-                                    source: Box::new(e),
-                                })?
+                                .wrap_context(func)?
                         }
                         None => SaveResult::NoSave,
                     };
@@ -149,18 +134,14 @@ pub(super) fn apply_skill_to_area(
             let caster_unit = board
                 .units
                 .get(&caster)
-                .ok_or_else(|| Error::NoActingUnit {
+                .ok_or(Error::NoActingUnit {
                     func,
                     unit_id: caster,
                 })?;
 
-            let caster_accuracy = unit::skills_to_accuracy(caster_unit.skills.iter(), skills)
-                .map_err(|e| Error::Wrap {
-                    func,
-                    source: Box::new(e),
-                })?;
+            let caster_accuracy =
+                unit::skills_to_accuracy(caster_unit.skills.iter(), skills).wrap_context(func)?;
 
-            // 將技能 accuracy 與施法者 accuracy 加總
             let total_accuracy = skill_accuracy + caster_accuracy;
 
             msgs.extend(calc_hit_result(
@@ -241,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_consume_skill_mp_sufficient() {
-        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+        let (mut board, unit_id, _skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         // 設置 MP
         board.units.get_mut(&unit_id).unwrap().mp = 50;
@@ -263,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_consume_skill_mp_insufficient() {
-        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+        let (mut board, unit_id, _skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         // 設置 MP 不足
         board.units.get_mut(&unit_id).unwrap().mp = 5;
