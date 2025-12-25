@@ -4,7 +4,9 @@
       "Bash(cat:*)",
       "Bash(cargo.exe build:*)",
       "Bash(cargo.exe test:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []
