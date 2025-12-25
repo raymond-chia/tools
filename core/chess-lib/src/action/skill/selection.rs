@@ -1,0 +1,324 @@
+//! 技能選擇與施放模組
+//!
+//! 提供 SkillSelection 結構，作為技能系統的主要入口點
+
+use crate::*;
+use skills_lib::*;
+use std::collections::BTreeMap;
+
+use super::casting::{
+    apply_skill_to_area, check_status_effects_block_skill, consume_skill_mp, validate_skill_casting,
+};
+use super::targeting::{calc_shape_area, is_able_to_cast, is_in_skill_range_manhattan};
+
+/// 技能選擇資料結構
+#[derive(Debug, Clone, Default)]
+pub struct SkillSelection {
+    /// 當前選擇的技能 ID
+    pub selected_skill: Option<SkillID>,
+}
+
+impl SkillSelection {
+    /// 設定目前選擇的技能
+    pub fn select_skill(&mut self, skill_id: Option<SkillID>) {
+        self.selected_skill = skill_id;
+    }
+
+    /// 施放技能主流程
+    pub fn cast_skill(
+        &self,
+        board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster: UnitID,
+        target: Pos,
+    ) -> Result<Vec<String>, Error> {
+        let func = "SkillSelection::cast_skill";
+
+        // 1. 驗證施法前提條件
+        let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)
+            .map_err(|e| Error::Wrap {
+                func,
+                source: Box::new(e),
+            })?;
+
+        // 取得技能（驗證後再次取得引用）
+        let skill = skills.get(&skill_id).ok_or_else(|| Error::SkillNotFound {
+            func,
+            skill_id: skill_id.clone(),
+        })?;
+
+        // 2. 計算影響區域
+        let (caster_pos, affect_area) = self
+            .get_affect_area_or_error(board, skills, caster, &skill_id, target)
+            .map_err(|e| Error::Wrap {
+                func,
+                source: Box::new(e),
+            })?;
+
+        // 3. 魔力消耗檢查與扣除
+        consume_skill_mp(board, caster, &skill_id, skill).map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+
+        // 4. 檢查狀態效果是否阻止施法
+        check_status_effects_block_skill(board, caster, &skill_id, skill).map_err(|e| {
+            Error::Wrap {
+                func,
+                source: Box::new(e),
+            }
+        })?;
+
+        // 5. 應用技能效果到影響區域
+        let msgs = apply_skill_to_area(
+            board,
+            skills,
+            caster,
+            caster_pos,
+            &skill_id,
+            skill,
+            affect_area,
+            target,
+        )
+        .map_err(|e| Error::Wrap {
+            func,
+            source: Box::new(e),
+        })?;
+
+        // 6. 設置施法標記
+        if let Some(unit) = board.units.get_mut(&caster) {
+            unit.has_cast_skill_this_turn = true;
+        }
+
+        Ok(msgs)
+    }
+
+    /// 預覽技能範圍
+    /// 根據目前選擇的技能與棋盤狀態，計算技能可作用的座標列表
+    /// - board: 棋盤狀態
+    /// - skills: 技能資料表
+    /// - caster_pos: 施法者座標
+    /// - to: 指向格
+    ///
+    /// 回傳：技能可作用範圍的座標 Vec<Pos>
+    pub fn skill_affect_area(
+        &self,
+        board: &Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster_pos: Pos,
+        to: Pos,
+    ) -> Vec<Pos> {
+        // 取得技能
+        let skill_id = match &self.selected_skill {
+            Some(id) => id,
+            None => return vec![],
+        };
+        let skill = match skills.get(skill_id) {
+            Some(s) => s,
+            None => return vec![],
+        };
+        // 使用傳入的施法者座標
+        let from = caster_pos;
+        // 取得單位物件，檢查移動點數
+        let caster_id = match board.pos_to_unit(caster_pos) {
+            Some(id) => id,
+            None => return vec![],
+        };
+        let caster = match board.units.get(&caster_id) {
+            Some(u) => u,
+            None => return vec![],
+        };
+        if is_able_to_cast(caster).is_err() {
+            return vec![];
+        }
+        // 判斷 to 是否在技能 range 內，超過則不顯示範圍
+        if !is_in_skill_range_manhattan(skill.range, from, to) {
+            return vec![];
+        }
+        // 取得技能範圍形狀（僅取第一個 effect 的 shape）
+        let shape = skill.effects.get(0).map(|e| e.shape());
+        let shape = match shape {
+            Some(s) => s,
+            None => return vec![],
+        };
+        // 計算範圍
+        calc_shape_area(board, shape, from, to)
+    }
+
+    /// 取得施法者座標並計算技能影響區域
+    fn get_affect_area_or_error(
+        &self,
+        board: &Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster: UnitID,
+        skill_id: &SkillID,
+        target: Pos,
+    ) -> Result<(Pos, Vec<Pos>), Error> {
+        let func = "get_affect_area_or_error";
+
+        // 取得施法者座標，用於像推人等需要方向資訊的效果
+        let caster_pos = board
+            .unit_to_pos(caster)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
+
+        let affect_area = self.skill_affect_area(board, skills, caster_pos, target);
+        if affect_area.is_empty() {
+            return Err(Error::SkillAffectEmpty {
+                func,
+                skill_id: skill_id.clone(),
+                pos: target,
+            });
+        }
+
+        Ok((caster_pos, affect_area))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn prepare_test_board(
+        pos: Pos,
+        extra_unit_pos: Option<Vec<Pos>>,
+    ) -> (Board, UnitID, BTreeMap<SkillID, Skill>) {
+        let data = include_str!("../../../tests/unit.json");
+        let v: serde_json::Value = serde_json::from_str(data).unwrap();
+        let template: UnitTemplate = serde_json::from_value(v["UnitTemplate"].clone()).unwrap();
+        let marker: UnitMarker = serde_json::from_value(v["UnitMarker"].clone()).unwrap();
+        let team: Team = serde_json::from_value(v["Team"].clone()).unwrap();
+        let teams = HashMap::from([(team.id.clone(), team.clone())]);
+        let skills = {
+            let slash_data = include_str!("../../../tests/skill_slash.json");
+            let slash_skill: Skill = serde_json::from_str(slash_data).unwrap();
+            let shoot_data = include_str!("../../../tests/skill_shoot.json");
+            let shoot_skill: Skill = serde_json::from_str(shoot_data).unwrap();
+            let splash_data = include_str!("../../../tests/skill_splash.json");
+            let splash_skill: Skill = serde_json::from_str(splash_data).unwrap();
+            BTreeMap::from([
+                ("shoot".to_string(), shoot_skill),
+                ("slash".to_string(), slash_skill),
+                ("splash".to_string(), splash_skill),
+            ])
+        };
+        let template = {
+            let mut template = template;
+            template.skills = skills.iter().map(|(id, _)| id.clone()).collect();
+            template
+        };
+        let unit = Unit::from_template(&marker, &template, &skills).unwrap();
+        let unit_id = unit.id;
+
+        let mut unit_map = UnitMap::default();
+        unit_map.insert(unit_id, pos);
+        let mut units = HashMap::from([(unit_id, unit)]);
+
+        if let Some(pos_list) = extra_unit_pos {
+            let mut next_id = unit_id;
+            for p in pos_list {
+                next_id += 1;
+                let extra_template = template.clone();
+                let mut extra_unit =
+                    Unit::from_template(&marker, &extra_template, &skills).unwrap();
+                extra_unit.id = next_id;
+                unit_map.insert(extra_unit.id, p);
+                units.insert(extra_unit.id, extra_unit);
+            }
+        }
+
+        let board = Board {
+            tiles: vec![vec![Tile::default(); 10]; 10],
+            teams,
+            unit_map,
+            units,
+        };
+        (board, unit_id, skills)
+    }
+
+    #[test]
+    fn test_select_skill() {
+        let mut sel = SkillSelection::default();
+        assert_eq!(sel.selected_skill, None);
+        sel.select_skill(Some("1".to_string()));
+        assert_eq!(sel.selected_skill, Some("1".to_string()));
+        sel.select_skill(None);
+        assert_eq!(sel.selected_skill, None);
+    }
+
+    #[test]
+    fn test_cast_skill_basic() {
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let target_unit_id = unit_id + 1;
+
+        // 設置不同隊伍
+        board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("slash".to_string()));
+
+        let target = Pos { x: 1, y: 2 };
+        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+
+        assert!(result.is_ok());
+        let msgs = result.unwrap();
+        assert!(msgs.iter().any(|m| m.contains("slash 在 (1, 2) 施放")));
+
+        // 檢查 has_cast_skill_this_turn 被設置
+        assert!(board.units.get(&unit_id).unwrap().has_cast_skill_this_turn);
+    }
+
+    #[test]
+    fn test_cast_skill_no_selection() {
+        let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+
+        let sel = SkillSelection::default();
+        let target = Pos { x: 1, y: 2 };
+        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+
+        assert!(matches!(result, Err(Error::NoSkillSelected { .. })));
+    }
+
+    #[test]
+    fn test_cast_skill_twice() {
+        let (mut board, unit_id, skills) =
+            prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let target_unit_id = unit_id + 1;
+        board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
+
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("slash".to_string()));
+
+        let target = Pos { x: 1, y: 2 };
+
+        // 第一次施放成功
+        let result1 = sel.cast_skill(&mut board, &skills, unit_id, target);
+        assert!(result1.is_ok());
+
+        // 第二次施放失敗（已經施放過）
+        let result2 = sel.cast_skill(&mut board, &skills, unit_id, target);
+        // 可能因為目標已死亡而失敗，或因為已施放過而失敗
+        assert!(result2.is_err(), "Expected error, got: {:?}", result2);
+    }
+
+    #[test]
+    fn test_skill_affect_area() {
+        let (board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+
+        let mut sel = SkillSelection::default();
+        sel.select_skill(Some("slash".to_string()));
+
+        let caster_pos = Pos { x: 1, y: 1 };
+        let target = Pos { x: 1, y: 2 };
+
+        let area = sel.skill_affect_area(&board, &skills, caster_pos, target);
+
+        // slash 是 Point shape，應該只有目標位置
+        assert_eq!(area.len(), 1);
+        assert_eq!(area[0], target);
+    }
+}
