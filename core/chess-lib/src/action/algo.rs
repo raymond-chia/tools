@@ -54,7 +54,7 @@ pub fn dijkstra(graph: &impl PathfindingBoard, start: Pos) -> HashMap<Pos, (Move
                 _ => {
                     if let Some((prev_weight, _)) = ans.insert(next, (new_weight, vertex)) {
                         prio.remove(&(prev_weight, next));
-                    };
+                    }
                     prio.insert((new_weight, next));
                 }
             }

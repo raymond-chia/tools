@@ -9,12 +9,6 @@ use super::CRITICAL_HIT_MULTIPLIER;
 use super::hit_resolution::{AttackResult, SaveResult, calc_save_result};
 use super::targeting::calc_direction_manhattan;
 
-/// 推擠結果
-enum PushResult {
-    Destination(Pos), // 可以推到目標位置
-    Stopped(String),  // 停止推擠並回傳訊息
-}
-
 /// 處理空地效果（無單位的位置）
 pub(super) fn apply_effects_to_empty_tile(
     board: &mut Board,
@@ -134,148 +128,6 @@ pub(super) fn apply_effects_with_block(
     Ok(results)
 }
 
-/// 判斷推擠目的地（處理 Cliff 越過邏輯）
-fn determine_push_destination(
-    board: &Board,
-    next_pos: Pos,
-    step: (isize, isize),
-    unit_type: &str,
-) -> PushResult {
-    let tile = match board.get_tile(next_pos) {
-        Some(t) => t,
-        None => {
-            return PushResult::Stopped(format!("單位 {} 被推到邊界並停止", unit_type));
-        }
-    };
-
-    match &tile.object {
-        Some(Object::Cliff { orientation }) => {
-            // 檢查推擠方向是否與 Cliff 方向一致
-            let direction_matches = match orientation {
-                Orientation::Up => step.1 < 0,    // 往上推
-                Orientation::Down => step.1 > 0,  // 往下推
-                Orientation::Left => step.0 < 0,  // 往左推
-                Orientation::Right => step.0 > 0, // 往右推
-            };
-
-            // 方向不一致，無法越過 Cliff
-            if !direction_matches {
-                return PushResult::Stopped(format!("單位 {} 被推到懸崖並停止", unit_type));
-            }
-
-            // 方向一致，越過 Cliff 到下一格
-            let beyond_x = next_pos.x as isize + step.0;
-            let beyond_y = next_pos.y as isize + step.1;
-
-            // 檢查左上邊界
-            if beyond_x < 0 || beyond_y < 0 {
-                return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
-            }
-
-            let beyond_pos = Pos {
-                x: beyond_x as usize,
-                y: beyond_y as usize,
-            };
-
-            // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
-            if board.get_tile(beyond_pos).is_none() {
-                return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
-            }
-
-            PushResult::Destination(beyond_pos)
-        }
-        Some(Object::Pit) => PushResult::Destination(next_pos),
-        _ => {
-            if !tile.object.as_ref().map_or(true, |obj| obj.is_passable()) {
-                PushResult::Stopped(format!("單位 {} 被推到障礙物並停止", unit_type))
-            } else {
-                PushResult::Destination(next_pos)
-            }
-        }
-    }
-}
-
-/// 推擠效果的輔助函數
-fn apply_shove_effect(
-    board: &mut Board,
-    caster_pos: Pos,
-    mut target_pos: Pos,
-    distance: &usize,
-) -> Option<String> {
-    // 只有在格子上有單位時才處理
-    let unit_id = board.pos_to_unit(target_pos)?;
-    let unit = board.units.get(&unit_id)?;
-    let unit_type = unit.unit_template_type.clone();
-
-    // 計算推擠方向
-    let step = calc_direction_manhattan(caster_pos, target_pos);
-    let mut pushed = 0usize;
-
-    for _ in 0..*distance {
-        let (next_x, next_y) = (
-            target_pos.x as isize + step.0,
-            target_pos.y as isize + step.1,
-        );
-
-        if next_x < 0 || next_y < 0 {
-            return Some(format!("單位 {} 被推到邊界並停止", unit_type));
-        }
-
-        let next_pos = Pos {
-            x: next_x as usize,
-            y: next_y as usize,
-        };
-
-        // 決定最終位置
-        let final_pos = match determine_push_destination(board, next_pos, step, &unit_type) {
-            PushResult::Destination(pos) => pos,
-            PushResult::Stopped(msg) => return Some(msg),
-        };
-
-        // 檢查最終位置是否有其他單位
-        if let Some(other_id) = board.pos_to_unit(final_pos) {
-            let other_type = board
-                .units
-                .get(&other_id)
-                .map(|u| u.unit_template_type.clone())
-                .unwrap_or_default();
-            return Some(format!(
-                "單位 {} 與 單位 {} 相撞並停止",
-                unit_type, other_type
-            ));
-        }
-
-        // 執行移動
-        if let Err(e) = board.unit_map.move_unit(unit_id, target_pos, final_pos) {
-            // 無法移動（不應發生）
-            return Some(format!(
-                "單位 {} 無法被移動並停止 (err: {:?})",
-                unit_type, e
-            ));
-        }
-
-        target_pos = final_pos;
-        pushed += 1;
-
-        // 檢查掉落
-        if let Some(tile) = board.get_tile(final_pos) {
-            if matches!(tile.object, Some(Object::Pit)) {
-                // 單位掉落坑洞，立即死亡
-                if let Some(unit) = board.units.get_mut(&unit_id) {
-                    unit.hp = 0;
-                }
-                return Some(format!("單位 {} 被推入坑洞並墜落死亡！", unit_type));
-            }
-        }
-    }
-
-    Some(format!(
-        "單位 {} 被推擠了 {} 格 到 ({}, {})",
-        unit_type, pushed, target_pos.x, target_pos.y
-    ))
-}
-
-/// 將單一效果套用到指定座標（單一 entry-point，方便後續擴充/重構）
 pub(super) fn apply_effect_to_pos(
     board: &mut Board,
     effect: &Effect,
@@ -292,49 +144,8 @@ pub(super) fn apply_effect_to_pos(
     };
 
     match effect {
-        Effect::Hp { value, .. } => {
-            let unit_id = board.pos_to_unit(target_pos)?;
-            let unit = board.units.get_mut(&unit_id)?;
-            let old_hp = unit.hp;
-
-            // 套用倍率（僅對 Hp 效果）
-            let modified_value = *value * multiplier;
-            unit.hp += modified_value;
-
-            // HP 上限限制
-            if unit.hp > unit.max_hp {
-                unit.hp = unit.max_hp;
-            }
-
-            let new_hp = unit.hp;
-            Some(format!(
-                "單位 {} HP: {old_hp} → {new_hp}",
-                &unit.unit_template_type,
-            ))
-        }
-        Effect::Mp { value, .. } => {
-            let unit_id = board.pos_to_unit(target_pos)?;
-            let unit = board.units.get_mut(&unit_id)?;
-            let old_mp = unit.mp;
-
-            unit.mp += value;
-
-            // MP 上限限制
-            if unit.mp > unit.max_mp {
-                unit.mp = unit.max_mp;
-            }
-
-            // MP 下限限制
-            if unit.mp < 0 {
-                unit.mp = 0;
-            }
-
-            let new_mp = unit.mp;
-            Some(format!(
-                "單位 {} MP: {old_mp} → {new_mp}",
-                &unit.unit_template_type,
-            ))
-        }
+        Effect::Hp { value, .. } => apply_hp_effect(board, target_pos, *value, multiplier),
+        Effect::Mp { value, .. } => apply_mp_effect(board, target_pos, *value),
         Effect::MaxHp {
             duration, value, ..
         } => Some(format!("[未實作] MaxHp {value}, 持續 {duration} 回合",)),
@@ -385,7 +196,228 @@ pub(super) fn apply_effect_to_pos(
             "[未實作] Resistance 效果（{:?}）+{value}, 持續 {duration} 回合",
             save_type
         )),
-        Effect::Burn { duration, .. } => match save_result {
+        Effect::Burn { duration, .. } => {
+            apply_burn_effect(board, target_pos, effect, *duration, save_result)
+        }
+    }
+}
+
+/// 內部實作細節（私有函數）
+use inner::*;
+mod inner {
+    use super::*;
+
+    /// 推擠結果
+    pub(super) enum PushResult {
+        Destination(Pos), // 可以推到目標位置
+        Stopped(String),  // 停止推擠並回傳訊息
+    }
+
+    pub(super) fn determine_push_destination(
+        board: &Board,
+        next_pos: Pos,
+        step: (isize, isize),
+        unit_type: &str,
+    ) -> PushResult {
+        let tile = match board.get_tile(next_pos) {
+            Some(t) => t,
+            None => {
+                return PushResult::Stopped(format!("單位 {} 被推到邊界並停止", unit_type));
+            }
+        };
+
+        match &tile.object {
+            Some(Object::Cliff { orientation }) => {
+                // 檢查推擠方向是否與 Cliff 方向一致
+                let direction_matches = match orientation {
+                    Orientation::Up => step.1 < 0,    // 往上推
+                    Orientation::Down => step.1 > 0,  // 往下推
+                    Orientation::Left => step.0 < 0,  // 往左推
+                    Orientation::Right => step.0 > 0, // 往右推
+                };
+
+                // 方向不一致，無法越過 Cliff
+                if !direction_matches {
+                    return PushResult::Stopped(format!("單位 {} 被推到懸崖並停止", unit_type));
+                }
+
+                // 方向一致，越過 Cliff 到下一格
+                let beyond_x = next_pos.x as isize + step.0;
+                let beyond_y = next_pos.y as isize + step.1;
+
+                // 檢查左上邊界
+                if beyond_x < 0 || beyond_y < 0 {
+                    return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
+                }
+
+                let beyond_pos = Pos {
+                    x: beyond_x as usize,
+                    y: beyond_y as usize,
+                };
+
+                // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
+                if board.get_tile(beyond_pos).is_none() {
+                    return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
+                }
+
+                PushResult::Destination(beyond_pos)
+            }
+            Some(Object::Pit) => PushResult::Destination(next_pos),
+            _ => {
+                if !tile.object.as_ref().map_or(true, |obj| obj.is_passable()) {
+                    PushResult::Stopped(format!("單位 {} 被推到障礙物並停止", unit_type))
+                } else {
+                    PushResult::Destination(next_pos)
+                }
+            }
+        }
+    }
+
+    /// 推擠效果的輔助函數
+    pub(super) fn apply_shove_effect(
+        board: &mut Board,
+        caster_pos: Pos,
+        mut target_pos: Pos,
+        distance: &usize,
+    ) -> Option<String> {
+        // 只有在格子上有單位時才處理
+        let unit_id = board.pos_to_unit(target_pos)?;
+        let unit = board.units.get(&unit_id)?;
+        let unit_type = unit.unit_template_type.clone();
+
+        // 計算推擠方向
+        let step = calc_direction_manhattan(caster_pos, target_pos);
+        let mut pushed = 0usize;
+
+        for _ in 0..*distance {
+            let (next_x, next_y) = (
+                target_pos.x as isize + step.0,
+                target_pos.y as isize + step.1,
+            );
+
+            if next_x < 0 || next_y < 0 {
+                return Some(format!("單位 {} 被推到邊界並停止", unit_type));
+            }
+
+            let next_pos = Pos {
+                x: next_x as usize,
+                y: next_y as usize,
+            };
+
+            // 決定最終位置
+            let final_pos = match determine_push_destination(board, next_pos, step, &unit_type) {
+                PushResult::Destination(pos) => pos,
+                PushResult::Stopped(msg) => return Some(msg),
+            };
+
+            // 檢查最終位置是否有其他單位
+            if let Some(other_id) = board.pos_to_unit(final_pos) {
+                let other_type = board
+                    .units
+                    .get(&other_id)
+                    .map(|u| u.unit_template_type.clone())
+                    .unwrap_or_default();
+                return Some(format!(
+                    "單位 {} 與 單位 {} 相撞並停止",
+                    unit_type, other_type
+                ));
+            }
+
+            // 執行移動
+            if let Err(e) = board.unit_map.move_unit(unit_id, target_pos, final_pos) {
+                // 無法移動（不應發生）
+                return Some(format!(
+                    "單位 {} 無法被移動並停止 (err: {:?})",
+                    unit_type, e
+                ));
+            }
+
+            target_pos = final_pos;
+            pushed += 1;
+
+            // 檢查掉落
+            if let Some(tile) = board.get_tile(final_pos) {
+                if matches!(tile.object, Some(Object::Pit)) {
+                    // 單位掉落坑洞，立即死亡
+                    if let Some(unit) = board.units.get_mut(&unit_id) {
+                        unit.hp = 0;
+                    }
+                    return Some(format!("單位 {} 被推入坑洞並墜落死亡！", unit_type));
+                }
+            }
+        }
+
+        Some(format!(
+            "單位 {} 被推擠了 {} 格 到 ({}, {})",
+            unit_type, pushed, target_pos.x, target_pos.y
+        ))
+    }
+
+    /// 應用 Hp 效果
+    pub(super) fn apply_hp_effect(
+        board: &mut Board,
+        target_pos: Pos,
+        value: i32,
+        multiplier: i32,
+    ) -> Option<String> {
+        let unit_id = board.pos_to_unit(target_pos)?;
+        let unit = board.units.get_mut(&unit_id)?;
+        let old_hp = unit.hp;
+
+        // 套用倍率（僅對 Hp 效果）
+        let modified_value = value * multiplier;
+        unit.hp += modified_value;
+
+        // HP 上限限制
+        if unit.hp > unit.max_hp {
+            unit.hp = unit.max_hp;
+        }
+
+        let new_hp = unit.hp;
+        Some(format!(
+            "單位 {} HP: {old_hp} → {new_hp}",
+            &unit.unit_template_type,
+        ))
+    }
+
+    /// 應用 Mp 效果
+    pub(super) fn apply_mp_effect(
+        board: &mut Board,
+        target_pos: Pos,
+        value: i32,
+    ) -> Option<String> {
+        let unit_id = board.pos_to_unit(target_pos)?;
+        let unit = board.units.get_mut(&unit_id)?;
+        let old_mp = unit.mp;
+
+        unit.mp += value;
+
+        // MP 上限限制
+        if unit.mp > unit.max_mp {
+            unit.mp = unit.max_mp;
+        }
+
+        // MP 下限限制
+        if unit.mp < 0 {
+            unit.mp = 0;
+        }
+
+        let new_mp = unit.mp;
+        Some(format!(
+            "單位 {} MP: {old_mp} → {new_mp}",
+            &unit.unit_template_type,
+        ))
+    }
+
+    /// 應用 Burn 效果（帶豁免判定）
+    pub(super) fn apply_burn_effect(
+        board: &mut Board,
+        target_pos: Pos,
+        effect: &Effect,
+        duration: i32,
+        save_result: SaveResult,
+    ) -> Option<String> {
+        match save_result {
             SaveResult::Success => {
                 // 豁免成功，抵抗狀態
                 Some(format!("豁免成功！抵抗了 {:?} 效果", effect))
@@ -402,7 +434,7 @@ pub(super) fn apply_effect_to_pos(
                 // 不應該發生（Burn 一定需要豁免）
                 Some(format!("[錯誤] {:?} 效果需要豁免判定", effect))
             }
-        },
+        }
     }
 }
 

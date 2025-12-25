@@ -41,7 +41,6 @@ pub fn calc_hit_result(
     affect_area: Vec<Pos>,
     accuracy: i32,
 ) -> Result<Vec<String>, Error> {
-    let func = "calc_hit_result";
     let (caster_id, caster_pos) = caster;
 
     // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
@@ -60,116 +59,19 @@ pub fn calc_hit_result(
             }
             Some(unit_id) => unit_id,
         };
-        let unit = board
-            .units
-            .get(&unit_id)
-            .ok_or_else(|| Error::InvalidImplementation {
-                func,
-                detail: "unit not found".to_string(),
-            })?;
-        let unit_type = unit.unit_template_type.clone();
-        let unit_skills = &unit.skills;
 
-        if hit_random <= CRITICAL_FAILURE_THRESHOLD {
-            // 完全閃避
-            msgs.push(format!(
-                "亂數={hit_random} <= {CRITICAL_FAILURE_THRESHOLD}%，單位 {unit_type} 完全閃避了攻擊！"
-            ));
-            continue;
-        }
-
-        // 爆擊判定（決定傷害倍率）
-        let attack_result = skill.crit_rate.map_or(AttackResult::NoAttack, |crit_rate| {
-            if hit_random > (100 - crit_rate as i32) {
-                AttackResult::Critical
-            } else {
-                AttackResult::Normal
-            }
-        });
-        let crit_msg = if matches!(attack_result, AttackResult::Critical) {
-            "爆擊"
-        } else {
-            "攻擊"
-        };
-
-        if hit_random > CRITICAL_SUCCESS_THRESHOLD {
-            // 完全命中（套用倍率）
-            let effect_msgs = apply_all_effects(
-                board,
-                skills,
-                caster_id,
-                unit_id,
-                caster_pos,
-                pos,
-                skill,
-                attack_result,
-            )
-            .wrap_context(func)?;
-            for msg in effect_msgs {
-                msgs.push(format!(
-                    "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
-                ));
-            }
-            continue;
-        }
-
-        // 計算閃避值
-        let evasion = unit::skills_to_evasion(unit_skills.iter(), skills).wrap_context(func)?;
-        // 閃避
-        let evade_score = hit_score - evasion;
-        if evade_score <= 0 {
-            msgs.push(format!(
-                "單位 {unit_type} 閃避了{crit_msg}！(accuracy={accuracy}, random={hit_random}, evade={evasion})",
-            ));
-            continue;
-        }
-
-        // 計算格擋值（用於命中判定）
-        let block = unit::skills_to_block(unit_skills.iter(), skills).wrap_context(func)?;
-        let block_score = hit_score - block - evasion;
-
-        // 計算格擋減傷百分比（用於傷害計算）
-        // 格擋減傷百分比：基礎值與最大值由常量定義
-        let block_reduction = unit::skills_to_block_reduction(unit_skills.iter(), skills)
-            .wrap_context(func)?
-            .clamp(MIN_BLOCK_REDUCTION_PERCENT, MAX_BLOCK_REDUCTION_PERCENT);
-
-        // 格擋（百分比減傷）
-        if block_score <= 0 {
-            let effect_results = apply_effects_with_block(
-                board,
-                skills,
-                caster_id,
-                unit_id,
-                caster_pos,
-                pos,
-                skill,
-                attack_result,
-                block_reduction,
-            )
-            .wrap_context(func)?;
-
-            for msg in effect_results {
-                msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！：{msg}"));
-            }
-            continue;
-        }
-
-        // 完全命中（普通路徑，套用倍率）
-        let effect_msgs = apply_all_effects(
+        msgs.extend(process_target_hit(
             board,
             skills,
             caster_id,
-            unit_id,
             caster_pos,
+            unit_id,
             pos,
             skill,
-            attack_result,
-        )
-        .wrap_context(func)?;
-        for msg in effect_msgs {
-            msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
-        }
+            hit_random,
+            hit_score,
+            accuracy,
+        )?);
     }
     Ok(msgs)
 }
@@ -194,13 +96,10 @@ pub fn calc_save_result(
     };
 
     // 計算施法者的 potency（累加所有 skill tags 的 potency）
-    let caster_unit = board
-        .units
-        .get(&caster_id)
-        .ok_or(Error::NoActingUnit {
-            func,
-            unit_id: caster_id,
-        })?;
+    let caster_unit = board.units.get(&caster_id).ok_or(Error::NoActingUnit {
+        func,
+        unit_id: caster_id,
+    })?;
 
     let mut caster_potency = 0;
     for tag in &skill.tags {
@@ -231,5 +130,144 @@ pub fn calc_save_result(
         Ok(SaveResult::Failure)
     } else {
         Ok(SaveResult::Success)
+    }
+}
+
+use inner::*;
+mod inner {
+    use super::*;
+
+    /// 判定攻擊結果（普通或爆擊）與訊息文字
+    pub(super) fn determine_attack_result(
+        skill: &Skill,
+        hit_random: i32,
+    ) -> (AttackResult, &'static str) {
+        let attack_result = skill.crit_rate.map_or(AttackResult::NoAttack, |crit_rate| {
+            if hit_random > (100 - crit_rate as i32) {
+                AttackResult::Critical
+            } else {
+                AttackResult::Normal
+            }
+        });
+        let crit_msg = if matches!(attack_result, AttackResult::Critical) {
+            "爆擊"
+        } else {
+            "攻擊"
+        };
+        (attack_result, crit_msg)
+    }
+
+    /// 處理單一目標的命中判定與效果應用
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn process_target_hit(
+        board: &mut Board,
+        skills: &BTreeMap<SkillID, Skill>,
+        caster_id: UnitID,
+        caster_pos: Pos,
+        unit_id: UnitID,
+        pos: Pos,
+        skill: &Skill,
+        hit_random: i32,
+        hit_score: i32,
+        accuracy: i32,
+    ) -> Result<Vec<String>, Error> {
+        let func = "process_target_hit";
+
+        let unit = board.units.get(&unit_id).ok_or(Error::InvalidImplementation {
+            func,
+            detail: "unit not found".to_string(),
+        })?;
+        let unit_type = unit.unit_template_type.clone();
+        let unit_skills = &unit.skills;
+
+        let mut msgs = vec![];
+
+        // 完全閃避
+        if hit_random <= CRITICAL_FAILURE_THRESHOLD {
+            msgs.push(format!(
+                "亂數={hit_random} <= {CRITICAL_FAILURE_THRESHOLD}%，單位 {unit_type} 完全閃避了攻擊！"
+            ));
+            return Ok(msgs);
+        }
+
+        let (attack_result, crit_msg) = determine_attack_result(skill, hit_random);
+
+        // 完全命中
+        if hit_random > CRITICAL_SUCCESS_THRESHOLD {
+            let effect_msgs = apply_all_effects(
+                board,
+                skills,
+                caster_id,
+                unit_id,
+                caster_pos,
+                pos,
+                skill,
+                attack_result,
+            )
+            .wrap_context(func)?;
+            for msg in effect_msgs {
+                msgs.push(format!(
+                    "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
+                ));
+            }
+            return Ok(msgs);
+        }
+
+        // 閃避判定
+        let evasion = unit::skills_to_evasion(unit_skills.iter(), skills).wrap_context(func)?;
+        let evade_score = hit_score - evasion;
+        if evade_score <= 0 {
+            msgs.push(format!(
+                "單位 {unit_type} 閃避了{crit_msg}！(accuracy={accuracy}, random={hit_random}, evade={evasion})",
+            ));
+            return Ok(msgs);
+        }
+
+        // 格擋判定
+        let block = unit::skills_to_block(unit_skills.iter(), skills).wrap_context(func)?;
+        let block_score = hit_score - block - evasion;
+
+        let block_reduction = unit::skills_to_block_reduction(unit_skills.iter(), skills)
+            .wrap_context(func)?
+            .clamp(MIN_BLOCK_REDUCTION_PERCENT, MAX_BLOCK_REDUCTION_PERCENT);
+
+        if block_score <= 0 {
+            let effect_results = apply_effects_with_block(
+                board,
+                skills,
+                caster_id,
+                unit_id,
+                caster_pos,
+                pos,
+                skill,
+                attack_result,
+                block_reduction,
+            )
+            .wrap_context(func)?;
+
+            for msg in effect_results {
+                msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！：{msg}"));
+            }
+            return Ok(msgs);
+        }
+
+
+        // 完全命中
+        let effect_msgs = apply_all_effects(
+            board,
+            skills,
+            caster_id,
+            unit_id,
+            caster_pos,
+            pos,
+            skill,
+            attack_result,
+        )
+        .wrap_context(func)?;
+        for msg in effect_msgs {
+            msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
+        }
+
+        Ok(msgs)
     }
 }

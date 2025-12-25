@@ -70,8 +70,7 @@ impl PathfindingBoard for MovableBoardView<'_> {
     fn get_cost(&self, pos: Pos) -> MovementCost {
         self.board
             .get_tile(pos)
-            .map(|t| movement_cost(t.terrain))
-            .unwrap_or(MAX_MOVEMENT_COST)
+            .map_or(MAX_MOVEMENT_COST, |t| movement_cost(t.terrain))
     }
 
     /// 取得鄰近座標（上下左右）
@@ -198,8 +197,7 @@ pub fn movement_tile_color(
     let (move_points, moved) = board
         .units
         .get(active_unit_id)
-        .map(|u| (u.move_points, u.moved))
-        .unwrap_or((0, 0));
+        .map_or((0, 0), |u| (u.move_points, u.moved));
     let is_first = moved + cost <= move_points;
     // 顯示可移動範圍
     let color = if is_first {

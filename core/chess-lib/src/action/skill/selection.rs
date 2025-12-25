@@ -133,12 +133,10 @@ impl SkillSelection {
         let func = "get_affect_area_or_error";
 
         // 取得施法者座標，用於像推人等需要方向資訊的效果
-        let caster_pos = board
-            .unit_to_pos(caster)
-            .ok_or(Error::NoActingUnit {
-                func,
-                unit_id: caster,
-            })?;
+        let caster_pos = board.unit_to_pos(caster).ok_or(Error::NoActingUnit {
+            func,
+            unit_id: caster,
+        })?;
 
         let affect_area = self.skill_affect_area(board, skills, caster_pos, target);
         if affect_area.is_empty() {

@@ -26,13 +26,10 @@ pub(super) fn validate_skill_casting(
     let func = "validate_skill_casting";
 
     // 施放前必須找到 unit，否則不能施放技能
-    let unit = board
-        .units
-        .get(&caster)
-        .ok_or(Error::NoActingUnit {
-            func,
-            unit_id: caster,
-        })?;
+    let unit = board.units.get(&caster).ok_or(Error::NoActingUnit {
+        func,
+        unit_id: caster,
+    })?;
     is_able_to_cast(unit).wrap_context(func)?;
 
     let skill_id = selected_skill
@@ -60,13 +57,10 @@ pub(super) fn consume_skill_mp(
 
     // 魔力消耗檢查與扣除
     if skill.cost < 0 {
-        let unit = board
-            .units
-            .get_mut(&caster)
-            .ok_or(Error::NoActingUnit {
-                func,
-                unit_id: caster,
-            })?;
+        let unit = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
+            func,
+            unit_id: caster,
+        })?;
 
         if unit.mp + skill.cost < 0 {
             return Err(Error::NotEnoughMp {
@@ -131,13 +125,10 @@ pub(super) fn apply_skill_to_area(
         }
         Some(skill_accuracy) => {
             // 預先計算施法者的 accuracy 加成
-            let caster_unit = board
-                .units
-                .get(&caster)
-                .ok_or(Error::NoActingUnit {
-                    func,
-                    unit_id: caster,
-                })?;
+            let caster_unit = board.units.get(&caster).ok_or(Error::NoActingUnit {
+                func,
+                unit_id: caster,
+            })?;
 
             let caster_accuracy =
                 unit::skills_to_accuracy(caster_unit.skills.iter(), skills).wrap_context(func)?;

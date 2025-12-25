@@ -172,20 +172,15 @@ pub fn is_targeting_valid_target(
         return Ok(());
     }
     // 檢查陣營是否符合技能效果目標
-    let caster_unit = board
-        .units
-        .get(&caster_id)
-        .ok_or(Error::NoActingUnit {
-            func,
-            unit_id: caster_id,
-        })?;
-    let target_id = board
-        .pos_to_unit(target)
-        .ok_or(Error::SkillTargetNoUnit {
-            func,
-            skill_id: skill_id.to_string(),
-            pos: target,
-        })?;
+    let caster_unit = board.units.get(&caster_id).ok_or(Error::NoActingUnit {
+        func,
+        unit_id: caster_id,
+    })?;
+    let target_id = board.pos_to_unit(target).ok_or(Error::SkillTargetNoUnit {
+        func,
+        skill_id: skill_id.to_string(),
+        pos: target,
+    })?;
     let target_unit = board
         .units
         .get(&target_id)
