@@ -61,15 +61,7 @@ pub fn calc_hit_result(
         };
 
         msgs.extend(process_target_hit(
-            board,
-            skills,
-            caster_id,
-            caster_pos,
-            unit_id,
-            pos,
-            skill,
-            hit_random,
-            hit_score,
+            board, skills, caster_id, caster_pos, unit_id, pos, skill, hit_random, hit_score,
             accuracy,
         )?);
     }
@@ -173,10 +165,13 @@ mod inner {
     ) -> Result<Vec<String>, Error> {
         let func = "process_target_hit";
 
-        let unit = board.units.get(&unit_id).ok_or(Error::InvalidImplementation {
-            func,
-            detail: "unit not found".to_string(),
-        })?;
+        let unit = board
+            .units
+            .get(&unit_id)
+            .ok_or(Error::InvalidImplementation {
+                func,
+                detail: "unit not found".to_string(),
+            })?;
         let unit_type = unit.unit_template_type.clone();
         let unit_skills = &unit.skills;
 
@@ -250,7 +245,6 @@ mod inner {
             }
             return Ok(msgs);
         }
-
 
         // 完全命中
         let effect_msgs = apply_all_effects(

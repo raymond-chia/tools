@@ -37,6 +37,8 @@ pub struct Unit {
     pub moved: MovementCost,
     pub move_points: MovementCost,
     pub has_cast_skill_this_turn: bool,
+    pub reactions_used_this_turn: ReactionCount,
+    pub max_reactions_per_turn: ReactionCount,
     pub hp: i32,
     pub max_hp: i32,
     pub mp: i32,
@@ -64,7 +66,7 @@ impl Unit {
         }
 
         // 使用統一函數計算衍生值
-        let (max_hp, max_mp, move_points) =
+        let (max_hp, max_mp, move_points, max_reactions_per_turn) =
             calculate_derived_stats(&template.skills, skills).wrap_context(func)?;
 
         Ok(Unit {
@@ -74,6 +76,8 @@ impl Unit {
             moved: 0,
             move_points,
             has_cast_skill_this_turn: false,
+            reactions_used_this_turn: 0,
+            max_reactions_per_turn,
             hp: max_hp,
             max_hp,
             mp: max_mp,
@@ -88,7 +92,7 @@ impl Unit {
         let func = "Unit::recalc_from_skills";
 
         // 使用統一函數計算衍生值
-        let (max_hp, max_mp, move_points) =
+        let (max_hp, max_mp, move_points, max_reactions_per_turn) =
             calculate_derived_stats(&self.skills, skills).wrap_context(func)?;
 
         self.max_hp = max_hp;
@@ -96,6 +100,7 @@ impl Unit {
         self.max_mp = max_mp;
         self.mp = max_mp; // 重置 MP 為新的最大值
         self.move_points = move_points;
+        self.max_reactions_per_turn = max_reactions_per_turn;
 
         Ok(())
     }
@@ -196,6 +201,22 @@ pub fn skills_to_move_points(
     Ok(if total < 0 { 0 } else { total as MovementCost })
 }
 
+pub fn skills_to_max_reactions(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+) -> Result<ReactionCount, Error> {
+    let func = "skills_to_max_reactions";
+    let total = aggregate_skill_effect(skill_ids, skills, |effect| {
+        if let Effect::MaxReactions { value, .. } = effect {
+            *value
+        } else {
+            0
+        }
+    })
+    .wrap_context(func)?;
+    Ok(if total < 0 { 0 } else { total as ReactionCount })
+}
+
 /// 計算單位對特定 Tag 的施法效力總和
 /// 尋找所有 effect 為 Effect::Potency 且 tag 匹配的技能，並加總其 value
 pub fn skills_to_potency(
@@ -247,7 +268,7 @@ mod inner {
     pub fn calculate_derived_stats(
         skill_ids: &BTreeSet<String>,
         skills: &BTreeMap<SkillID, Skill>,
-    ) -> Result<(i32, i32, MovementCost), Error> {
+    ) -> Result<(i32, i32, MovementCost, ReactionCount), Error> {
         let func = "calculate_derived_stats";
         let max_hp = skills_to_max_hp(skill_ids.iter(), skills).wrap_context(func)?;
 
@@ -255,7 +276,10 @@ mod inner {
 
         let move_points = skills_to_move_points(skill_ids.iter(), skills).wrap_context(func)?;
 
-        Ok((max_hp, max_mp, move_points))
+        let max_reactions_per_turn =
+            skills_to_max_reactions(skill_ids.iter(), skills).wrap_context(func)?;
+
+        Ok((max_hp, max_mp, move_points, max_reactions_per_turn))
     }
 }
 
@@ -339,6 +363,8 @@ mod tests {
             assert_eq!(unit.moved, 0);
             assert_eq!(unit.move_points, expect["move_points"] as usize);
             assert_eq!(unit.has_cast_skill_this_turn, false);
+            assert_eq!(unit.reactions_used_this_turn, 0);
+            assert_eq!(unit.max_reactions_per_turn, 0);
             assert_eq!(unit.hp, expect["max_hp"]);
             assert_eq!(unit.max_hp, expect["max_hp"]);
             assert_eq!(unit.mp, expect["max_mp"]);
@@ -366,6 +392,8 @@ mod tests {
             moved: usize::MAX,
             move_points: usize::MAX,
             has_cast_skill_this_turn: true,
+            reactions_used_this_turn: usize::MAX,
+            max_reactions_per_turn: usize::MAX,
             hp: i32::MIN,
             max_hp: i32::MAX,
             mp: i32::MIN,
@@ -379,6 +407,8 @@ mod tests {
         assert_eq!(unit.moved, usize::MAX);
         assert_eq!(unit.move_points, usize::MAX);
         assert!(unit.has_cast_skill_this_turn);
+        assert_eq!(unit.reactions_used_this_turn, usize::MAX);
+        assert_eq!(unit.max_reactions_per_turn, usize::MAX);
         assert_eq!(unit.hp, i32::MIN);
         assert_eq!(unit.max_hp, i32::MAX);
         assert_eq!(unit.mp, i32::MIN);
@@ -794,6 +824,8 @@ mod tests {
             moved: 0,
             move_points: 0,
             has_cast_skill_this_turn: false,
+            reactions_used_this_turn: 0,
+            max_reactions_per_turn: 0,
             hp: 0,
             max_hp: 0,
             mp: 0,
@@ -811,6 +843,40 @@ mod tests {
         assert_eq!(unit.max_mp, 5);
         assert_eq!(unit.mp, 5);
         assert_eq!(unit.move_points, 7);
+        assert_eq!(unit.max_reactions_per_turn, 0);
+    }
+
+    #[test]
+    fn test_recalc_from_skills_with_max_reactions() {
+        let mut skills = BTreeMap::new();
+        let mut s1 = Skill::default();
+        s1.effects = vec![Effect::MaxReactions {
+            value: 2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        skills.insert("reaction_skill".to_string(), s1);
+
+        let mut unit = Unit {
+            id: 1,
+            unit_template_type: "t".to_string(),
+            team: "team".to_string(),
+            moved: 0,
+            move_points: 0,
+            has_cast_skill_this_turn: false,
+            reactions_used_this_turn: 0,
+            max_reactions_per_turn: 0,
+            hp: 0,
+            max_hp: 0,
+            mp: 0,
+            max_mp: 0,
+            skills: ["reaction_skill".to_string()].iter().cloned().collect(),
+            status_effects: Vec::new(),
+        };
+
+        unit.recalc_from_skills(&skills).unwrap();
+        assert_eq!(unit.max_reactions_per_turn, 2);
     }
 
     #[test]
@@ -832,6 +898,8 @@ mod tests {
             moved: 0,
             move_points: 10, // initial value should be overwritten
             has_cast_skill_this_turn: false,
+            reactions_used_this_turn: 0,
+            max_reactions_per_turn: 0,
             hp: 1,
             max_hp: 1,
             mp: 1,
@@ -940,5 +1008,88 @@ mod tests {
 
         let reflex_resistance = skills_to_resistance(skills.keys(), &skills, &SaveType::Reflex);
         assert_eq!(reflex_resistance.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_skills_to_max_reactions() {
+        let mut skills = BTreeMap::new();
+        // 無技能
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 0);
+
+        // 一個 MaxReactions 技能
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::MaxReactions {
+            value: 1,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 1);
+
+        // 多個 MaxReactions 技能
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::MaxReactions {
+            value: 2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 3);
+
+        // 非 MaxReactions 類型技能不影響
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxHp {
+            value: 99,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 3);
+    }
+
+    #[test]
+    fn test_skills_to_max_reactions_negative() {
+        let mut skills = BTreeMap::new();
+        // 負數 max_reactions，應回傳 0
+        let mut skill1 = Skill::default();
+        skill1.effects = vec![Effect::MaxReactions {
+            value: -2,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_a = "a".to_string();
+        skills.insert(key_a.clone(), skill1);
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 0);
+
+        // 正負混合，總和為負，仍回傳 0
+        let mut skill2 = Skill::default();
+        skill2.effects = vec![Effect::MaxReactions {
+            value: 1,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_b = "b".to_string();
+        skills.insert(key_b.clone(), skill2);
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 0);
+
+        // 正負混合，總和為正
+        let mut skill3 = Skill::default();
+        skill3.effects = vec![Effect::MaxReactions {
+            value: 5,
+            target_type: Default::default(),
+            shape: Default::default(),
+            duration: 0,
+        }];
+        let key_c = "c".to_string();
+        skills.insert(key_c.clone(), skill3);
+        assert_eq!(skills_to_max_reactions(skills.keys(), &skills).unwrap(), 4);
     }
 }

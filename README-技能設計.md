@@ -962,5 +962,95 @@ shape = "point"
 
 ---
 
+## 暫存區域（設計草稿）
+
+### Reaction 系統設計
+
+#### 核心機制
+
+**次數管理**（類似 move_points）：
+- `Unit.max_reactions_per_turn: usize` - 從技能計算
+- `Unit.reactions_used_this_turn: usize` - 當前已使用次數
+- 每回合開始重置為 0
+
+**Effect 類型**：
+- `Effect::Reaction` - 提供 Reaction 能力（觸發條件、執行技能）
+- `Effect::MaxReactions` - 提供 Reaction 次數上限
+
+**觸發條件（ReactionTrigger）**：
+- `OnMove` - 敵人離開相鄰格時（借機攻擊）
+- `OnAttacked` - 自己被攻擊命中時（反擊）
+
+**技能來源（ReactionSkillSource）**：
+```rust
+pub enum ReactionSkillSource {
+    SkillId(String),    // 使用特定技能 ID
+    Tag(Tag),           // 使用有此 Tag 的技能
+}
+```
+- `SkillId` - 明確指定技能（如特殊的反擊技能）
+- `Tag` - 按 Tag 查找技能（如 `BasicAttack`）
+  - 如果找到**多個**符合的技能 → UI 讓玩家選擇要用哪個
+  - 如果只有一個 → 直接使用
+
+#### UI 互動設計 ⭐ **核心原則**
+
+**所有 Reaction 都必須由玩家確認執行**：
+- 無論有 1 個還是多個 Reaction，都要跳出提示
+- 遊戲暫停，顯示可用的 Reaction 選項
+- 玩家可選擇：
+  - ✅ 執行（消耗 Reaction 次數）
+  - ❌ 跳過（保留次數給其他時機）
+- 多個 Reaction 時，依照玩家點選順序執行
+
+**設計理由**：
+- ✅ **玩家主導**：戰術決策權在玩家手中
+- ✅ **資源管理**：玩家自行判斷何時使用寶貴的 Reaction 機會
+- ✅ **透明度**：清楚知道觸發時機和可用選項
+- ✅ **避免意外**：不會因為 AI 自動執行而浪費 Reaction
+- ✅ **戰術深度**：有多個技能可選時，玩家根據情況選最適合的
+  - 敵人血少 → 選高傷害技能
+  - 敵人血多 → 選帶 debuff 的技能
+
+**範例場景 1：單一技能**
+```
+敵人移動離開相鄰格 → 遊戲暫停
+UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
+玩家選擇：[執行] / [跳過]
+```
+
+**範例場景 2：多個技能可選** ⭐
+```
+觸發 Reaction (skill_source = Tag::BasicAttack)
+→ 找到 3 個符合的技能 → UI 彈出選擇：
+
+┌─────────────────────────────┐
+│ 戰士可以使用借機攻擊，選擇：  │
+│ [ ] 斬擊 (10 傷害)           │
+│ [ ] 刺擊 (8 傷害 + 流血)     │
+│ [ ] 橫掃 (6 傷害 AOE)        │
+│ [ ] 跳過                     │
+└─────────────────────────────┘
+
+玩家根據情況選擇最適合的技能
+```
+
+#### 實作待辦
+
+- [ ] skills-lib: 加入 ReactionTrigger enum
+- [ ] skills-lib: 加入 ReactionSkillSource enum (SkillId, Tag)
+- [ ] skills-lib: 加入 Effect::Reaction, Effect::MaxReactions
+- [ ] Unit: 加入 max_reactions_per_turn, reactions_used_this_turn
+- [ ] unit.rs: 實作 skills_to_max_reactions() 計算函數
+- [ ] action/reaction.rs: 實作 find_reaction_skills() 查找邏輯
+- [ ] action/reaction.rs: 實作觸發檢查邏輯
+- [ ] action/movement.rs, skill.rs: 整合觸發點
+- [ ] battle.rs: 回合開始重置次數
+- [ ] UI: Reaction 確認介面（單一技能）
+- [ ] UI: Reaction 技能選擇介面（多個技能可選）
+- [ ] 測試場景
+
+---
+
 **最後更新**：2025-12-25
 **文檔版本**：v1.1

@@ -23,6 +23,7 @@ pub type UnitID = u32;
 pub type UnitTemplateType = String;
 pub type TeamID = String;
 pub type MovementCost = usize;
+pub type ReactionCount = usize;
 pub type RGB = (u8, u8, u8);
 pub type RGBA = (u8, u8, u8, u8);
 pub type AIScore = f32;

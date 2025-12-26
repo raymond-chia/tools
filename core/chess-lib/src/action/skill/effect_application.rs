@@ -178,6 +178,17 @@ pub(super) fn apply_effect_to_pos(
         Effect::MovePoints {
             value, duration, ..
         } => Some(format!("[未實作] 單位移動 {value}, 持續 {duration} 回合")),
+        Effect::MaxReactions {
+            value, duration, ..
+        } => Some(format!(
+            "[未實作] MaxReactions 效果 +{value}, 持續 {duration} 回合"
+        )),
+        Effect::Reaction {
+            trigger, duration, ..
+        } => Some(format!(
+            "[未實作] Reaction 效果（{:?}）, 持續 {duration} 回合",
+            trigger
+        )),
         Effect::HitAndRun { .. } => Some("[未實作] 打帶跑".to_string()),
         Effect::Shove { distance, .. } => {
             apply_shove_effect(board, caster_pos, target_pos, distance)

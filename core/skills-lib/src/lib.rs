@@ -93,6 +93,34 @@ pub enum SaveType {
     Will,   // 意志：對抗心靈控制、幻術
 }
 
+/// 反應動作觸發條件
+#[derive(
+    Debug, Deserialize, Serialize, Default, Clone, EnumString, Display, EnumIter, PartialEq,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ReactionTrigger {
+    #[default]
+    OnMove, // 敵人離開相鄰格時（借機攻擊）
+    OnAttacked, // 自己被攻擊命中時（反擊）
+}
+
+/// 被觸發的技能來源
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum TriggeredSkill {
+    SkillId { id: SkillID }, // 使用特定技能 ID
+    Tag { tag: Tag },        // 使用有此 Tag 的技能
+}
+
+impl Default for TriggeredSkill {
+    fn default() -> Self {
+        TriggeredSkill::Tag {
+            tag: Tag::default(),
+        }
+    }
+}
+
 #[derive(
     Debug, Deserialize, Serialize, Clone, Default, EnumString, Display, EnumIter, PartialEq,
 )]
@@ -181,6 +209,19 @@ pub enum Effect {
         value: i32,
         duration: i32, // -1 代表永久
     },
+    MaxReactions {
+        target_type: TargetType,
+        shape: Shape,
+        value: i32,
+        duration: i32, // -1 代表永久
+    },
+    Reaction {
+        target_type: TargetType,
+        shape: Shape,
+        trigger: ReactionTrigger,        // 觸發條件
+        triggered_skill: TriggeredSkill, // 被觸發的技能
+        duration: i32,                   // -1 代表永久
+    },
     HitAndRun {
         target_type: TargetType,
         shape: Shape,
@@ -241,6 +282,8 @@ macro_rules! effect_field_ref {
             | Effect::Block { $field, .. }
             | Effect::BlockReduction { $field, .. }
             | Effect::MovePoints { $field, .. }
+            | Effect::MaxReactions { $field, .. }
+            | Effect::Reaction { $field, .. }
             | Effect::HitAndRun { $field, .. }
             | Effect::Shove { $field, .. }
             | Effect::Potency { $field, .. }
@@ -286,6 +329,8 @@ impl Effect {
             | Effect::Block { .. }
             | Effect::BlockReduction { .. }
             | Effect::MovePoints { .. }
+            | Effect::MaxReactions { .. }
+            | Effect::Reaction { .. }
             | Effect::HitAndRun { .. }
             | Effect::Shove { .. }
             | Effect::Potency { .. }
@@ -304,6 +349,8 @@ impl Effect {
             | Effect::Block { duration, .. }
             | Effect::BlockReduction { duration, .. }
             | Effect::MovePoints { duration, .. }
+            | Effect::MaxReactions { duration, .. }
+            | Effect::Reaction { duration, .. }
             | Effect::HitAndRun { duration, .. }
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
@@ -323,6 +370,8 @@ impl Effect {
             | Effect::Block { duration, .. }
             | Effect::BlockReduction { duration, .. }
             | Effect::MovePoints { duration, .. }
+            | Effect::MaxReactions { duration, .. }
+            | Effect::Reaction { duration, .. }
             | Effect::HitAndRun { duration, .. }
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
