@@ -1037,20 +1037,47 @@ UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
 
 #### 實作待辦
 
-- [ ] skills-lib: 加入 ReactionTrigger enum
-- [ ] skills-lib: 加入 ReactionSkillSource enum (SkillId, Tag)
-- [ ] skills-lib: 加入 Effect::Reaction, Effect::MaxReactions
-- [ ] Unit: 加入 max_reactions_per_turn, reactions_used_this_turn
-- [ ] unit.rs: 實作 skills_to_max_reactions() 計算函數
-- [ ] action/reaction.rs: 實作 find_reaction_skills() 查找邏輯
-- [ ] action/reaction.rs: 實作觸發檢查邏輯
-- [ ] action/movement.rs, skill.rs: 整合觸發點
-- [ ] battle.rs: 回合開始重置次數
+**核心資料結構與邏輯**（已完成 ✅）
+
+- [x] skills-lib: 加入 ReactionTrigger enum (OnMove, OnAttacked)
+- [x] skills-lib: 加入 TriggeredSkill enum (SkillId, Tag) - 重命名自 ReactionSkillSource
+- [x] skills-lib: 加入 Effect::Reaction, Effect::MaxReactions
+- [x] Unit: 加入 max_reactions_per_turn, reactions_used_this_turn (使用 ReactionCount 類型別名)
+- [x] unit.rs: 實作 skills_to_max_reactions() 計算函數（含測試）
+- [x] action/reaction.rs: 實作 find_reaction_skills() 查找邏輯（含測試）
+  - [x] SkillId 查找：檢查單位是否擁有該技能
+  - [x] Tag 查找：找到所有符合 tag 的技能
+  - [x] 錯誤處理：沒有找到技能時返回 SkillNotFound 錯誤
+- [x] action/reaction.rs: 實作 can_trigger_reaction() 次數檢查（含測試）
+
+**整合與執行邏輯**（部分完成 ⏳）
+
+- [x] battle.rs: 回合開始重置 reactions_used_this_turn = 0 (含測試)
+- [ ] action/movement.rs: 整合 OnMove 觸發點
+  - [ ] 單位移動離開相鄰格時觸發
+  - [ ] 檢查相鄰敵方單位的 reaction
+  - [ ] 調用 reaction 執行邏輯
+- [ ] action/skill.rs: 整合 OnAttacked 觸發點
+  - [ ] 技能命中目標時觸發
+  - [ ] 檢查被攻擊單位的 reaction
+  - [ ] 調用 reaction 執行邏輯
+- [ ] 實作 reaction 執行邏輯（消耗次數、施放技能）
+
+**UI 與測試**（待完成 ❌）
+
 - [ ] UI: Reaction 確認介面（單一技能）
 - [ ] UI: Reaction 技能選擇介面（多個技能可選）
-- [ ] 測試場景
+- [ ] 完整場景測試
+  - [ ] 借機攻擊（OnMove）
+  - [ ] 反擊（OnAttacked）
+  - [ ] 次數限制（max_reactions_per_turn）
+  - [ ] 多技能選擇
 
 ---
 
-**最後更新**：2025-12-25
-**文檔版本**：v1.1
+**最後更新**：2025-12-26
+**文檔版本**：v1.2
+
+**v1.2 更新內容**：
+- ✅ Reaction 系統核心邏輯已完成（資料結構、計算函數、查找邏輯）
+- ⏳ 待整合：觸發點、回合管理、UI 互動

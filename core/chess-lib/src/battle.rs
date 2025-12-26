@@ -47,6 +47,7 @@ impl Battle {
                 remove_expired_status_effects(unit);
                 unit.moved = 0;
                 unit.has_cast_skill_this_turn = false;
+                unit.reactions_used_this_turn = 0;
             }
         }
         skill_selection.select_skill(None);
@@ -114,6 +115,7 @@ mod tests {
                         Unit::from_template(&marker, &template, &BTreeMap::new()).unwrap();
                     unit.moved = 3;
                     unit.has_cast_skill_this_turn = true;
+                    unit.reactions_used_this_turn = 2; // 已使用 2 次 reaction
                     unit
                 }),
                 (223, {
@@ -158,6 +160,11 @@ mod tests {
                 board.units.get(&ids[i]).unwrap().has_cast_skill_this_turn,
                 false,
                 "{i}th turn has cast skill this turn check"
+            );
+            assert_eq!(
+                board.units.get(&ids[i]).unwrap().reactions_used_this_turn,
+                0,
+                "{i}th turn reactions used check"
             );
         }
     }
