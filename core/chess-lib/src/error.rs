@@ -29,6 +29,13 @@ pub enum Error {
         func: &'static str,
         skill_id: SkillID,
     },
+    #[error("`{func}`: 單位 {unit_id}({unit_type}) 找不到技能 {skill_id}")]
+    SkillNotFoundInUnit {
+        func: &'static str,
+        unit_id: UnitID,
+        unit_type: UnitTemplateType,
+        skill_id: SkillID, // 可能是具體 ID 或 "tag:Physical" 之類的描述
+    },
     // 使用技能
     #[error("`{func}`: 未選擇技能")]
     NoSkillSelected { func: &'static str },
