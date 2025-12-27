@@ -7,8 +7,7 @@ use skills_lib::*;
 use std::collections::BTreeMap;
 
 use super::casting::{
-    apply_skill_to_area, calc_skill_affect_area, consume_skill_mp, get_caster_pos,
-    validate_skill_casting,
+    calc_skill_affect_area, cast_skill_internal, get_caster_pos, validate_skill_casting,
 };
 use super::targeting::{
     calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan,
@@ -41,36 +40,11 @@ impl SkillSelection {
         let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)
             .wrap_context(func)?;
 
-        // 2. 取得技能引用
-        let skill = skills.get(&skill_id).ok_or_else(|| Error::SkillNotFound {
-            func,
-            skill_id: skill_id.clone(),
-        })?;
-
-        // 3. 取得施法者位置
-        let caster_pos = get_caster_pos(board, caster).wrap_context(func)?;
-
-        // 4. 計算影響區域（含範圍檢查）
-        let affect_area = calc_skill_affect_area(board, &skill_id, skill, caster_pos, target)
+        // 2. 施放技能（共用邏輯）
+        let msgs = cast_skill_internal(board, skills, caster, &skill_id, target)
             .wrap_context(func)?;
 
-        // 5. 消耗 MP
-        consume_skill_mp(board, caster, &skill_id, skill).wrap_context(func)?;
-
-        // 6. 應用技能效果
-        let msgs = apply_skill_to_area(
-            board,
-            skills,
-            caster,
-            caster_pos,
-            &skill_id,
-            skill,
-            affect_area,
-            target,
-        )
-        .wrap_context(func)?;
-
-        // 7. 消耗 action
+        // 3. 消耗 action
         let unit = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
             func,
             unit_id: caster,

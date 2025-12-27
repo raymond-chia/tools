@@ -13,8 +13,10 @@ use std::collections::BTreeMap;
 use super::effect_application::apply_effect_to_pos;
 use super::hit_resolution::{AttackResult, SaveResult, calc_hit_result, calc_save_result};
 use super::targeting::{
-    calc_shape_area, is_able_to_cast, is_in_skill_range_manhattan, is_targeting_valid_target,
+    calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan,
+    is_targeting_valid_target,
 };
+use crate::action::reaction::consume_reaction;
 
 /// 取得施法者位置
 ///
@@ -88,6 +90,69 @@ pub(in crate::action) fn calc_skill_affect_area(
     }
 
     Ok(affect_area)
+}
+
+/// 施放技能核心邏輯（供 cast_skill 和 execute_reaction 共用）
+///
+/// # 參數
+/// - `board`: 棋盤狀態
+/// - `skills`: 技能資料表
+/// - `caster_id`: 施法者 ID
+/// - `skill_id`: 技能 ID（已驗證）
+/// - `target_pos`: 目標位置
+///
+/// # 返回值
+/// - Ok(Vec<String>): 技能效果訊息
+/// - Err(Error): 施放失敗
+///
+/// # 流程
+/// 1. 取得技能引用
+/// 2. 取得施法者位置
+/// 3. 計算影響區域（含範圍檢查）
+/// 4. 消耗 MP
+/// 5. 應用技能效果
+///
+/// # 注意
+/// 此函數不包含資源消耗（action/reaction），由調用者負責
+pub(in crate::action) fn cast_skill_internal(
+    board: &mut Board,
+    skills: &BTreeMap<SkillID, Skill>,
+    caster_id: UnitID,
+    skill_id: &SkillID,
+    target_pos: Pos,
+) -> Result<Vec<String>, Error> {
+    let func = "cast_skill_internal";
+
+    // 1. 取得技能引用
+    let skill = skills.get(skill_id).ok_or_else(|| Error::SkillNotFound {
+        func,
+        skill_id: skill_id.clone(),
+    })?;
+
+    // 2. 取得施法者位置
+    let caster_pos = get_caster_pos(board, caster_id).wrap_context(func)?;
+
+    // 3. 計算影響區域（含範圍檢查）
+    let affect_area = calc_skill_affect_area(board, skill_id, skill, caster_pos, target_pos)
+        .wrap_context(func)?;
+
+    // 4. 消耗 MP
+    consume_skill_mp(board, caster_id, skill_id, skill).wrap_context(func)?;
+
+    // 5. 應用技能效果
+    let msgs = apply_skill_to_area(
+        board,
+        skills,
+        caster_id,
+        caster_pos,
+        skill_id,
+        skill,
+        affect_area,
+        target_pos,
+    )
+    .wrap_context(func)?;
+
+    Ok(msgs)
 }
 
 /// 驗證施法前提條件：施法者存在、能施法、技能選擇、目標有效
