@@ -2,10 +2,11 @@
 //! - Reaction 系統核心邏輯
 //! - 負責查找符合條件的 reaction 技能
 //! - 檢查觸發條件與次數限制
+use crate::action::movement::get_adjacent_positions;
+use crate::action::skill::{cast_skill_internal, is_targeting_valid_target};
 use crate::*;
 use skills_lib::*;
 use std::collections::{BTreeMap, BTreeSet};
-use crate::action::skill::{cast_skill_internal,is_targeting_valid_target};
 
 /// 根據 TriggeredSkill 查找符合條件的技能
 ///
@@ -229,6 +230,45 @@ pub fn check_reactions(
     Ok(all_pending)
 }
 
+/// 檢查移動離開某個位置時觸發的 reactions（借機攻擊）
+///
+/// # 參數
+/// - `board`: 棋盤狀態
+/// - `mover`: (移動的單位, 離開的位置)
+/// - `all_skills`: 全局技能表
+///
+/// # 返回值
+/// - Ok(Vec<PendingReaction>): 被觸發的 reactions 列表（可能為空）
+/// - Err(Error): 查找過程中的錯誤
+///
+/// # 實作說明
+/// 1. 檢查離開位置相鄰（上下左右）格子的敵方單位
+/// 2. 調用 check_reactions 查找有 OnMove trigger 的 reactions
+pub fn check_move_reactions(
+    board: &Board,
+    mover: (&Unit, Pos),
+    all_skills: &BTreeMap<SkillID, Skill>,
+) -> Result<Vec<PendingReaction>, Error> {
+    let func = "check_move_reactions";
+    let (mover_unit, from_pos) = mover;
+
+    // 收集相鄰的敵方單位
+    let mut adjacent_enemies = Vec::new();
+    for pos in get_adjacent_positions(from_pos) {
+        if let Some(unit_id) = board.pos_to_unit(pos) {
+            if let Some(unit) = board.units.get(&unit_id) {
+                // 只檢查敵方單位
+                if unit.team != mover_unit.team {
+                    adjacent_enemies.push((unit, pos));
+                }
+            }
+        }
+    }
+
+    // 檢查這些敵方單位的 OnMove reactions
+    check_reactions(&adjacent_enemies, ReactionTrigger::OnMove, all_skills).wrap_context(func)
+}
+
 /// 執行 reaction（施放技能並消耗 reaction 次數）
 ///
 /// # 參數
@@ -271,18 +311,20 @@ pub fn execute_reaction(
     is_able_to_react(unit).wrap_context(func)?;
 
     // 3. 驗證目標有效（TargetType 檢查）
-    is_targeting_valid_target(board, skill_id, skill, reactor_id, target_pos)
-        .wrap_context(func)?;
+    is_targeting_valid_target(board, skill_id, skill, reactor_id, target_pos).wrap_context(func)?;
 
     // 4. 施放技能（共用邏輯）
-    let msgs = cast_skill_internal(board, skills, reactor_id, skill_id, target_pos)
-        .wrap_context(func)?;
+    let msgs =
+        cast_skill_internal(board, skills, reactor_id, skill_id, target_pos).wrap_context(func)?;
 
     // 5. 消耗 reaction 次數
-    let unit = board.units.get_mut(&reactor_id).ok_or(Error::NoActingUnit {
-        func,
-        unit_id: reactor_id,
-    })?;
+    let unit = board
+        .units
+        .get_mut(&reactor_id)
+        .ok_or(Error::NoActingUnit {
+            func,
+            unit_id: reactor_id,
+        })?;
     consume_reaction(unit).wrap_context(func)?;
 
     Ok(msgs)
@@ -508,5 +550,202 @@ mod tests {
         // 第 4 次應該失敗
         assert!(consume_reaction(&mut unit).is_err());
         assert_eq!(unit.reactions_used_this_turn, 3);
+    }
+
+    // check_move_reactions 測試輔助函數
+    fn create_test_unit(id: UnitID, team: &str, pos: Pos) -> (Unit, Pos) {
+        let unit = Unit {
+            id,
+            unit_template_type: "test".to_string(),
+            team: team.to_string(),
+            moved: 0,
+            move_points: 10,
+            has_cast_skill_this_turn: false,
+            hp: 100,
+            max_hp: 100,
+            mp: 50,
+            max_mp: 50,
+            skills: BTreeSet::new(),
+            status_effects: Vec::new(),
+            max_reactions_per_turn: 0,
+            reactions_used_this_turn: 0,
+        };
+        (unit, pos)
+    }
+
+    fn create_test_board_for_move_reactions() -> (Board, UnitID, UnitID) {
+        use std::collections::HashMap;
+
+        // 創建 3x3 棋盤
+        let tiles = vec![
+            vec![
+                Tile {
+                    terrain: Terrain::Plain,
+                    object: None
+                };
+                3
+            ];
+            3
+        ];
+
+        // 創建單位：玩家在 (1,1)，敵人在 (2,1)
+        let mover_pos = Pos { x: 1, y: 1 };
+        let enemy_pos = Pos { x: 2, y: 1 };
+
+        let (mover, _) = create_test_unit(1, "player", mover_pos);
+        let (enemy, _) = create_test_unit(2, "enemy", enemy_pos);
+
+        let mut units = HashMap::new();
+        units.insert(mover.id, mover);
+        units.insert(enemy.id, enemy);
+
+        let mut unit_map = UnitMap::default();
+        unit_map.insert(1, mover_pos);
+        unit_map.insert(2, enemy_pos);
+
+        let board = Board {
+            tiles,
+            teams: HashMap::new(),
+            units,
+            unit_map,
+        };
+
+        (board, 1, 2)
+    }
+
+    #[test]
+    fn test_check_move_reactions_no_adjacent_enemies() {
+        // 測試：沒有相鄰敵人時，不觸發任何 reactions
+        let (board, mover_id, _) = create_test_board_for_move_reactions();
+        let skills_map = BTreeMap::new();
+
+        // 測試從棋盤角落移動（沒有相鄰敵人）
+        let mover = board.units.get(&mover_id).unwrap();
+        let from_pos = Pos { x: 0, y: 0 };
+
+        let reactions = check_move_reactions(&board, (mover, from_pos), &skills_map).unwrap();
+        assert_eq!(reactions.len(), 0, "沒有相鄰敵人應該不觸發 reactions");
+    }
+
+    #[test]
+    fn test_check_move_reactions_with_adjacent_enemy() {
+        // 測試：有相鄰敵人且敵人有 OnMove reaction 時，應觸發 reactions
+        let (mut board, mover_id, enemy_id) = create_test_board_for_move_reactions();
+
+        // 創建帶有 OnMove reaction 的技能（觸發特定技能 ID）
+        let reaction_skill = Skill {
+            effects: vec![Effect::Reaction {
+                target_type: TargetType::Enemy,
+                shape: Shape::Point,
+                trigger: ReactionTrigger::OnMove,
+                triggered_skill: TriggeredSkill::SkillId {
+                    id: "basic_attack".to_string(),
+                },
+                duration: -1, // 永久效果
+            }],
+            ..Default::default()
+        };
+
+        let basic_attack = Skill {
+            effects: vec![Effect::Hp {
+                target_type: TargetType::Enemy,
+                shape: Shape::Point,
+                value: -10,
+            }],
+            ..Default::default()
+        };
+
+        let mut skills_map = BTreeMap::new();
+        skills_map.insert("opportunity_attack".to_string(), reaction_skill);
+        skills_map.insert("basic_attack".to_string(), basic_attack);
+
+        // 給敵方單位添加 reaction 技能和攻擊技能
+        if let Some(enemy_unit) = board.units.get_mut(&enemy_id) {
+            enemy_unit.skills.insert("opportunity_attack".to_string());
+            enemy_unit.skills.insert("basic_attack".to_string());
+            enemy_unit.max_reactions_per_turn = 1; // 允許 1 次 reaction
+            enemy_unit.reactions_used_this_turn = 0;
+        }
+
+        let mover = board.units.get(&mover_id).unwrap();
+        let from_pos = Pos { x: 1, y: 1 }; // 離開 (1,1)，相鄰 (2,1) 的敵人
+
+        let reactions = check_move_reactions(&board, (mover, from_pos), &skills_map).unwrap();
+
+        assert_eq!(reactions.len(), 1, "相鄰敵人有 reaction 應該觸發 1 個");
+        assert_eq!(reactions[0].reactor_id, enemy_id);
+        assert_eq!(reactions[0].reactor_pos, Pos { x: 2, y: 1 });
+        assert_eq!(reactions[0].trigger, ReactionTrigger::OnMove);
+        assert_eq!(reactions[0].info.available_skills.len(), 1);
+        assert!(
+            reactions[0]
+                .info
+                .available_skills
+                .contains(&"basic_attack".to_string())
+        );
+    }
+
+    #[test]
+    fn test_check_move_reactions_ignores_allies() {
+        // 測試：相鄰的友方單位不會觸發 reactions
+        use std::collections::HashMap;
+
+        let tiles = vec![
+            vec![
+                Tile {
+                    terrain: Terrain::Plain,
+                    object: None
+                };
+                3
+            ];
+            3
+        ];
+
+        // 創建單位：兩個都是同隊的
+        let (mover, _) = create_test_unit(1, "player", Pos { x: 1, y: 1 });
+        let (ally, _) = create_test_unit(2, "player", Pos { x: 2, y: 1 }); // 同隊
+
+        let mut units = HashMap::new();
+        units.insert(mover.id, mover);
+        units.insert(ally.id, ally);
+
+        let mut unit_map = UnitMap::default();
+        unit_map.insert(1, Pos { x: 1, y: 1 });
+        unit_map.insert(2, Pos { x: 2, y: 1 });
+
+        let mut board = Board {
+            tiles,
+            teams: HashMap::new(),
+            units,
+            unit_map,
+        };
+
+        // 給友方單位添加 reaction 技能（應該被忽略）
+        if let Some(ally_unit) = board.units.get_mut(&2) {
+            ally_unit.skills.insert("opportunity_attack".to_string());
+            ally_unit.skills.insert("basic_attack".to_string());
+            ally_unit.max_reactions_per_turn = 1;
+            ally_unit.reactions_used_this_turn = 0;
+        }
+
+        let skills_map = BTreeMap::new();
+        let mover = board.units.get(&1).unwrap();
+        let from_pos = Pos { x: 1, y: 1 };
+
+        let reactions = check_move_reactions(&board, (mover, from_pos), &skills_map).unwrap();
+        assert_eq!(reactions.len(), 0, "友方單位不應觸發 reactions");
+    }
+
+    #[test]
+    fn test_check_move_reactions_enemy_without_reaction() {
+        // 測試：相鄰敵人沒有 OnMove reaction 時，不觸發
+        let (board, mover_id, _enemy_id) = create_test_board_for_move_reactions();
+        let skills_map = BTreeMap::new(); // 沒有 reaction 技能
+
+        let mover = board.units.get(&mover_id).unwrap();
+        let from_pos = Pos { x: 1, y: 1 };
+
+        let reactions = check_move_reactions(&board, (mover, from_pos), &skills_map).unwrap();
+        assert_eq!(reactions.len(), 0, "敵人沒有 reaction 技能應該不觸發");
     }
 }

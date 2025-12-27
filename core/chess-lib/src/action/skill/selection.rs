@@ -41,8 +41,8 @@ impl SkillSelection {
             .wrap_context(func)?;
 
         // 2. 施放技能（共用邏輯）
-        let msgs = cast_skill_internal(board, skills, caster, &skill_id, target)
-            .wrap_context(func)?;
+        let msgs =
+            cast_skill_internal(board, skills, caster, &skill_id, target).wrap_context(func)?;
 
         // 3. 消耗 action
         let unit = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {

@@ -414,6 +414,10 @@ impl SkillsEditor {
             Some(skill_id) => skill_id,
         };
         ui.heading("技能編輯: ");
+
+        // 先收集技能 ID 列表，避免借用衝突
+        let skill_ids: Vec<SkillID> = self.skills_data.skills.keys().cloned().collect();
+
         let skill = match self.skills_data.skills.get_mut(skill_id) {
             None => {
                 self.set_status("技能不存在".to_string(), true);
@@ -489,6 +493,7 @@ impl SkillsEditor {
                                     &mut move_up_effect_index,
                                     &mut move_down_effect_index,
                                     &mut delete_effect_index,
+                                    &skill_ids,
                                 );
 
                                 ui.add_space(8.0);
@@ -587,6 +592,8 @@ impl SkillsEditor {
                         Effect::Block { .. } => ui.button("新增格擋效果").clicked(),
                         Effect::BlockReduction { .. } => ui.button("新增格擋減傷效果").clicked(),
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
+                        Effect::MaxReactions { .. } => ui.button("新增最大反應次數效果").clicked(),
+                        Effect::Reaction { .. } => ui.button("新增反應效果").clicked(),
                         Effect::Burn { .. } => ui.button("新增燃燒效果").clicked(),
                         Effect::HitAndRun { .. } => ui.button("新增打帶跑效果").clicked(),
                         Effect::Shove { .. } => ui.button("新增推擠效果").clicked(),
@@ -1059,6 +1066,7 @@ fn show_skill_effect_editor(
     move_up_effect_index: &mut Option<usize>,
     move_down_effect_index: &mut Option<usize>,
     delete_effect_index: &mut Option<usize>,
+    skill_ids: &[SkillID],
 ) -> bool {
     let mut move_up_clicked = false;
     let mut move_down_clicked = false;
@@ -1076,6 +1084,8 @@ fn show_skill_effect_editor(
             Effect::Block { .. } => ui.label("格擋"),
             Effect::BlockReduction { .. } => ui.label("格擋減傷"),
             Effect::MovePoints { .. } => ui.label("移動點數"),
+            Effect::MaxReactions { .. } => ui.label("最大反應次數"),
+            Effect::Reaction { .. } => ui.label("反應"),
             Effect::Burn { .. } => ui.label("燃燒"),
             Effect::HitAndRun { .. } => ui.label("打帶跑效果"),
             Effect::Shove { .. } => ui.label("推擠"),
@@ -1108,7 +1118,7 @@ fn show_skill_effect_editor(
     let mut changed = false;
     ui.indent(format!("effect_{}", index), |ui| {
         if !is_basic_passive_effect {
-            if show_effect_editor(ui, effect) {
+            if show_effect_editor(ui, effect, skill_ids) {
                 changed = true;
             }
         } else {
@@ -1128,7 +1138,7 @@ fn show_skill_effect_editor(
     changed
 }
 
-fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
+fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -> bool {
     let mut changed = false;
     match effect {
         Effect::Hp {
@@ -1337,6 +1347,36 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect) -> bool {
             changed |= show_numeric_editor(ui, value, "抗性數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
+        Effect::MaxReactions {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_numeric_editor(ui, value, "最大反應次數變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Reaction {
+            target_type,
+            shape,
+            trigger,
+            triggered_skill,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            ui.horizontal(|ui| {
+                ui.label("形狀:");
+                changed |= show_shape_editor(ui, shape);
+            });
+            changed |= show_reaction_trigger_editor(ui, trigger);
+            changed |= show_triggered_skill_editor(ui, triggered_skill, skill_ids);
+            changed |= show_duration_editor(ui, duration);
+        }
     }
     changed
 }
@@ -1499,6 +1539,97 @@ fn show_duration_editor(ui: &mut Ui, duration: &mut i32) -> bool {
             changed = true;
         }
     });
+    changed
+}
+
+fn show_reaction_trigger_editor(ui: &mut Ui, trigger: &mut ReactionTrigger) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label("觸發條件:");
+        if ui
+            .selectable_value(trigger, ReactionTrigger::OnMove, "離開相鄰格")
+            .clicked()
+        {
+            changed = true;
+        }
+        if ui
+            .selectable_value(trigger, ReactionTrigger::OnAttacked, "被攻擊")
+            .clicked()
+        {
+            changed = true;
+        }
+    });
+    changed
+}
+
+fn show_triggered_skill_editor(
+    ui: &mut Ui,
+    triggered_skill: &mut TriggeredSkill,
+    skill_ids: &[SkillID],
+) -> bool {
+    let mut changed = false;
+
+    ui.label("觸發的技能:");
+
+    // 使用按鈕切換類型
+    ui.horizontal(|ui| {
+        if ui
+            .selectable_label(
+                matches!(triggered_skill, TriggeredSkill::SkillId { .. }),
+                "技能 ID",
+            )
+            .clicked()
+        {
+            if !matches!(triggered_skill, TriggeredSkill::SkillId { .. }) {
+                *triggered_skill = TriggeredSkill::SkillId { id: String::new() };
+                changed = true;
+            }
+        }
+        if ui
+            .selectable_label(
+                matches!(triggered_skill, TriggeredSkill::Tag { .. }),
+                "標籤",
+            )
+            .clicked()
+        {
+            if !matches!(triggered_skill, TriggeredSkill::Tag { .. }) {
+                *triggered_skill = TriggeredSkill::Tag { tag: Tag::Active };
+                changed = true;
+            }
+        }
+    });
+
+    // 根據類型顯示對應的編輯器
+    match triggered_skill {
+        TriggeredSkill::SkillId { id } => {
+            ui.horizontal(|ui| {
+                ui.label("技能 ID:");
+                let response = egui::ComboBox::new("triggered_skill_id", "")
+                    .selected_text(if id.is_empty() {
+                        "請選擇"
+                    } else {
+                        id.as_str()
+                    })
+                    .show_ui(ui, |ui| {
+                        for skill_id in skill_ids {
+                            if ui.selectable_label(id == skill_id, skill_id).clicked() {
+                                *id = skill_id.clone();
+                                changed = true;
+                            }
+                        }
+                    });
+                if response.response.changed() {
+                    changed = true;
+                }
+            });
+        }
+        TriggeredSkill::Tag { tag } => {
+            if show_tag_editor(ui, tag) {
+                changed = true;
+            }
+        }
+    }
+
     changed
 }
 

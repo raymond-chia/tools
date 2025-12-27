@@ -969,25 +969,30 @@ shape = "point"
 #### 核心機制
 
 **次數管理**（類似 move_points）：
+
 - `Unit.max_reactions_per_turn: usize` - 從技能計算
 - `Unit.reactions_used_this_turn: usize` - 當前已使用次數
 - 每回合開始重置為 0
 
 **Effect 類型**：
+
 - `Effect::Reaction` - 提供 Reaction 能力（觸發條件、執行技能）
 - `Effect::MaxReactions` - 提供 Reaction 次數上限
 
 **觸發條件（ReactionTrigger）**：
+
 - `OnMove` - 敵人離開相鄰格時（借機攻擊）
 - `OnAttacked` - 自己被攻擊命中時（反擊）
 
 **技能來源（ReactionSkillSource）**：
+
 ```rust
 pub enum ReactionSkillSource {
     SkillId(String),    // 使用特定技能 ID
     Tag(Tag),           // 使用有此 Tag 的技能
 }
 ```
+
 - `SkillId` - 明確指定技能（如特殊的反擊技能）
 - `Tag` - 按 Tag 查找技能（如 `BasicAttack`）
   - 如果找到**多個**符合的技能 → UI 讓玩家選擇要用哪個
@@ -996,6 +1001,7 @@ pub enum ReactionSkillSource {
 #### UI 互動設計 ⭐ **核心原則**
 
 **所有 Reaction 都必須由玩家確認執行**：
+
 - 無論有 1 個還是多個 Reaction，都要跳出提示
 - 遊戲暫停，顯示可用的 Reaction 選項
 - 玩家可選擇：
@@ -1004,6 +1010,7 @@ pub enum ReactionSkillSource {
 - 多個 Reaction 時，依照玩家點選順序執行
 
 **設計理由**：
+
 - ✅ **玩家主導**：戰術決策權在玩家手中
 - ✅ **資源管理**：玩家自行判斷何時使用寶貴的 Reaction 機會
 - ✅ **透明度**：清楚知道觸發時機和可用選項
@@ -1013,6 +1020,7 @@ pub enum ReactionSkillSource {
   - 敵人血多 → 選帶 debuff 的技能
 
 **範例場景 1：單一技能**
+
 ```
 敵人移動離開相鄰格 → 遊戲暫停
 UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
@@ -1020,6 +1028,7 @@ UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
 ```
 
 **範例場景 2：多個技能可選** ⭐
+
 ```
 觸發 Reaction (skill_source = Tag::BasicAttack)
 → 找到 3 個符合的技能 → UI 彈出選擇：
@@ -1034,6 +1043,28 @@ UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
 
 玩家根據情況選擇最適合的技能
 ```
+
+#### 移動與 Reaction 整合設計 ⭐ **核心架構**
+
+**問題**：
+
+- 移動過程中觸發的 reactions（如降低 MovePoints）需要立即執行並影響後續移動
+- 目前 `move_unit_along_path` 只收集 reactions，移動完成後才回傳，無法即時生效
+
+**UI 層流程**：
+
+- 遍歷路徑，對每一步：
+  1. 檢查 reactions → 玩家選擇是否執行 → 執行 `execute_reaction`
+  2. 執行移動 → 檢查是否能繼續 → 若否則停止
+
+**關鍵特點**：
+
+- ✅ Reactions 立即執行，影響後續移動
+- ✅ 玩家完全控制（符合 UI 互動設計）
+- ✅ 職責分離（chess-lib 不依賴 UI）
+- ✅ 單位死亡或移動力不足時停止移動
+
+---
 
 #### 實作待辦
 
@@ -1053,15 +1084,19 @@ UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
 **整合與執行邏輯**（部分完成 ⏳）
 
 - [x] battle.rs: 回合開始重置 reactions_used_this_turn = 0 (含測試)
-- [ ] action/movement.rs: 整合 OnMove 觸發點
-  - [ ] 單位移動離開相鄰格時觸發
-  - [ ] 檢查相鄰敵方單位的 reaction
-  - [ ] 調用 reaction 執行邏輯
+- [x] action/reaction.rs: 實作 consume_reaction() 消耗次數（含測試）
+  - [x] 檢查是否還有可用次數
+  - [x] 消耗一次 reaction 次數
+  - [x] 錯誤處理：次數用盡時返回錯誤
+- [x] action/reaction.rs: 實作 execute_reaction() 執行 reaction 技能（含測試）
+- [ ] action/movement.rs: 實作逐步移動 API ⭐
+  - [ ] `check_next_step_reactions()` - 檢查單步觸發的 reactions
+  - [ ] `execute_one_step_move()` - 執行單步移動
+  - [ ] `can_continue_moving()` - 檢查是否能繼續移動
+  - [ ] 重構 `move_unit_along_path` 供 AI 使用（自動執行 reactions）
 - [ ] action/skill.rs: 整合 OnAttacked 觸發點
-  - [ ] 技能命中目標時觸發
-  - [ ] 檢查被攻擊單位的 reaction
-  - [ ] 調用 reaction 執行邏輯
-- [ ] 實作 reaction 執行邏輯（消耗次數、施放技能）
+  - [ ] 技能命中目標時檢查 reactions
+  - [ ] 回傳 `Vec<PendingReaction>` 供外層處理
 
 **UI 與測試**（待完成 ❌）
 
@@ -1079,5 +1114,6 @@ UI 提示：「戰士 A1 可以使用借機攻擊 (斬擊)，是否執行？」
 **文檔版本**：v1.2
 
 **v1.2 更新內容**：
+
 - ✅ Reaction 系統核心邏輯已完成（資料結構、計算函數、查找邏輯）
 - ⏳ 待整合：觸發點、回合管理、UI 互動

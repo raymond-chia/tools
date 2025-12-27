@@ -11,6 +11,25 @@ const SECOND_MOVEMENT_COLOR: RGBA = (50, 50, 255, 150); // 深藍
 const FIRST_PATH_COLOR: RGBA = (125, 0, 125, 150); // 淺紫
 const SECOND_PATH_COLOR: RGBA = (100, 0, 100, 150); // 深紫
 
+/// 取得相鄰格子（上下左右）
+pub fn get_adjacent_positions(pos: Pos) -> Vec<Pos> {
+    let dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+    dirs.into_iter()
+        .filter_map(|(dx, dy)| {
+            let x = pos.x as isize + dx;
+            let y = pos.y as isize + dy;
+            if x >= 0 && y >= 0 {
+                Some(Pos {
+                    x: x as usize,
+                    y: y as usize,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 /// 檢查位置的地形和物件是否可通行（不處理單位阻擋）
 pub fn is_tile_passable(board: &Board, pos: Pos) -> bool {
     match board.get_tile(pos) {
@@ -75,18 +94,7 @@ impl PathfindingBoard for MovableBoardView<'_> {
 
     /// 取得鄰近座標（上下左右）
     fn get_neighbors(&self, pos: Pos) -> Vec<Pos> {
-        let dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)];
-        dirs.into_iter()
-            .map(|(dx, dy)| (dx + pos.x as isize, dy + pos.y as isize))
-            .filter_map(|(x, y)| {
-                if x >= 0 && y >= 0 {
-                    Some((x as usize, y as usize))
-                } else {
-                    None
-                }
-            })
-            .map(|(x, y)| Pos { x, y })
-            .collect()
+        get_adjacent_positions(pos)
     }
 }
 
@@ -574,4 +582,5 @@ mod tests {
         let area = area.keys().cloned().collect::<BTreeSet<_>>();
         assert_eq!(area, expect);
     }
+
 }
