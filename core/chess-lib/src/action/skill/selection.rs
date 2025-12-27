@@ -7,7 +7,7 @@ use skills_lib::*;
 use std::collections::BTreeMap;
 
 use super::casting::{apply_skill_to_area, consume_skill_mp, validate_skill_casting};
-use super::targeting::{calc_shape_area, is_able_to_cast, is_in_skill_range_manhattan};
+use super::targeting::{calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan};
 
 /// 技能選擇資料結構
 #[derive(Debug, Clone, Default)]
@@ -63,10 +63,12 @@ impl SkillSelection {
         )
         .wrap_context(func)?;
 
-        // 5. 設置施法標記
-        if let Some(unit) = board.units.get_mut(&caster) {
-            unit.has_cast_skill_this_turn = true;
-        }
+        // 5. 消耗 action
+        let unit = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
+            func,
+            unit_id: caster,
+        })?;
+        consume_action(unit).wrap_context(func)?;
 
         Ok(msgs)
     }

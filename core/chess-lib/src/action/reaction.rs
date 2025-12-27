@@ -72,10 +72,15 @@ pub fn find_reaction_skills(
 /// - `unit`: 要檢查的單位
 ///
 /// # 返回值
-/// - true: 可以觸發（次數未用盡）
-/// - false: 不可觸發（次數已用盡）
-pub fn can_trigger_reaction(unit: &Unit) -> bool {
-    unit.reactions_used_this_turn < unit.max_reactions_per_turn
+/// - Ok(()): 可以觸發（次數未用盡）
+/// - Err(Error): 不可觸發（次數已用盡）
+pub fn is_able_to_react(unit: &Unit) -> Result<(), Error> {
+    let func = "is_able_to_react";
+
+    if unit.reactions_used_this_turn >= unit.max_reactions_per_turn {
+        return Err(Error::NotEnoughAP { func });
+    }
+    Ok(())
 }
 
 /// 消耗一次 reaction 次數
@@ -92,9 +97,7 @@ pub fn can_trigger_reaction(unit: &Unit) -> bool {
 pub fn consume_reaction(unit: &mut Unit) -> Result<(), Error> {
     let func = "consume_reaction";
 
-    if !can_trigger_reaction(unit) {
-        return Err(Error::NotEnoughAP { func });
-    }
+    is_able_to_react(unit).wrap_context(func)?;
 
     unit.reactions_used_this_turn += 1;
     Ok(())
@@ -137,7 +140,7 @@ pub fn check_unit_reactions(
     let func = "check_unit_reactions";
 
     // 檢查是否還有可用的 reaction 次數
-    if !can_trigger_reaction(unit) {
+    if is_able_to_react(unit).is_err() {
         return Ok(Vec::new());
     }
 
@@ -318,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn test_can_trigger_reaction() {
+    fn test_is_able_to_react() {
         let unit = Unit {
             id: 1,
             unit_template_type: "test".to_string(),
@@ -336,11 +339,11 @@ mod tests {
             reactions_used_this_turn: 0,
         };
 
-        assert!(can_trigger_reaction(&unit));
+        assert!(is_able_to_react(&unit).is_ok());
     }
 
     #[test]
-    fn test_can_trigger_reaction_exhausted() {
+    fn test_is_able_to_react_exhausted() {
         let unit = Unit {
             id: 1,
             unit_template_type: "test".to_string(),
@@ -358,7 +361,7 @@ mod tests {
             reactions_used_this_turn: 1, // 已用盡
         };
 
-        assert!(!can_trigger_reaction(&unit));
+        assert!(is_able_to_react(&unit).is_err());
     }
 
     #[test]
@@ -411,12 +414,6 @@ mod tests {
         // 應該返回錯誤
         let result = consume_reaction(&mut unit);
         assert!(result.is_err());
-        match result {
-            Err(Error::NotEnoughAP { .. }) => {
-                // 正確的錯誤類型
-            }
-            _ => panic!("應該返回 NotEnoughAP 錯誤"),
-        }
         // 次數不應該增加
         assert_eq!(unit.reactions_used_this_turn, 1);
     }

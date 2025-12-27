@@ -62,6 +62,26 @@ pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
     Ok(())
 }
 
+/// 消耗 action 點數（設置施法標記）
+///
+/// # 參數
+/// - `unit`: 要消耗 action 的單位
+///
+/// # 返回值
+/// - Ok(()): 成功消耗
+/// - Err(Error): 沒有可用的 action（已施放過技能或移動點數用盡）
+///
+/// # 使用場景
+/// 在執行主動技能後調用此函數來消耗 action
+pub fn consume_action(unit: &mut Unit) -> Result<(), Error> {
+    let func = "consume_action";
+
+    is_able_to_cast(unit).wrap_context(func)?;
+
+    unit.has_cast_skill_this_turn = true;
+    Ok(())
+}
+
 /// 計算技能形狀範圍
 /// board: 棋盤物件, shape: 技能形狀, from: 施放者座標, to: 目標座標
 /// 回傳：座標列表
