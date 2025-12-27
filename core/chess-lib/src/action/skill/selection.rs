@@ -6,8 +6,13 @@ use crate::*;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
-use super::casting::{apply_skill_to_area, consume_skill_mp, validate_skill_casting};
-use super::targeting::{calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan};
+use super::casting::{
+    apply_skill_to_area, calc_skill_affect_area, consume_skill_mp, get_caster_pos,
+    validate_skill_casting,
+};
+use super::targeting::{
+    calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan,
+};
 
 /// 技能選擇資料結構
 #[derive(Debug, Clone, Default)]
@@ -32,25 +37,27 @@ impl SkillSelection {
     ) -> Result<Vec<String>, Error> {
         let func = "SkillSelection::cast_skill";
 
-        // 1. 驗證施法前提條件
+        // 1. 驗證施法前提條件（技能選擇 + TargetType）
         let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)
             .wrap_context(func)?;
 
-        // 取得技能（驗證後再次取得引用）
+        // 2. 取得技能引用
         let skill = skills.get(&skill_id).ok_or_else(|| Error::SkillNotFound {
             func,
             skill_id: skill_id.clone(),
         })?;
 
-        // 2. 計算影響區域
-        let (caster_pos, affect_area) = self
-            .get_affect_area_or_error(board, skills, caster, &skill_id, target)
+        // 3. 取得施法者位置
+        let caster_pos = get_caster_pos(board, caster).wrap_context(func)?;
+
+        // 4. 計算影響區域（含範圍檢查）
+        let affect_area = calc_skill_affect_area(board, &skill_id, skill, caster_pos, target)
             .wrap_context(func)?;
 
-        // 3. 魔力消耗檢查與扣除
+        // 5. 消耗 MP
         consume_skill_mp(board, caster, &skill_id, skill).wrap_context(func)?;
 
-        // 4. 應用技能效果到影響區域
+        // 6. 應用技能效果
         let msgs = apply_skill_to_area(
             board,
             skills,
@@ -63,7 +70,7 @@ impl SkillSelection {
         )
         .wrap_context(func)?;
 
-        // 5. 消耗 action
+        // 7. 消耗 action
         let unit = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
             func,
             unit_id: caster,
@@ -97,7 +104,7 @@ impl SkillSelection {
             Some(s) => s,
             None => return vec![],
         };
-        // 取得單位物件，檢查移動點數
+        // 取得單位物件，檢查是否能施法
         let caster_id = match board.pos_to_unit(caster_pos) {
             Some(id) => id,
             None => return vec![],
@@ -109,47 +116,9 @@ impl SkillSelection {
         if is_able_to_cast(caster).is_err() {
             return vec![];
         }
-        // 判斷 to 是否在技能 range 內，超過則不顯示範圍
-        if !is_in_skill_range_manhattan(skill.range, caster_pos, to) {
-            return vec![];
-        }
-        // 取得技能範圍形狀（僅取第一個 effect 的 shape）
-        let shape = skill.effects.first().map(|e| e.shape());
-        let shape = match shape {
-            Some(s) => s,
-            None => return vec![],
-        };
-        // 計算範圍
-        calc_shape_area(board, shape, caster_pos, to)
-    }
 
-    /// 取得施法者座標並計算技能影響區域
-    fn get_affect_area_or_error(
-        &self,
-        board: &Board,
-        skills: &BTreeMap<SkillID, Skill>,
-        caster: UnitID,
-        skill_id: &SkillID,
-        target: Pos,
-    ) -> Result<(Pos, Vec<Pos>), Error> {
-        let func = "get_affect_area_or_error";
-
-        // 取得施法者座標，用於像推人等需要方向資訊的效果
-        let caster_pos = board.unit_to_pos(caster).ok_or(Error::NoActingUnit {
-            func,
-            unit_id: caster,
-        })?;
-
-        let affect_area = self.skill_affect_area(board, skills, caster_pos, target);
-        if affect_area.is_empty() {
-            return Err(Error::SkillAffectEmpty {
-                func,
-                skill_id: skill_id.clone(),
-                pos: target,
-            });
-        }
-
-        Ok((caster_pos, affect_area))
+        // 使用細粒度函數計算影響區域（失敗時返回空 vec 用於 UI 預覽）
+        calc_skill_affect_area(board, skill_id, skill, caster_pos, to).unwrap_or_else(|_| vec![])
     }
 }
 

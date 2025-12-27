@@ -12,7 +12,83 @@ use std::collections::BTreeMap;
 
 use super::effect_application::apply_effect_to_pos;
 use super::hit_resolution::{AttackResult, SaveResult, calc_hit_result, calc_save_result};
-use super::targeting::{is_able_to_cast, is_targeting_valid_target};
+use super::targeting::{
+    calc_shape_area, is_able_to_cast, is_in_skill_range_manhattan, is_targeting_valid_target,
+};
+
+/// 取得施法者位置
+///
+/// # 參數
+/// - `board`: 棋盤狀態
+/// - `caster_id`: 施法者 ID
+///
+/// # 返回值
+/// - Ok(Pos): 施法者位置
+/// - Err(Error): 施法者不在棋盤上
+pub(in crate::action) fn get_caster_pos(board: &Board, caster_id: UnitID) -> Result<Pos, Error> {
+    let func = "get_caster_pos";
+
+    board.unit_to_pos(caster_id).ok_or(Error::NoActingUnit {
+        func,
+        unit_id: caster_id,
+    })
+}
+
+/// 計算技能影響區域（含範圍檢查）
+///
+/// # 參數
+/// - `board`: 棋盤狀態
+/// - `skill_id`: 技能 ID（用於錯誤訊息）
+/// - `skill`: 技能引用
+/// - `caster_pos`: 施法者位置
+/// - `target_pos`: 目標位置
+///
+/// # 返回值
+/// - Ok(Vec<Pos>): 影響區域座標列表
+/// - Err(Error): 目標超出範圍或影響區域為空
+pub(in crate::action) fn calc_skill_affect_area(
+    board: &Board,
+    skill_id: &SkillID,
+    skill: &Skill,
+    caster_pos: Pos,
+    target_pos: Pos,
+) -> Result<Vec<Pos>, Error> {
+    let func = "calc_skill_affect_area";
+
+    // 判斷 target_pos 是否在技能 range 內
+    if !is_in_skill_range_manhattan(skill.range, caster_pos, target_pos) {
+        return Err(Error::SkillOutOfRange {
+            func,
+            skill_id: skill_id.clone(),
+            caster_pos,
+            target_pos,
+            range: skill.range,
+        });
+    }
+
+    // 取得技能範圍形狀（僅取第一個 effect 的 shape）
+    let shape = skill
+        .effects
+        .first()
+        .ok_or_else(|| Error::InvalidSkill {
+            func,
+            skill_id: skill_id.clone(),
+        })?
+        .shape();
+
+    // 計算範圍
+    let affect_area = calc_shape_area(board, shape, caster_pos, target_pos);
+
+    if affect_area.is_empty() {
+        return Err(Error::SkillAffectEmpty {
+            func,
+            skill_id: skill_id.clone(),
+            pos: target_pos,
+        });
+    }
+
+    Ok(affect_area)
+}
 
 /// 驗證施法前提條件：施法者存在、能施法、技能選擇、目標有效
 /// 返回技能 ID（克隆）

@@ -4,7 +4,7 @@
 //! - 檢查觸發條件與次數限制
 use crate::*;
 use skills_lib::*;
-use std::collections::{BTreeMap,BTreeSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// 根據 TriggeredSkill 查找符合條件的技能
 ///
@@ -41,12 +41,13 @@ pub fn find_reaction_skills(
             // 查找單位擁有的所有具有該 tag 的技能
             let mut matching_skills = Vec::new();
             for skill_id in unit_skills {
-                let skill = all_skills.get(skill_id.as_str()).ok_or_else(|| {
-                    Error::SkillNotFound {
-                        func,
-                        skill_id: skill_id.clone(),
-                    }
-                })?;
+                let skill =
+                    all_skills
+                        .get(skill_id.as_str())
+                        .ok_or_else(|| Error::SkillNotFound {
+                            func,
+                            skill_id: skill_id.clone(),
+                        })?;
 
                 if skill.tags.contains(tag) {
                     matching_skills.push(skill_id.clone());
@@ -114,9 +115,9 @@ pub struct ReactionInfo {
 #[derive(Debug, Clone)]
 pub struct PendingReaction {
     pub reactor_id: UnitID,       // 觸發 reaction 的單位 ID
-    pub reactor_pos: Pos,          // 觸發 reaction 的單位位置
-    pub trigger: ReactionTrigger,  // 觸發條件類型
-    pub info: ReactionInfo,        // reaction 詳細資訊
+    pub reactor_pos: Pos,         // 觸發 reaction 的單位位置
+    pub trigger: ReactionTrigger, // 觸發條件類型
+    pub info: ReactionInfo,       // reaction 詳細資訊
 }
 
 /// 檢查單一單位的 reactions（公開供測試使用）
@@ -148,12 +149,12 @@ pub fn check_unit_reactions(
 
     // 遍歷單位擁有的所有技能，檢查是否有匹配的 Reaction effect
     for skill_id in &unit.skills {
-        let skill = all_skills.get(skill_id.as_str()).ok_or_else(|| {
-            Error::SkillNotFound {
+        let skill = all_skills
+            .get(skill_id.as_str())
+            .ok_or_else(|| Error::SkillNotFound {
                 func,
                 skill_id: skill_id.clone(),
-            }
-        })?;
+            })?;
 
         // 檢查技能的所有效果
         for effect in &skill.effects {
@@ -169,17 +170,18 @@ pub fn check_unit_reactions(
                 }
 
                 // 查找可用的技能
-                let available_skills = find_reaction_skills(triggered_skill, &unit.skills, all_skills)
-                    .map_err(|e| match e {
-                        Error::SkillNotFound { skill_id, func } => Error::SkillNotFoundInUnit {
-                            func,  // 保留原始 func name
-                            unit_id: unit.id,
-                            unit_type: unit.unit_template_type.clone(),
-                            skill_id,
-                        },
-                        other => other,
-                    })
-                    .wrap_context(func)?;
+                let available_skills =
+                    find_reaction_skills(triggered_skill, &unit.skills, all_skills)
+                        .map_err(|e| match e {
+                            Error::SkillNotFound { skill_id, func } => Error::SkillNotFoundInUnit {
+                                func, // 保留原始 func name
+                                unit_id: unit.id,
+                                unit_type: unit.unit_template_type.clone(),
+                                skill_id,
+                            },
+                            other => other,
+                        })
+                        .wrap_context(func)?;
 
                 reactions.push(ReactionInfo {
                     triggered_skill: triggered_skill.clone(),
@@ -447,5 +449,4 @@ mod tests {
         assert!(consume_reaction(&mut unit).is_err());
         assert_eq!(unit.reactions_used_this_turn, 3);
     }
-
 }

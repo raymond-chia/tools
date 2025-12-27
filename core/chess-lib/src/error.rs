@@ -58,6 +58,16 @@ pub enum Error {
         skill_id: SkillID,
         pos: Pos,
     },
+    #[error(
+        "`{func}`: 技能 {skill_id} 超出範圍，施法者位置 {caster_pos:?}，目標位置 {target_pos:?}，技能範圍 {range:?}"
+    )]
+    SkillOutOfRange {
+        func: &'static str,
+        skill_id: SkillID,
+        caster_pos: Pos,
+        target_pos: Pos,
+        range: (usize, usize),
+    },
     #[error("`{func}`: 技能 {skill_id} 無法作用於單位: {detail}")]
     SkillAffectWrongUnit {
         func: &'static str,
