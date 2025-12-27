@@ -484,7 +484,7 @@ impl BoardsEditor {
                 .units
                 .get(&active_unit_id)
                 .expect("active unit not exist");
-            if let Err(e) = is_able_to_cast(unit) {
+            if let Err(e) = is_able_to_act(unit) {
                 self.set_status(e.to_string(), true);
                 return;
             }
@@ -492,7 +492,7 @@ impl BoardsEditor {
                 self.set_status("技能範圍外無法施放".to_string(), true);
                 return;
             }
-            match self.skill_selection.cast_skill(
+            match self.skill_selection.execute_action(
                 &mut self.sim_board,
                 &self.skills,
                 active_unit_id,

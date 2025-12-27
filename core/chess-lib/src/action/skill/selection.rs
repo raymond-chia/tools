@@ -10,7 +10,7 @@ use super::casting::{
     calc_skill_affect_area, cast_skill_internal, get_caster_pos, validate_skill_casting,
 };
 use super::targeting::{
-    calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan,
+    calc_shape_area, consume_action, is_able_to_act, is_in_skill_range_manhattan,
 };
 
 /// 技能選擇資料結構
@@ -26,15 +26,15 @@ impl SkillSelection {
         self.selected_skill = skill_id;
     }
 
-    /// 施放技能主流程
-    pub fn cast_skill(
+    /// 執行 action（施放技能並消耗 action 點數）
+    pub fn execute_action(
         &self,
         board: &mut Board,
         skills: &BTreeMap<SkillID, Skill>,
         caster: UnitID,
         target: Pos,
     ) -> Result<Vec<String>, Error> {
-        let func = "SkillSelection::cast_skill";
+        let func = "SkillSelection::execute_action";
 
         // 1. 驗證施法前提條件（技能選擇 + TargetType）
         let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)
@@ -87,7 +87,7 @@ impl SkillSelection {
             Some(u) => u,
             None => return vec![],
         };
-        if is_able_to_cast(caster).is_err() {
+        if is_able_to_act(caster).is_err() {
             return vec![];
         }
 
@@ -169,7 +169,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cast_skill_basic() {
+    fn test_execute_action_basic() {
         let (mut board, unit_id, skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
         let target_unit_id = unit_id + 1;
@@ -181,7 +181,7 @@ mod tests {
         sel.select_skill(Some("slash".to_string()));
 
         let target = Pos { x: 1, y: 2 };
-        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+        let result = sel.execute_action(&mut board, &skills, unit_id, target);
 
         assert!(result.is_ok());
         let msgs = result.unwrap();
@@ -192,19 +192,19 @@ mod tests {
     }
 
     #[test]
-    fn test_cast_skill_no_selection() {
+    fn test_execute_action_no_selection() {
         let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         let sel = SkillSelection::default();
         let target = Pos { x: 1, y: 2 };
-        let result = sel.cast_skill(&mut board, &skills, unit_id, target);
+        let result = sel.execute_action(&mut board, &skills, unit_id, target);
 
         // 錯誤被包裝在 Error::Wrap 中
         assert!(matches!(result, Err(Error::Wrap { .. })));
     }
 
     #[test]
-    fn test_cast_skill_twice() {
+    fn test_execute_action_twice() {
         let (mut board, unit_id, skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
         let target_unit_id = unit_id + 1;
@@ -216,11 +216,11 @@ mod tests {
         let target = Pos { x: 1, y: 2 };
 
         // 第一次施放成功
-        let result1 = sel.cast_skill(&mut board, &skills, unit_id, target);
+        let result1 = sel.execute_action(&mut board, &skills, unit_id, target);
         assert!(result1.is_ok());
 
         // 第二次施放失敗（已經施放過）
-        let result2 = sel.cast_skill(&mut board, &skills, unit_id, target);
+        let result2 = sel.execute_action(&mut board, &skills, unit_id, target);
         // 可能因為目標已死亡而失敗，或因為已施放過而失敗
         assert!(result2.is_err(), "Expected error, got: {:?}", result2);
     }

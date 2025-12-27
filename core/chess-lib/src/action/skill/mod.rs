@@ -6,6 +6,8 @@
 pub use hit_resolution::{AttackResult, SaveResult};
 pub use selection::*;
 pub use targeting::*;
+// 重新導出供 reaction 系統使用
+pub(in crate::action) use casting::cast_skill_internal;
 
 mod casting;
 mod effect_application;

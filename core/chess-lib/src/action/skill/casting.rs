@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use super::effect_application::apply_effect_to_pos;
 use super::hit_resolution::{AttackResult, SaveResult, calc_hit_result, calc_save_result};
 use super::targeting::{
-    calc_shape_area, consume_action, is_able_to_cast, is_in_skill_range_manhattan,
+    calc_shape_area, consume_action, is_able_to_act, is_in_skill_range_manhattan,
     is_targeting_valid_target,
 };
 use crate::action::reaction::consume_reaction;
@@ -92,7 +92,7 @@ pub(in crate::action) fn calc_skill_affect_area(
     Ok(affect_area)
 }
 
-/// 施放技能核心邏輯（供 cast_skill 和 execute_reaction 共用）
+/// 施放技能核心邏輯（供 execute_action 和 execute_reaction 共用）
 ///
 /// # 參數
 /// - `board`: 棋盤狀態
@@ -171,7 +171,7 @@ pub(super) fn validate_skill_casting(
         func,
         unit_id: caster,
     })?;
-    is_able_to_cast(unit).wrap_context(func)?;
+    is_able_to_act(unit).wrap_context(func)?;
 
     let skill_id = selected_skill
         .as_ref()

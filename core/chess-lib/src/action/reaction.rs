@@ -5,6 +5,7 @@
 use crate::*;
 use skills_lib::*;
 use std::collections::{BTreeMap, BTreeSet};
+use crate::action::skill::{cast_skill_internal,is_targeting_valid_target};
 
 /// 根據 TriggeredSkill 查找符合條件的技能
 ///
@@ -226,6 +227,65 @@ pub fn check_reactions(
     }
 
     Ok(all_pending)
+}
+
+/// 執行 reaction（施放技能並消耗 reaction 次數）
+///
+/// # 參數
+/// - `board`: 棋盤狀態
+/// - `skills`: 技能資料表
+/// - `reactor_id`: 觸發 reaction 的單位 ID
+/// - `skill_id`: 要施放的技能 ID
+/// - `target_pos`: 目標位置
+///
+/// # 返回值
+/// - Ok(Vec<String>): 技能效果訊息
+/// - Err(Error): 施放失敗
+///
+/// # 流程
+/// 1. 驗證技能存在
+/// 2. 驗證單位可以 react（檢查 reaction counter）
+/// 3. 驗證目標有效（TargetType 檢查）
+/// 4. 施放技能（使用共用邏輯）
+/// 5. 消耗 reaction 次數
+pub fn execute_reaction(
+    board: &mut Board,
+    skills: &BTreeMap<SkillID, Skill>,
+    reactor_id: UnitID,
+    skill_id: &SkillID,
+    target_pos: Pos,
+) -> Result<Vec<String>, Error> {
+    let func = "execute_reaction";
+
+    // 1. 驗證技能存在
+    let skill = skills.get(skill_id).ok_or_else(|| Error::SkillNotFound {
+        func,
+        skill_id: skill_id.clone(),
+    })?;
+
+    // 2. 驗證單位可以 react（檢查 reaction counter）
+    let unit = board.units.get(&reactor_id).ok_or(Error::NoActingUnit {
+        func,
+        unit_id: reactor_id,
+    })?;
+    is_able_to_react(unit).wrap_context(func)?;
+
+    // 3. 驗證目標有效（TargetType 檢查）
+    is_targeting_valid_target(board, skill_id, skill, reactor_id, target_pos)
+        .wrap_context(func)?;
+
+    // 4. 施放技能（共用邏輯）
+    let msgs = cast_skill_internal(board, skills, reactor_id, skill_id, target_pos)
+        .wrap_context(func)?;
+
+    // 5. 消耗 reaction 次數
+    let unit = board.units.get_mut(&reactor_id).ok_or(Error::NoActingUnit {
+        func,
+        unit_id: reactor_id,
+    })?;
+    consume_reaction(unit).wrap_context(func)?;
+
+    Ok(msgs)
 }
 
 #[cfg(test)]

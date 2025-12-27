@@ -22,7 +22,7 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
         Some(u) => u,
         None => return vec![],
     };
-    if is_able_to_cast(unit).is_err() {
+    if is_able_to_act(unit).is_err() {
         return vec![];
     }
 
@@ -50,8 +50,8 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
 }
 
 /// 判定現在狀態能否使用任何技能
-pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
-    let func = "is_able_to_cast";
+pub fn is_able_to_act(unit: &Unit) -> Result<(), Error> {
+    let func = "is_able_to_act";
 
     if unit.has_cast_skill_this_turn {
         return Err(Error::NotEnoughAP { func });
@@ -76,7 +76,7 @@ pub fn is_able_to_cast(unit: &Unit) -> Result<(), Error> {
 pub fn consume_action(unit: &mut Unit) -> Result<(), Error> {
     let func = "consume_action";
 
-    is_able_to_cast(unit).wrap_context(func)?;
+    is_able_to_act(unit).wrap_context(func)?;
 
     unit.has_cast_skill_this_turn = true;
     Ok(())
@@ -429,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_able_to_cast() {
+    fn test_is_able_to_act() {
         let (mut board, unit_id, _skills) = prepare_test_board(Pos { x: 0, y: 0 }, None);
         let unit = board.units.get_mut(&unit_id).unwrap();
 
@@ -437,13 +437,13 @@ mod tests {
         unit.has_cast_skill_this_turn = false;
         unit.moved = 0;
         unit.move_points = 2;
-        assert!(is_able_to_cast(unit).is_ok());
+        assert!(is_able_to_act(unit).is_ok());
 
         // 已施放過技能
         unit.has_cast_skill_this_turn = true;
         unit.moved = 0;
         assert!(matches!(
-            is_able_to_cast(unit),
+            is_able_to_act(unit),
             Err(Error::NotEnoughAP { .. })
         ));
 
@@ -452,7 +452,7 @@ mod tests {
         unit.moved = 3;
         unit.move_points = 2;
         assert!(matches!(
-            is_able_to_cast(unit),
+            is_able_to_act(unit),
             Err(Error::NotEnoughAP { .. })
         ));
     }
