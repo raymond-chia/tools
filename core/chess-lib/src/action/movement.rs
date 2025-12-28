@@ -164,7 +164,7 @@ pub enum MoveResult {
 pub fn move_unit_along_path(
     board: &mut Board,
     path: Vec<Pos>,
-    // 檢測
+    reacted: bool,
     skills_map: &BTreeMap<String, Skill>,
 ) -> Result<MoveResult, Error> {
     let func = "move_unit_along_path";
@@ -202,21 +202,23 @@ pub fn move_unit_along_path(
 
     // 遍歷路徑，從第二個位置開始（第一個是起始位置）
     for (i, &next_pos) in path.iter().enumerate().skip(1) {
-        // 在移動之前檢查是否會觸發 reactions
-        let actor = board.units.get(&actor_id).ok_or(Error::NoUnitAtPos {
-            func,
-            pos: current_pos,
-        })?;
-        let reactions =
-            check_move_reactions(board, (actor, current_pos), skills_map).wrap_context(func)?;
+        if !reacted || i != 1 {
+            // 在移動之前檢查是否會觸發 reactions
+            let actor = board.units.get(&actor_id).ok_or(Error::NoUnitAtPos {
+                func,
+                pos: current_pos,
+            })?;
+            let reactions =
+                check_move_reactions(board, (actor, current_pos), skills_map).wrap_context(func)?;
 
-        // 如果有 reactions 被觸發，返回給 UI 處理
-        if !reactions.is_empty() {
-            return Ok(MoveResult::ReactionTriggered {
-                current_pos,
-                remaining_path: path[i..].to_vec(),
-                reactions,
-            });
+            // 如果有 reactions 被觸發，返回給 UI 處理
+            if !reactions.is_empty() {
+                return Ok(MoveResult::ReactionTriggered {
+                    current_pos,
+                    remaining_path: path[i - 1..].to_vec(),
+                    reactions,
+                });
+            }
         }
 
         // 沒有 reactions，執行移動
@@ -512,7 +514,7 @@ mod tests {
         for (is_ok, path) in test_data {
             let to = path.last().cloned().unwrap();
             let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
-            let res = move_unit_along_path(&mut board, path, &skills_map);
+            let res = move_unit_along_path(&mut board, path, false, &skills_map);
             if is_ok {
                 // 檢查返回值是 MoveResult::Completed
                 assert!(res.is_ok(), "移動到 {:?} 應該成功", to);
@@ -551,7 +553,7 @@ mod tests {
                 unit.skills.clear();
             }
 
-            let res = move_unit_along_path(&mut board, path.clone(), &skills_map);
+            let res = move_unit_along_path(&mut board, path.clone(), false, &skills_map);
             assert!(
                 matches!(
                     res,
@@ -572,7 +574,7 @@ mod tests {
                 unit.skills.insert("hit_and_run".to_string());
             }
 
-            let res = move_unit_along_path(&mut board, path, &skills_map);
+            let res = move_unit_along_path(&mut board, path, false, &skills_map);
             assert!(res.is_ok(), "有打帶跑技能時應可移動");
             assert_eq!(res.unwrap(), MoveResult::Completed);
         }
@@ -691,7 +693,7 @@ mod tests {
         // 當離開 (0,0) 時，相鄰的 (1,0) 的敵人會觸發 reaction
         let path = vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }];
 
-        let res = move_unit_along_path(&mut board, path.clone(), &skills_map);
+        let res = move_unit_along_path(&mut board, path.clone(), false, &skills_map);
 
         // 應該返回 ReactionTriggered
         assert!(res.is_ok());
@@ -733,7 +735,7 @@ mod tests {
         // 路徑：(0,0) -> (0,1) -> (0,2)
         let path = vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }];
 
-        let res = move_unit_along_path(&mut board, path, &skills_map);
+        let res = move_unit_along_path(&mut board, path, false, &skills_map);
 
         // 應該返回 Completed（沒有 reaction）
         assert!(res.is_ok());

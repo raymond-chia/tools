@@ -257,6 +257,19 @@ impl PlayerProgressionEditor {
                                     .push((format!("單位名稱 '{}' 已經存在", new_name), true));
                             }
                         }
+                        if ui
+                            .button("從模板複製技能")
+                            .on_hover_text("將單位模板的技能複製到此單位")
+                            .clicked()
+                        {
+                            if let Some(template) = self.unit_templates.get(typ) {
+                                let mut new_unit = unit.clone();
+                                new_unit.skills = grouped_unit_skills(&self.skill_group, template);
+                                to_edit_unit = Some(new_unit);
+                            } else {
+                                status_messages.push((format!("找不到單位模板 '{}'", typ), true));
+                            }
+                        }
                         if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
                             to_remove_unit = Some(typ.clone());
                         }
