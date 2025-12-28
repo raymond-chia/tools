@@ -2,6 +2,7 @@
 //! - 負責單位移動相關邏輯（如移動規則、移動點消耗、特殊移動技能等）。
 //! - 僅處理移動本身，不負責戰鬥判定、AI 決策或棋盤初始化。
 //! - 移動相關的資料結構與輔助函式應集中於此。
+use crate::action::reaction::{PendingReaction, check_move_reactions};
 use crate::*;
 use skills_lib::*;
 use std::collections::{BTreeMap, HashMap};
@@ -147,42 +148,92 @@ pub fn reconstruct_path(
     Ok(path)
 }
 
+/// 移動結果
+#[derive(Debug, Clone, PartialEq)]
+pub enum MoveResult {
+    /// 移動完成（無 reaction）
+    Completed,
+    /// 觸發 reaction，需要 UI 處理
+    ReactionTriggered {
+        current_pos: Pos,                // 當前位置
+        remaining_path: Vec<Pos>,        // 剩餘路徑（從下一個位置開始）
+        reactions: Vec<PendingReaction>, // 觸發的 reactions
+    },
+}
+
 pub fn move_unit_along_path(
     board: &mut Board,
     path: Vec<Pos>,
     // 檢測
     skills_map: &BTreeMap<String, Skill>,
-) -> Result<(), Error> {
+) -> Result<MoveResult, Error> {
     let func = "move_unit_along_path";
 
-    let actor = path.first().ok_or(Error::InvalidParameter {
+    let actor_pos = path.first().ok_or(Error::InvalidParameter {
         func,
         detail: "actor position not found".to_string(),
     })?;
-    let unit_id = match board.pos_to_unit(*actor) {
+    let actor_id = match board.pos_to_unit(*actor_pos) {
         Some(id) => id,
-        None => return Err(Error::NoUnitAtPos { func, pos: *actor }),
+        None => {
+            return Err(Error::NoUnitAtPos {
+                func,
+                pos: *actor_pos,
+            });
+        }
     };
-    let unit = match board.units.get(&unit_id) {
+
+    // 檢查單位是否可以移動
+    let actor = match board.units.get(&actor_id) {
         Some(u) => u,
-        None => return Err(Error::NoUnitAtPos { func, pos: *actor }),
+        None => {
+            return Err(Error::NoUnitAtPos {
+                func,
+                pos: *actor_pos,
+            });
+        }
     };
-    if unit.has_cast_skill_this_turn && !has_hit_and_run_skill(unit, skills_map) {
+    if actor.has_cast_skill_this_turn && !has_hit_and_run_skill(actor, skills_map) {
         // 若無「打帶跑」則禁止移動
         return Err(Error::NotEnoughAP { func });
     }
-    let mut actor = *actor;
-    for next in path {
-        let result = move_unit(board, actor, next);
+
+    let mut current_pos = *actor_pos;
+
+    // 遍歷路徑，從第二個位置開始（第一個是起始位置）
+    for (i, &next_pos) in path.iter().enumerate().skip(1) {
+        // 在移動之前檢查是否會觸發 reactions
+        let actor = board.units.get(&actor_id).ok_or(Error::NoUnitAtPos {
+            func,
+            pos: current_pos,
+        })?;
+        let reactions =
+            check_move_reactions(board, (actor, current_pos), skills_map).wrap_context(func)?;
+
+        // 如果有 reactions 被觸發，返回給 UI 處理
+        if !reactions.is_empty() {
+            return Ok(MoveResult::ReactionTriggered {
+                current_pos,
+                remaining_path: path[i..].to_vec(),
+                reactions,
+            });
+        }
+
+        // 沒有 reactions，執行移動
+        let result = move_unit(board, current_pos, next_pos);
         match result {
             Ok(_) => {
-                actor = next;
+                current_pos = next_pos;
             }
-            Err(Error::AlliedUnitAtPos { .. }) => {}
+            Err(Error::AlliedUnitAtPos { .. }) => {
+                // 被友軍阻擋，跳過這一格
+            }
             Err(e) => return Err(e).wrap_context(func),
         }
     }
-    Ok(())
+
+    // 所有移動完成
+    Ok(MoveResult::Completed)
 }
 
 pub fn movement_tile_color(
@@ -462,10 +513,14 @@ mod tests {
             let to = path.last().cloned().unwrap();
             let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
             let res = move_unit_along_path(&mut board, path, &skills_map);
-            assert_eq!(res.is_ok(), is_ok, "移動到 {:?} 應該成功 ? {}", to, is_ok);
             if is_ok {
+                // 檢查返回值是 MoveResult::Completed
+                assert!(res.is_ok(), "移動到 {:?} 應該成功", to);
+                assert_eq!(res.unwrap(), MoveResult::Completed);
                 assert_eq!(board.pos_to_unit(to), Some(unit_id));
                 assert!(board.pos_to_unit(start).is_none());
+            } else {
+                assert!(res.is_err(), "移動到 {:?} 應該失敗", to);
             }
         }
     }
@@ -519,6 +574,7 @@ mod tests {
 
             let res = move_unit_along_path(&mut board, path, &skills_map);
             assert!(res.is_ok(), "有打帶跑技能時應可移動");
+            assert_eq!(res.unwrap(), MoveResult::Completed);
         }
     }
 
@@ -583,4 +639,108 @@ mod tests {
         assert_eq!(area, expect);
     }
 
+    #[test]
+    fn test_move_unit_along_path_with_reaction() {
+        use skills_lib::ReactionTrigger;
+
+        // 創建 3x3 棋盤
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
+
+        // 創建帶有 OnMove reaction 的技能
+        let reaction_skill = Skill {
+            effects: vec![Effect::Reaction {
+                target_type: TargetType::Enemy,
+                shape: Shape::Point,
+                trigger: ReactionTrigger::OnMove,
+                triggered_skill: TriggeredSkill::SkillId {
+                    id: "basic_attack".to_string(),
+                },
+                duration: -1,
+            }],
+            ..Default::default()
+        };
+
+        let basic_attack = Skill {
+            effects: vec![Effect::Hp {
+                target_type: TargetType::Enemy,
+                shape: Shape::Point,
+                value: -10,
+            }],
+            ..Default::default()
+        };
+
+        // 使用 skills_map() 獲取基礎技能，然後添加 reaction 技能
+        let mut skills_map = skills_map();
+        skills_map.insert("opportunity_attack".to_string(), reaction_skill);
+        skills_map.insert("basic_attack".to_string(), basic_attack);
+
+        // 給敵方單位添加 reaction 技能（清空原有技能以簡化測試）
+        if let Some(enemy_unit) = board.units.get_mut(&(unit_id + 2)) {
+            enemy_unit.skills.clear();
+            enemy_unit.skills.insert("opportunity_attack".to_string());
+            enemy_unit.skills.insert("basic_attack".to_string());
+            enemy_unit.max_reactions_per_turn = 1;
+            enemy_unit.reactions_used_this_turn = 0;
+        }
+
+        // 測試：從 (0,0) 移動經過 (1,0) 旁邊應該觸發 reaction
+        // 路徑：(0,0) -> (0,1) -> (0,2)
+        // 當離開 (0,0) 時，相鄰的 (1,0) 的敵人會觸發 reaction
+        let path = vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }];
+
+        let res = move_unit_along_path(&mut board, path.clone(), &skills_map);
+
+        // 應該返回 ReactionTriggered
+        assert!(res.is_ok());
+        match res.unwrap() {
+            MoveResult::ReactionTriggered {
+                current_pos,
+                remaining_path,
+                reactions,
+            } => {
+                // 當前位置應該是起始位置（還沒移動）
+                assert_eq!(current_pos, Pos { x: 0, y: 0 });
+                // 剩餘路徑應該是從下一個位置開始
+                assert_eq!(remaining_path, vec![Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }]);
+                // 應該有一個 reaction
+                assert_eq!(reactions.len(), 1);
+                assert_eq!(reactions[0].reactor_id, unit_id + 2); // 敵人的 ID
+                assert_eq!(reactions[0].reactor_pos, Pos { x: 1, y: 0 });
+                assert_eq!(reactions[0].trigger, ReactionTrigger::OnMove);
+            }
+            MoveResult::Completed => {
+                panic!("應該觸發 reaction 而不是完成移動");
+            }
+        }
+
+        // 單位應該還在原位（因為 reaction 被觸發，移動被中斷）
+        assert_eq!(board.pos_to_unit(start), Some(unit_id));
+    }
+
+    #[test]
+    fn test_move_unit_along_path_no_reaction() {
+        // 創建棋盤，但不給敵人 reaction 技能
+        let start = Pos { x: 0, y: 0 };
+        let ally = Pos { x: 0, y: 1 };
+        let enemy = Pos { x: 1, y: 0 };
+        let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
+
+        let skills_map = BTreeMap::new(); // 空技能表，沒有 reaction
+
+        // 路徑：(0,0) -> (0,1) -> (0,2)
+        let path = vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }];
+
+        let res = move_unit_along_path(&mut board, path, &skills_map);
+
+        // 應該返回 Completed（沒有 reaction）
+        assert!(res.is_ok());
+        assert_eq!(res.unwrap(), MoveResult::Completed);
+
+        // 單位應該移動到最終位置
+        assert_eq!(board.pos_to_unit(Pos { x: 0, y: 2 }), Some(unit_id));
+        assert!(board.pos_to_unit(start).is_none());
+    }
 }

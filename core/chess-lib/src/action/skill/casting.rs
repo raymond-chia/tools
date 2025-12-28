@@ -13,10 +13,8 @@ use std::collections::BTreeMap;
 use super::effect_application::apply_effect_to_pos;
 use super::hit_resolution::{AttackResult, SaveResult, calc_hit_result, calc_save_result};
 use super::targeting::{
-    calc_shape_area, consume_action, is_able_to_act, is_in_skill_range_manhattan,
-    is_targeting_valid_target,
+    calc_shape_area, is_able_to_act, is_in_skill_range_manhattan, is_targeting_valid_target,
 };
-use crate::action::reaction::consume_reaction;
 
 /// 取得施法者位置
 ///

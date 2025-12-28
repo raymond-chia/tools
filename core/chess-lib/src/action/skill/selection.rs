@@ -6,12 +6,8 @@ use crate::*;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
-use super::casting::{
-    calc_skill_affect_area, cast_skill_internal, get_caster_pos, validate_skill_casting,
-};
-use super::targeting::{
-    calc_shape_area, consume_action, is_able_to_act, is_in_skill_range_manhattan,
-};
+use super::casting::{calc_skill_affect_area, cast_skill_internal, validate_skill_casting};
+use super::targeting::{consume_action, is_able_to_act};
 
 /// 技能選擇資料結構
 #[derive(Debug, Clone, Default)]
@@ -227,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_skill_affect_area() {
-        let (board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+        let (board, _unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         let mut sel = SkillSelection::default();
         sel.select_skill(Some("slash".to_string()));

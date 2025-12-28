@@ -107,14 +107,14 @@ pub fn consume_reaction(unit: &mut Unit) -> Result<(), Error> {
 }
 
 /// 簡化的 reaction 資訊（單一單位）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReactionInfo {
     pub triggered_skill: TriggeredSkill, // 被觸發的技能來源
     pub available_skills: Vec<SkillID>,  // 可用的技能列表
 }
 
 /// 完整的 pending reaction（包含觸發者資訊）
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PendingReaction {
     pub reactor_id: UnitID,       // 觸發 reaction 的單位 ID
     pub reactor_pos: Pos,         // 觸發 reaction 的單位位置
