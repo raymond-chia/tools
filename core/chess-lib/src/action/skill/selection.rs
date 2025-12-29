@@ -37,15 +37,15 @@ impl SkillSelection {
             .wrap_context(func)?;
 
         // 2. 施放技能（共用邏輯）
-        let msgs =
-            cast_skill_internal(board, skills, caster, &skill_id, target).wrap_context(func)?;
+        let msgs = cast_skill_internal(board, skills, caster, &skill_id, (target, target))
+            .wrap_context(func)?;
 
         // 3. 消耗 action
-        let unit = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
+        let caster = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
             func,
             unit_id: caster,
         })?;
-        consume_action(unit).wrap_context(func)?;
+        consume_action(caster).wrap_context(func)?;
 
         Ok(msgs)
     }
@@ -88,7 +88,8 @@ impl SkillSelection {
         }
 
         // 使用細粒度函數計算影響區域（失敗時返回空 vec 用於 UI 預覽）
-        calc_skill_affect_area(board, skill_id, skill, caster_pos, to).unwrap_or_else(|_| vec![])
+        calc_skill_affect_area(board, skill_id, skill, caster_pos, (to, to))
+            .unwrap_or_else(|_| vec![])
     }
 }
 

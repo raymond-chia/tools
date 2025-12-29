@@ -51,17 +51,18 @@ pub(in crate::action) fn calc_skill_affect_area(
     skill_id: &SkillID,
     skill: &Skill,
     caster_pos: Pos,
-    target_pos: Pos,
+    // logical_pos 不管是否重疊
+    (actual_pos, logical_pos): (Pos, Pos),
 ) -> Result<Vec<Pos>, Error> {
     let func = "calc_skill_affect_area";
 
-    // 判斷 target_pos 是否在技能 range 內
-    if !is_in_skill_range_manhattan(skill.range, caster_pos, target_pos) {
+    // 判斷 logical_pos 是否在技能 range 內
+    if !is_in_skill_range_manhattan(skill.range, caster_pos, logical_pos) {
         return Err(Error::SkillOutOfRange {
             func,
             skill_id: skill_id.clone(),
             caster_pos,
-            target_pos,
+            target_pos: logical_pos,
             range: skill.range,
         });
     }
@@ -77,13 +78,13 @@ pub(in crate::action) fn calc_skill_affect_area(
         .shape();
 
     // 計算範圍
-    let affect_area = calc_shape_area(board, shape, caster_pos, target_pos);
+    let affect_area = calc_shape_area(board, shape, caster_pos, actual_pos);
 
     if affect_area.is_empty() {
         return Err(Error::SkillAffectEmpty {
             func,
             skill_id: skill_id.clone(),
-            pos: target_pos,
+            pos: actual_pos,
         });
     }
 
@@ -117,7 +118,7 @@ pub(in crate::action) fn cast_skill_internal(
     skills: &BTreeMap<SkillID, Skill>,
     caster_id: UnitID,
     skill_id: &SkillID,
-    target_pos: Pos,
+    (actual_pos, logical_pos): (Pos, Pos),
 ) -> Result<Vec<String>, Error> {
     let func = "cast_skill_internal";
 
@@ -131,8 +132,14 @@ pub(in crate::action) fn cast_skill_internal(
     let caster_pos = get_caster_pos(board, caster_id).wrap_context(func)?;
 
     // 3. 計算影響區域（含範圍檢查）
-    let affect_area = calc_skill_affect_area(board, skill_id, skill, caster_pos, target_pos)
-        .wrap_context(func)?;
+    let affect_area = calc_skill_affect_area(
+        board,
+        skill_id,
+        skill,
+        caster_pos,
+        (actual_pos, logical_pos),
+    )
+    .wrap_context(func)?;
 
     // 4. 消耗 MP
     consume_skill_mp(board, caster_id, skill_id, skill).wrap_context(func)?;
@@ -146,7 +153,7 @@ pub(in crate::action) fn cast_skill_internal(
         skill_id,
         skill,
         affect_area,
-        target_pos,
+        actual_pos,
     )
     .wrap_context(func)?;
 

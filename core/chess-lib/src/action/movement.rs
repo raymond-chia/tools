@@ -155,8 +155,9 @@ pub enum MoveResult {
     Completed,
     /// 觸發 reaction，需要 UI 處理
     ReactionTriggered {
-        current_pos: Pos,                // 當前位置
-        remaining_path: Vec<Pos>,        // 剩餘路徑（從下一個位置開始）
+        target_actual_pos: Pos,          // 考量重疊
+        target_logical_pos: Pos,         // 不管是否重疊
+        remaining_path: Vec<Pos>,        // 剩餘路徑
         reactions: Vec<PendingReaction>, // 觸發的 reactions
     },
 }
@@ -198,23 +199,25 @@ pub fn move_unit_along_path(
         return Err(Error::NotEnoughAP { func });
     }
 
-    let mut current_pos = *actor_pos;
+    let mut actual_pos = *actor_pos; // 考量重疊
 
     // 遍歷路徑，從第二個位置開始（第一個是起始位置）
     for (i, &next_pos) in path.iter().enumerate().skip(1) {
+        let logical_pos = path[i - 1]; // 不管是否重疊
         if !reacted || i != 1 {
             // 在移動之前檢查是否會觸發 reactions
             let actor = board.units.get(&actor_id).ok_or(Error::NoUnitAtPos {
                 func,
-                pos: current_pos,
+                pos: actual_pos,
             })?;
             let reactions =
-                check_move_reactions(board, (actor, current_pos), skills_map).wrap_context(func)?;
+                check_move_reactions(board, (actor, logical_pos), skills_map).wrap_context(func)?;
 
             // 如果有 reactions 被觸發，返回給 UI 處理
             if !reactions.is_empty() {
                 return Ok(MoveResult::ReactionTriggered {
-                    current_pos,
+                    target_actual_pos: actual_pos,
+                    target_logical_pos: logical_pos,
                     remaining_path: path[i - 1..].to_vec(),
                     reactions,
                 });
@@ -222,10 +225,10 @@ pub fn move_unit_along_path(
         }
 
         // 沒有 reactions，執行移動
-        let result = move_unit(board, current_pos, next_pos);
+        let result = move_unit(board, actual_pos, next_pos);
         match result {
             Ok(_) => {
-                current_pos = next_pos;
+                actual_pos = next_pos;
             }
             Err(Error::AlliedUnitAtPos { .. }) => {
                 // 被友軍阻擋，跳過這一格
@@ -699,14 +702,20 @@ mod tests {
         assert!(res.is_ok());
         match res.unwrap() {
             MoveResult::ReactionTriggered {
-                current_pos,
+                target_actual_pos,
+                target_logical_pos,
                 remaining_path,
                 reactions,
             } => {
-                // 當前位置應該是起始位置（還沒移動）
-                assert_eq!(current_pos, Pos { x: 0, y: 0 });
-                // 剩餘路徑應該是從下一個位置開始
-                assert_eq!(remaining_path, vec![Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }]);
+                // 目標單位應該是移動的單位
+                assert_eq!(target_actual_pos, Pos { x: 0, y: 0 });
+                // 邏輯位置也應該是起始位置（還沒穿過友軍）
+                assert_eq!(target_logical_pos, Pos { x: 0, y: 0 });
+                // 剩餘路徑應該包含邏輯位置開始的完整路徑
+                assert_eq!(
+                    remaining_path,
+                    vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }]
+                );
                 // 應該有一個 reaction
                 assert_eq!(reactions.len(), 1);
                 assert_eq!(reactions[0].reactor_id, unit_id + 2); // 敵人的 ID

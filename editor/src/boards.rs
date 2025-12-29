@@ -22,7 +22,8 @@ const TILE_ACTIVE_UNIT_MARKER_STROKE_WIDTH: f32 = 2.0;
 /// Reaction 處理狀態
 #[derive(Debug, Clone)]
 struct PendingReactionState {
-    current_pos: Pos,
+    target_actual_pos: Pos,  // 考量重疊
+    target_logical_pos: Pos, // 不管是否重疊
     remaining_path: Vec<Pos>,
     reactions: Vec<PendingReaction>,
 }
@@ -51,6 +52,7 @@ pub struct BoardsEditor {
     sim_board: Board,
     sim_battle: Battle,
     skill_selection: SkillSelection,
+    selected_unit_for_info: Option<UnitID>,
     // Reaction 處理狀態
     pending_reactions: Option<PendingReactionState>,
     // AI 評分結果
@@ -538,6 +540,17 @@ impl BoardsEditor {
                 show_sim_others(&self.sim_board, &movable, &active_unit_id, &path),
             );
 
+            // 右鍵點擊單位以顯示資訊
+            if let Some(target) = target {
+                if ui.ctx().input(|i| i.pointer.secondary_clicked()) {
+                    if let Some(unit_id) = self.sim_board.pos_to_unit(target) {
+                        self.selected_unit_for_info = Some(unit_id);
+                    } else {
+                        self.selected_unit_for_info = None;
+                    }
+                }
+            }
+
             // 滑鼠點擊時才移動（此處不需處理技能執行）
             if let Some(target) = target {
                 if !ui.ctx().input(|i| i.pointer.primary_clicked()) {
@@ -552,12 +565,10 @@ impl BoardsEditor {
                     return;
                 }
                 match move_unit_along_path(&mut self.sim_board, path, false, &self.skills) {
-                    Ok(MoveResult::Completed) => {
-                        // 移動完成
-                        self.set_status("移動完成".to_string(), false);
-                    }
+                    Ok(MoveResult::Completed) => {}
                     Ok(MoveResult::ReactionTriggered {
-                        current_pos,
+                        target_actual_pos,
+                        target_logical_pos,
                         remaining_path,
                         reactions,
                     }) => {
@@ -565,7 +576,8 @@ impl BoardsEditor {
                         let reaction_count = reactions.len();
                         // 保存 reaction 狀態，等待用戶選擇
                         self.pending_reactions = Some(PendingReactionState {
-                            current_pos,
+                            target_actual_pos,
+                            target_logical_pos,
                             remaining_path,
                             reactions,
                         });
@@ -645,18 +657,15 @@ impl BoardsEditor {
         };
         if state.reactions.is_empty() {
             self.pending_reactions = None;
-            match move_unit_along_path(
-                &mut self.sim_board,
-                state.remaining_path,
-                true,
-                &self.skills,
-            ) {
-                Ok(MoveResult::Completed) => {
-                    // 移動完成
-                    self.set_status("反應完畢。移動完成".to_string(), false);
-                }
+            // 替換掉第一個位置，以免重疊在友軍身上，導致後續移動到友軍
+            let (target_actual_pos, mut remaining_path) =
+                (state.target_actual_pos, state.remaining_path);
+            remaining_path[0] = target_actual_pos;
+            match move_unit_along_path(&mut self.sim_board, remaining_path, true, &self.skills) {
+                Ok(MoveResult::Completed) => {}
                 Ok(MoveResult::ReactionTriggered {
-                    current_pos,
+                    target_actual_pos,
+                    target_logical_pos,
                     remaining_path,
                     reactions,
                 }) => {
@@ -664,7 +673,8 @@ impl BoardsEditor {
                     let reaction_count = reactions.len();
                     // 保存 reaction 狀態，等待用戶選擇
                     self.pending_reactions = Some(PendingReactionState {
-                        current_pos,
+                        target_actual_pos,
+                        target_logical_pos,
                         remaining_path,
                         reactions,
                     });
@@ -679,7 +689,7 @@ impl BoardsEditor {
             }
         }
 
-        let mut selected_reaction: Option<(usize, SkillID, Pos)> = None; // (reaction_idx, skill_id, target_pos)
+        let mut selected_reaction: Option<(usize, SkillID)> = None; // (reaction_idx, skill_id)
         let mut reaction_to_skip: Option<usize> = None; // 要跳過的 reaction 索引
 
         Window::new("⚔ Reaction 觸發")
@@ -689,7 +699,7 @@ impl BoardsEditor {
             .show(ctx, |ui| {
                 ui.label(format!(
                     "單位在位置 {:?} 觸發了 {} 個 reaction！",
-                    state.current_pos,
+                    state.target_logical_pos,
                     state.reactions.len()
                 ));
                 ui.separator();
@@ -712,9 +722,8 @@ impl BoardsEditor {
                         ui.label("可用技能:");
                         for skill_id in &reaction.info.available_skills {
                             if ui.button(format!("使用 {}", skill_id)).clicked() {
-                                // 目標是移動的單位當前位置
-                                selected_reaction =
-                                    Some((idx, skill_id.clone(), state.current_pos));
+                                // 選擇要執行的 reaction
+                                selected_reaction = Some((idx, skill_id.clone()));
                             }
                         }
 
@@ -728,8 +737,8 @@ impl BoardsEditor {
 
         if let Some(skip) = reaction_to_skip {
             self.skip_reaction(skip);
-        } else if let Some((reaction_idx, skill_id, target_pos)) = selected_reaction {
-            match self.apply_reaction(reaction_idx, skill_id, target_pos) {
+        } else if let Some((reaction_idx, skill_id)) = selected_reaction {
+            match self.apply_reaction(reaction_idx, skill_id) {
                 Ok(msg) => {
                     self.set_status(msg, false);
                 }
@@ -1294,6 +1303,33 @@ impl BoardsEditor {
 
         ui.separator();
 
+        // 顯示選中單位的資訊
+        if let Some(selected_id) = self.selected_unit_for_info {
+            if let Some(selected_unit) = self.sim_board.units.get(&selected_id) {
+                ui.heading("選中單位資訊");
+                ui.label(format!("單位種類: {}", selected_unit.unit_template_type));
+                ui.label(format!("隊伍: {}", selected_unit.team));
+                ui.label(format!(
+                    "❤ HP: {}/{}",
+                    selected_unit.hp, selected_unit.max_hp
+                ));
+                ui.label(format!(
+                    "✦ MP: {}/{}",
+                    selected_unit.mp, selected_unit.max_mp
+                ));
+                ui.label(format!(
+                    "Reaction: {}/{}",
+                    selected_unit.max_reactions_per_turn - selected_unit.reactions_used_this_turn,
+                    selected_unit.max_reactions_per_turn
+                ));
+            } else {
+                // 選中的單位不存在（可能已被擊殺）
+                self.selected_unit_for_info = None;
+            }
+        }
+
+        ui.separator();
+
         // AI 評分按鈕
         if ui.button("AI 評分 (score_actions)").clicked() {
             let result = score_actions(&self.sim_board, &self.skills, &self.ai_config, unit_id);
@@ -1430,23 +1466,18 @@ impl BoardsEditor {
             .remove(skip);
     }
 
-    fn apply_reaction(
-        &mut self,
-        reaction_idx: usize,
-        skill_id: SkillID,
-        target_pos: Pos,
-    ) -> Result<String, String> {
-        let reaction = &self
+    fn apply_reaction(&mut self, reaction_idx: usize, skill_id: SkillID) -> Result<String, String> {
+        let state = self
             .pending_reactions
             .as_ref()
-            .expect("caller should make sure pending_reactions is Some")
-            .reactions[reaction_idx];
+            .expect("caller should make sure pending_reactions is Some");
+        let reaction = &state.reactions[reaction_idx];
         match execute_reaction(
             &mut self.sim_board,
             &self.skills,
             reaction.reactor_id,
             &skill_id,
-            target_pos,
+            (state.target_actual_pos, state.target_logical_pos),
         ) {
             Err(e) => {
                 return Err(format!("Reaction 執行錯誤: {e:?}"));

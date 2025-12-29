@@ -293,7 +293,7 @@ pub fn execute_reaction(
     skills: &BTreeMap<SkillID, Skill>,
     reactor_id: UnitID,
     skill_id: &SkillID,
-    target_pos: Pos,
+    (target_actual_pos, target_logical_pos): (Pos, Pos),
 ) -> Result<Vec<String>, Error> {
     let func = "execute_reaction";
 
@@ -304,28 +304,35 @@ pub fn execute_reaction(
     })?;
 
     // 2. 驗證單位可以 react（檢查 reaction counter）
-    let unit = board.units.get(&reactor_id).ok_or(Error::NoActingUnit {
+    let reactor = board.units.get(&reactor_id).ok_or(Error::NoActingUnit {
         func,
         unit_id: reactor_id,
     })?;
-    is_able_to_react(unit).wrap_context(func)?;
+    is_able_to_react(reactor).wrap_context(func)?;
 
     // 3. 驗證目標有效（TargetType 檢查）
-    is_targeting_valid_target(board, skill_id, skill, reactor_id, target_pos).wrap_context(func)?;
+    is_targeting_valid_target(board, skill_id, skill, reactor_id, target_logical_pos)
+        .wrap_context(func)?;
 
     // 4. 施放技能（共用邏輯）
-    let msgs =
-        cast_skill_internal(board, skills, reactor_id, skill_id, target_pos).wrap_context(func)?;
+    let msgs = cast_skill_internal(
+        board,
+        skills,
+        reactor_id,
+        skill_id,
+        (target_actual_pos, target_logical_pos),
+    )
+    .wrap_context(func)?;
 
     // 5. 消耗 reaction 次數
-    let unit = board
+    let reactor = board
         .units
         .get_mut(&reactor_id)
         .ok_or(Error::NoActingUnit {
             func,
             unit_id: reactor_id,
         })?;
-    consume_reaction(unit).wrap_context(func)?;
+    consume_reaction(reactor).wrap_context(func)?;
 
     Ok(msgs)
 }
