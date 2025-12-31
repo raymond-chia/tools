@@ -1,3 +1,7 @@
+# 檢查
+
+- `(?<!\.wrap_context\(func\))\?` 確認是否都有攜帶 function 名稱
+
 # Character
 
 - pixel art 要點: https://www.youtube.com/watch?v=Z8earctNBxg

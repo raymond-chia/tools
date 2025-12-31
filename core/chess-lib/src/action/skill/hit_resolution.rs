@@ -41,6 +41,7 @@ pub fn calc_hit_result(
     affect_area: Vec<Pos>,
     accuracy: i32,
 ) -> Result<Vec<String>, Error> {
+    let func = "calc_hit_result";
     let (caster_id, caster_pos) = caster;
 
     // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
@@ -60,9 +61,12 @@ pub fn calc_hit_result(
             Some(unit_id) => unit_id,
         };
 
-        msgs.extend(process_target_hit(
-            board, skills, caster_id, caster_pos, unit_id, pos, skill, hit_random, hit_score,
-        )?);
+        msgs.extend(
+            process_target_hit(
+                board, skills, caster_id, caster_pos, unit_id, pos, skill, hit_random, hit_score,
+            )
+            .wrap_context(func)?,
+        );
     }
     Ok(msgs)
 }

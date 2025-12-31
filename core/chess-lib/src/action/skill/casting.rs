@@ -281,14 +281,17 @@ pub(super) fn apply_skill_to_area(
 
             let total_accuracy = skill_accuracy + caster_accuracy;
 
-            msgs.extend(calc_hit_result(
-                board,
-                (caster, caster_pos),
-                skills,
-                skill,
-                affect_area,
-                total_accuracy,
-            )?);
+            msgs.extend(
+                calc_hit_result(
+                    board,
+                    (caster, caster_pos),
+                    skills,
+                    skill,
+                    affect_area,
+                    total_accuracy,
+                )
+                .wrap_context(func)?,
+            );
         }
     }
 

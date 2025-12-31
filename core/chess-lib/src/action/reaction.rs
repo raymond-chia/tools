@@ -210,11 +210,13 @@ pub fn check_reactions(
     trigger_type: ReactionTrigger,
     all_skills: &BTreeMap<SkillID, Skill>,
 ) -> Result<Vec<PendingReaction>, Error> {
+    let func = "check_reactions";
     let mut all_pending = Vec::new();
 
     for &(unit, pos) in units {
         // 檢查該單位的 reactions
-        let reactions = check_unit_reactions(unit, trigger_type.clone(), all_skills)?;
+        let reactions =
+            check_unit_reactions(unit, trigger_type.clone(), all_skills).wrap_context(func)?;
 
         // 將 ReactionInfo 包裝成 PendingReaction
         for info in reactions {
