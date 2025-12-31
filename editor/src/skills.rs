@@ -17,14 +17,16 @@ const BASIC_PASSIVE_DURATION: i32 = -1;
 #[derive(Clone)]
 struct BasicPassiveEffectMeta {
     name: &'static str,
+    default_value: i32,
     make: fn(i32) -> Effect,
     validate: fn(&Effect) -> bool,
     extract_value_mut: fn(&mut Effect) -> Option<&mut i32>,
 }
 macro_rules! basic_passive_effect_meta {
-    ($variant:ident, $name:expr) => {
+    ($variant:ident, $name:expr, $default:expr) => {
         BasicPassiveEffectMeta {
             name: $name,
+            default_value: $default,
             make: |value| Effect::$variant {
                 target_type: BASIC_PASSIVE_TARGET_TYPE,
                 shape: BASIC_PASSIVE_SHAPE,
@@ -40,12 +42,13 @@ macro_rules! basic_passive_effect_meta {
     };
 }
 const BASIC_PASSIVE_EFFECTS: &[BasicPassiveEffectMeta] = &[
-    basic_passive_effect_meta!(MaxHp, "max_hp"),
-    basic_passive_effect_meta!(MaxMp, "max_mp"),
-    basic_passive_effect_meta!(Initiative, "initiative"),
-    basic_passive_effect_meta!(Evasion, "evasion"),
-    basic_passive_effect_meta!(Block, "block"),
-    basic_passive_effect_meta!(MovePoints, "move_points"),
+    basic_passive_effect_meta!(MaxHp, "max_hp", 10),
+    basic_passive_effect_meta!(MaxMp, "max_mp", 30),
+    basic_passive_effect_meta!(Initiative, "initiative", 0),
+    basic_passive_effect_meta!(Evasion, "evasion", 100),
+    basic_passive_effect_meta!(Block, "block", 0),
+    basic_passive_effect_meta!(Flanking, "flanking", 10),
+    basic_passive_effect_meta!(MovePoints, "move_points", 50),
 ];
 
 // 判斷是否為 basic passive 效果（依 meta 陣列 validate 規則）
@@ -851,10 +854,10 @@ impl SkillsEditor {
             }
         }
 
-        // （保留 value，覆蓋其他欄位，缺少則補 0）
+        // （保留 value，覆蓋其他欄位，缺少則補預設值）
         let mut new_basic_passive_effects = Vec::with_capacity(BASIC_PASSIVE_EFFECTS.len());
         for (i, meta) in BASIC_PASSIVE_EFFECTS.iter().enumerate() {
-            let value = found[i].unwrap_or(0);
+            let value = found[i].unwrap_or(meta.default_value);
             new_basic_passive_effects.push((meta.make)(value));
         }
 
