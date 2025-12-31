@@ -308,7 +308,7 @@ mod inner {
             .wrap_context(func)?;
 
             for msg in effect_results {
-                msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！：{msg}"));
+                msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！(命中={hit_score}{flanking_msg}, 閃避={evasion})\n{msg}"));
             }
             return Ok(msgs);
         }
@@ -326,7 +326,7 @@ mod inner {
         )
         .wrap_context(func)?;
         for msg in effect_msgs {
-            msgs.push(format!("單位 {unit_type} 被{crit_msg}了：{msg}"));
+            msgs.push(format!("單位 {unit_type} 被{crit_msg}了(命中={hit_score}{flanking_msg}, 閃避={evasion})\n{msg}"));
         }
 
         Ok(msgs)
