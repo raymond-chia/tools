@@ -115,21 +115,40 @@ macro_rules! impl_simple_skills_stat {
             skills: &BTreeMap<SkillID, Skill>,
         ) -> Result<i32, Error> {
             let func = stringify!($fn_name);
-            let mut total = 0;
-            for skill_id in skill_ids {
-                let skill = skills
-                    .get(skill_id.as_ref())
-                    .ok_or_else(|| Error::SkillNotFound {
-                        func,
-                        skill_id: skill_id.as_ref().to_string(),
-                    })?;
-                for effect in &skill.effects {
-                    if let Effect::$effect_variant { value, .. } = effect {
-                        total += value;
-                    }
+            aggregate_skill_effect(skill_ids, skills, |effect| {
+                if let Effect::$effect_variant { value, .. } = effect {
+                    *value
+                } else {
+                    0
                 }
-            }
-            Ok(total)
+            })
+            .wrap_context(func)
+        }
+    };
+}
+
+/// 累加型態的 skills_to_xxx 函式生成 macro（保證非負，可指定返回類型）
+macro_rules! impl_nonnegative_skills_stat {
+    ($(#[$meta:meta])* $fn_name:ident, $effect_variant:ident, $return_type:ty) => {
+        $(#[$meta])*
+        pub fn $fn_name(
+            skill_ids: impl Iterator<Item = impl AsRef<str>>,
+            skills: &BTreeMap<SkillID, Skill>,
+        ) -> Result<$return_type, Error> {
+            let func = stringify!($fn_name);
+            let total = aggregate_skill_effect(skill_ids, skills, |effect| {
+                if let Effect::$effect_variant { value, .. } = effect {
+                    *value
+                } else {
+                    0
+                }
+            })
+            .wrap_context(func)?;
+            let nonnegative = if total < 0 { 0 } else { total };
+            nonnegative.try_into().map_err(|_| Error::InvalidImplementation {
+                func,
+                detail: format!("無法轉換為 {}", stringify!($return_type)),
+            })
         }
     };
 }
@@ -185,37 +204,10 @@ impl_simple_skills_stat!(skills_to_evasion, Evasion);
 impl_simple_skills_stat!(skills_to_block, Block);
 impl_simple_skills_stat!(skills_to_block_reduction, BlockReduction);
 
-pub fn skills_to_move_points(
-    skill_ids: impl Iterator<Item = impl AsRef<str>>,
-    skills: &BTreeMap<SkillID, Skill>,
-) -> Result<MovementCost, Error> {
-    let func = "skills_to_move_points";
-    let total = aggregate_skill_effect(skill_ids, skills, |effect| {
-        if let Effect::MovePoints { value, .. } = effect {
-            *value
-        } else {
-            0
-        }
-    })
-    .wrap_context(func)?;
-    Ok(if total < 0 { 0 } else { total as MovementCost })
-}
-
-pub fn skills_to_max_reactions(
-    skill_ids: impl Iterator<Item = impl AsRef<str>>,
-    skills: &BTreeMap<SkillID, Skill>,
-) -> Result<ReactionCount, Error> {
-    let func = "skills_to_max_reactions";
-    let total = aggregate_skill_effect(skill_ids, skills, |effect| {
-        if let Effect::MaxReactions { value, .. } = effect {
-            *value
-        } else {
-            0
-        }
-    })
-    .wrap_context(func)?;
-    Ok(if total < 0 { 0 } else { total as ReactionCount })
-}
+// 以下統計保證非負（負值會被設為 0）
+impl_nonnegative_skills_stat!(skills_to_flanking, Flanking, i32);
+impl_nonnegative_skills_stat!(skills_to_move_points, MovePoints, MovementCost);
+impl_nonnegative_skills_stat!(skills_to_max_reactions, MaxReactions, ReactionCount);
 
 /// 計算單位對特定 Tag 的施法效力總和
 /// 尋找所有 effect 為 Effect::Potency 且 tag 匹配的技能，並加總其 value

@@ -175,6 +175,11 @@ pub(super) fn apply_effect_to_pos(
         } => Some(format!(
             "[未實作] BlockReduction 效果 +{value}%, 持續 {duration} 回合"
         )),
+        Effect::Flanking {
+            value, duration, ..
+        } => Some(format!(
+            "[未實作] Flanking 效果 +{value}, 持續 {duration} 回合"
+        )),
         Effect::MovePoints {
             value, duration, ..
         } => Some(format!("[未實作] 單位移動 {value}, 持續 {duration} 回合")),

@@ -591,6 +591,7 @@ impl SkillsEditor {
                         Effect::Evasion { .. } => ui.button("新增閃避效果").clicked(),
                         Effect::Block { .. } => ui.button("新增格擋效果").clicked(),
                         Effect::BlockReduction { .. } => ui.button("新增格擋減傷效果").clicked(),
+                        Effect::Flanking { .. } => ui.button("新增夾擊效果").clicked(),
                         Effect::MovePoints { .. } => ui.button("新增移動點數效果").clicked(),
                         Effect::MaxReactions { .. } => ui.button("新增最大反應次數效果").clicked(),
                         Effect::Reaction { .. } => ui.button("新增反應效果").clicked(),
@@ -1083,6 +1084,7 @@ fn show_skill_effect_editor(
             Effect::Evasion { .. } => ui.label("閃避"),
             Effect::Block { .. } => ui.label("格擋"),
             Effect::BlockReduction { .. } => ui.label("格擋減傷"),
+            Effect::Flanking { .. } => ui.label("夾擊"),
             Effect::MovePoints { .. } => ui.label("移動點數"),
             Effect::MaxReactions { .. } => ui.label("最大反應次數"),
             Effect::Reaction { .. } => ui.label("反應"),
@@ -1147,10 +1149,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             value,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "HP 變化值:");
         }
         Effect::Mp {
@@ -1159,10 +1158,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             value,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "MP 變化值:");
         }
         Effect::MaxHp {
@@ -1172,10 +1168,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "最大 HP 變化值:");
             changed |= show_duration_editor(ui, duration);
         }
@@ -1186,10 +1179,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "最大 MP 變化值:");
             changed |= show_duration_editor(ui, duration);
         }
@@ -1200,10 +1190,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "先攻變化值:");
             changed |= show_duration_editor(ui, duration);
         }
@@ -1214,10 +1201,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "命中數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
@@ -1228,10 +1212,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "閃避數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
@@ -1242,10 +1223,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "格擋數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
@@ -1256,11 +1234,19 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "格擋減傷百分比變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Flanking {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            changed |= show_shape_editor(ui, shape);
+            changed |= show_numeric_editor(ui, value, "夾擊數值變化：");
             changed |= show_duration_editor(ui, duration);
         }
         Effect::MovePoints {
@@ -1270,11 +1256,32 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, value, "移動點數變化值:");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::MaxReactions {
+            target_type,
+            shape,
+            value,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            changed |= show_shape_editor(ui, shape);
+            changed |= show_numeric_editor(ui, value, "最大反應次數變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Reaction {
+            target_type,
+            shape,
+            trigger,
+            triggered_skill,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            changed |= show_shape_editor(ui, shape);
+            changed |= show_reaction_trigger_editor(ui, trigger);
+            changed |= show_triggered_skill_editor(ui, triggered_skill, skill_ids);
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Burn {
@@ -1284,10 +1291,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_save_type_editor(ui, save_type);
             changed |= show_duration_editor(ui, duration);
         }
@@ -1297,10 +1301,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_duration_editor(ui, duration);
         }
         Effect::Shove {
@@ -1309,10 +1310,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             distance,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_numeric_editor(ui, distance, "推擠距離:");
         }
         Effect::Potency {
@@ -1323,10 +1321,7 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_tag_editor(ui, tag);
             changed |= show_numeric_editor(ui, value, "施法效力變化：");
             changed |= show_duration_editor(ui, duration);
@@ -1339,42 +1334,9 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             duration,
         } => {
             changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
+            changed |= show_shape_editor(ui, shape);
             changed |= show_save_type_editor(ui, save_type);
             changed |= show_numeric_editor(ui, value, "抗性數值變化：");
-            changed |= show_duration_editor(ui, duration);
-        }
-        Effect::MaxReactions {
-            target_type,
-            shape,
-            value,
-            duration,
-        } => {
-            changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
-            changed |= show_numeric_editor(ui, value, "最大反應次數變化：");
-            changed |= show_duration_editor(ui, duration);
-        }
-        Effect::Reaction {
-            target_type,
-            shape,
-            trigger,
-            triggered_skill,
-            duration,
-        } => {
-            changed |= show_target_type_editor(ui, target_type);
-            ui.horizontal(|ui| {
-                ui.label("形狀:");
-                changed |= show_shape_editor(ui, shape);
-            });
-            changed |= show_reaction_trigger_editor(ui, trigger);
-            changed |= show_triggered_skill_editor(ui, triggered_skill, skill_ids);
             changed |= show_duration_editor(ui, duration);
         }
     }
@@ -1443,82 +1405,85 @@ fn show_tag_editor(ui: &mut Ui, tag: &mut Tag) -> bool {
 
 fn show_shape_editor(ui: &mut Ui, shape: &mut Shape) -> bool {
     let mut changed = false;
-    let shape_type = match shape {
-        Shape::Point => "點".to_string(),
-        Shape::Circle(_) => "圓形".to_string(),
-        Shape::Line(_) => "直線".to_string(),
-        Shape::Cone(_, _) => "錐形".to_string(),
-    };
+    ui.horizontal(|ui| {
+        ui.label("形狀:");
+        let shape_type = match shape {
+            Shape::Point => "點".to_string(),
+            Shape::Circle(_) => "圓形".to_string(),
+            Shape::Line(_) => "直線".to_string(),
+            Shape::Cone(_, _) => "錐形".to_string(),
+        };
 
-    // 切換
-    egui::ComboBox::new("shape_type", "")
-        .selected_text(shape_type)
-        .show_ui(ui, |ui| {
-            if ui
-                .selectable_label(matches!(shape, Shape::Point), "點")
-                .clicked()
-            {
-                *shape = Shape::Point;
-                changed = true;
-            }
-            if ui
-                .selectable_label(matches!(shape, Shape::Circle(_)), "圓形")
-                .clicked()
-            {
-                if !matches!(shape, Shape::Circle(_)) {
-                    *shape = Shape::Circle(1);
+        // 切換
+        egui::ComboBox::new("shape_type", "")
+            .selected_text(shape_type)
+            .show_ui(ui, |ui| {
+                if ui
+                    .selectable_label(matches!(shape, Shape::Point), "點")
+                    .clicked()
+                {
+                    *shape = Shape::Point;
                     changed = true;
                 }
-            }
-            if ui
-                .selectable_label(matches!(shape, Shape::Line(_)), "直線")
-                .clicked()
-            {
-                if !matches!(shape, Shape::Line(_)) {
-                    *shape = Shape::Line(3);
-                    changed = true;
+                if ui
+                    .selectable_label(matches!(shape, Shape::Circle(_)), "圓形")
+                    .clicked()
+                {
+                    if !matches!(shape, Shape::Circle(_)) {
+                        *shape = Shape::Circle(1);
+                        changed = true;
+                    }
                 }
-            }
-            if ui
-                .selectable_label(matches!(shape, Shape::Cone(_, _)), "錐形")
-                .clicked()
-            {
-                if !matches!(shape, Shape::Cone(_, _)) {
-                    *shape = Shape::Cone(3, 45);
-                    changed = true;
+                if ui
+                    .selectable_label(matches!(shape, Shape::Line(_)), "直線")
+                    .clicked()
+                {
+                    if !matches!(shape, Shape::Line(_)) {
+                        *shape = Shape::Line(3);
+                        changed = true;
+                    }
                 }
-            }
-        });
+                if ui
+                    .selectable_label(matches!(shape, Shape::Cone(_, _)), "錐形")
+                    .clicked()
+                {
+                    if !matches!(shape, Shape::Cone(_, _)) {
+                        *shape = Shape::Cone(3, 45);
+                        changed = true;
+                    }
+                }
+            });
 
-    // 各個形狀細節
-    ui.horizontal(|ui| match shape {
-        Shape::Point => {}
-        Shape::Circle(radius) => {
-            ui.add_space(20.0);
-            ui.label("半徑:");
-            if ui.add(DragValue::new(radius).range(1..=10)).changed() {
-                changed = true;
+        // 各個形狀細節
+        match shape {
+            Shape::Point => {}
+            Shape::Circle(radius) => {
+                ui.add_space(20.0);
+                ui.label("半徑:");
+                if ui.add(DragValue::new(radius).range(1..=10)).changed() {
+                    changed = true;
+                }
             }
-        }
-        Shape::Line(length) => {
-            ui.add_space(20.0);
-            ui.label("長度:");
-            if ui.add(DragValue::new(length).range(1..=10)).changed() {
-                changed = true;
+            Shape::Line(length) => {
+                ui.add_space(20.0);
+                ui.label("長度:");
+                if ui.add(DragValue::new(length).range(1..=10)).changed() {
+                    changed = true;
+                }
             }
-        }
-        Shape::Cone(length, angle) => {
-            ui.add_space(20.0);
-            ui.label("長度:");
-            if ui.add(DragValue::new(length).range(1..=10)).changed() {
-                changed = true;
-            }
-            ui.label("角度:");
-            if ui
-                .add(DragValue::new(angle).range(10.0..=120.0).suffix("°"))
-                .changed()
-            {
-                changed = true;
+            Shape::Cone(length, angle) => {
+                ui.add_space(20.0);
+                ui.label("長度:");
+                if ui.add(DragValue::new(length).range(1..=10)).changed() {
+                    changed = true;
+                }
+                ui.label("角度:");
+                if ui
+                    .add(DragValue::new(angle).range(10.0..=120.0).suffix("°"))
+                    .changed()
+                {
+                    changed = true;
+                }
             }
         }
     });
