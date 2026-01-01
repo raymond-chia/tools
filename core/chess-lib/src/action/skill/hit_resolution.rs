@@ -61,12 +61,29 @@ pub fn calc_hit_result(
             Some(unit_id) => unit_id,
         };
 
-        msgs.extend(
-            process_target_hit(
-                board, skills, caster_id, caster_pos, unit_id, pos, skill, hit_random, hit_score,
-            )
-            .wrap_context(func)?,
-        );
+        let flanking_bonus =
+            calc_flanking_bonus(board, skills, caster_id, caster_pos, pos).wrap_context(func)?;
+        let flank_msg = if flanking_bonus > 0 {
+            format!("(夾擊加成={flanking_bonus})")
+        } else {
+            "".to_string()
+        };
+
+        let result_msgs = process_target_hit(
+            board,
+            skills,
+            caster_id,
+            caster_pos,
+            unit_id,
+            pos,
+            skill,
+            hit_random,
+            hit_score + flanking_bonus,
+        )
+        .wrap_context(func)?;
+        msgs.push(format!("命中亂數: {hit_random}; "));
+        msgs.extend(result_msgs);
+        msgs.push(format!("{flank_msg}\n"));
     }
     Ok(msgs)
 }
@@ -257,37 +274,26 @@ mod inner {
                 attack_result,
             )
             .wrap_context(func)?;
+            msgs.push(format!("亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了！"));
             for msg in effect_msgs {
-                msgs.push(format!(
-                    "亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了：{msg}"
-                ));
+                msgs.push(format!("{msg}"));
             }
             return Ok(msgs);
         }
 
-        // 計算夾擊加成
-        let flanking_bonus =
-            calc_flanking_bonus(board, skills, caster_id, caster_pos, pos).wrap_context(func)?;
-        let flanking_msg = if flanking_bonus > 0 {
-            format!("+夾擊{flanking_bonus}")
-        } else {
-            String::new()
-        };
-        let total_hit_score = hit_score + flanking_bonus;
-
         // 閃避判定（考慮夾擊加成）
         let evasion = unit::skills_to_evasion(unit_skills.iter(), skills).wrap_context(func)?;
-        let evade_score = total_hit_score - evasion;
+        let evade_score = hit_score - evasion;
         if evade_score <= 0 {
             msgs.push(format!(
-                "單位 {unit_type} 閃避了{crit_msg}！(命中={hit_score}{flanking_msg}, 閃避={evasion})",
+                "單位 {unit_type} 閃避了{crit_msg}！(命中={hit_score}, 閃避={evasion})",
             ));
             return Ok(msgs);
         }
 
         // 格擋判定
         let block = unit::skills_to_block(unit_skills.iter(), skills).wrap_context(func)?;
-        let block_score = total_hit_score - block - evasion;
+        let block_score = hit_score - block - evasion;
 
         let block_reduction = unit::skills_to_block_reduction(unit_skills.iter(), skills)
             .wrap_context(func)?
@@ -307,8 +313,11 @@ mod inner {
             )
             .wrap_context(func)?;
 
+            msgs.push(format!(
+                "單位 {unit_type} 格擋{crit_msg}！(命中={hit_score}, 閃避={evasion}, 格擋={block})"
+            ));
             for msg in effect_results {
-                msgs.push(format!("單位 {unit_type} 格擋{crit_msg}！(命中={hit_score}{flanking_msg}, 閃避={evasion})\n{msg}"));
+                msgs.push(format!("{msg}"));
             }
             return Ok(msgs);
         }
@@ -325,8 +334,12 @@ mod inner {
             attack_result,
         )
         .wrap_context(func)?;
+
+        msgs.push(format!(
+            "單位 {unit_type} 被{crit_msg}了(命中={hit_score}, 閃避={evasion}, 格擋={block})"
+        ));
         for msg in effect_msgs {
-            msgs.push(format!("單位 {unit_type} 被{crit_msg}了(命中={hit_score}{flanking_msg}, 閃避={evasion})\n{msg}"));
+            msgs.push(format!("{msg}"));
         }
 
         Ok(msgs)
