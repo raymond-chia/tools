@@ -258,6 +258,21 @@ pub enum Effect {
         save_type: SaveType,
         duration: i32, // -1 代表永久
     },
+    /// 黑暗感知：在指定範圍內忽略光照懲罰
+    Sense {
+        target_type: TargetType,
+        shape: Shape,
+        range: usize,
+        duration: i32, // -1 代表永久
+    },
+    /// 攜帶光源：單位發出光芒
+    CarriesLight {
+        target_type: TargetType,
+        shape: Shape,
+        bright_range: usize,
+        dim_range: usize,
+        duration: i32, // -1 代表永久
+    },
 }
 
 impl Default for Skill {
@@ -295,7 +310,9 @@ macro_rules! effect_field_ref {
             | Effect::Shove { $field, .. }
             | Effect::Potency { $field, .. }
             | Effect::Resistance { $field, .. }
-            | Effect::Burn { $field, .. } => $field,
+            | Effect::Burn { $field, .. }
+            | Effect::Sense { $field, .. }
+            | Effect::CarriesLight { $field, .. } => $field,
         }
     };
 }
@@ -342,7 +359,9 @@ impl Effect {
             | Effect::HitAndRun { .. }
             | Effect::Shove { .. }
             | Effect::Potency { .. }
-            | Effect::Resistance { .. } => None,
+            | Effect::Resistance { .. }
+            | Effect::Sense { .. }
+            | Effect::CarriesLight { .. } => None,
         }
     }
 
@@ -363,7 +382,9 @@ impl Effect {
             | Effect::HitAndRun { duration, .. }
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
-            | Effect::Burn { duration, .. } => *duration,
+            | Effect::Burn { duration, .. }
+            | Effect::Sense { duration, .. }
+            | Effect::CarriesLight { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
         }
     }
@@ -385,7 +406,9 @@ impl Effect {
             | Effect::HitAndRun { duration, .. }
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
-            | Effect::Burn { duration, .. } => {
+            | Effect::Burn { duration, .. }
+            | Effect::Sense { duration, .. }
+            | Effect::CarriesLight { duration, .. } => {
                 // 只有 duration > 0 時才減少（永久效果 -1 不減少）
                 if *duration > 0 {
                     *duration -= 1;

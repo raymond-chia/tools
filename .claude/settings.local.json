@@ -5,6 +5,7 @@
       "Bash(cargo.exe build:*)",
       "Bash(cargo.exe test:*)",
       "Bash(cargo.exe check:*)",
+      "Bash(cargo.exe fmt:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
       "Bash(wc:*)"

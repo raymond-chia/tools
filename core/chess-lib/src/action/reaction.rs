@@ -617,6 +617,8 @@ mod tests {
             teams: HashMap::new(),
             units,
             unit_map,
+            ambient_light: LightLevel::default(),
+            light_sources: Vec::new(),
         };
 
         (board, 1, 2)
@@ -727,6 +729,8 @@ mod tests {
             teams: HashMap::new(),
             units,
             unit_map,
+            ambient_light: LightLevel::default(),
+            light_sources: Vec::new(),
         };
 
         // 給友方單位添加 reaction 技能（應該被忽略）

@@ -2,6 +2,7 @@
 //! - 負責 AI 行為決策、行動評分、傾向資料結構與自動化行為流程。
 //! - 不負責戰鬥流程、單位屬性計算或棋盤資料結構。
 //! - 僅與 AI 決策、行動選擇、評分相關的邏輯應放於此。
+use crate::board::manhattan_distance;
 use crate::*;
 use serde::Deserialize;
 use skills_lib::*;
@@ -307,9 +308,5 @@ mod inner {
             score: -1.0,
             reason: format!("not implemented"),
         })
-    }
-
-    fn manhattan_distance(a: Pos, b: Pos) -> usize {
-        ((a.x as isize - b.x as isize).abs() + (a.y as isize - b.y as isize).abs()) as usize
     }
 }

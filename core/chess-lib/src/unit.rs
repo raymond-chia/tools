@@ -209,6 +209,30 @@ impl_nonnegative_skills_stat!(skills_to_flanking, Flanking, i32);
 impl_nonnegative_skills_stat!(skills_to_move_points, MovePoints, MovementCost);
 impl_nonnegative_skills_stat!(skills_to_max_reactions, MaxReactions, ReactionCount);
 
+pub fn skills_to_hit_and_run(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+) -> Result<bool, Error> {
+    let func = "skills_to_hit_and_run";
+
+    for skill_id in skill_ids {
+        let skill = skills
+            .get(skill_id.as_ref())
+            .ok_or_else(|| Error::SkillNotFound {
+                func,
+                skill_id: skill_id.as_ref().to_string(),
+            })?;
+        if skill
+            .effects
+            .iter()
+            .any(|e| matches!(e, Effect::HitAndRun { .. }))
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// 計算單位對特定 Tag 的施法效力總和
 /// 尋找所有 effect 為 Effect::Potency 且 tag 匹配的技能，並加總其 value
 pub fn skills_to_potency(
@@ -248,6 +272,79 @@ pub fn skills_to_resistance(
         0
     })
     .wrap_context(func)
+}
+
+/// 檢查單位的技能中是否有 Sense 效果覆蓋目標位置
+pub fn skills_to_sense(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+    distance: usize,
+) -> Result<bool, Error> {
+    let func = "skills_to_sense";
+
+    for skill_id in skill_ids {
+        let skill = skills
+            .get(skill_id.as_ref())
+            .ok_or_else(|| Error::SkillNotFound {
+                func,
+                skill_id: skill_id.as_ref().to_string(),
+            })?;
+
+        if effects_to_sense(skill.effects.iter(), distance) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// 從效果集合中根據距離計算光照等級（CarriesLight 效果）
+/// 如果有多個 CarriesLight 效果，取最亮的光照等級
+pub fn effects_to_light_level<'a>(
+    effects: impl Iterator<Item = &'a Effect>,
+    distance: usize,
+) -> LightLevel {
+    let mut max_light = LightLevel::Darkness;
+
+    for effect in effects {
+        if let Effect::CarriesLight {
+            bright_range,
+            dim_range,
+            ..
+        } = effect
+        {
+            let light_level = if *bright_range > 0 && distance <= *bright_range {
+                LightLevel::Bright
+            } else if *dim_range > 0 && distance <= *dim_range {
+                LightLevel::Dim
+            } else {
+                LightLevel::Darkness
+            };
+
+            max_light = max_light.max(light_level);
+
+            // 早期退出：已經是最亮
+            if max_light == LightLevel::Bright {
+                return LightLevel::Bright;
+            }
+        }
+    }
+
+    max_light
+}
+
+/// 檢查效果集合中是否有 Sense 效果覆蓋目標位置
+pub fn effects_to_sense<'a>(
+    mut effects: impl Iterator<Item = &'a Effect>,
+    distance: usize,
+) -> bool {
+    effects.any(|effect| {
+        if let Effect::Sense { range, .. } = effect {
+            distance <= *range
+        } else {
+            false
+        }
+    })
 }
 
 use inner::*;

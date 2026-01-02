@@ -370,6 +370,8 @@ mod tests {
             teams,
             unit_map,
             units,
+            ambient_light: LightLevel::default(),
+            light_sources: Vec::new(),
         };
         (board, unit_id, skills)
     }

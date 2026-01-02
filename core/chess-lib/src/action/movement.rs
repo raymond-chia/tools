@@ -115,7 +115,9 @@ pub fn movable_area(
         Some(u) => u,
         None => return HashMap::new(),
     };
-    if unit.has_cast_skill_this_turn && !has_hit_and_run_skill(unit, skills_map) {
+    if unit.has_cast_skill_this_turn
+        && !skills_to_hit_and_run(unit.skills.iter(), skills_map).unwrap_or(false)
+    {
         // 若無「打帶跑」則禁止移動，回傳現有錯誤型別
         return HashMap::new();
     }
@@ -194,7 +196,9 @@ pub fn move_unit_along_path(
             });
         }
     };
-    if actor.has_cast_skill_this_turn && !has_hit_and_run_skill(actor, skills_map) {
+    if actor.has_cast_skill_this_turn
+        && !skills_to_hit_and_run(actor.skills.iter(), skills_map).unwrap_or(false)
+    {
         // 若無「打帶跑」則禁止移動
         return Err(Error::NotEnoughAP { func });
     }
@@ -333,21 +337,6 @@ mod inner {
         }
         result
     }
-
-    pub fn has_hit_and_run_skill(unit: &Unit, skills_map: &BTreeMap<String, Skill>) -> bool {
-        for skill_id in &unit.skills {
-            if let Some(skill) = skills_map.get(skill_id) {
-                if skill
-                    .effects
-                    .iter()
-                    .any(|e| matches!(e, Effect::HitAndRun { .. }))
-                {
-                    return true;
-                }
-            }
-        }
-        false
-    }
 }
 
 #[cfg(test)]
@@ -440,6 +429,8 @@ mod tests {
             teams,
             units,
             unit_map,
+            ambient_light: LightLevel::default(),
+            light_sources: Vec::new(),
         };
         (board, unit_id)
     }

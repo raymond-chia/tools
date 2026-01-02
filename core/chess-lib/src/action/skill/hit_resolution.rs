@@ -45,20 +45,19 @@ pub fn calc_hit_result(
     let (caster_id, caster_pos) = caster;
 
     // 有命中數值，進行命中機制（命中只算一次，閃避/格擋每目標）
+    let mut msgs = vec![];
     let mut rng = rand::rng();
     let hit_random = rng.random_range(1..=100);
     let hit_score = accuracy + hit_random;
 
-    let mut msgs = vec![];
-
     for pos in affect_area {
-        let unit_id = match board.pos_to_unit(pos) {
+        let target_id = match board.pos_to_unit(pos) {
             // 無單位，直接套用效果（不需要豁免判定）
             None => {
                 msgs.extend(apply_effects_to_empty_tile(board, skill, caster_pos, pos));
                 continue;
             }
-            Some(unit_id) => unit_id,
+            Some(target_id) => target_id,
         };
 
         let flanking_bonus =
@@ -72,10 +71,8 @@ pub fn calc_hit_result(
         let result_msgs = process_target_hit(
             board,
             skills,
-            caster_id,
-            caster_pos,
-            unit_id,
-            pos,
+            (caster_id, caster_pos),
+            (target_id, pos),
             skill,
             hit_random,
             hit_score + flanking_bonus,
@@ -148,6 +145,15 @@ pub fn calc_save_result(
 use inner::*;
 mod inner {
     use super::*;
+
+    /// 根據光照等級計算倍率
+    pub(super) fn get_lighting_multiplier(light_level: LightLevel) -> f32 {
+        match light_level {
+            LightLevel::Darkness => 0.7,
+            LightLevel::Dim => 0.9,
+            LightLevel::Bright => 1.0,
+        }
+    }
 
     /// 判定攻擊結果（普通或爆擊）與訊息文字
     pub(super) fn determine_attack_result(
@@ -229,32 +235,73 @@ mod inner {
     pub(super) fn process_target_hit(
         board: &mut Board,
         skills: &BTreeMap<SkillID, Skill>,
-        caster_id: UnitID,
-        caster_pos: Pos,
-        unit_id: UnitID,
-        pos: Pos,
+        (caster_id, caster_pos): (UnitID, Pos),
+        (target_id, target_pos): (UnitID, Pos),
         skill: &Skill,
         hit_random: i32,
         hit_score: i32,
     ) -> Result<Vec<String>, Error> {
         let func = "process_target_hit";
+        let mut msgs = vec![];
 
-        let unit = board
+        let target_unit = board
             .units
-            .get(&unit_id)
+            .get(&target_id)
             .ok_or(Error::InvalidImplementation {
                 func,
                 detail: "unit not found".to_string(),
             })?;
-        let unit_type = unit.unit_template_type.clone();
-        let unit_skills = &unit.skills;
+        let target_unit_type = target_unit.unit_template_type.clone();
 
-        let mut msgs = vec![];
+        // 取得施法者單位以檢查是否能感知目標
+        let caster_unit = board.units.get(&caster_id).ok_or(Error::NoActingUnit {
+            func,
+            unit_id: caster_id,
+        })?;
+        let distance_to_target = manhattan_distance(caster_pos, target_pos);
+        let caster_can_sense_target =
+            unit::skills_to_sense(caster_unit.skills.iter(), skills, distance_to_target)?
+                || unit::effects_to_sense(caster_unit.status_effects.iter(), distance_to_target);
+
+        // 取得目標光照等級（影響施法者命中值）
+        // 如果施法者能感知目標，則忽略目標位置的光照影響
+        let target_light = if caster_can_sense_target {
+            LightLevel::Bright
+        } else {
+            board.get_light_level(target_pos, skills)?
+        };
+        let target_light_mult = get_lighting_multiplier(target_light);
+
+        // 應用目標光照到命中值（直接影響整個 hit_score，包括夾擊加成）
+        let adjusted_hit_score = (hit_score as f32 * target_light_mult) as i32;
+
+        // 記錄目標光照訊息
+        if target_light != LightLevel::Bright {
+            msgs.push(format!("目標光照影響: {:.0}%", target_light_mult * 100.0));
+        }
+
+        // 取得攻擊者光照等級（影響目標閃避值）
+        // 如果目標能感知攻擊者，則忽略攻擊者位置的光照影響
+        let target_can_sense_caster =
+            unit::skills_to_sense(target_unit.skills.iter(), skills, distance_to_target)?
+                || unit::effects_to_sense(target_unit.status_effects.iter(), distance_to_target);
+
+        let caster_light = if target_can_sense_caster {
+            LightLevel::Bright
+        } else {
+            board.get_light_level(caster_pos, skills)?
+        };
+        let caster_light_mult = get_lighting_multiplier(caster_light);
+
+        // 記錄攻擊者光照訊息
+        if caster_light != LightLevel::Bright {
+            msgs.push(format!("攻擊者光照影響: {:.0}%", caster_light_mult * 100.0));
+        }
 
         // 完全閃避
         if hit_random <= CRITICAL_FAILURE_THRESHOLD {
             msgs.push(format!(
-                "亂數={hit_random} <= {CRITICAL_FAILURE_THRESHOLD}%，單位 {unit_type} 完全閃避了攻擊！"
+                "亂數={hit_random} <= {CRITICAL_FAILURE_THRESHOLD}%，單位 {target_unit_type} 完全閃避了攻擊！"
             ));
             return Ok(msgs);
         }
@@ -266,36 +313,37 @@ mod inner {
             let effect_msgs = apply_all_effects(
                 board,
                 skills,
-                caster_id,
-                unit_id,
-                caster_pos,
-                pos,
+                (caster_id, caster_pos),
+                (target_id, target_pos),
                 skill,
                 attack_result,
             )
             .wrap_context(func)?;
-            msgs.push(format!("亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {unit_type} 被完全命中{crit_msg}了！"));
+            msgs.push(format!("亂數={hit_random} > {CRITICAL_SUCCESS_THRESHOLD}%，單位 {target_unit_type} 被完全命中{crit_msg}了！"));
             for msg in effect_msgs {
                 msgs.push(format!("{msg}"));
             }
             return Ok(msgs);
         }
 
-        // 閃避判定（考慮夾擊加成）
-        let evasion = unit::skills_to_evasion(unit_skills.iter(), skills).wrap_context(func)?;
-        let evade_score = hit_score - evasion;
+        // 閃避判定（考慮夾擊加成與光照）
+        let base_evasion =
+            unit::skills_to_evasion(target_unit.skills.iter(), skills).wrap_context(func)?;
+        // 應用施法者光照到閃避值（施法者在暗處，目標更容易閃避）
+        let adjusted_evasion = (base_evasion as f32 * caster_light_mult) as i32;
+        let evade_score = adjusted_hit_score - adjusted_evasion;
         if evade_score <= 0 {
             msgs.push(format!(
-                "單位 {unit_type} 閃避了{crit_msg}！(命中={hit_score}, 閃避={evasion})",
+                "單位 {target_unit_type} 閃避了{crit_msg}！(命中={adjusted_hit_score}, 閃避={adjusted_evasion})",
             ));
             return Ok(msgs);
         }
 
         // 格擋判定
-        let block = unit::skills_to_block(unit_skills.iter(), skills).wrap_context(func)?;
-        let block_score = hit_score - block - evasion;
+        let block = unit::skills_to_block(target_unit.skills.iter(), skills).wrap_context(func)?;
+        let block_score = adjusted_hit_score - block - adjusted_evasion;
 
-        let block_reduction = unit::skills_to_block_reduction(unit_skills.iter(), skills)
+        let block_reduction = unit::skills_to_block_reduction(target_unit.skills.iter(), skills)
             .wrap_context(func)?
             .clamp(MIN_BLOCK_REDUCTION_PERCENT, MAX_BLOCK_REDUCTION_PERCENT);
 
@@ -303,10 +351,8 @@ mod inner {
             let effect_results = apply_effects_with_block(
                 board,
                 skills,
-                caster_id,
-                unit_id,
-                caster_pos,
-                pos,
+                (caster_id, caster_pos),
+                (target_id, target_pos),
                 skill,
                 attack_result,
                 block_reduction,
@@ -314,7 +360,7 @@ mod inner {
             .wrap_context(func)?;
 
             msgs.push(format!(
-                "單位 {unit_type} 格擋{crit_msg}！(命中={hit_score}, 閃避={evasion}, 格擋={block})"
+                "單位 {target_unit_type} 格擋{crit_msg}！(命中={adjusted_hit_score}, 閃避={adjusted_evasion}, 格擋={block})"
             ));
             for msg in effect_results {
                 msgs.push(format!("{msg}"));
@@ -326,17 +372,15 @@ mod inner {
         let effect_msgs = apply_all_effects(
             board,
             skills,
-            caster_id,
-            unit_id,
-            caster_pos,
-            pos,
+            (caster_id, caster_pos),
+            (target_id, target_pos),
             skill,
             attack_result,
         )
         .wrap_context(func)?;
 
         msgs.push(format!(
-            "單位 {unit_type} 被{crit_msg}了(命中={hit_score}, 閃避={evasion}, 格擋={block})"
+            "單位 {target_unit_type} 被{crit_msg}了(命中={adjusted_hit_score}, 閃避={adjusted_evasion}, 格擋={block})"
         ));
         for msg in effect_msgs {
             msgs.push(format!("{msg}"));

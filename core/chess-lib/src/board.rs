@@ -28,6 +28,20 @@ pub enum Orientation {
     Right,
 }
 
+/// 光照等級
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LightLevel {
+    Darkness = 0, // 黑暗
+    Dim = 1,      // 微光
+    Bright = 2,   // 明亮
+}
+
+impl Default for LightLevel {
+    fn default() -> Self {
+        LightLevel::Bright
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
 pub enum Object {
     Tree,
@@ -46,11 +60,16 @@ pub enum Object {
         rel: Pos,
         duration: u32,
     },
+    Torch {
+        lit: bool,
+    },
+    Campfire {
+        lit: bool,
+    },
 }
 
 impl Object {
     /// 是否允許通行：物件自身負責描述能否通行的規則
-    /// - Tree / Wall / Cliff / Pit / 多格帳篷 -> 阻擋（不可通行）
     pub fn is_passable(&self) -> bool {
         match self {
             Object::Tree
@@ -58,7 +77,42 @@ impl Object {
             | Object::Cliff { .. }
             | Object::Pit
             | Object::Tent2 { .. }
-            | Object::Tent15 { .. } => false,
+            | Object::Tent15 { .. }
+            | Object::Campfire { .. } => false,
+            Object::Torch { .. } => true,
+        }
+    }
+
+    /// 根據距離計算光照等級
+    /// 返回 Darkness 表示無光或熄滅
+    pub fn light_level_at(&self, distance: usize) -> LightLevel {
+        match self {
+            Object::Torch { lit: true } => {
+                if TORCH_BRIGHT_RANGE > 0 && distance <= TORCH_BRIGHT_RANGE {
+                    LightLevel::Bright
+                } else if TORCH_DIM_RANGE > 0 && distance <= TORCH_DIM_RANGE {
+                    LightLevel::Dim
+                } else {
+                    LightLevel::Darkness
+                }
+            }
+            Object::Campfire { lit: true } => {
+                if CAMPFIRE_BRIGHT_RANGE > 0 && distance <= CAMPFIRE_BRIGHT_RANGE {
+                    LightLevel::Bright
+                } else if CAMPFIRE_DIM_RANGE > 0 && distance <= CAMPFIRE_DIM_RANGE {
+                    LightLevel::Dim
+                } else {
+                    LightLevel::Darkness
+                }
+            }
+            Object::Tree
+            | Object::Wall
+            | Object::Cliff { .. }
+            | Object::Pit
+            | Object::Tent2 { .. }
+            | Object::Tent15 { .. }
+            | Object::Torch { lit: false }
+            | Object::Campfire { lit: false } => LightLevel::Darkness,
         }
     }
 }
@@ -74,6 +128,8 @@ pub struct Tile {
 pub struct BoardConfig {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: BTreeMap<TeamID, Team>,
+    #[serde(default)]
+    pub ambient_light: LightLevel, // 環境光（向後兼容）
     // 以上會同步到 Board
     pub deployable: BTreeSet<Pos>,
     #[serde(with = "unitid_key_map")]
@@ -84,6 +140,8 @@ pub struct BoardConfig {
 pub struct Board {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: HashMap<TeamID, Team>,
+    pub ambient_light: LightLevel,
+    pub light_sources: Vec<Pos>,
     pub units: HashMap<UnitID, Unit>,
     pub unit_map: UnitMap,
 }
@@ -116,12 +174,19 @@ impl Board {
             units.insert(unit_id, unit);
         }
 
-        Ok(Board {
+        let mut board = Board {
             tiles: config.tiles,
             teams,
+            ambient_light: config.ambient_light,
+            light_sources: Vec::new(),
             units,
             unit_map,
-        })
+        };
+
+        // 初始化光源快取
+        board.rebuild_light_sources_cache();
+
+        Ok(board)
     }
 
     pub fn pos_to_unit(&self, pos: Pos) -> Option<UnitID> {
@@ -130,6 +195,88 @@ impl Board {
 
     pub fn unit_to_pos(&self, unit_id: UnitID) -> Option<Pos> {
         self.unit_map.get_pos(unit_id)
+    }
+
+    /// 掃描棋盤建立光源快取
+    pub fn rebuild_light_sources_cache(&mut self) {
+        self.light_sources.clear();
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                let pos = Pos { x, y };
+                if let Some(tile) = self.get_tile(pos) {
+                    if let Some(obj) = &tile.object {
+                        match obj {
+                            Object::Torch { .. } | Object::Campfire { .. } => {
+                                self.light_sources.push(pos);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_light_level(
+        &self,
+        pos: Pos,
+        _skills: &BTreeMap<SkillID, Skill>,
+    ) -> Result<LightLevel, Error> {
+        let func = "get_light_level";
+        let mut max_light = self.ambient_light;
+
+        // 早期退出：如果環境光已經是最亮，直接返回
+        if max_light == LightLevel::Bright {
+            return Ok(LightLevel::Bright);
+        }
+
+        // 檢查所有 Object 光源
+        for &source_pos in &self.light_sources {
+            let tile = self
+                .get_tile(source_pos)
+                .ok_or_else(|| Error::InvalidImplementation {
+                    func,
+                    detail: format!(
+                        "light_sources cache contains invalid position {:?}",
+                        source_pos
+                    ),
+                })?;
+            let obj = tile
+                .object
+                .as_ref()
+                .ok_or_else(|| Error::InvalidImplementation {
+                    func,
+                    detail: format!(
+                        "light_sources cache contains position {:?} without light source",
+                        source_pos
+                    ),
+                })?;
+
+            let distance = manhattan_distance(pos, source_pos);
+            let light_level = obj.light_level_at(distance);
+
+            max_light = max_light.max(light_level);
+            if max_light == LightLevel::Bright {
+                return Ok(LightLevel::Bright);
+            }
+        }
+
+        // 檢查所有單位的 CarriesLight 效果
+        for (unit_id, unit) in &self.units {
+            let Some(unit_pos) = self.unit_to_pos(*unit_id) else {
+                continue;
+            };
+
+            let distance = manhattan_distance(pos, unit_pos);
+            let light_level = unit::effects_to_light_level(unit.status_effects.iter(), distance);
+
+            max_light = max_light.max(light_level);
+            if max_light == LightLevel::Bright {
+                return Ok(LightLevel::Bright);
+            }
+        }
+
+        Ok(max_light)
     }
 }
 
@@ -213,6 +360,13 @@ impl UnitMap {
     pub fn get_pos(&self, unit_id: UnitID) -> Option<Pos> {
         self.unit_to_pos.get(&unit_id).copied()
     }
+}
+
+/// 計算曼哈頓距離
+pub fn manhattan_distance(a: Pos, b: Pos) -> usize {
+    let dx = if a.x > b.x { a.x - b.x } else { b.x - a.x };
+    let dy = if a.y > b.y { a.y - b.y } else { b.y - a.y };
+    dx + dy
 }
 
 // 讓 BTreeMap<UnitID, UnitMarker> 可以用 string key 序列化
@@ -418,5 +572,415 @@ mod tests {
         assert_eq!(deser[&7].unit_template_type, "Another");
         assert_eq!(deser[&7].team, "t2");
         assert_eq!(deser[&7].pos, Pos { x: 0, y: 0 });
+    }
+
+    #[test]
+    fn test_object_light_level_at_torch() {
+        let torch_lit = Object::Torch { lit: true };
+
+        // 距離 0-3：Bright
+        assert_eq!(torch_lit.light_level_at(0), LightLevel::Bright);
+        assert_eq!(torch_lit.light_level_at(3), LightLevel::Bright);
+
+        // 距離 4-5：Dim
+        assert_eq!(torch_lit.light_level_at(4), LightLevel::Dim);
+        assert_eq!(torch_lit.light_level_at(5), LightLevel::Dim);
+
+        // 距離 > 5：Darkness
+        assert_eq!(torch_lit.light_level_at(6), LightLevel::Darkness);
+        assert_eq!(torch_lit.light_level_at(10), LightLevel::Darkness);
+
+        // 熄滅的火把：所有距離都是 Darkness
+        let torch_unlit = Object::Torch { lit: false };
+        assert_eq!(torch_unlit.light_level_at(0), LightLevel::Darkness);
+        assert_eq!(torch_unlit.light_level_at(3), LightLevel::Darkness);
+    }
+
+    #[test]
+    fn test_object_light_level_at_campfire() {
+        let campfire_lit = Object::Campfire { lit: true };
+
+        // 距離 0-5：Bright
+        assert_eq!(campfire_lit.light_level_at(0), LightLevel::Bright);
+        assert_eq!(campfire_lit.light_level_at(5), LightLevel::Bright);
+
+        // 距離 6-8：Dim
+        assert_eq!(campfire_lit.light_level_at(6), LightLevel::Dim);
+        assert_eq!(campfire_lit.light_level_at(8), LightLevel::Dim);
+
+        // 距離 > 8：Darkness
+        assert_eq!(campfire_lit.light_level_at(9), LightLevel::Darkness);
+
+        // 熄滅的營火：所有距離都是 Darkness
+        let campfire_unlit = Object::Campfire { lit: false };
+        assert_eq!(campfire_unlit.light_level_at(0), LightLevel::Darkness);
+        assert_eq!(campfire_unlit.light_level_at(5), LightLevel::Darkness);
+    }
+
+    #[test]
+    fn test_object_light_level_at_non_light_objects() {
+        // 其他物件不發光：所有距離都是 Darkness
+        assert_eq!(Object::Tree.light_level_at(0), LightLevel::Darkness);
+        assert_eq!(Object::Wall.light_level_at(0), LightLevel::Darkness);
+        assert_eq!(Object::Pit.light_level_at(0), LightLevel::Darkness);
+        assert_eq!(
+            Object::Cliff {
+                orientation: Orientation::Up
+            }
+            .light_level_at(0),
+            LightLevel::Darkness
+        );
+    }
+
+    #[test]
+    fn test_object_is_passable_light_sources() {
+        // Torch（火把）可通行，Campfire（營火）不可通行
+        assert!(Object::Torch { lit: true }.is_passable());
+        assert!(Object::Torch { lit: false }.is_passable());
+        assert!(!Object::Campfire { lit: true }.is_passable());
+        assert!(!Object::Campfire { lit: false }.is_passable());
+    }
+
+    #[test]
+    fn test_board_config_backward_compatibility() {
+        // 測試舊存檔（沒有 ambient_light）的兼容性
+        let json = r#"{
+            "tiles": [[{"terrain": "Plain", "object": null}]],
+            "teams": {},
+            "deployable": [],
+            "units": {}
+        }"#;
+        let config: BoardConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.ambient_light, LightLevel::Bright); // default
+    }
+
+    #[test]
+    fn test_get_light_level_ambient() {
+        // 只有環境光時返回環境光
+        let mut tiles = vec![vec![Tile::default()]];
+        tiles[0][0].terrain = Terrain::Plain;
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+        assert_eq!(
+            board.get_light_level(Pos { x: 0, y: 0 }, &skills),
+            Ok(LightLevel::Darkness)
+        );
+    }
+
+    #[test]
+    fn test_get_light_level_torch_bright() {
+        // Torch 3 格內為 Bright
+        let mut tiles = vec![vec![Tile::default(); 5]; 5];
+        tiles[2][2].object = Some(Object::Torch { lit: true });
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // Torch 在 (2, 2)，TORCH_BRIGHT_RADIUS = 3
+        // 距離 0：同位置
+        assert_eq!(
+            board.get_light_level(Pos { x: 2, y: 2 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+
+        // 距離 1
+        assert_eq!(
+            board.get_light_level(Pos { x: 3, y: 2 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+
+        // 距離 3（邊界）
+        assert_eq!(
+            board.get_light_level(Pos { x: 2, y: 5 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+        assert_eq!(
+            board.get_light_level(Pos { x: 5, y: 2 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+    }
+
+    #[test]
+    fn test_get_light_level_torch_dim() {
+        // Torch 4-5 格為 Dim
+        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+        tiles[5][5].object = Some(Object::Torch { lit: true });
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // Torch 在 (5, 5)，TORCH_DIM_RADIUS = 5
+        // 距離 4（Dim）
+        assert_eq!(
+            board.get_light_level(Pos { x: 5, y: 9 }, &skills),
+            Ok(LightLevel::Dim)
+        );
+
+        // 距離 5（邊界，Dim）
+        assert_eq!(
+            board.get_light_level(Pos { x: 5, y: 0 }, &skills),
+            Ok(LightLevel::Dim)
+        );
+
+        // 距離 6（超出範圍，回到環境光 Darkness）
+        assert_eq!(
+            board.get_light_level(Pos { x: 0, y: 0 }, &skills),
+            Ok(LightLevel::Darkness)
+        );
+    }
+
+    #[test]
+    fn test_get_light_level_multiple_sources() {
+        // 多光源重疊取最亮
+        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+        tiles[2][2].object = Some(Object::Torch { lit: true });
+        tiles[5][5].object = Some(Object::Campfire { lit: true });
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // 位置 (4, 4)：
+        // - 距離 Torch(2,2) = |4-2| + |4-2| = 4 (Dim)
+        // - 距離 Campfire(5,5) = |4-5| + |4-5| = 2 (Bright)
+        // 取最亮 = Bright
+        assert_eq!(
+            board.get_light_level(Pos { x: 4, y: 4 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+    }
+
+    #[test]
+    fn test_rebuild_light_sources_cache() {
+        // 測試光源快取建立（快取所有 Torch/Campfire，不論是否點燃）
+        let mut tiles = vec![vec![Tile::default(); 5]; 5];
+        tiles[1][1].object = Some(Object::Torch { lit: true });
+        tiles[2][2].object = Some(Object::Campfire { lit: true });
+        tiles[3][3].object = Some(Object::Torch { lit: false }); // 熄滅的也計入快取
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Bright,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // 驗證快取（包含點燃和熄滅的）
+        assert_eq!(board.light_sources.len(), 3);
+        assert!(board.light_sources.contains(&Pos { x: 1, y: 1 }));
+        assert!(board.light_sources.contains(&Pos { x: 2, y: 2 }));
+        assert!(board.light_sources.contains(&Pos { x: 3, y: 3 })); // 熄滅的也在快取
+    }
+
+    #[test]
+    fn test_get_light_level_carries_light() {
+        use std::collections::BTreeSet;
+        // 測試單位攜帶光源（CarriesLight 效果）
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let mut board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // 創建一個帶有 CarriesLight 效果的單位
+        let unit_id = 1;
+        let mut unit = Unit {
+            id: unit_id,
+            unit_template_type: "test".to_string(),
+            team: "team1".to_string(),
+            hp: 100,
+            max_hp: 100,
+            mp: 50,
+            max_mp: 50,
+            move_points: 5,
+            moved: 0,
+            has_cast_skill_this_turn: false,
+            reactions_used_this_turn: 0,
+            max_reactions_per_turn: 0,
+            skills: BTreeSet::new(),
+            status_effects: vec![],
+        };
+
+        // 添加 CarriesLight 效果（bright_range: 3, dim_range: 5）
+        unit.status_effects.push(Effect::CarriesLight {
+            target_type: TargetType::Caster,
+            shape: Shape::Point,
+            bright_range: 3,
+            dim_range: 5,
+            duration: -1,
+        });
+
+        // 將單位放置在 (5, 5)
+        board.unit_map.insert(unit_id, Pos { x: 5, y: 5 });
+        board.units.insert(unit_id, unit);
+
+        // 測試不同距離的光照等級
+        // 距離 0：同位置（應為 Bright）
+        assert_eq!(
+            board.get_light_level(Pos { x: 5, y: 5 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+
+        // 距離 1（應為 Bright）
+        assert_eq!(
+            board.get_light_level(Pos { x: 6, y: 5 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+
+        // 距離 3：邊界（應為 Bright）
+        assert_eq!(
+            board.get_light_level(Pos { x: 5, y: 8 }, &skills),
+            Ok(LightLevel::Bright)
+        );
+
+        // 距離 4（應為 Dim）
+        assert_eq!(
+            board.get_light_level(Pos { x: 5, y: 9 }, &skills),
+            Ok(LightLevel::Dim)
+        );
+
+        // 距離 5：邊界（應為 Dim）
+        assert_eq!(
+            board.get_light_level(Pos { x: 8, y: 7 }, &skills),
+            Ok(LightLevel::Dim)
+        );
+
+        // 距離 6：超出範圍（應為 Darkness）
+        assert_eq!(
+            board.get_light_level(Pos { x: 0, y: 0 }, &skills),
+            Ok(LightLevel::Darkness)
+        );
+    }
+
+    #[test]
+    fn test_manhattan_distance() {
+        // 同一點距離為 0
+        let p1 = Pos { x: 5, y: 5 };
+        assert_eq!(manhattan_distance(p1, p1), 0);
+
+        // 水平距離
+        let p2 = Pos { x: 10, y: 5 };
+        assert_eq!(manhattan_distance(p1, p2), 5);
+        assert_eq!(manhattan_distance(p2, p1), 5); // 對稱性
+
+        // 垂直距離
+        let p3 = Pos { x: 5, y: 10 };
+        assert_eq!(manhattan_distance(p1, p3), 5);
+
+        // 對角線距離
+        let p4 = Pos { x: 8, y: 9 };
+        assert_eq!(manhattan_distance(p1, p4), 7); // |8-5| + |9-5| = 3 + 4 = 7
+
+        // 經典範例：(0,0) 到 (3,4)
+        let origin = Pos { x: 0, y: 0 };
+        let p5 = Pos { x: 3, y: 4 };
+        assert_eq!(manhattan_distance(origin, p5), 7);
+    }
+
+    #[test]
+    fn test_light_level_ordering() {
+        // 驗證光照等級排序：Bright > Dim > Darkness
+        assert!(LightLevel::Bright > LightLevel::Dim);
+        assert!(LightLevel::Dim > LightLevel::Darkness);
+        assert!(LightLevel::Bright > LightLevel::Darkness);
+
+        // 驗證 max() 操作（多光源取最亮）
+        assert_eq!(LightLevel::Bright.max(LightLevel::Dim), LightLevel::Bright);
+        assert_eq!(LightLevel::Dim.max(LightLevel::Darkness), LightLevel::Dim);
+        assert_eq!(
+            LightLevel::Darkness.max(LightLevel::Bright),
+            LightLevel::Bright
+        );
+    }
+
+    #[test]
+    fn test_light_level_default() {
+        // 驗證預設值為 Bright
+        assert_eq!(LightLevel::default(), LightLevel::Bright);
     }
 }

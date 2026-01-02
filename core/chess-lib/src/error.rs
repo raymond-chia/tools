@@ -8,7 +8,7 @@ use skills_lib::*;
 use thiserror::Error;
 
 /// 棋盤核心錯誤型別
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum Error {
     #[error("`{func}`: 實作錯誤: {detail}")]
     InvalidImplementation { func: &'static str, detail: String },

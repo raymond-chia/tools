@@ -36,10 +36,8 @@ pub(super) fn apply_effects_to_empty_tile(
 pub(super) fn apply_all_effects(
     board: &mut Board,
     skills: &BTreeMap<SkillID, Skill>,
-    caster_id: UnitID,
-    unit_id: UnitID,
-    caster_pos: Pos,
-    pos: Pos,
+    (caster_id, caster_pos): (UnitID, Pos),
+    (target_id, target_pos): (UnitID, Pos),
     skill: &Skill,
     attack_result: AttackResult,
 ) -> Result<Vec<String>, Error> {
@@ -47,12 +45,17 @@ pub(super) fn apply_all_effects(
     let mut msgs = vec![];
 
     for effect in &skill.effects {
-        let save_result = calc_save_result(board, skills, caster_id, unit_id, skill, effect)
+        let save_result = calc_save_result(board, skills, caster_id, target_id, skill, effect)
             .wrap_context(func)?;
 
-        if let Some(msg) =
-            apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
-        {
+        if let Some(msg) = apply_effect_to_pos(
+            board,
+            effect,
+            caster_pos,
+            target_pos,
+            attack_result,
+            save_result,
+        ) {
             msgs.push(msg);
         }
     }
@@ -64,10 +67,8 @@ pub(super) fn apply_all_effects(
 pub(super) fn apply_effects_with_block(
     board: &mut Board,
     skills: &BTreeMap<SkillID, Skill>,
-    caster_id: UnitID,
-    unit_id: UnitID,
-    caster_pos: Pos,
-    pos: Pos,
+    (caster_id, caster_pos): (UnitID, Pos),
+    (target_id, target_pos): (UnitID, Pos),
     skill: &Skill,
     attack_result: AttackResult,
     block_reduction: i32,
@@ -94,14 +95,14 @@ pub(super) fn apply_effects_with_block(
                 };
 
                 let save_result =
-                    calc_save_result(board, skills, caster_id, unit_id, skill, &reduced_effect)
+                    calc_save_result(board, skills, caster_id, target_id, skill, &reduced_effect)
                         .wrap_context(func)?;
 
                 if let Some(msg) = apply_effect_to_pos(
                     board,
                     &reduced_effect,
                     caster_pos,
-                    pos,
+                    target_pos,
                     attack_result,
                     save_result,
                 ) {
@@ -113,12 +114,17 @@ pub(super) fn apply_effects_with_block(
             _ => {
                 // 其他效果不受格擋影響，直接套用
                 let save_result =
-                    calc_save_result(board, skills, caster_id, unit_id, skill, effect)
+                    calc_save_result(board, skills, caster_id, target_id, skill, effect)
                         .wrap_context(func)?;
 
-                if let Some(msg) =
-                    apply_effect_to_pos(board, effect, caster_pos, pos, attack_result, save_result)
-                {
+                if let Some(msg) = apply_effect_to_pos(
+                    board,
+                    effect,
+                    caster_pos,
+                    target_pos,
+                    attack_result,
+                    save_result,
+                ) {
                     results.push(format!("但效果不受影響：{msg}"));
                 }
             }
@@ -215,6 +221,19 @@ pub(super) fn apply_effect_to_pos(
         Effect::Burn { duration, .. } => {
             apply_burn_effect(board, target_pos, effect, *duration, save_result)
         }
+        Effect::Sense {
+            range, duration, ..
+        } => Some(format!(
+            "[未實作] Sense 效果（範圍: {range}）, 持續 {duration} 回合"
+        )),
+        Effect::CarriesLight {
+            bright_range,
+            dim_range,
+            duration,
+            ..
+        } => Some(format!(
+            "[未實作] CarriesLight 效果（明亮範圍: {bright_range}, 微光範圍: {dim_range}）, 持續 {duration} 回合"
+        )),
     }
 }
 
@@ -440,8 +459,8 @@ mod inner {
             }
             SaveResult::Failure => {
                 // 豁免失敗，施加狀態
-                let target_unit_id = board.pos_to_unit(target_pos)?;
-                let target = board.units.get_mut(&target_unit_id)?;
+                let target_id = board.pos_to_unit(target_pos)?;
+                let target = board.units.get_mut(&target_id)?;
                 target.status_effects.push(effect.clone());
 
                 Some(format!("豁免失敗！{:?} 效果持續 {} 回合", effect, duration))
@@ -512,6 +531,8 @@ mod tests {
             teams,
             unit_map,
             units,
+            ambient_light: LightLevel::default(),
+            light_sources: Vec::new(),
         };
         (board, unit_id, skills)
     }
