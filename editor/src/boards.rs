@@ -36,7 +36,7 @@ pub struct BoardsEditor {
     brush: BrushMode,
     selected_terrain: Terrain,
     selected_object: Option<Object>,
-    selected_object_duration: u32,
+    selected_object_lit: bool,
     selected_orientation: Orientation,
     selected_unit: Option<UnitTemplateType>,
     selected_team: TeamID,
@@ -363,7 +363,7 @@ impl BoardsEditor {
                         painted,
                         self.selected_object.as_ref(),
                         self.selected_orientation,
-                        self.selected_object_duration,
+                        self.selected_object_lit,
                     ) {
                         err_msg = format!("Error painting object: {}", e);
                     }
@@ -789,6 +789,21 @@ impl BoardsEditor {
             }
             self.has_unsaved_changes = true;
         }
+
+        // 光線等級設定
+        ui.separator();
+        ui.label("環境光線等級");
+        ui.horizontal(|ui| {
+            for light in LightLevel::iter() {
+                if ui
+                    .selectable_label(board.ambient_light == light, light.to_string())
+                    .clicked()
+                {
+                    board.ambient_light = light;
+                    self.has_unsaved_changes = true;
+                }
+            }
+        });
     }
 
     fn show_terrain_brush(&mut self, ui: &mut Ui) {
@@ -828,7 +843,7 @@ impl BoardsEditor {
                     end,
                     self.selected_object.as_ref(),
                     self.selected_orientation,
-                    self.selected_object_duration,
+                    self.selected_object_lit,
                 ) {
                     Ok((success, skipped)) => {
                         self.has_unsaved_changes = true;
@@ -913,7 +928,7 @@ impl BoardsEditor {
                     end,
                     self.selected_object.as_ref(),
                     self.selected_orientation,
-                    self.selected_object_duration,
+                    self.selected_object_lit,
                     self.drunkards_steps,
                     self.drunkards_start_y,
                     self.drunkards_weights,
@@ -976,6 +991,20 @@ impl BoardsEditor {
                 }
             }
         });
+
+        // 動態顯示物件屬性編輯器
+        if let Some(obj) = &self.selected_object {
+            match obj {
+                Object::Torch { .. } | Object::Campfire { .. } => {
+                    ui.horizontal(|ui| {
+                        ui.label("光源狀態:");
+                        ui.checkbox(&mut self.selected_object_lit, "點燃");
+                    });
+                }
+                _ => {}
+            }
+        }
+
         if ui.selectable_label(self.selecting, "選取").clicked() {
             self.selecting = !self.selecting;
             self.selection_start = None;
@@ -1554,11 +1583,13 @@ fn draw_tile_object(painter: &Painter, rect: Rect, tile: &Tile, zoom: f32) {
         return;
     }
     let o_len = symbol.len() as f32;
+    // 限制字體大小為格子高度的 50%，確保不會超出格子
+    let font_size = (TILE_OBJECT_SIZE / o_len * zoom).min(TILE_SIZE * 0.5 * zoom);
     painter.text(
         rect.center(),
         Align2::CENTER_TOP,
         symbol,
-        FontId::proportional(TILE_OBJECT_SIZE / o_len * zoom),
+        FontId::proportional(font_size),
         Color32::WHITE,
     );
 }
@@ -1841,7 +1872,7 @@ fn paint_object(
     pos: Pos,
     object: Option<&Object>,
     orientation: Orientation,
-    duration: u32,
+    lit: bool,
 ) -> Result<(), String> {
     // helper: 放置單格物件
     let mut apply_single = |obj: Option<Object>| {
@@ -1859,16 +1890,14 @@ fn paint_object(
             Object::Wall => apply_single(Some(Object::Wall)),
             Object::Cliff { .. } => apply_single(Some(Object::Cliff { orientation })),
             Object::Pit => apply_single(Some(Object::Pit)),
+            Object::Torch { .. } => apply_single(Some(Object::Torch { lit })),
+            Object::Campfire { .. } => apply_single(Some(Object::Campfire { lit })),
             Object::Tent2 { .. } => {
                 let (w, h) = match orientation {
                     Orientation::Left | Orientation::Right => (2, 1),
                     Orientation::Up | Orientation::Down => (1, 2),
                 };
-                paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 {
-                    orientation,
-                    rel,
-                    duration,
-                })
+                paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 { orientation, rel })
             }
             Object::Tent15 { .. } => {
                 let (w, h) = match orientation {
@@ -1878,7 +1907,6 @@ fn paint_object(
                 paint_multiple_object(board, pos, (w, h), |rel| Object::Tent15 {
                     orientation,
                     rel,
-                    duration,
                 })
             }
         },
@@ -1970,7 +1998,7 @@ fn fill_selected_area(
     rect_end: Pos,
     object: Option<&Object>,
     orientation: Orientation,
-    _duration: u32,
+    lit: bool,
 ) -> Result<(usize, usize), String> {
     let (min_x, max_x) = if rect_start.x <= rect_end.x {
         (rect_start.x, rect_end.x)
@@ -2002,6 +2030,8 @@ fn fill_selected_area(
                 None => apply_single(pos, None),
                 Some(obj) => match obj {
                     Object::Tree | Object::Wall | Object::Pit => apply_single(pos, object.cloned()),
+                    Object::Torch { .. } => apply_single(pos, Some(Object::Torch { lit })),
+                    Object::Campfire { .. } => apply_single(pos, Some(Object::Campfire { lit })),
                     Object::Cliff { .. } => apply_single(pos, Some(Object::Cliff { orientation })),
                     Object::Tent2 { .. } | Object::Tent15 { .. } => {
                         // 其他物件類型暫不支援
@@ -2022,7 +2052,7 @@ fn drunkards_walk_deploy(
     rect_end: Pos,
     object: Option<&Object>,
     orientation: Orientation,
-    duration: u32,
+    lit: bool,
     steps: usize,
     start_y: Option<usize>,
     weights: [usize; 4],
@@ -2030,7 +2060,11 @@ fn drunkards_walk_deploy(
     // 僅支援單格物件或清除
     match object {
         Some(obj) => match obj {
-            Object::Tree | Object::Wall | Object::Pit => {}
+            Object::Tree
+            | Object::Wall
+            | Object::Pit
+            | Object::Torch { .. }
+            | Object::Campfire { .. } => {}
             _ => return Err("Drunkard's walk 僅支援單格物件或清除".to_string()),
         },
         None => {} // 允許清除
@@ -2075,7 +2109,7 @@ fn drunkards_walk_deploy(
                 };
                 if should_act {
                     // 放置或清除物件
-                    paint_object(board, current_pos, object, orientation, duration)?;
+                    paint_object(board, current_pos, object, orientation, lit)?;
                     placed += 1;
                 }
             }
@@ -2203,6 +2237,20 @@ fn object_symbol(tile: &Tile) -> &'static str {
             Orientation::Right => "\\→",
         },
         Some(Object::Pit) => "💀",
+        Some(Object::Torch { lit }) => {
+            if *lit {
+                "T🔥"
+            } else {
+                "T"
+            }
+        }
+        Some(Object::Campfire { lit }) => {
+            if *lit {
+                "C🔥"
+            } else {
+                "C"
+            }
+        }
         Some(Object::Tent2 { orientation, .. }) => match orientation {
             Orientation::Left | Orientation::Right => "⛺→2",
             Orientation::Up | Orientation::Down => "⛺↓2",

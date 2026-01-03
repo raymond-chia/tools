@@ -277,7 +277,7 @@ mod inner {
 
         // 記錄目標光照訊息
         if target_light != LightLevel::Bright {
-            msgs.push(format!("目標光照影響: {:.0}%", target_light_mult * 100.0));
+            msgs.push(format!("命中光照影響: {:.0}%", target_light_mult * 100.0));
         }
 
         // 取得攻擊者光照等級（影響目標閃避值）
@@ -295,7 +295,7 @@ mod inner {
 
         // 記錄攻擊者光照訊息
         if caster_light != LightLevel::Bright {
-            msgs.push(format!("攻擊者光照影響: {:.0}%", caster_light_mult * 100.0));
+            msgs.push(format!("閃避光照影響: {:.0}%", caster_light_mult * 100.0));
         }
 
         // 完全閃避

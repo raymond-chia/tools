@@ -29,7 +29,9 @@ pub enum Orientation {
 }
 
 /// 光照等級
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Display, EnumIter,
+)]
 pub enum LightLevel {
     Darkness = 0, // 黑暗
     Dim = 1,      // 微光
@@ -46,26 +48,12 @@ impl Default for LightLevel {
 pub enum Object {
     Tree,
     Wall,
-    Cliff {
-        orientation: Orientation,
-    },
+    Cliff { orientation: Orientation },
     Pit,
-    Tent2 {
-        orientation: Orientation,
-        rel: Pos,
-        duration: u32,
-    },
-    Tent15 {
-        orientation: Orientation,
-        rel: Pos,
-        duration: u32,
-    },
-    Torch {
-        lit: bool,
-    },
-    Campfire {
-        lit: bool,
-    },
+    Tent2 { orientation: Orientation, rel: Pos },
+    Tent15 { orientation: Orientation, rel: Pos },
+    Torch { lit: bool },
+    Campfire { lit: bool },
 }
 
 impl Object {

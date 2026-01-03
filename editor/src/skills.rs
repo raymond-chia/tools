@@ -603,6 +603,8 @@ impl SkillsEditor {
                         Effect::Shove { .. } => ui.button("新增推擠效果").clicked(),
                         Effect::Potency { .. } => ui.button("新增施法效力效果").clicked(),
                         Effect::Resistance { .. } => ui.button("新增抗性效果").clicked(),
+                        Effect::Sense { .. } => ui.button("新增黑暗感知效果").clicked(),
+                        Effect::CarriesLight { .. } => ui.button("新增攜帶光源效果").clicked(),
                     };
                     effects.push((flag, effect));
                 }
@@ -1096,6 +1098,8 @@ fn show_skill_effect_editor(
             Effect::Shove { .. } => ui.label("推擠"),
             Effect::Potency { .. } => ui.label("施法效力"),
             Effect::Resistance { .. } => ui.label("抗性"),
+            Effect::Sense { .. } => ui.label("黑暗感知"),
+            Effect::CarriesLight { .. } => ui.label("攜帶光源"),
         };
         // 種族效果不顯示刪除、上下移動
         if !is_basic_passive_effect {
@@ -1340,6 +1344,30 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             changed |= show_shape_editor(ui, shape);
             changed |= show_save_type_editor(ui, save_type);
             changed |= show_numeric_editor(ui, value, "抗性數值變化：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::Sense {
+            target_type,
+            shape,
+            range,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            changed |= show_shape_editor(ui, shape);
+            changed |= show_numeric_editor(ui, range, "感知範圍：");
+            changed |= show_duration_editor(ui, duration);
+        }
+        Effect::CarriesLight {
+            target_type,
+            shape,
+            bright_range,
+            dim_range,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            changed |= show_shape_editor(ui, shape);
+            changed |= show_numeric_editor(ui, bright_range, "明亮光照範圍：");
+            changed |= show_numeric_editor(ui, dim_range, "昏暗光照範圍：");
             changed |= show_duration_editor(ui, duration);
         }
     }
