@@ -86,20 +86,20 @@ impl Object {
             // 不阻擋視線的物件
             Object::Pit | Object::Torch { .. } | Object::Campfire { .. } => false,
             // Cliff 有方向性：只有從下方往上看才阻擋
+            // TODO: 峽谷兩端互相看不見的限制
             Object::Cliff { orientation } => {
                 // 計算觀察者相對於懸崖的方向
                 let dx = from_pos.x as isize - obj_pos.x as isize;
                 let dy = from_pos.y as isize - obj_pos.y as isize;
 
-                // 判斷觀察者是否在懸崖下方（與 orientation 反向）
+                // 判斷觀察者是否在懸崖下方
+                // 只有從懸崖下方往上看才會被阻擋
                 let is_from_below = match orientation {
                     Orientation::Up => dy < 0,
                     Orientation::Down => dy > 0,
                     Orientation::Left => dx < 0,
                     Orientation::Right => dx > 0,
                 };
-
-                // 只有從懸崖下方往上看才會被阻擋
                 is_from_below
             }
         }
