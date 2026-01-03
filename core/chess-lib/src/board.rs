@@ -93,10 +93,10 @@ impl Object {
 
                 // 判斷觀察者是否在懸崖下方（與 orientation 反向）
                 let is_from_below = match orientation {
-                    Orientation::Up => dy > 0,    // 懸崖朝上，觀察者在下方（y 較大）
-                    Orientation::Down => dy < 0,  // 懸崖朝下，觀察者在上方（y 較小）
-                    Orientation::Left => dx > 0,  // 懸崖朝左，觀察者在右方（x 較大）
-                    Orientation::Right => dx < 0, // 懸崖朝右，觀察者在左方（x 較小）
+                    Orientation::Up => dy < 0,
+                    Orientation::Down => dy > 0,
+                    Orientation::Left => dx < 0,
+                    Orientation::Right => dx > 0,
                 };
 
                 // 只有從懸崖下方往上看才會被阻擋
@@ -1150,56 +1150,56 @@ mod tests {
 
     #[test]
     fn test_cliff_blocks_sight_from_direction() {
-        // Cliff 朝上（orientation: Up），表示下方是懸崖
+        // Cliff 朝上（orientation: Up），表示懸崖下方在上方（北側），高地在下方（南側）
         let cliff_up = Object::Cliff {
             orientation: Orientation::Up,
         };
         let cliff_pos = Pos { x: 5, y: 5 };
 
-        // 從下方（y > cliff_pos.y）往上看：被阻擋
-        assert!(cliff_up.blocks_sight_from(Pos { x: 5, y: 6 }, cliff_pos));
-        assert!(cliff_up.blocks_sight_from(Pos { x: 5, y: 10 }, cliff_pos));
+        // 從下方（y > cliff_pos.y，南側，高地）往上看：不被阻擋（從高地往低地看）
+        assert!(!cliff_up.blocks_sight_from(Pos { x: 5, y: 6 }, cliff_pos));
+        assert!(!cliff_up.blocks_sight_from(Pos { x: 5, y: 10 }, cliff_pos));
 
-        // 從上方（y < cliff_pos.y）往下看：不阻擋
-        assert!(!cliff_up.blocks_sight_from(Pos { x: 5, y: 4 }, cliff_pos));
-        assert!(!cliff_up.blocks_sight_from(Pos { x: 5, y: 0 }, cliff_pos));
+        // 從上方（y < cliff_pos.y，北側，低地）往下看：被阻擋（從低地往高地看）
+        assert!(cliff_up.blocks_sight_from(Pos { x: 5, y: 4 }, cliff_pos));
+        assert!(cliff_up.blocks_sight_from(Pos { x: 5, y: 0 }, cliff_pos));
 
         // 從側面（x 不同，y 相同）：不阻擋
         assert!(!cliff_up.blocks_sight_from(Pos { x: 3, y: 5 }, cliff_pos));
         assert!(!cliff_up.blocks_sight_from(Pos { x: 7, y: 5 }, cliff_pos));
 
-        // Cliff 朝下（orientation: Down）
+        // Cliff 朝下（orientation: Down），表示懸崖下方在下方（南側），高地在上方（北側）
         let cliff_down = Object::Cliff {
             orientation: Orientation::Down,
         };
 
-        // 從上方往下看：被阻擋
-        assert!(cliff_down.blocks_sight_from(Pos { x: 5, y: 3 }, cliff_pos));
+        // 從上方（北側，高地）往下看：不被阻擋（從高地往低地看）
+        assert!(!cliff_down.blocks_sight_from(Pos { x: 5, y: 3 }, cliff_pos));
 
-        // 從下方往上看：不阻擋
-        assert!(!cliff_down.blocks_sight_from(Pos { x: 5, y: 7 }, cliff_pos));
+        // 從下方（南側，低地）往上看：被阻擋（從低地往高地看）
+        assert!(cliff_down.blocks_sight_from(Pos { x: 5, y: 7 }, cliff_pos));
 
-        // Cliff 朝左（orientation: Left）
+        // Cliff 朝左（orientation: Left），表示懸崖下方在左方（西側），高地在右方（東側）
         let cliff_left = Object::Cliff {
             orientation: Orientation::Left,
         };
 
-        // 從右方往左看：被阻擋
-        assert!(cliff_left.blocks_sight_from(Pos { x: 6, y: 5 }, cliff_pos));
+        // 從右方（東側，高地）往左看：不被阻擋（從高地往低地看）
+        assert!(!cliff_left.blocks_sight_from(Pos { x: 6, y: 5 }, cliff_pos));
 
-        // 從左方往右看：不阻擋
-        assert!(!cliff_left.blocks_sight_from(Pos { x: 4, y: 5 }, cliff_pos));
+        // 從左方（西側，低地）往右看：被阻擋（從低地往高地看）
+        assert!(cliff_left.blocks_sight_from(Pos { x: 4, y: 5 }, cliff_pos));
 
-        // Cliff 朝右（orientation: Right）
+        // Cliff 朝右（orientation: Right），表示懸崖下方在右方（東側），高地在左方（西側）
         let cliff_right = Object::Cliff {
             orientation: Orientation::Right,
         };
 
-        // 從左方往右看：被阻擋
-        assert!(cliff_right.blocks_sight_from(Pos { x: 3, y: 5 }, cliff_pos));
+        // 從左方（西側，高地）往右看：不被阻擋（從高地往低地看）
+        assert!(!cliff_right.blocks_sight_from(Pos { x: 3, y: 5 }, cliff_pos));
 
-        // 從右方往左看：不阻擋
-        assert!(!cliff_right.blocks_sight_from(Pos { x: 7, y: 5 }, cliff_pos));
+        // 從右方（東側，低地）往左看：被阻擋（從低地往高地看）
+        assert!(cliff_right.blocks_sight_from(Pos { x: 7, y: 5 }, cliff_pos));
     }
 
     #[test]
@@ -1246,7 +1246,7 @@ mod tests {
         // 建立棋盤，測試 Cliff 高地視線
         let mut tiles = vec![vec![Tile::default(); 10]; 10];
 
-        // 在 (5, 5) 放置 Cliff，朝上（下方是懸崖）
+        // 在 (5, 5) 放置 Cliff，朝上（懸崖下方在北側，高地在南側）
         tiles[5][5].object = Some(Object::Cliff {
             orientation: Orientation::Up,
         });
@@ -1269,14 +1269,14 @@ mod tests {
 
         let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
 
-        // 從上方（高地）往下看：可以看到懸崖後方
-        assert!(has_line_of_sight(&board, Pos { x: 5, y: 3 }, Pos { x: 5, y: 7 }).unwrap());
+        // 從南方（y=7，高地）往北看：可以看到懸崖後方（從高地往低地看）
+        assert!(has_line_of_sight(&board, Pos { x: 5, y: 7 }, Pos { x: 5, y: 3 }).unwrap());
 
-        // 從下方（低地）往上看：被懸崖阻擋
-        assert!(!has_line_of_sight(&board, Pos { x: 5, y: 7 }, Pos { x: 5, y: 3 }).unwrap());
+        // 從北方（y=3，低地）往南看：被懸崖阻擋（從低地往高地看）
+        assert!(!has_line_of_sight(&board, Pos { x: 5, y: 3 }, Pos { x: 5, y: 7 }).unwrap());
 
-        // 從下方可以看到懸崖本身
-        assert!(has_line_of_sight(&board, Pos { x: 5, y: 7 }, Pos { x: 5, y: 5 }).unwrap());
+        // 從北方（低地）可以看到懸崖本身
+        assert!(has_line_of_sight(&board, Pos { x: 5, y: 3 }, Pos { x: 5, y: 5 }).unwrap());
     }
 
     #[test]
