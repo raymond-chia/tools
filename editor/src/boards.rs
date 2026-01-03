@@ -52,7 +52,7 @@ pub struct BoardsEditor {
     sim_board: Board,
     sim_battle: Battle,
     skill_selection: SkillSelection,
-    selected_unit_for_info: Option<UnitID>,
+    selected_pos_for_info: Option<Pos>,
     // Reaction 處理狀態
     pending_reactions: Option<PendingReactionState>,
     // AI 評分結果
@@ -540,14 +540,10 @@ impl BoardsEditor {
                 show_sim_others(&self.sim_board, &movable, &active_unit_id, &path),
             );
 
-            // 右鍵點擊單位以顯示資訊
+            // 右鍵點擊格子以顯示資訊（包含單位和地點資訊）
             if let Some(target) = target {
                 if ui.ctx().input(|i| i.pointer.secondary_clicked()) {
-                    if let Some(unit_id) = self.sim_board.pos_to_unit(target) {
-                        self.selected_unit_for_info = Some(unit_id);
-                    } else {
-                        self.selected_unit_for_info = None;
-                    }
+                    self.selected_pos_for_info = Some(target);
                 }
             }
 
@@ -1332,28 +1328,42 @@ impl BoardsEditor {
 
         ui.separator();
 
-        // 顯示選中單位的資訊
-        if let Some(selected_id) = self.selected_unit_for_info {
-            if let Some(selected_unit) = self.sim_board.units.get(&selected_id) {
-                ui.heading("選中單位資訊");
-                ui.label(format!("單位種類: {}", selected_unit.unit_template_type));
-                ui.label(format!("隊伍: {}", selected_unit.team));
-                ui.label(format!(
-                    "❤ HP: {}/{}",
-                    selected_unit.hp, selected_unit.max_hp
-                ));
-                ui.label(format!(
-                    "✦ MP: {}/{}",
-                    selected_unit.mp, selected_unit.max_mp
-                ));
-                ui.label(format!(
-                    "Reaction: {}/{}",
-                    selected_unit.max_reactions_per_turn - selected_unit.reactions_used_this_turn,
-                    selected_unit.max_reactions_per_turn
-                ));
-            } else {
-                // 選中的單位不存在（可能已被擊殺）
-                self.selected_unit_for_info = None;
+        // 顯示選中位置的資訊（包含單位和光線亮度）
+        if let Some(selected_pos) = self.selected_pos_for_info {
+            ui.heading("選中位置資訊");
+            ui.label(format!("位置: {:?}", selected_pos));
+
+            // 顯示光線亮度
+            match self.sim_board.get_light_level(selected_pos, &self.skills) {
+                Ok(light_level) => {
+                    ui.label(format!("💡 光線等級: {}", light_level));
+                }
+                Err(e) => {
+                    ui.label(format!("⚠ 光線等級計算錯誤: {:?}", e));
+                }
+            }
+
+            // 如果該位置有單位，顯示單位資訊
+            if let Some(unit_id) = self.sim_board.pos_to_unit(selected_pos) {
+                if let Some(selected_unit) = self.sim_board.units.get(&unit_id) {
+                    ui.separator();
+                    ui.label(format!("單位種類: {}", selected_unit.unit_template_type));
+                    ui.label(format!("隊伍: {}", selected_unit.team));
+                    ui.label(format!(
+                        "❤ HP: {}/{}",
+                        selected_unit.hp, selected_unit.max_hp
+                    ));
+                    ui.label(format!(
+                        "✦ MP: {}/{}",
+                        selected_unit.mp, selected_unit.max_mp
+                    ));
+                    ui.label(format!(
+                        "Reaction: {}/{}",
+                        selected_unit.max_reactions_per_turn
+                            - selected_unit.reactions_used_this_turn,
+                        selected_unit.max_reactions_per_turn
+                    ));
+                }
             }
         }
 
