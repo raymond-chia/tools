@@ -32,10 +32,10 @@ pub const PLAYER_TEAM: &str = "player";
 pub const MAX_MOVEMENT_COST: MovementCost = 999;
 
 // 光源範圍（曼哈頓距離）
-pub const TORCH_BRIGHT_RANGE: usize = 3;
-pub const TORCH_DIM_RANGE: usize = 5;
-pub const CAMPFIRE_BRIGHT_RANGE: usize = 5;
-pub const CAMPFIRE_DIM_RANGE: usize = 8;
+pub const TORCH_BRIGHT_RANGE: usize = 1;
+pub const TORCH_DIM_RANGE: usize = 3;
+pub const CAMPFIRE_BRIGHT_RANGE: usize = 6;
+pub const CAMPFIRE_DIM_RANGE: usize = 12;
 
 #[derive(
     Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash,

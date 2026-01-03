@@ -71,6 +71,40 @@ impl Object {
         }
     }
 
+    /// 從特定方向查看時是否阻擋視線
+    /// from_pos: 觀察者位置
+    /// obj_pos: 物件位置
+    ///
+    /// Cliff 高地機制：
+    /// - Cliff orientation 指向「懸崖下方」
+    /// - 從上方（與 orientation 同向或正交）往下看：不阻擋
+    /// - 從下方（與 orientation 反向）往上看：阻擋視線
+    pub fn blocks_sight_from(&self, from_pos: Pos, obj_pos: Pos) -> bool {
+        match self {
+            // 完全阻擋視線的物件（無方向性）
+            Object::Wall | Object::Tree | Object::Tent2 { .. } | Object::Tent15 { .. } => true,
+            // 不阻擋視線的物件
+            Object::Pit | Object::Torch { .. } | Object::Campfire { .. } => false,
+            // Cliff 有方向性：只有從下方往上看才阻擋
+            Object::Cliff { orientation } => {
+                // 計算觀察者相對於懸崖的方向
+                let dx = from_pos.x as isize - obj_pos.x as isize;
+                let dy = from_pos.y as isize - obj_pos.y as isize;
+
+                // 判斷觀察者是否在懸崖下方（與 orientation 反向）
+                let is_from_below = match orientation {
+                    Orientation::Up => dy > 0,    // 懸崖朝上，觀察者在下方（y 較大）
+                    Orientation::Down => dy < 0,  // 懸崖朝下，觀察者在上方（y 較小）
+                    Orientation::Left => dx > 0,  // 懸崖朝左，觀察者在右方（x 較大）
+                    Orientation::Right => dx < 0, // 懸崖朝右，觀察者在左方（x 較小）
+                };
+
+                // 只有從懸崖下方往上看才會被阻擋
+                is_from_below
+            }
+        }
+    }
+
     /// 根據距離計算光照等級
     /// 返回 Darkness 表示無光或熄滅
     pub fn light_level_at(&self, distance: usize) -> LightLevel {
@@ -203,6 +237,60 @@ impl Board {
                 }
             }
         }
+    }
+
+    /// 檢查觀察者是否能看到目標位置
+    ///
+    /// 結合物理視線、光照和 Sense 能力的完整可見性判斷
+    ///
+    /// 參數：
+    /// - from: 觀察者位置
+    /// - to: 目標位置
+    /// - observer_unit_id: 觀察者單位 ID
+    /// - skills: 技能定義表
+    ///
+    /// 返回：是否可見
+    ///
+    /// 檢查流程：
+    /// 1. 檢查物理視線（透過 has_line_of_sight）
+    /// 2. 檢查目標位置光照等級
+    /// 3. 若目標處於黑暗，檢查觀察者是否有足夠距離的 Sense 能力
+    pub fn can_see_target(
+        &self,
+        from: Pos,
+        to: Pos,
+        observer_unit_id: UnitID,
+        skills: &BTreeMap<SkillID, Skill>,
+    ) -> Result<bool, Error> {
+        let func = "can_see_target";
+
+        // 1. 檢查物理視線
+        if !has_line_of_sight(self, from, to)? {
+            return Ok(false);
+        }
+
+        // 2. 檢查目標位置光照
+        let light_level = self.get_light_level(to, skills)?;
+
+        // 3. 如果是黑暗，檢查觀察者是否有 Sense 能力
+        if light_level == LightLevel::Darkness {
+            let observer =
+                self.units
+                    .get(&observer_unit_id)
+                    .ok_or_else(|| Error::NoActingUnit {
+                        func,
+                        unit_id: observer_unit_id,
+                    })?;
+
+            let distance = manhattan_distance(from, to);
+            let has_sense = skills_to_sense(observer.skills.iter(), skills, distance)?;
+
+            if !has_sense {
+                return Ok(false); // 黑暗中沒有 Sense 能力
+            }
+        }
+
+        Ok(true)
     }
 
     pub fn get_light_level(
@@ -390,6 +478,71 @@ mod unitid_key_map {
     }
 }
 
+use inner::*;
+mod inner {
+    use super::*;
+
+    /// 檢查從 from 到 to 是否有視線（line of sight）
+    ///
+    /// 純粹檢查物理視線，考慮因素：
+    /// 1. 障礙物阻擋視線（使用 Bresenham 追蹤路徑）
+    /// 2. Cliff 的方向性視線（高地優勢）
+    /// 3. 一律使用 blocks_sight_from 進行方向性判斷
+    ///
+    /// 注意：
+    /// - 此函數只檢查「物理視線」，不考慮單位阻擋
+    /// - 不考慮光照影響（黑暗狀態由上層邏輯處理）
+    pub fn has_line_of_sight(board: &Board, from: Pos, to: Pos) -> Result<bool, Error> {
+        let func = "has_line_of_sight";
+
+        // 同一位置永遠可見
+        if from == to {
+            return Ok(true);
+        }
+
+        // 檢查起點和終點是否在棋盤範圍內
+        if board.get_tile(from).is_none() {
+            return Err(Error::NoTileAtPos { func, pos: from });
+        }
+        if board.get_tile(to).is_none() {
+            return Err(Error::NoTileAtPos { func, pos: to });
+        }
+
+        // 計算距離用於 Bresenham 路徑長度
+        let distance = manhattan_distance(from, to);
+
+        // 使用 Bresenham 算法追蹤視線路徑
+        let path = bresenham_line(from, to, distance + 1, |pos| {
+            pos.x < board.width() && pos.y < board.height()
+        });
+
+        // 檢查路徑上的每個格子（不包括起點，包括終點）
+        for (i, &pos) in path.iter().enumerate() {
+            // 跳過起點
+            if i == 0 {
+                continue;
+            }
+
+            // 到達目標位置，停止檢查（目標本身總是可見）
+            if pos == to {
+                break;
+            }
+
+            // 檢查中間路徑是否有物件阻擋視線（一律使用 blocks_sight_from）
+            if let Some(tile) = board.get_tile(pos) {
+                if let Some(obj) = &tile.object {
+                    if obj.blocks_sight_from(from, pos) {
+                        return Ok(false);
+                    }
+                }
+            }
+        }
+
+        // 視線暢通或已到達目標
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -566,16 +719,16 @@ mod tests {
     fn test_object_light_level_at_torch() {
         let torch_lit = Object::Torch { lit: true };
 
-        // 距離 0-3：Bright
+        // 距離 <= 1 (TORCH_BRIGHT_RANGE)：Bright
         assert_eq!(torch_lit.light_level_at(0), LightLevel::Bright);
-        assert_eq!(torch_lit.light_level_at(3), LightLevel::Bright);
+        assert_eq!(torch_lit.light_level_at(1), LightLevel::Bright);
 
-        // 距離 4-5：Dim
-        assert_eq!(torch_lit.light_level_at(4), LightLevel::Dim);
-        assert_eq!(torch_lit.light_level_at(5), LightLevel::Dim);
+        // 距離 2-3 (TORCH_DIM_RANGE)：Dim
+        assert_eq!(torch_lit.light_level_at(2), LightLevel::Dim);
+        assert_eq!(torch_lit.light_level_at(3), LightLevel::Dim);
 
-        // 距離 > 5：Darkness
-        assert_eq!(torch_lit.light_level_at(6), LightLevel::Darkness);
+        // 距離 > 3：Darkness
+        assert_eq!(torch_lit.light_level_at(4), LightLevel::Darkness);
         assert_eq!(torch_lit.light_level_at(10), LightLevel::Darkness);
 
         // 熄滅的火把：所有距離都是 Darkness
@@ -588,21 +741,21 @@ mod tests {
     fn test_object_light_level_at_campfire() {
         let campfire_lit = Object::Campfire { lit: true };
 
-        // 距離 0-5：Bright
+        // 距離 <= 6 (CAMPFIRE_BRIGHT_RANGE)：Bright
         assert_eq!(campfire_lit.light_level_at(0), LightLevel::Bright);
-        assert_eq!(campfire_lit.light_level_at(5), LightLevel::Bright);
+        assert_eq!(campfire_lit.light_level_at(6), LightLevel::Bright);
 
-        // 距離 6-8：Dim
-        assert_eq!(campfire_lit.light_level_at(6), LightLevel::Dim);
-        assert_eq!(campfire_lit.light_level_at(8), LightLevel::Dim);
+        // 距離 7-12 (CAMPFIRE_DIM_RANGE)：Dim
+        assert_eq!(campfire_lit.light_level_at(7), LightLevel::Dim);
+        assert_eq!(campfire_lit.light_level_at(12), LightLevel::Dim);
 
-        // 距離 > 8：Darkness
-        assert_eq!(campfire_lit.light_level_at(9), LightLevel::Darkness);
+        // 距離 > 12：Darkness
+        assert_eq!(campfire_lit.light_level_at(13), LightLevel::Darkness);
 
         // 熄滅的營火：所有距離都是 Darkness
         let campfire_unlit = Object::Campfire { lit: false };
         assert_eq!(campfire_unlit.light_level_at(0), LightLevel::Darkness);
-        assert_eq!(campfire_unlit.light_level_at(5), LightLevel::Darkness);
+        assert_eq!(campfire_unlit.light_level_at(6), LightLevel::Darkness);
     }
 
     #[test]
@@ -695,33 +848,27 @@ mod tests {
 
         let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
 
-        // Torch 在 (2, 2)，TORCH_BRIGHT_RADIUS = 3
+        // Torch 在 (2, 2)，TORCH_BRIGHT_RANGE = 1
         // 距離 0：同位置
         assert_eq!(
             board.get_light_level(Pos { x: 2, y: 2 }, &skills),
             Ok(LightLevel::Bright)
         );
 
-        // 距離 1
+        // 距離 1（邊界）
         assert_eq!(
             board.get_light_level(Pos { x: 3, y: 2 }, &skills),
             Ok(LightLevel::Bright)
         );
-
-        // 距離 3（邊界）
         assert_eq!(
-            board.get_light_level(Pos { x: 2, y: 5 }, &skills),
-            Ok(LightLevel::Bright)
-        );
-        assert_eq!(
-            board.get_light_level(Pos { x: 5, y: 2 }, &skills),
+            board.get_light_level(Pos { x: 2, y: 3 }, &skills),
             Ok(LightLevel::Bright)
         );
     }
 
     #[test]
     fn test_get_light_level_torch_dim() {
-        // Torch 4-5 格為 Dim
+        // Torch 2-3 格為 Dim
         let mut tiles = vec![vec![Tile::default(); 10]; 10];
         tiles[5][5].object = Some(Object::Torch { lit: true });
 
@@ -743,20 +890,20 @@ mod tests {
 
         let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
 
-        // Torch 在 (5, 5)，TORCH_DIM_RADIUS = 5
-        // 距離 4（Dim）
+        // Torch 在 (5, 5)，TORCH_DIM_RANGE = 3
+        // 距離 2（Dim）
         assert_eq!(
-            board.get_light_level(Pos { x: 5, y: 9 }, &skills),
+            board.get_light_level(Pos { x: 5, y: 7 }, &skills),
             Ok(LightLevel::Dim)
         );
 
-        // 距離 5（邊界，Dim）
+        // 距離 3（邊界，Dim）
         assert_eq!(
-            board.get_light_level(Pos { x: 5, y: 0 }, &skills),
+            board.get_light_level(Pos { x: 5, y: 8 }, &skills),
             Ok(LightLevel::Dim)
         );
 
-        // 距離 6（超出範圍，回到環境光 Darkness）
+        // 距離 4（超出範圍，回到環境光 Darkness）
         assert_eq!(
             board.get_light_level(Pos { x: 0, y: 0 }, &skills),
             Ok(LightLevel::Darkness)
@@ -970,5 +1117,405 @@ mod tests {
     fn test_light_level_default() {
         // 驗證預設值為 Bright
         assert_eq!(LightLevel::default(), LightLevel::Bright);
+    }
+
+    #[test]
+    fn test_blocks_sight_from_non_directional() {
+        // 測試無方向性的物件（任何方向都阻擋或不阻擋）
+        let observer = Pos { x: 3, y: 3 };
+        let obj_pos = Pos { x: 5, y: 5 };
+
+        // 完全阻擋視線的物件
+        assert!(Object::Wall.blocks_sight_from(observer, obj_pos));
+        assert!(Object::Tree.blocks_sight_from(observer, obj_pos));
+        assert!(
+            Object::Tent2 {
+                orientation: Orientation::Up,
+                rel: Pos { x: 0, y: 0 }
+            }
+            .blocks_sight_from(observer, obj_pos)
+        );
+        assert!(
+            Object::Tent15 {
+                orientation: Orientation::Up,
+                rel: Pos { x: 0, y: 0 }
+            }
+            .blocks_sight_from(observer, obj_pos)
+        );
+
+        // 不阻擋視線的物件
+        assert!(!Object::Pit.blocks_sight_from(observer, obj_pos));
+        assert!(!Object::Torch { lit: true }.blocks_sight_from(observer, obj_pos));
+        assert!(!Object::Campfire { lit: true }.blocks_sight_from(observer, obj_pos));
+    }
+
+    #[test]
+    fn test_cliff_blocks_sight_from_direction() {
+        // Cliff 朝上（orientation: Up），表示下方是懸崖
+        let cliff_up = Object::Cliff {
+            orientation: Orientation::Up,
+        };
+        let cliff_pos = Pos { x: 5, y: 5 };
+
+        // 從下方（y > cliff_pos.y）往上看：被阻擋
+        assert!(cliff_up.blocks_sight_from(Pos { x: 5, y: 6 }, cliff_pos));
+        assert!(cliff_up.blocks_sight_from(Pos { x: 5, y: 10 }, cliff_pos));
+
+        // 從上方（y < cliff_pos.y）往下看：不阻擋
+        assert!(!cliff_up.blocks_sight_from(Pos { x: 5, y: 4 }, cliff_pos));
+        assert!(!cliff_up.blocks_sight_from(Pos { x: 5, y: 0 }, cliff_pos));
+
+        // 從側面（x 不同，y 相同）：不阻擋
+        assert!(!cliff_up.blocks_sight_from(Pos { x: 3, y: 5 }, cliff_pos));
+        assert!(!cliff_up.blocks_sight_from(Pos { x: 7, y: 5 }, cliff_pos));
+
+        // Cliff 朝下（orientation: Down）
+        let cliff_down = Object::Cliff {
+            orientation: Orientation::Down,
+        };
+
+        // 從上方往下看：被阻擋
+        assert!(cliff_down.blocks_sight_from(Pos { x: 5, y: 3 }, cliff_pos));
+
+        // 從下方往上看：不阻擋
+        assert!(!cliff_down.blocks_sight_from(Pos { x: 5, y: 7 }, cliff_pos));
+
+        // Cliff 朝左（orientation: Left）
+        let cliff_left = Object::Cliff {
+            orientation: Orientation::Left,
+        };
+
+        // 從右方往左看：被阻擋
+        assert!(cliff_left.blocks_sight_from(Pos { x: 6, y: 5 }, cliff_pos));
+
+        // 從左方往右看：不阻擋
+        assert!(!cliff_left.blocks_sight_from(Pos { x: 4, y: 5 }, cliff_pos));
+
+        // Cliff 朝右（orientation: Right）
+        let cliff_right = Object::Cliff {
+            orientation: Orientation::Right,
+        };
+
+        // 從左方往右看：被阻擋
+        assert!(cliff_right.blocks_sight_from(Pos { x: 3, y: 5 }, cliff_pos));
+
+        // 從右方往左看：不阻擋
+        assert!(!cliff_right.blocks_sight_from(Pos { x: 7, y: 5 }, cliff_pos));
+    }
+
+    #[test]
+    fn test_has_line_of_sight_basic() {
+        // 建立簡單棋盤
+        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+
+        // 添加牆壁障礙物
+        tiles[5][5].object = Some(Object::Wall);
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Bright,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // 測試同一位置
+        assert!(has_line_of_sight(&board, Pos { x: 0, y: 0 }, Pos { x: 0, y: 0 }).unwrap());
+
+        // 測試無障礙物的視線
+        assert!(has_line_of_sight(&board, Pos { x: 0, y: 0 }, Pos { x: 3, y: 3 }).unwrap());
+
+        // 測試可以看到障礙物本身
+        assert!(has_line_of_sight(&board, Pos { x: 3, y: 5 }, Pos { x: 5, y: 5 }).unwrap());
+
+        // 測試被牆阻擋的視線
+        assert!(!has_line_of_sight(&board, Pos { x: 3, y: 5 }, Pos { x: 7, y: 5 }).unwrap());
+    }
+
+    #[test]
+    fn test_has_line_of_sight_cliff_high_ground() {
+        // 建立棋盤，測試 Cliff 高地視線
+        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+
+        // 在 (5, 5) 放置 Cliff，朝上（下方是懸崖）
+        tiles[5][5].object = Some(Object::Cliff {
+            orientation: Orientation::Up,
+        });
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Bright,
+            deployable: BTreeSet::new(),
+            units: BTreeMap::new(),
+        };
+
+        let skills = BTreeMap::new();
+        struct EmptyGetter;
+        impl UnitTemplateGetter for EmptyGetter {
+            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                None
+            }
+        }
+
+        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
+
+        // 從上方（高地）往下看：可以看到懸崖後方
+        assert!(has_line_of_sight(&board, Pos { x: 5, y: 3 }, Pos { x: 5, y: 7 }).unwrap());
+
+        // 從下方（低地）往上看：被懸崖阻擋
+        assert!(!has_line_of_sight(&board, Pos { x: 5, y: 7 }, Pos { x: 5, y: 3 }).unwrap());
+
+        // 從下方可以看到懸崖本身
+        assert!(has_line_of_sight(&board, Pos { x: 5, y: 7 }, Pos { x: 5, y: 5 }).unwrap());
+    }
+
+    #[test]
+    fn test_can_see_target_physical_blocked() {
+        // 測試物理視線被阻擋
+        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+        tiles[5][5].object = Some(Object::Wall); // 中間有牆
+
+        let mut units = BTreeMap::new();
+        units.insert(
+            1,
+            UnitMarker {
+                id: 1,
+                unit_template_type: "observer".to_string(),
+                team: "player".to_string(),
+                pos: Pos { x: 3, y: 5 },
+            },
+        );
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Bright,
+            deployable: BTreeSet::new(),
+            units,
+        };
+
+        let skills = BTreeMap::new();
+        let template = UnitTemplate {
+            name: "observer".to_string(),
+            skills: BTreeSet::new(),
+        };
+        struct TestGetter {
+            template: UnitTemplate,
+        }
+        impl UnitTemplateGetter for TestGetter {
+            fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                if typ == &self.template.name {
+                    Some(&self.template)
+                } else {
+                    None
+                }
+            }
+        }
+
+        let board = Board::from_config(config, &TestGetter { template }, &skills).unwrap();
+
+        // 物理視線被阻擋，應該看不到牆後方
+        assert!(
+            !board
+                .can_see_target(Pos { x: 3, y: 5 }, Pos { x: 7, y: 5 }, 1, &skills)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_can_see_target_bright_light() {
+        // 測試明亮環境下可直接看到
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let mut units = BTreeMap::new();
+        units.insert(
+            1,
+            UnitMarker {
+                id: 1,
+                unit_template_type: "observer".to_string(),
+                team: "player".to_string(),
+                pos: Pos { x: 0, y: 0 },
+            },
+        );
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Bright,
+            deployable: BTreeSet::new(),
+            units,
+        };
+
+        let skills = BTreeMap::new();
+        let template = UnitTemplate {
+            name: "observer".to_string(),
+            skills: BTreeSet::new(),
+        };
+        struct TestGetter {
+            template: UnitTemplate,
+        }
+        impl UnitTemplateGetter for TestGetter {
+            fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                if typ == &self.template.name {
+                    Some(&self.template)
+                } else {
+                    None
+                }
+            }
+        }
+
+        let board = Board::from_config(config, &TestGetter { template }, &skills).unwrap();
+
+        // 明亮環境下，物理視線暢通即可見
+        assert!(
+            board
+                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 5, y: 5 }, 1, &skills)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_can_see_target_darkness_no_sense() {
+        // 測試黑暗中無 Sense 能力
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let mut units = BTreeMap::new();
+        units.insert(
+            1,
+            UnitMarker {
+                id: 1,
+                unit_template_type: "observer".to_string(),
+                team: "player".to_string(),
+                pos: Pos { x: 0, y: 0 },
+            },
+        );
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness, // 黑暗環境
+            deployable: BTreeSet::new(),
+            units,
+        };
+
+        let skills = BTreeMap::new();
+        let template = UnitTemplate {
+            name: "observer".to_string(),
+            skills: BTreeSet::new(), // 沒有 Sense 技能
+        };
+        struct TestGetter {
+            template: UnitTemplate,
+        }
+        impl UnitTemplateGetter for TestGetter {
+            fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                if typ == &self.template.name {
+                    Some(&self.template)
+                } else {
+                    None
+                }
+            }
+        }
+
+        let board = Board::from_config(config, &TestGetter { template }, &skills).unwrap();
+
+        // 黑暗中沒有 Sense 能力，看不到
+        assert!(
+            !board
+                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 5, y: 5 }, 1, &skills)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_can_see_target_darkness_with_sense() {
+        // 測試黑暗中有 Sense 能力
+        use skills_lib::{Effect, Shape, Skill, TargetType};
+
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let mut units = BTreeMap::new();
+        units.insert(
+            1,
+            UnitMarker {
+                id: 1,
+                unit_template_type: "observer".to_string(),
+                team: "player".to_string(),
+                pos: Pos { x: 0, y: 0 },
+            },
+        );
+
+        let config = BoardConfig {
+            tiles,
+            teams: BTreeMap::new(),
+            ambient_light: LightLevel::Darkness, // 黑暗環境
+            deployable: BTreeSet::new(),
+            units,
+        };
+
+        let mut skills = BTreeMap::new();
+        skills.insert(
+            "sense_skill".to_string(),
+            Skill {
+                tags: BTreeSet::new(),
+                range: (0, 0),
+                cost: 0,
+                accuracy: None,
+                crit_rate: None,
+                effects: vec![Effect::Sense {
+                    target_type: TargetType::Caster,
+                    shape: Shape::Point,
+                    range: 10,
+                    duration: -1, // 永久效果
+                }],
+            },
+        );
+
+        let mut observer_skills = BTreeSet::new();
+        observer_skills.insert("sense_skill".to_string());
+
+        let template = UnitTemplate {
+            name: "observer".to_string(),
+            skills: observer_skills,
+        };
+
+        struct TestGetter {
+            template: UnitTemplate,
+        }
+        impl UnitTemplateGetter for TestGetter {
+            fn get(&self, typ: &UnitTemplateType) -> Option<&UnitTemplate> {
+                if typ == &self.template.name {
+                    Some(&self.template)
+                } else {
+                    None
+                }
+            }
+        }
+
+        let board = Board::from_config(config, &TestGetter { template }, &skills).unwrap();
+
+        // 黑暗中有 Sense 能力（range=10，距離 < 10），可以看到
+        assert!(
+            board
+                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 5, y: 5 }, 1, &skills)
+                .unwrap()
+        );
+
+        // 超出 Sense 範圍（距離 > 10），看不到
+        assert!(
+            !board
+                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 9, y: 9 }, 1, &skills)
+                .unwrap()
+        );
     }
 }
