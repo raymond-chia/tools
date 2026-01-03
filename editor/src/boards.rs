@@ -463,7 +463,7 @@ impl BoardsEditor {
             }
             // -------- 有選擇主動技能時：只顯示技能範圍 --------
             let casting_area = if let Some(skill) = self.skills.get(skill_id) {
-                skill_casting_area(&self.sim_board, active_unit_pos, skill.range)
+                skill_casting_area(&self.sim_board, active_unit_pos, skill.range, &self.skills)
             } else {
                 vec![]
             };

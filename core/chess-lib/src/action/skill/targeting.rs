@@ -4,25 +4,32 @@
 
 use crate::*;
 use skills_lib::*;
+use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
 /// 計算單位周邊區域的技能施放範圍（根據 range，不含 shape）
 /// - board: 棋盤物件
 /// - from: 施放者座標
 /// - range: (min_range, max_range) 技能 range 設定
+/// - skills: 技能定義表（用於檢查 Sense 能力）
 ///
 /// # Returns
-/// 所有可施放座標
-pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, usize)) -> Vec<Pos> {
-    let unit_id = match board.pos_to_unit(active_unit_pos) {
+/// 所有可施放座標（已過濾視線檢查）
+pub fn skill_casting_area(
+    board: &Board,
+    active_unit_pos: Pos,
+    range: (usize, usize),
+    skills: &BTreeMap<SkillID, Skill>,
+) -> Vec<Pos> {
+    let active_unit_id = match board.pos_to_unit(active_unit_pos) {
         Some(id) => id,
         None => return vec![],
     };
-    let unit = match board.units.get(&unit_id) {
+    let active_unit = match board.units.get(&active_unit_id) {
         Some(u) => u,
         None => return vec![],
     };
-    if is_able_to_act(unit).is_err() {
+    if is_able_to_act(active_unit).is_err() {
         return vec![];
     }
 
@@ -43,7 +50,12 @@ pub fn skill_casting_area(board: &Board, active_unit_pos: Pos, range: (usize, us
             if board.get_tile(target).is_none() {
                 continue;
             }
-            area.push(target);
+
+            // 檢查視線：是否能看到目標位置
+            match board.can_see_target((active_unit_id, active_unit_pos), target, skills) {
+                Ok(true) => area.push(target),
+                _ => continue, // 看不到或出錯，跳過此位置
+            }
         }
     }
     area
@@ -378,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_skill_casting_area() {
-        let (board, _, _) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+        let (board, _, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
 
         let set = |v: &[Pos]| BTreeSet::from_iter(v.iter().copied());
 
@@ -423,7 +435,7 @@ mod tests {
         ];
 
         for (range, active_unit_pos, expected) in test_data {
-            let area = skill_casting_area(&board, active_unit_pos, range)
+            let area = skill_casting_area(&board, active_unit_pos, range, &skills)
                 .into_iter()
                 .collect::<BTreeSet<_>>();
             assert_eq!(area, expected);

@@ -88,8 +88,15 @@ impl SkillSelection {
         }
 
         // 使用細粒度函數計算影響區域（失敗時返回空 vec 用於 UI 預覽）
-        calc_skill_affect_area(board, skill_id, skill, caster_pos, (to, to))
-            .unwrap_or_else(|_| vec![])
+        calc_skill_affect_area(
+            board,
+            skills,
+            skill_id,
+            skill,
+            (caster_id, caster_pos),
+            (to, to),
+        )
+        .unwrap_or_else(|_| vec![])
     }
 }
 

@@ -34,10 +34,12 @@ pub(in crate::action) fn get_caster_pos(board: &Board, caster_id: UnitID) -> Res
     })
 }
 
-/// 計算技能影響區域（含範圍檢查）
+/// 計算技能影響區域（含範圍檢查與視線檢查）
 ///
 /// # 參數
 /// - `board`: 棋盤狀態
+/// - `skills`: 技能資料表（用於檢查 Sense 能力）
+/// - `caster_id`: 施法者 ID
 /// - `skill_id`: 技能 ID（用於錯誤訊息）
 /// - `skill`: 技能引用
 /// - `caster_pos`: 施法者位置
@@ -45,12 +47,13 @@ pub(in crate::action) fn get_caster_pos(board: &Board, caster_id: UnitID) -> Res
 ///
 /// # 返回值
 /// - Ok(Vec<Pos>): 影響區域座標列表
-/// - Err(Error): 目標超出範圍或影響區域為空
+/// - Err(Error): 目標超出範圍、視線被阻擋或影響區域為空
 pub(in crate::action) fn calc_skill_affect_area(
     board: &Board,
+    skills: &BTreeMap<SkillID, Skill>,
     skill_id: &SkillID,
     skill: &Skill,
-    caster_pos: Pos,
+    (caster_id, caster_pos): (UnitID, Pos),
     // logical_pos 不管是否重疊
     (actual_pos, logical_pos): (Pos, Pos),
 ) -> Result<Vec<Pos>, Error> {
@@ -65,6 +68,21 @@ pub(in crate::action) fn calc_skill_affect_area(
             target_pos: logical_pos,
             range: skill.range,
         });
+    }
+
+    // 檢查視線：是否能看到目標位置
+    match board.can_see_target((caster_id, caster_pos), logical_pos, skills) {
+        Ok(true) => {} // 可以看到，繼續
+        Ok(false) => {
+            return Err(Error::SkillOutOfRange {
+                func,
+                skill_id: skill_id.clone(),
+                caster_pos,
+                target_pos: logical_pos,
+                range: skill.range,
+            });
+        }
+        Err(e) => return Err(e).wrap_context(func),
     }
 
     // 取得技能範圍形狀（僅取第一個 effect 的 shape）
@@ -131,12 +149,13 @@ pub(in crate::action) fn cast_skill_internal(
     // 2. 取得施法者位置
     let caster_pos = get_caster_pos(board, caster_id).wrap_context(func)?;
 
-    // 3. 計算影響區域（含範圍檢查）
+    // 3. 計算影響區域（含範圍檢查與視線檢查）
     let affect_area = calc_skill_affect_area(
         board,
+        skills,
         skill_id,
         skill,
-        caster_pos,
+        (caster_id, caster_pos),
         (actual_pos, logical_pos),
     )
     .wrap_context(func)?;

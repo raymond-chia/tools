@@ -135,7 +135,7 @@ pub fn score_actions(
                 Some(s) => s,
             };
             // 技能施放範圍（以 move_to 為基準）
-            let cast_area = skill_casting_area(board, new_from, skill.range);
+            let cast_area = skill_casting_area(board, new_from, skill.range, skills);
             // 只取第一個 effect 的 shape
             let shape = skill
                 .effects

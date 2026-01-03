@@ -257,9 +257,8 @@ impl Board {
     /// 3. 若目標處於黑暗，檢查觀察者是否有足夠距離的 Sense 能力
     pub fn can_see_target(
         &self,
-        from: Pos,
+        (observer_unit_id, from): (UnitID, Pos),
         to: Pos,
-        observer_unit_id: UnitID,
         skills: &BTreeMap<SkillID, Skill>,
     ) -> Result<bool, Error> {
         let func = "can_see_target";
@@ -1328,7 +1327,7 @@ mod tests {
         // 物理視線被阻擋，應該看不到牆後方
         assert!(
             !board
-                .can_see_target(Pos { x: 3, y: 5 }, Pos { x: 7, y: 5 }, 1, &skills)
+                .can_see_target((1, Pos { x: 3, y: 5 }), Pos { x: 7, y: 5 }, &skills)
                 .unwrap()
         );
     }
@@ -1380,7 +1379,7 @@ mod tests {
         // 明亮環境下，物理視線暢通即可見
         assert!(
             board
-                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 5, y: 5 }, 1, &skills)
+                .can_see_target((1, Pos { x: 0, y: 0 }), Pos { x: 5, y: 5 }, &skills)
                 .unwrap()
         );
     }
@@ -1432,7 +1431,7 @@ mod tests {
         // 黑暗中沒有 Sense 能力，看不到
         assert!(
             !board
-                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 5, y: 5 }, 1, &skills)
+                .can_see_target((1, Pos { x: 0, y: 0 }), Pos { x: 5, y: 5 }, &skills)
                 .unwrap()
         );
     }
@@ -1507,14 +1506,14 @@ mod tests {
         // 黑暗中有 Sense 能力（range=10，距離 < 10），可以看到
         assert!(
             board
-                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 5, y: 5 }, 1, &skills)
+                .can_see_target((1, Pos { x: 0, y: 0 }), Pos { x: 5, y: 5 }, &skills)
                 .unwrap()
         );
 
         // 超出 Sense 範圍（距離 > 10），看不到
         assert!(
             !board
-                .can_see_target(Pos { x: 0, y: 0 }, Pos { x: 9, y: 9 }, 1, &skills)
+                .can_see_target((1, Pos { x: 0, y: 0 }), Pos { x: 9, y: 9 }, &skills)
                 .unwrap()
         );
     }
