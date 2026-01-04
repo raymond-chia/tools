@@ -12,9 +12,6 @@ use strum_macros::{Display, EnumIter};
 pub enum Terrain {
     #[default]
     Plain,
-    Hill,
-    Mountain,
-    Forest,
     ShallowWater,
     DeepWater,
 }
@@ -388,9 +385,6 @@ impl_board!(Board);
 pub fn movement_cost(t: Terrain) -> MovementCost {
     match t {
         Terrain::Plain => 10,
-        Terrain::Hill => 13,
-        Terrain::Mountain => 20,
-        Terrain::Forest => 13,
         Terrain::ShallowWater => 17,
         Terrain::DeepWater => MAX_MOVEMENT_COST,
     }
@@ -597,7 +591,7 @@ mod tests {
         );
         assert_eq!(
             board.get_tile(Pos { x: 0, y: 1 }).unwrap().terrain,
-            Terrain::Hill
+            Terrain::ShallowWater
         );
 
         // 驗證 team
@@ -614,9 +608,6 @@ mod tests {
     #[test]
     fn test_movement_cost() {
         assert_eq!(movement_cost(Terrain::Plain), 10);
-        assert_eq!(movement_cost(Terrain::Hill), 13);
-        assert_eq!(movement_cost(Terrain::Mountain), 20);
-        assert_eq!(movement_cost(Terrain::Forest), 13);
         assert_eq!(movement_cost(Terrain::ShallowWater), 17);
         assert_eq!(movement_cost(Terrain::DeepWater), MAX_MOVEMENT_COST);
     }

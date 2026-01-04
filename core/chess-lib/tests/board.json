@@ -1,7 +1,7 @@
 {
   "tiles": [
     [{ "terrain": "Plain" }, { "terrain": "Plain" }],
-    [{ "terrain": "Hill" }, { "terrain": "Hill" }]
+    [{ "terrain": "ShallowWater" }, { "terrain": "ShallowWater" }]
   ],
   "teams": {
     "t1": {

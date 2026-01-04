@@ -2228,9 +2228,6 @@ fn override_player_unit(
 fn terrain_color(tile: &Tile) -> Color32 {
     match tile.terrain {
         Terrain::Plain => Color32::DARK_GREEN,
-        Terrain::Hill => Color32::from_rgb(90, 60, 30),
-        Terrain::Mountain => Color32::from_rgb(60, 30, 0),
-        Terrain::Forest => Color32::from_rgb(0, 60, 0),
         Terrain::ShallowWater => Color32::from_rgb(60, 60, 199),
         Terrain::DeepWater => Color32::DARK_BLUE,
     }
