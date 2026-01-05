@@ -20,6 +20,7 @@ pub use unit::*;
 
 pub type BoardID = String;
 pub type UnitID = u32;
+pub type ObjectID = u32;
 pub type UnitTemplateType = String;
 pub type TeamID = String;
 pub type MovementCost = usize;
@@ -28,7 +29,8 @@ pub type RGB = (u8, u8, u8);
 pub type RGBA = (u8, u8, u8, u8);
 pub type AIScore = f32;
 
-pub const PLAYER_TEAM: &str = "player";
+pub const TEAM_PLAYER: &str = "player";
+pub const TEAM_NONE: &str = "none"; // 中立物件的 TeamID
 pub const MAX_MOVEMENT_COST: MovementCost = 999;
 
 // 光源範圍（曼哈頓距離）

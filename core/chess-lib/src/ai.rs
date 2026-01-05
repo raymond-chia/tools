@@ -293,15 +293,15 @@ mod inner {
     }
 
     fn score_move_and_use_skill(
-        tendency: &Tendency,
-        ally_positions: Vec<Pos>,
-        enemy_positions: Vec<Pos>,
-        path: Vec<Pos>,
-        skill_id: SkillID,
-        target: Pos,
-        target_units: Vec<UnitID>,
+        _tendency: &Tendency,
+        _ally_positions: Vec<Pos>,
+        _enemy_positions: Vec<Pos>,
+        _path: Vec<Pos>,
+        _skill_id: SkillID,
+        _target: Pos,
+        _target_units: Vec<UnitID>,
     ) -> Result<ScoredAction, Error> {
-        let func = "ai.score_move_and_use_skill";
+        let _func = "ai.score_move_and_use_skill";
 
         Ok(ScoredAction {
             action: Action::Idle,

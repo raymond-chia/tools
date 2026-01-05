@@ -151,3 +151,171 @@
 ---
 
 ## TODO
+
+## 創造地形系統設計（2026-01）
+
+### 設計目標
+
+實現「創造地形」技能效果，包括：
+
+- **Grease**（油脂）：增加移動成本、絆倒效果
+- **Pillar**（石柱）：永久障礙物，阻擋移動和視線
+- **Smoke**（煙霧）：臨時視線阻擋
+
+### 核心設計決策
+
+#### 1. 統一 Object 系統
+
+- **移除** `Tile.object` 欄位
+- **Object 枚舉** → 改名為 **ObjectType**（保留原有變體：Tree, Wall, Cliff, Pit, Tent, Torch, Campfire）
+- **新增 Object 結構**：
+  - `id`: ObjectID
+  - `affected_positions`: Vec<Pos>（支持多格，單格物體也是 vec![pos]）
+  - `object_type`: ObjectType
+  - `duration`: i32（-1 = 永久，> 0 = 臨時）
+  - `creator_team`: TeamID（None = 地圖預設的中立物件）
+- **BoardConfig 改動**：
+  - 新增 `objects: BTreeMap<ObjectID, Object>`
+- **Board 改動**：
+  - 新增 `objects: HashMap<ObjectID, Object>`
+  - 新增 `pos_to_object: HashMap<Pos, Vec<ObjectID>>`（支持多個物體疊加）
+
+#### 2. 臨時物體進入 turn_order
+
+- **永久物體**（duration = -1）：不進入 turn_order
+- **臨時物體**（duration > 0）：進入 turn_order，輪到時減少 duration，到 0 時自動消失
+- **TurnEntity**：枚舉 `Unit(UnitID)` 或 `Object(ObjectID)`
+- **Battle.turn_order** 類型改為 `Vec<TurnEntity>`
+
+#### 3. Tag 機制處理環境互動
+
+- **新增 Tag**：
+  - `Tag::Ignite`：點燃範圍內的 Torch/Campfire
+  - `Tag::Extinguish`：熄滅範圍內的 Torch/Campfire
+- **自動觸發**：技能施放後檢查 tag，自動點燃/熄滅（不需要額外視線檢查）
+- **火焰技能建議**：同時擁有 `Tag::Fire`（傷害類型）+ `Tag::Ignite`（環境互動）
+
+### 新增物體類型
+
+#### ObjectType::Wall（石牆）
+
+- **永久**（duration = -1）
+- **阻擋移動**：blocks_movement() = true
+- **阻擋視線**：blocks_sight() = true
+- **創造方式**：Effect::CreateObject
+
+#### ObjectType::Grease（油脂）
+
+- **臨時**（duration > 0，建議 3-5 回合）
+- **移動成本**：movement_cost_modifier() = +5
+- **絆倒效果**：
+  - **觸發**：單位在 grease 上的時候, 無論是進入還是回合開始就在. 每個回合只檢定一次
+  - **判定**：豁免判定（Reflex）
+  - **失敗效果**：
+    - 失去剩餘移動力（`unit.moved` 往上到 `unit.move_points` 或者 `unit.move_points * 2` (如果 `unit.moved` 本來就超過 `unit.move_points`)）
+    - 降低命中、閃避（添加 Tripped status_effect，持續 1 回合）
+
+#### ObjectType::Smoke（煙霧）
+
+- **臨時**（duration > 0，建議 2-3 回合）
+- **阻擋視線**：blocks_sight() = true
+- **不阻擋移動**：blocks_movement() = false
+
+### 新增 Effect 和 Tag
+
+#### Effect::CreateObject
+
+- **參數**：
+  - `target_type`: TargetType
+  - `shape`: Shape
+  - `object_type`: ObjectType
+  - `duration`: i32（-1 = 永久，> 0 = 臨時）
+- **功能**：創造物體（永久或臨時）
+- **支持多格**：根據 shape 計算 affected_positions
+
+#### Tag::Ignite / Extinguish
+
+- **Ignite**：點燃 Torch/Campfire（目前只處理這兩種，未來可擴展到可燃物）
+- **Extinguish**：熄滅 Torch/Campfire
+- **自動觸發**：技能施放後自動檢查 tag 並應用效果
+
+### ObjectType 行為方法
+
+所有 ObjectType 實作以下方法：
+
+- `blocks_movement()` - 是否阻擋移動
+- `blocks_sight()` - 是否阻擋視線（Cliff 需要特殊處理方向性）
+- `movement_cost_modifier()` - 移動成本修正
+- `light_level_at(distance)` - 光照等級計算
+
+### 實作步驟（6 個階段）
+
+1. **Phase 1: 基礎結構重構** (已完成)
+
+   - 定義 ObjectType、Object、Board.objects
+   - 遷移所有 tile.object 代碼
+   - 實作 ObjectType 行為方法
+   - 更新序列化格式
+
+2. **Phase 2: TurnEntity 和回合系統**
+
+   - 定義 TurnEntity 枚舉
+   - 修改 Battle.turn_order 類型
+   - 實作 process_object_turn()（減少 duration）
+   - 實作 remove_entity_from_turn_order()（統一移除邏輯）
+
+3. **Phase 3: 創造物系統**
+
+   - 新增 Effect::CreateObject
+   - 實作創造邏輯（生成 Object、插入 turn_order）
+   - Object 消失時的清理
+
+4. **Phase 4: Tag 點燃/熄滅機制**
+
+   - 新增 Tag::Ignite、Tag::Extinguish
+   - 實作 ignite_objects_at()、extinguish_objects_at()
+   - 在技能施放時自動觸發
+
+5. **Phase 5: 遊戲邏輯整合**
+
+   - 移動成本計算（檢查 pos_to_object）
+   - 可通行性檢查
+   - 視線檢查
+   - 絆倒判定（grease）
+
+6. **Phase 6: 測試**
+   - 基礎測試、創造物測試、duration 測試
+   - 點燃/熄滅測試、疊加測試
+
+### 技能範例
+
+**創造石柱**（永久障礙）：
+
+- tags: [Active]
+- range: (1, 5)
+- cost: -5
+- effects: [CreateObject { target_type: Ground, shape: Point, object_type: Wall, duration: -1 }]
+
+**油脂術**（Grease，臨時地形）：
+
+- tags: [Active]
+- range: (1, 10)
+- cost: -10
+- effects: [CreateObject { target_type: Ground, shape: Circle(radius=1), object_type: Grease, duration: 3 }]
+
+**煙霧彈**（臨時視線阻擋）：
+
+- tags: [Active]
+- range: (1, 10)
+- cost: -5
+- effects: [CreateObject { target_type: Ground, shape: Point, object_type: Smoke, duration: 2 }]
+
+**火球術**（傷害 + 點燃）：
+
+- tags: [Active, Fire, Ignite]
+- range: (1, 10)
+- cost: -15
+- accuracy: 70
+- crit_rate: 10
+- effects: [Hp { target_type: Enemy, shape: Circle(radius=1), value: -30 }]
+- 自動觸發：點燃範圍內的 Torch/Campfire

@@ -31,20 +31,6 @@ pub fn get_adjacent_positions(pos: Pos) -> Vec<Pos> {
         .collect()
 }
 
-/// 檢查位置的地形和物件是否可通行（不處理單位阻擋）
-pub fn is_tile_passable(board: &Board, pos: Pos) -> bool {
-    match board.get_tile(pos) {
-        None => false, // 地形不存在 -> 不可通行
-        Some(tile) => {
-            if let Some(object) = &tile.object {
-                object.is_passable() // 物件可通行
-            } else {
-                true // 無物件 -> 可通行
-            }
-        }
-    }
-}
-
 /// 提供移動邏輯用的棋盤視圖，實作 PathfindingBoard 供路徑搜尋演算法使用
 struct MovableBoardView<'a> {
     board: &'a Board,
@@ -65,16 +51,18 @@ impl PathfindingBoard for MovableBoardView<'_> {
             return false;
         }
         // 檢查地形和物件阻擋
-        if !is_tile_passable(self.board, pos) {
+        if !self.board.is_tile_passable(pos) {
             return false;
         }
-        let Some(unit_id) = self.board.pos_to_unit(active_unit_pos) else {
+        let unit_id = match self.board.pos_to_unit(active_unit_pos) {
             // 不合理
-            return false;
+            None => return false,
+            Some(unit_id) => unit_id,
         };
-        let Some(active_team) = self.board.units.get(&unit_id).map(|unit| &unit.team) else {
+        let active_team = match self.board.units.get(&unit_id).map(|unit| &unit.team) {
             // 不合理
-            return false;
+            None => return false,
+            Some(team) => team,
         };
         match self.board.pos_to_unit(pos) {
             None => true, // 目標位置無單位
@@ -139,8 +127,9 @@ pub fn reconstruct_path(
     let mut path = Vec::new();
     let mut current = to;
     while current != from {
-        let Some((_, prev)) = map.get(&current) else {
-            return Err(Error::NotReachable { func, pos: to });
+        let (_, prev) = match map.get(&current) {
+            None => return Err(Error::NotReachable { func, pos: to }),
+            Some(v) => v,
         };
         path.push(current);
         current = *prev;
@@ -257,8 +246,9 @@ pub fn movement_tile_color(
     if board.pos_to_unit(pos).is_some() {
         return Err(Error::NotReachable { func, pos });
     }
-    let Some((cost, _)) = movable.get(&pos) else {
-        return Err(Error::NotReachable { func, pos });
+    let (cost, _) = match movable.get(&pos) {
+        None => return Err(Error::NotReachable { func, pos }),
+        Some(v) => v,
     };
     let cost = *cost;
 
@@ -297,8 +287,9 @@ mod inner {
             return Ok(()); // 不需要移動
         }
         // to 應該在棋盤上
-        let Some(tile) = board.get_tile(to) else {
-            return Err(Error::NoTileAtPos { func, pos: to });
+        let tile = match board.get_tile(to) {
+            None => return Err(Error::NoTileAtPos { func, pos: to }),
+            Some(tile) => tile,
         };
         let terrain = tile.terrain;
         // 檢查 from 位置有無單位
@@ -306,13 +297,15 @@ mod inner {
             Some(id) => id,
             None => return Err(Error::NoUnitAtPos { func, pos: actor }),
         };
-        let Some(active_unit) = board.units.get(&unit_id) else {
-            return Err(Error::NoUnitAtPos { func, pos: actor });
+        let active_unit = match board.units.get(&unit_id) {
+            None => return Err(Error::NoUnitAtPos { func, pos: actor }),
+            Some(unit) => unit,
         };
         // 檢查 to 位置是否已有單位
         let result = if let Some(unit_id) = board.pos_to_unit(to) {
-            let Some(target_unit) = board.units.get(&unit_id) else {
-                return Err(Error::NoUnitAtPos { func, pos: to });
+            let target_unit = match board.units.get(&unit_id) {
+                None => return Err(Error::NoUnitAtPos { func, pos: to }),
+                Some(unit) => unit,
             };
             if active_unit.team != target_unit.team {
                 return Err(Error::HostileUnitAtPos { func, pos: to });
@@ -321,8 +314,9 @@ mod inner {
         } else {
             Ok(())
         };
-        let Some(active_unit) = board.units.get_mut(&unit_id) else {
-            return Err(Error::NoUnitAtPos { func, pos: actor });
+        let active_unit = match board.units.get_mut(&unit_id) {
+            None => return Err(Error::NoUnitAtPos { func, pos: actor }),
+            Some(unit) => unit,
         };
         let cost = movement_cost(terrain);
         if active_unit.moved + cost > active_unit.move_points * 2 {
@@ -342,6 +336,7 @@ mod inner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
     use std::collections::{BTreeMap, BTreeSet};
 
     fn skills_map() -> BTreeMap<String, Skill> {
@@ -361,21 +356,18 @@ mod tests {
             vec![
                 Tile {
                     terrain: Terrain::Plain,
-                    object: None,
                 };
                 3
             ],
             vec![
                 Tile {
                     terrain: Terrain::Plain,
-                    object: None,
                 };
                 3
             ],
             vec![
                 Tile {
                     terrain: Terrain::Plain,
-                    object: None
                 };
                 3
             ],
@@ -430,7 +422,8 @@ mod tests {
             units,
             unit_map,
             ambient_light: LightLevel::default(),
-            light_sources: Vec::new(),
+            objects: HashMap::new(),
+            pos_to_object: HashMap::new(),
         };
         (board, unit_id)
     }
@@ -617,9 +610,22 @@ mod tests {
         let mut board = basic_board_and_unit(start, ally, enemy).0;
 
         // 在 (1,1) 放置樹木
-        if let Some(tile) = board.get_tile_mut(Pos { x: 1, y: 1 }) {
-            tile.object = Some(Object::Tree);
-        }
+        let tree_pos = Pos { x: 1, y: 1 };
+        let mut rng = rand::rng();
+        let obj_id = rng.random_range(0..u32::MAX);
+        let obj = Object {
+            id: obj_id,
+            affected_positions: vec![tree_pos],
+            object_type: ObjectType::Tree,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        board
+            .pos_to_object
+            .entry(tree_pos)
+            .or_default()
+            .push(obj_id);
+        board.objects.insert(obj_id, obj);
 
         let expect = BTreeSet::from([
             Pos { x: 0, y: 0 },

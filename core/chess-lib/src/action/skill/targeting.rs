@@ -383,7 +383,8 @@ mod tests {
             unit_map,
             units,
             ambient_light: LightLevel::default(),
-            light_sources: Vec::new(),
+            objects: HashMap::new(),
+            pos_to_object: HashMap::new(),
         };
         (board, unit_id, skills)
     }

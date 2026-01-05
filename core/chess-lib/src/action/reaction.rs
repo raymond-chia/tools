@@ -590,7 +590,6 @@ mod tests {
             vec![
                 Tile {
                     terrain: Terrain::Plain,
-                    object: None
                 };
                 3
             ];
@@ -618,7 +617,8 @@ mod tests {
             units,
             unit_map,
             ambient_light: LightLevel::default(),
-            light_sources: Vec::new(),
+            objects: HashMap::new(),
+            pos_to_object: HashMap::new(),
         };
 
         (board, 1, 2)
@@ -705,7 +705,6 @@ mod tests {
             vec![
                 Tile {
                     terrain: Terrain::Plain,
-                    object: None
                 };
                 3
             ];
@@ -730,7 +729,8 @@ mod tests {
             units,
             unit_map,
             ambient_light: LightLevel::default(),
-            light_sources: Vec::new(),
+            objects: HashMap::new(),
+            pos_to_object: HashMap::new(),
         };
 
         // 給友方單位添加 reaction 技能（應該被忽略）

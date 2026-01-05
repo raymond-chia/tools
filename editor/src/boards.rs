@@ -35,7 +35,7 @@ pub struct BoardsEditor {
     // 修改地圖
     brush: BrushMode,
     selected_terrain: Terrain,
-    selected_object: Option<Object>,
+    selected_object: Option<ObjectType>,
     selected_object_lit: bool,
     selected_orientation: Orientation,
     selected_unit: Option<UnitTemplateType>,
@@ -991,7 +991,7 @@ impl BoardsEditor {
         // 動態顯示物件屬性編輯器
         if let Some(obj) = &self.selected_object {
             match obj {
-                Object::Torch { .. } | Object::Campfire { .. } => {
+                ObjectType::Torch { .. } | ObjectType::Campfire { .. } => {
                     ui.horizontal(|ui| {
                         ui.label("光源狀態:");
                         ui.checkbox(&mut self.selected_object_lit, "點燃");
@@ -1012,7 +1012,7 @@ impl BoardsEditor {
         {
             self.selected_object = None;
         }
-        for object in Object::iter() {
+        for object in ObjectType::iter() {
             if ui
                 .selectable_label(
                     self.selected_object.as_ref() == Some(&object),
@@ -1880,12 +1880,12 @@ fn paint_terrain(board: &mut BoardConfig, pos: Pos, terrain: Terrain) -> bool {
 fn paint_object(
     board: &mut BoardConfig,
     pos: Pos,
-    object: Option<&Object>,
+    object: Option<&ObjectType>,
     orientation: Orientation,
     lit: bool,
 ) -> Result<(), String> {
     // helper: 放置單格物件
-    let mut apply_single = |obj: Option<Object>| {
+    let mut apply_single = |obj: Option<ObjectType>| {
         board
             .get_tile_mut(pos)
             .unwrap_or_else(|| panic!("painting in race condition. {:?} in {:?}", obj, pos))
@@ -1896,25 +1896,28 @@ fn paint_object(
     match object {
         None => apply_single(None),
         Some(obj) => match obj {
-            Object::Tree => apply_single(Some(Object::Tree)),
-            Object::Wall => apply_single(Some(Object::Wall)),
-            Object::Cliff { .. } => apply_single(Some(Object::Cliff { orientation })),
-            Object::Pit => apply_single(Some(Object::Pit)),
-            Object::Torch { .. } => apply_single(Some(Object::Torch { lit })),
-            Object::Campfire { .. } => apply_single(Some(Object::Campfire { lit })),
-            Object::Tent2 { .. } => {
+            ObjectType::Tree => apply_single(Some(ObjectType::Tree)),
+            ObjectType::Wall => apply_single(Some(ObjectType::Wall)),
+            ObjectType::Cliff { .. } => apply_single(Some(ObjectType::Cliff { orientation })),
+            ObjectType::Pit => apply_single(Some(ObjectType::Pit)),
+            ObjectType::Torch { .. } => apply_single(Some(ObjectType::Torch { lit })),
+            ObjectType::Campfire { .. } => apply_single(Some(ObjectType::Campfire { lit })),
+            ObjectType::Tent2 { .. } => {
                 let (w, h) = match orientation {
                     Orientation::Left | Orientation::Right => (2, 1),
                     Orientation::Up | Orientation::Down => (1, 2),
                 };
-                paint_multiple_object(board, pos, (w, h), |rel| Object::Tent2 { orientation, rel })
+                paint_multiple_object(board, pos, (w, h), |rel| ObjectType::Tent2 {
+                    orientation,
+                    rel,
+                })
             }
-            Object::Tent15 { .. } => {
+            ObjectType::Tent15 { .. } => {
                 let (w, h) = match orientation {
                     Orientation::Left | Orientation::Right => (5, 3),
                     Orientation::Up | Orientation::Down => (3, 5),
                 };
-                paint_multiple_object(board, pos, (w, h), |rel| Object::Tent15 {
+                paint_multiple_object(board, pos, (w, h), |rel| ObjectType::Tent15 {
                     orientation,
                     rel,
                 })
@@ -1930,7 +1933,7 @@ fn paint_multiple_object<F>(
     make_object: F,
 ) -> Result<(), String>
 where
-    F: Fn(Pos) -> Object,
+    F: Fn(Pos) -> ObjectType,
 {
     // 整理要放到哪些格子
     let (w, h) = size;
@@ -2006,7 +2009,7 @@ fn fill_selected_area(
     board: &mut BoardConfig,
     rect_start: Pos,
     rect_end: Pos,
-    object: Option<&Object>,
+    object: Option<&ObjectType>,
     orientation: Orientation,
     lit: bool,
 ) -> Result<(usize, usize), String> {
@@ -2039,11 +2042,17 @@ fn fill_selected_area(
             match object {
                 None => apply_single(pos, None),
                 Some(obj) => match obj {
-                    Object::Tree | Object::Wall | Object::Pit => apply_single(pos, object.cloned()),
-                    Object::Torch { .. } => apply_single(pos, Some(Object::Torch { lit })),
-                    Object::Campfire { .. } => apply_single(pos, Some(Object::Campfire { lit })),
-                    Object::Cliff { .. } => apply_single(pos, Some(Object::Cliff { orientation })),
-                    Object::Tent2 { .. } | Object::Tent15 { .. } => {
+                    ObjectType::Tree | ObjectType::Wall | ObjectType::Pit => {
+                        apply_single(pos, object.cloned())
+                    }
+                    ObjectType::Torch { .. } => apply_single(pos, Some(ObjectType::Torch { lit })),
+                    ObjectType::Campfire { .. } => {
+                        apply_single(pos, Some(ObjectType::Campfire { lit }))
+                    }
+                    ObjectType::Cliff { .. } => {
+                        apply_single(pos, Some(ObjectType::Cliff { orientation }))
+                    }
+                    ObjectType::Tent2 { .. } | ObjectType::Tent15 { .. } => {
                         // 其他物件類型暫不支援
                         return Err(format!("不支援多格物件類型：{:?}", obj));
                     }
@@ -2060,7 +2069,7 @@ fn drunkards_walk_deploy(
     board: &mut BoardConfig,
     rect_start: Pos,
     rect_end: Pos,
-    object: Option<&Object>,
+    object: Option<&ObjectType>,
     orientation: Orientation,
     lit: bool,
     steps: usize,
@@ -2070,12 +2079,15 @@ fn drunkards_walk_deploy(
     // 僅支援單格物件或清除
     match object {
         Some(obj) => match obj {
-            Object::Tree
-            | Object::Wall
-            | Object::Pit
-            | Object::Torch { .. }
-            | Object::Campfire { .. } => {}
-            _ => return Err("Drunkard's walk 僅支援單格物件或清除".to_string()),
+            ObjectType::Tree
+            | ObjectType::Wall
+            | ObjectType::Cliff { .. }
+            | ObjectType::Pit
+            | ObjectType::Torch { .. }
+            | ObjectType::Campfire { .. } => {}
+            ObjectType::Tent2 { .. } | ObjectType::Tent15 { .. } => {
+                return Err("Drunkard's walk 僅支援單格物件或清除".to_string());
+            }
         },
         None => {} // 允許清除
     }
@@ -2188,7 +2200,7 @@ fn override_player_unit(
     // 1. 取得 board 上所有 team "player" 單位（map: unit_template_type → &mut Unit），若有重複則 set_status 跳錯並 return。
     let mut board_map: HashMap<UnitTemplateType, &mut Unit> = HashMap::new();
     for unit in board.units.values_mut() {
-        if unit.team != PLAYER_TEAM {
+        if unit.team != TEAM_PLAYER {
             continue;
         }
         let unit_type = unit.unit_template_type.clone();
@@ -2235,34 +2247,34 @@ fn terrain_color(tile: &Tile) -> Color32 {
 
 fn object_symbol(tile: &Tile) -> &'static str {
     match &tile.object {
-        Some(Object::Tree) => "🌳",
-        Some(Object::Wall) => "█",
-        Some(Object::Cliff { orientation }) => match orientation {
+        Some(ObjectType::Tree) => "🌳",
+        Some(ObjectType::Wall) => "█",
+        Some(ObjectType::Cliff { orientation }) => match orientation {
             Orientation::Up => "\\↑",
             Orientation::Down => "\\↓",
             Orientation::Left => "\\←",
             Orientation::Right => "\\→",
         },
-        Some(Object::Pit) => "💀",
-        Some(Object::Torch { lit }) => {
+        Some(ObjectType::Pit) => "💀",
+        Some(ObjectType::Torch { lit }) => {
             if *lit {
                 "T🔥"
             } else {
                 "T"
             }
         }
-        Some(Object::Campfire { lit }) => {
+        Some(ObjectType::Campfire { lit }) => {
             if *lit {
                 "C🔥"
             } else {
                 "C"
             }
         }
-        Some(Object::Tent2 { orientation, .. }) => match orientation {
+        Some(ObjectType::Tent2 { orientation, .. }) => match orientation {
             Orientation::Left | Orientation::Right => "⛺→2",
             Orientation::Up | Orientation::Down => "⛺↓2",
         },
-        Some(Object::Tent15 { orientation, .. }) => match orientation {
+        Some(ObjectType::Tent15 { orientation, .. }) => match orientation {
             Orientation::Left | Orientation::Right => "⛺→15",
             Orientation::Up | Orientation::Down => "⛺↓15",
         },

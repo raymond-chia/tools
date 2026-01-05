@@ -42,7 +42,7 @@ impl Default for LightLevel {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
-pub enum Object {
+pub enum ObjectType {
     Tree,
     Wall,
     Cliff { orientation: Orientation },
@@ -53,18 +53,29 @@ pub enum Object {
     Campfire { lit: bool },
 }
 
+/// 物體：棋盤上的物件實例
+/// 支持多格物體、臨時/永久、所屬隊伍
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct Object {
+    pub id: ObjectID,
+    pub affected_positions: Vec<Pos>,
+    pub object_type: ObjectType,
+    pub duration: i32,        // -1 = 永久，> 0 = 臨時
+    pub creator_team: TeamID, // "none" = 地圖預設的中立物件
+}
+
 impl Object {
     /// 是否允許通行：物件自身負責描述能否通行的規則
     pub fn is_passable(&self) -> bool {
-        match self {
-            Object::Tree
-            | Object::Wall
-            | Object::Cliff { .. }
-            | Object::Pit
-            | Object::Tent2 { .. }
-            | Object::Tent15 { .. }
-            | Object::Campfire { .. } => false,
-            Object::Torch { .. } => true,
+        match &self.object_type {
+            ObjectType::Tree
+            | ObjectType::Wall
+            | ObjectType::Cliff { .. }
+            | ObjectType::Pit
+            | ObjectType::Tent2 { .. }
+            | ObjectType::Tent15 { .. }
+            | ObjectType::Campfire { .. } => false,
+            ObjectType::Torch { .. } => true,
         }
     }
 
@@ -77,14 +88,17 @@ impl Object {
     /// - 從上方（與 orientation 同向或正交）往下看：不阻擋
     /// - 從下方（與 orientation 反向）往上看：阻擋視線
     pub fn blocks_sight_from(&self, from_pos: Pos, obj_pos: Pos) -> bool {
-        match self {
+        match &self.object_type {
             // 完全阻擋視線的物件（無方向性）
-            Object::Wall | Object::Tree | Object::Tent2 { .. } | Object::Tent15 { .. } => true,
+            ObjectType::Wall
+            | ObjectType::Tree
+            | ObjectType::Tent2 { .. }
+            | ObjectType::Tent15 { .. } => true,
             // 不阻擋視線的物件
-            Object::Pit | Object::Torch { .. } | Object::Campfire { .. } => false,
+            ObjectType::Pit | ObjectType::Torch { .. } | ObjectType::Campfire { .. } => false,
             // Cliff 有方向性：只有從下方往上看才阻擋
             // TODO: 峽谷兩端互相看不見的限制
-            Object::Cliff { orientation } => {
+            ObjectType::Cliff { orientation } => {
                 // 計算觀察者相對於懸崖的方向
                 let dx = from_pos.x as isize - obj_pos.x as isize;
                 let dy = from_pos.y as isize - obj_pos.y as isize;
@@ -105,8 +119,8 @@ impl Object {
     /// 根據距離計算光照等級
     /// 返回 Darkness 表示無光或熄滅
     pub fn light_level_at(&self, distance: usize) -> LightLevel {
-        match self {
-            Object::Torch { lit: true } => {
+        match &self.object_type {
+            ObjectType::Torch { lit: true } => {
                 if TORCH_BRIGHT_RANGE > 0 && distance <= TORCH_BRIGHT_RANGE {
                     LightLevel::Bright
                 } else if TORCH_DIM_RANGE > 0 && distance <= TORCH_DIM_RANGE {
@@ -115,7 +129,7 @@ impl Object {
                     LightLevel::Darkness
                 }
             }
-            Object::Campfire { lit: true } => {
+            ObjectType::Campfire { lit: true } => {
                 if CAMPFIRE_BRIGHT_RANGE > 0 && distance <= CAMPFIRE_BRIGHT_RANGE {
                     LightLevel::Bright
                 } else if CAMPFIRE_DIM_RANGE > 0 && distance <= CAMPFIRE_DIM_RANGE {
@@ -124,14 +138,14 @@ impl Object {
                     LightLevel::Darkness
                 }
             }
-            Object::Tree
-            | Object::Wall
-            | Object::Cliff { .. }
-            | Object::Pit
-            | Object::Tent2 { .. }
-            | Object::Tent15 { .. }
-            | Object::Torch { lit: false }
-            | Object::Campfire { lit: false } => LightLevel::Darkness,
+            ObjectType::Tree
+            | ObjectType::Wall
+            | ObjectType::Cliff { .. }
+            | ObjectType::Pit
+            | ObjectType::Tent2 { .. }
+            | ObjectType::Tent15 { .. }
+            | ObjectType::Torch { lit: false }
+            | ObjectType::Campfire { lit: false } => LightLevel::Darkness,
         }
     }
 }
@@ -139,7 +153,6 @@ impl Object {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Tile {
     pub terrain: Terrain,
-    pub object: Option<Object>,
 }
 
 // config 欄位需要排序
@@ -148,11 +161,13 @@ pub struct BoardConfig {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: BTreeMap<TeamID, Team>,
     #[serde(default)]
-    pub ambient_light: LightLevel, // 環境光（向後兼容）
+    pub ambient_light: LightLevel,
     // 以上會同步到 Board
     pub deployable: BTreeSet<Pos>,
     #[serde(with = "unitid_key_map")]
     pub units: BTreeMap<UnitID, UnitMarker>,
+    #[serde(default)]
+    pub objects: BTreeMap<ObjectID, Object>,
 }
 
 #[derive(Debug, Default)]
@@ -160,9 +175,11 @@ pub struct Board {
     pub tiles: Vec<Vec<Tile>>,
     pub teams: HashMap<TeamID, Team>,
     pub ambient_light: LightLevel,
-    pub light_sources: Vec<Pos>,
     pub units: HashMap<UnitID, Unit>,
     pub unit_map: UnitMap,
+    // 物體系統
+    pub objects: HashMap<ObjectID, Object>,
+    pub pos_to_object: HashMap<Pos, Vec<ObjectID>>,
 }
 
 pub trait UnitTemplateGetter {
@@ -193,19 +210,27 @@ impl Board {
             units.insert(unit_id, unit);
         }
 
-        let mut board = Board {
+        // 物體系統初始化
+        let mut objects = HashMap::new();
+        let mut pos_to_object: HashMap<Pos, Vec<ObjectID>> = HashMap::new();
+
+        // 從 config.objects 載入
+        for (obj_id, obj) in config.objects {
+            for &pos in &obj.affected_positions {
+                pos_to_object.entry(pos).or_default().push(obj_id);
+            }
+            objects.insert(obj_id, obj);
+        }
+
+        Ok(Board {
             tiles: config.tiles,
             teams,
             ambient_light: config.ambient_light,
-            light_sources: Vec::new(),
             units,
             unit_map,
-        };
-
-        // 初始化光源快取
-        board.rebuild_light_sources_cache();
-
-        Ok(board)
+            objects,
+            pos_to_object,
+        })
     }
 
     pub fn pos_to_unit(&self, pos: Pos) -> Option<UnitID> {
@@ -216,24 +241,17 @@ impl Board {
         self.unit_map.get_pos(unit_id)
     }
 
-    /// 掃描棋盤建立光源快取
-    pub fn rebuild_light_sources_cache(&mut self) {
-        self.light_sources.clear();
-        for y in 0..self.height() {
-            for x in 0..self.width() {
-                let pos = Pos { x, y };
-                if let Some(tile) = self.get_tile(pos) {
-                    if let Some(obj) = &tile.object {
-                        match obj {
-                            Object::Torch { .. } | Object::Campfire { .. } => {
-                                self.light_sources.push(pos);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            }
-        }
+    /// 取得位置上的所有物體
+    pub fn get_objects_at(&self, pos: Pos) -> Vec<&Object> {
+        self.pos_to_object
+            .get(&pos)
+            .map(|ids| ids.iter().filter_map(|id| self.objects.get(id)).collect())
+            .unwrap_or_default()
+    }
+
+    /// 檢查位置的地形和物件是否可通行
+    pub fn is_tile_passable(&self, pos: Pos) -> bool {
+        self.get_tile(pos).is_some() && self.get_objects_at(pos).iter().all(|obj| obj.is_passable())
     }
 
     /// 檢查觀察者是否能看到目標位置
@@ -294,7 +312,6 @@ impl Board {
         pos: Pos,
         _skills: &BTreeMap<SkillID, Skill>,
     ) -> Result<LightLevel, Error> {
-        let func = "get_light_level";
         let mut max_light = self.ambient_light;
 
         // 早期退出：如果環境光已經是最亮，直接返回
@@ -303,40 +320,32 @@ impl Board {
         }
 
         // 檢查所有 Object 光源
-        for &source_pos in &self.light_sources {
-            let tile = self
-                .get_tile(source_pos)
-                .ok_or_else(|| Error::InvalidImplementation {
-                    func,
-                    detail: format!(
-                        "light_sources cache contains invalid position {:?}",
-                        source_pos
-                    ),
-                })?;
-            let obj = tile
-                .object
-                .as_ref()
-                .ok_or_else(|| Error::InvalidImplementation {
-                    func,
-                    detail: format!(
-                        "light_sources cache contains position {:?} without light source",
-                        source_pos
-                    ),
-                })?;
+        for obj in self.objects.values() {
+            // 先檢查是否是光源類型
+            if !matches!(
+                obj.object_type,
+                ObjectType::Torch { .. } | ObjectType::Campfire { .. }
+            ) {
+                continue;
+            }
 
-            let distance = manhattan_distance(pos, source_pos);
-            let light_level = obj.light_level_at(distance);
+            // 對於光源物體的每個位置
+            for &source_pos in &obj.affected_positions {
+                let distance = manhattan_distance(pos, source_pos);
+                let light_level = obj.light_level_at(distance);
 
-            max_light = max_light.max(light_level);
-            if max_light == LightLevel::Bright {
-                return Ok(LightLevel::Bright);
+                max_light = max_light.max(light_level);
+                if max_light == LightLevel::Bright {
+                    return Ok(LightLevel::Bright);
+                }
             }
         }
 
         // 檢查所有單位的 CarriesLight 效果
         for (unit_id, unit) in &self.units {
-            let Some(unit_pos) = self.unit_to_pos(*unit_id) else {
-                continue;
+            let unit_pos = match self.unit_to_pos(*unit_id) {
+                None => continue,
+                Some(p) => p,
             };
 
             let distance = manhattan_distance(pos, unit_pos);
@@ -522,11 +531,9 @@ mod inner {
             }
 
             // 檢查中間路徑是否有物件阻擋視線（一律使用 blocks_sight_from）
-            if let Some(tile) = board.get_tile(pos) {
-                if let Some(obj) = &tile.object {
-                    if obj.blocks_sight_from(from, pos) {
-                        return Ok(false);
-                    }
+            for obj in board.get_objects_at(pos) {
+                if obj.blocks_sight_from(from, pos) {
+                    return Ok(false);
                 }
             }
         }
@@ -707,7 +714,13 @@ mod tests {
 
     #[test]
     fn test_object_light_level_at_torch() {
-        let torch_lit = Object::Torch { lit: true };
+        let torch_lit = Object {
+            id: 1,
+            affected_positions: vec![],
+            object_type: ObjectType::Torch { lit: true },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
 
         // 距離 <= 1 (TORCH_BRIGHT_RANGE)：Bright
         assert_eq!(torch_lit.light_level_at(0), LightLevel::Bright);
@@ -722,14 +735,26 @@ mod tests {
         assert_eq!(torch_lit.light_level_at(10), LightLevel::Darkness);
 
         // 熄滅的火把：所有距離都是 Darkness
-        let torch_unlit = Object::Torch { lit: false };
+        let torch_unlit = Object {
+            id: 2,
+            affected_positions: vec![],
+            object_type: ObjectType::Torch { lit: false },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
         assert_eq!(torch_unlit.light_level_at(0), LightLevel::Darkness);
         assert_eq!(torch_unlit.light_level_at(3), LightLevel::Darkness);
     }
 
     #[test]
     fn test_object_light_level_at_campfire() {
-        let campfire_lit = Object::Campfire { lit: true };
+        let campfire_lit = Object {
+            id: 1,
+            affected_positions: vec![],
+            object_type: ObjectType::Campfire { lit: true },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
 
         // 距離 <= 6 (CAMPFIRE_BRIGHT_RANGE)：Bright
         assert_eq!(campfire_lit.light_level_at(0), LightLevel::Bright);
@@ -743,7 +768,13 @@ mod tests {
         assert_eq!(campfire_lit.light_level_at(13), LightLevel::Darkness);
 
         // 熄滅的營火：所有距離都是 Darkness
-        let campfire_unlit = Object::Campfire { lit: false };
+        let campfire_unlit = Object {
+            id: 2,
+            affected_positions: vec![],
+            object_type: ObjectType::Campfire { lit: false },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
         assert_eq!(campfire_unlit.light_level_at(0), LightLevel::Darkness);
         assert_eq!(campfire_unlit.light_level_at(6), LightLevel::Darkness);
     }
@@ -751,38 +782,83 @@ mod tests {
     #[test]
     fn test_object_light_level_at_non_light_objects() {
         // 其他物件不發光：所有距離都是 Darkness
-        assert_eq!(Object::Tree.light_level_at(0), LightLevel::Darkness);
-        assert_eq!(Object::Wall.light_level_at(0), LightLevel::Darkness);
-        assert_eq!(Object::Pit.light_level_at(0), LightLevel::Darkness);
-        assert_eq!(
-            Object::Cliff {
-                orientation: Orientation::Up
-            }
-            .light_level_at(0),
-            LightLevel::Darkness
-        );
+        let tree = Object {
+            id: 1,
+            affected_positions: vec![],
+            object_type: ObjectType::Tree,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert_eq!(tree.light_level_at(0), LightLevel::Darkness);
+
+        let wall = Object {
+            id: 2,
+            affected_positions: vec![],
+            object_type: ObjectType::Wall,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert_eq!(wall.light_level_at(0), LightLevel::Darkness);
+
+        let pit = Object {
+            id: 3,
+            affected_positions: vec![],
+            object_type: ObjectType::Pit,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert_eq!(pit.light_level_at(0), LightLevel::Darkness);
+
+        let cliff = Object {
+            id: 4,
+            affected_positions: vec![],
+            object_type: ObjectType::Cliff {
+                orientation: Orientation::Up,
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert_eq!(cliff.light_level_at(0), LightLevel::Darkness);
     }
 
     #[test]
     fn test_object_is_passable_light_sources() {
         // Torch（火把）可通行，Campfire（營火）不可通行
-        assert!(Object::Torch { lit: true }.is_passable());
-        assert!(Object::Torch { lit: false }.is_passable());
-        assert!(!Object::Campfire { lit: true }.is_passable());
-        assert!(!Object::Campfire { lit: false }.is_passable());
-    }
+        let torch_lit = Object {
+            id: 1,
+            affected_positions: vec![],
+            object_type: ObjectType::Torch { lit: true },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(torch_lit.is_passable());
 
-    #[test]
-    fn test_board_config_backward_compatibility() {
-        // 測試舊存檔（沒有 ambient_light）的兼容性
-        let json = r#"{
-            "tiles": [[{"terrain": "Plain", "object": null}]],
-            "teams": {},
-            "deployable": [],
-            "units": {}
-        }"#;
-        let config: BoardConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(config.ambient_light, LightLevel::Bright); // default
+        let torch_unlit = Object {
+            id: 2,
+            affected_positions: vec![],
+            object_type: ObjectType::Torch { lit: false },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(torch_unlit.is_passable());
+
+        let campfire_lit = Object {
+            id: 3,
+            affected_positions: vec![],
+            object_type: ObjectType::Campfire { lit: true },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(!campfire_lit.is_passable());
+
+        let campfire_unlit = Object {
+            id: 4,
+            affected_positions: vec![],
+            object_type: ObjectType::Campfire { lit: false },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(!campfire_unlit.is_passable());
     }
 
     #[test]
@@ -797,6 +873,7 @@ mod tests {
             ambient_light: LightLevel::Darkness,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects: BTreeMap::new(),
         };
 
         let skills = BTreeMap::new();
@@ -817,8 +894,19 @@ mod tests {
     #[test]
     fn test_get_light_level_torch_bright() {
         // Torch 3 格內為 Bright
-        let mut tiles = vec![vec![Tile::default(); 5]; 5];
-        tiles[2][2].object = Some(Object::Torch { lit: true });
+        let tiles = vec![vec![Tile::default(); 5]; 5];
+
+        let mut objects = BTreeMap::new();
+        objects.insert(
+            1,
+            Object {
+                id: 1,
+                affected_positions: vec![Pos { x: 2, y: 2 }],
+                object_type: ObjectType::Torch { lit: true },
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
 
         let config = BoardConfig {
             tiles,
@@ -826,6 +914,7 @@ mod tests {
             ambient_light: LightLevel::Darkness,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects,
         };
 
         let skills = BTreeMap::new();
@@ -859,8 +948,19 @@ mod tests {
     #[test]
     fn test_get_light_level_torch_dim() {
         // Torch 2-3 格為 Dim
-        let mut tiles = vec![vec![Tile::default(); 10]; 10];
-        tiles[5][5].object = Some(Object::Torch { lit: true });
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let mut objects = BTreeMap::new();
+        objects.insert(
+            1,
+            Object {
+                id: 1,
+                affected_positions: vec![Pos { x: 5, y: 5 }],
+                object_type: ObjectType::Torch { lit: true },
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
 
         let config = BoardConfig {
             tiles,
@@ -868,6 +968,7 @@ mod tests {
             ambient_light: LightLevel::Darkness,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects,
         };
 
         let skills = BTreeMap::new();
@@ -903,9 +1004,29 @@ mod tests {
     #[test]
     fn test_get_light_level_multiple_sources() {
         // 多光源重疊取最亮
-        let mut tiles = vec![vec![Tile::default(); 10]; 10];
-        tiles[2][2].object = Some(Object::Torch { lit: true });
-        tiles[5][5].object = Some(Object::Campfire { lit: true });
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let mut objects = BTreeMap::new();
+        objects.insert(
+            1,
+            Object {
+                id: 1,
+                affected_positions: vec![Pos { x: 2, y: 2 }],
+                object_type: ObjectType::Torch { lit: true },
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
+        objects.insert(
+            2,
+            Object {
+                id: 2,
+                affected_positions: vec![Pos { x: 5, y: 5 }],
+                object_type: ObjectType::Campfire { lit: true },
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
 
         let config = BoardConfig {
             tiles,
@@ -913,6 +1034,7 @@ mod tests {
             ambient_light: LightLevel::Darkness,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects,
         };
 
         let skills = BTreeMap::new();
@@ -936,39 +1058,6 @@ mod tests {
     }
 
     #[test]
-    fn test_rebuild_light_sources_cache() {
-        // 測試光源快取建立（快取所有 Torch/Campfire，不論是否點燃）
-        let mut tiles = vec![vec![Tile::default(); 5]; 5];
-        tiles[1][1].object = Some(Object::Torch { lit: true });
-        tiles[2][2].object = Some(Object::Campfire { lit: true });
-        tiles[3][3].object = Some(Object::Torch { lit: false }); // 熄滅的也計入快取
-
-        let config = BoardConfig {
-            tiles,
-            teams: BTreeMap::new(),
-            ambient_light: LightLevel::Bright,
-            deployable: BTreeSet::new(),
-            units: BTreeMap::new(),
-        };
-
-        let skills = BTreeMap::new();
-        struct EmptyGetter;
-        impl UnitTemplateGetter for EmptyGetter {
-            fn get(&self, _typ: &UnitTemplateType) -> Option<&UnitTemplate> {
-                None
-            }
-        }
-
-        let board = Board::from_config(config, &EmptyGetter, &skills).unwrap();
-
-        // 驗證快取（包含點燃和熄滅的）
-        assert_eq!(board.light_sources.len(), 3);
-        assert!(board.light_sources.contains(&Pos { x: 1, y: 1 }));
-        assert!(board.light_sources.contains(&Pos { x: 2, y: 2 }));
-        assert!(board.light_sources.contains(&Pos { x: 3, y: 3 })); // 熄滅的也在快取
-    }
-
-    #[test]
     fn test_get_light_level_carries_light() {
         use std::collections::BTreeSet;
         // 測試單位攜帶光源（CarriesLight 效果）
@@ -980,6 +1069,7 @@ mod tests {
             ambient_light: LightLevel::Darkness,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects: BTreeMap::new(),
         };
 
         let skills = BTreeMap::new();
@@ -1116,34 +1206,88 @@ mod tests {
         let obj_pos = Pos { x: 5, y: 5 };
 
         // 完全阻擋視線的物件
-        assert!(Object::Wall.blocks_sight_from(observer, obj_pos));
-        assert!(Object::Tree.blocks_sight_from(observer, obj_pos));
-        assert!(
-            Object::Tent2 {
+        let wall = Object {
+            id: 1,
+            affected_positions: vec![],
+            object_type: ObjectType::Wall,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(wall.blocks_sight_from(observer, obj_pos));
+
+        let tree = Object {
+            id: 2,
+            affected_positions: vec![],
+            object_type: ObjectType::Tree,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(tree.blocks_sight_from(observer, obj_pos));
+
+        let tent2 = Object {
+            id: 3,
+            affected_positions: vec![],
+            object_type: ObjectType::Tent2 {
                 orientation: Orientation::Up,
-                rel: Pos { x: 0, y: 0 }
-            }
-            .blocks_sight_from(observer, obj_pos)
-        );
-        assert!(
-            Object::Tent15 {
+                rel: Pos { x: 0, y: 0 },
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(tent2.blocks_sight_from(observer, obj_pos));
+
+        let tent15 = Object {
+            id: 4,
+            affected_positions: vec![],
+            object_type: ObjectType::Tent15 {
                 orientation: Orientation::Up,
-                rel: Pos { x: 0, y: 0 }
-            }
-            .blocks_sight_from(observer, obj_pos)
-        );
+                rel: Pos { x: 0, y: 0 },
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(tent15.blocks_sight_from(observer, obj_pos));
 
         // 不阻擋視線的物件
-        assert!(!Object::Pit.blocks_sight_from(observer, obj_pos));
-        assert!(!Object::Torch { lit: true }.blocks_sight_from(observer, obj_pos));
-        assert!(!Object::Campfire { lit: true }.blocks_sight_from(observer, obj_pos));
+        let pit = Object {
+            id: 5,
+            affected_positions: vec![],
+            object_type: ObjectType::Pit,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(!pit.blocks_sight_from(observer, obj_pos));
+
+        let torch = Object {
+            id: 6,
+            affected_positions: vec![],
+            object_type: ObjectType::Torch { lit: true },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(!torch.blocks_sight_from(observer, obj_pos));
+
+        let campfire = Object {
+            id: 7,
+            affected_positions: vec![],
+            object_type: ObjectType::Campfire { lit: true },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        assert!(!campfire.blocks_sight_from(observer, obj_pos));
     }
 
     #[test]
     fn test_cliff_blocks_sight_from_direction() {
         // Cliff 朝上（orientation: Up），表示懸崖下方在上方（北側），高地在下方（南側）
-        let cliff_up = Object::Cliff {
-            orientation: Orientation::Up,
+        let cliff_up = Object {
+            id: 1,
+            affected_positions: vec![],
+            object_type: ObjectType::Cliff {
+                orientation: Orientation::Up,
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
         };
         let cliff_pos = Pos { x: 5, y: 5 };
 
@@ -1160,8 +1304,14 @@ mod tests {
         assert!(!cliff_up.blocks_sight_from(Pos { x: 7, y: 5 }, cliff_pos));
 
         // Cliff 朝下（orientation: Down），表示懸崖下方在下方（南側），高地在上方（北側）
-        let cliff_down = Object::Cliff {
-            orientation: Orientation::Down,
+        let cliff_down = Object {
+            id: 2,
+            affected_positions: vec![],
+            object_type: ObjectType::Cliff {
+                orientation: Orientation::Down,
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
         };
 
         // 從上方（北側，高地）往下看：不被阻擋（從高地往低地看）
@@ -1171,8 +1321,14 @@ mod tests {
         assert!(cliff_down.blocks_sight_from(Pos { x: 5, y: 7 }, cliff_pos));
 
         // Cliff 朝左（orientation: Left），表示懸崖下方在左方（西側），高地在右方（東側）
-        let cliff_left = Object::Cliff {
-            orientation: Orientation::Left,
+        let cliff_left = Object {
+            id: 3,
+            affected_positions: vec![],
+            object_type: ObjectType::Cliff {
+                orientation: Orientation::Left,
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
         };
 
         // 從右方（東側，高地）往左看：不被阻擋（從高地往低地看）
@@ -1182,8 +1338,14 @@ mod tests {
         assert!(cliff_left.blocks_sight_from(Pos { x: 4, y: 5 }, cliff_pos));
 
         // Cliff 朝右（orientation: Right），表示懸崖下方在右方（東側），高地在左方（西側）
-        let cliff_right = Object::Cliff {
-            orientation: Orientation::Right,
+        let cliff_right = Object {
+            id: 4,
+            affected_positions: vec![],
+            object_type: ObjectType::Cliff {
+                orientation: Orientation::Right,
+            },
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
         };
 
         // 從左方（西側，高地）往右看：不被阻擋（從高地往低地看）
@@ -1196,10 +1358,20 @@ mod tests {
     #[test]
     fn test_has_line_of_sight_basic() {
         // 建立簡單棋盤
-        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+        let tiles = vec![vec![Tile::default(); 10]; 10];
 
         // 添加牆壁障礙物
-        tiles[5][5].object = Some(Object::Wall);
+        let mut objects = BTreeMap::new();
+        objects.insert(
+            1,
+            Object {
+                id: 1,
+                affected_positions: vec![Pos { x: 5, y: 5 }],
+                object_type: ObjectType::Wall,
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
 
         let config = BoardConfig {
             tiles,
@@ -1207,6 +1379,7 @@ mod tests {
             ambient_light: LightLevel::Bright,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects,
         };
 
         let skills = BTreeMap::new();
@@ -1235,12 +1408,22 @@ mod tests {
     #[test]
     fn test_has_line_of_sight_cliff_high_ground() {
         // 建立棋盤，測試 Cliff 高地視線
-        let mut tiles = vec![vec![Tile::default(); 10]; 10];
+        let tiles = vec![vec![Tile::default(); 10]; 10];
 
         // 在 (5, 5) 放置 Cliff，朝上（懸崖下方在北側，高地在南側）
-        tiles[5][5].object = Some(Object::Cliff {
-            orientation: Orientation::Up,
-        });
+        let mut objects = BTreeMap::new();
+        objects.insert(
+            1,
+            Object {
+                id: 1,
+                affected_positions: vec![Pos { x: 5, y: 5 }],
+                object_type: ObjectType::Cliff {
+                    orientation: Orientation::Up,
+                },
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
 
         let config = BoardConfig {
             tiles,
@@ -1248,6 +1431,7 @@ mod tests {
             ambient_light: LightLevel::Bright,
             deployable: BTreeSet::new(),
             units: BTreeMap::new(),
+            objects,
         };
 
         let skills = BTreeMap::new();
@@ -1273,8 +1457,19 @@ mod tests {
     #[test]
     fn test_can_see_target_physical_blocked() {
         // 測試物理視線被阻擋
-        let mut tiles = vec![vec![Tile::default(); 10]; 10];
-        tiles[5][5].object = Some(Object::Wall); // 中間有牆
+        let tiles = vec![vec![Tile::default(); 10]; 10];
+
+        let mut objects = BTreeMap::new();
+        objects.insert(
+            1,
+            Object {
+                id: 1,
+                affected_positions: vec![Pos { x: 5, y: 5 }],
+                object_type: ObjectType::Wall, // 中間有牆
+                duration: -1,
+                creator_team: TEAM_NONE.to_string(),
+            },
+        );
 
         let mut units = BTreeMap::new();
         units.insert(
@@ -1293,6 +1488,7 @@ mod tests {
             ambient_light: LightLevel::Bright,
             deployable: BTreeSet::new(),
             units,
+            objects,
         };
 
         let skills = BTreeMap::new();
@@ -1345,6 +1541,7 @@ mod tests {
             ambient_light: LightLevel::Bright,
             deployable: BTreeSet::new(),
             units,
+            objects: BTreeMap::new(),
         };
 
         let skills = BTreeMap::new();
@@ -1397,6 +1594,7 @@ mod tests {
             ambient_light: LightLevel::Darkness, // 黑暗環境
             deployable: BTreeSet::new(),
             units,
+            objects: BTreeMap::new(),
         };
 
         let skills = BTreeMap::new();
@@ -1451,6 +1649,7 @@ mod tests {
             ambient_light: LightLevel::Darkness, // 黑暗環境
             deployable: BTreeSet::new(),
             units,
+            objects: BTreeMap::new(),
         };
 
         let mut skills = BTreeMap::new();

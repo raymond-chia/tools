@@ -254,57 +254,76 @@ mod inner {
         step: (isize, isize),
         unit_type: &str,
     ) -> PushResult {
-        let tile = match board.get_tile(next_pos) {
-            Some(t) => t,
-            None => {
-                return PushResult::Stopped(format!("單位 {} 被推到邊界並停止", unit_type));
-            }
+        if board.get_tile(next_pos).is_none() {
+            return PushResult::Stopped(format!("單位 {} 被推到邊界並停止", unit_type));
         };
 
-        match &tile.object {
-            Some(Object::Cliff { orientation }) => {
-                // 檢查推擠方向是否與 Cliff 方向一致
-                let direction_matches = match orientation {
-                    Orientation::Up => step.1 < 0,    // 往上推
-                    Orientation::Down => step.1 > 0,  // 往下推
-                    Orientation::Left => step.0 < 0,  // 往左推
-                    Orientation::Right => step.0 > 0, // 往右推
-                };
+        // 檢查所有物體是否允許推擠通過
+        let mut has_push_through = false;
 
-                // 方向不一致，無法越過 Cliff
-                if !direction_matches {
-                    return PushResult::Stopped(format!("單位 {} 被推到懸崖並停止", unit_type));
+        for obj in &board.get_objects_at(next_pos) {
+            match &obj.object_type {
+                ObjectType::Cliff { orientation } => {
+                    // 檢查推擠方向是否與 Cliff 方向一致
+                    let direction_matches = match orientation {
+                        Orientation::Up => step.1 < 0,    // 往上推
+                        Orientation::Down => step.1 > 0,  // 往下推
+                        Orientation::Left => step.0 < 0,  // 往左推
+                        Orientation::Right => step.0 > 0, // 往右推
+                    };
+
+                    // 方向不一致，無法越過 Cliff
+                    if !direction_matches {
+                        return PushResult::Stopped(format!("單位 {} 被推到懸崖並停止", unit_type));
+                    }
+
+                    // 記錄有推穿過去的效果
+                    has_push_through = true;
                 }
-
-                // 方向一致，越過 Cliff 到下一格
-                let beyond_x = next_pos.x as isize + step.0;
-                let beyond_y = next_pos.y as isize + step.1;
-
-                // 檢查左上邊界
-                if beyond_x < 0 || beyond_y < 0 {
-                    return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
+                ObjectType::Pit => {
+                    // Pit 允許推入
                 }
-
-                let beyond_pos = Pos {
-                    x: beyond_x as usize,
-                    y: beyond_y as usize,
-                };
-
-                // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
-                if board.get_tile(beyond_pos).is_none() {
-                    return PushResult::Stopped(format!("單位 {} 越過懸崖後會到達邊界", unit_type));
-                }
-
-                PushResult::Destination(beyond_pos)
-            }
-            Some(Object::Pit) => PushResult::Destination(next_pos),
-            _ => {
-                if !tile.object.as_ref().map_or(true, |obj| obj.is_passable()) {
-                    PushResult::Stopped(format!("單位 {} 被推到障礙物並停止", unit_type))
-                } else {
-                    PushResult::Destination(next_pos)
+                ObjectType::Tree
+                | ObjectType::Wall
+                | ObjectType::Tent2 { .. }
+                | ObjectType::Tent15 { .. }
+                | ObjectType::Torch { .. }
+                | ObjectType::Campfire { .. } => {
+                    if !obj.is_passable() {
+                        return PushResult::Stopped(format!(
+                            "單位 {} 被推到障礙物並停止",
+                            unit_type
+                        ));
+                    }
                 }
             }
+        }
+
+        // 決定目標位置
+        if has_push_through {
+            // 推穿過去到下一格
+            let beyond_x = next_pos.x as isize + step.0;
+            let beyond_y = next_pos.y as isize + step.1;
+
+            // 檢查左上邊界
+            if beyond_x < 0 || beyond_y < 0 {
+                return PushResult::Stopped(format!("單位 {} 推穿過去後會到達邊界", unit_type));
+            }
+
+            let beyond_pos = Pos {
+                x: beyond_x as usize,
+                y: beyond_y as usize,
+            };
+
+            // 檢查右下邊界（用 get_tile 判斷是否超出棋盤）
+            if board.get_tile(beyond_pos).is_none() {
+                return PushResult::Stopped(format!("單位 {} 推穿過去後會到達邊界", unit_type));
+            }
+
+            PushResult::Destination(beyond_pos)
+        } else {
+            // 無推穿效果或只有 Pit/可通行物體，推到 next_pos
+            PushResult::Destination(next_pos)
         }
     }
 
@@ -371,14 +390,16 @@ mod inner {
             pushed += 1;
 
             // 檢查掉落
-            if let Some(tile) = board.get_tile(final_pos) {
-                if matches!(tile.object, Some(Object::Pit)) {
-                    // 單位掉落坑洞，立即死亡
-                    if let Some(unit) = board.units.get_mut(&unit_id) {
-                        unit.hp = 0;
-                    }
-                    return Some(format!("單位 {} 被推入坑洞並墜落死亡！", unit_type));
+            if board
+                .get_objects_at(final_pos)
+                .iter()
+                .any(|obj| matches!(obj.object_type, ObjectType::Pit))
+            {
+                // 單位掉落坑洞，立即死亡
+                if let Some(unit) = board.units.get_mut(&unit_id) {
+                    unit.hp = 0;
                 }
+                return Some(format!("單位 {} 被推入坑洞並墜落死亡！", unit_type));
             }
         }
 
@@ -532,9 +553,26 @@ mod tests {
             unit_map,
             units,
             ambient_light: LightLevel::default(),
-            light_sources: Vec::new(),
+            objects: HashMap::new(),
+            pos_to_object: HashMap::new(),
         };
         (board, unit_id, skills)
+    }
+
+    /// 輔助函數：在指定位置添加物體
+    fn add_object_to_board(board: &mut Board, pos: Pos, object_type: ObjectType) {
+        use rand::Rng;
+        let mut rng = rand::rng();
+        let obj_id = rng.random_range(0..u32::MAX);
+        let obj = Object {
+            id: obj_id,
+            affected_positions: vec![pos],
+            object_type,
+            duration: -1,
+            creator_team: TEAM_NONE.to_string(),
+        };
+        board.pos_to_object.entry(pos).or_default().push(obj_id);
+        board.objects.insert(obj_id, obj);
     }
 
     #[test]
@@ -723,8 +761,8 @@ mod tests {
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
-        // 在 (1,3) 放置 Pit
-        board.tiles[3][1].object = Some(Object::Pit);
+        // 在 (1,3) 放置 Pit（使用輔助函數同步到新系統）
+        add_object_to_board(&mut board, Pos { x: 1, y: 3 }, ObjectType::Pit);
 
         let effect = Effect::Shove {
             target_type: TargetType::Enemy,
@@ -760,12 +798,16 @@ mod tests {
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
         // 在 (1,3) 放置向下的 Cliff
-        board.tiles[3][1].object = Some(Object::Cliff {
-            orientation: Orientation::Down,
-        });
+        add_object_to_board(
+            &mut board,
+            Pos { x: 1, y: 3 },
+            ObjectType::Cliff {
+                orientation: Orientation::Down,
+            },
+        );
 
         // 在 (1,4) 放置 Pit
-        board.tiles[4][1].object = Some(Object::Pit);
+        add_object_to_board(&mut board, Pos { x: 1, y: 4 }, ObjectType::Pit);
 
         let effect = Effect::Shove {
             target_type: TargetType::Enemy,
@@ -801,9 +843,13 @@ mod tests {
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
         // 在 (1,3) 放置向上的 Cliff（但推擠方向是向下）
-        board.tiles[3][1].object = Some(Object::Cliff {
-            orientation: Orientation::Up,
-        });
+        add_object_to_board(
+            &mut board,
+            Pos { x: 1, y: 3 },
+            ObjectType::Cliff {
+                orientation: Orientation::Up,
+            },
+        );
 
         let effect = Effect::Shove {
             target_type: TargetType::Enemy,
@@ -838,9 +884,13 @@ mod tests {
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
         // 在 (1,3) 放置向下的 Cliff
-        board.tiles[3][1].object = Some(Object::Cliff {
-            orientation: Orientation::Down,
-        });
+        add_object_to_board(
+            &mut board,
+            Pos { x: 1, y: 3 },
+            ObjectType::Cliff {
+                orientation: Orientation::Down,
+            },
+        );
 
         let effect = Effect::Shove {
             target_type: TargetType::Enemy,
