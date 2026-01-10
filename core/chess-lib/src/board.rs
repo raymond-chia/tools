@@ -47,8 +47,8 @@ pub enum ObjectType {
     Wall,
     Cliff { orientation: Orientation },
     Pit,
-    Tent2 { orientation: Orientation, rel: Pos },
-    Tent15 { orientation: Orientation, rel: Pos },
+    Tent2 { orientation: Orientation },
+    Tent15 { orientation: Orientation },
     Torch { lit: bool },
     Campfire { lit: bool },
 }
@@ -1229,7 +1229,6 @@ mod tests {
             affected_positions: vec![],
             object_type: ObjectType::Tent2 {
                 orientation: Orientation::Up,
-                rel: Pos { x: 0, y: 0 },
             },
             duration: -1,
             creator_team: TEAM_NONE.to_string(),
@@ -1241,7 +1240,6 @@ mod tests {
             affected_positions: vec![],
             object_type: ObjectType::Tent15 {
                 orientation: Orientation::Up,
-                rel: Pos { x: 0, y: 0 },
             },
             duration: -1,
             creator_team: TEAM_NONE.to_string(),

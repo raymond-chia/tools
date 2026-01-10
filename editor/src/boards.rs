@@ -1955,22 +1955,12 @@ fn paint_object(
             ObjectType::Pit => apply_single(Some(ObjectType::Pit)),
             ObjectType::Torch { .. } => apply_single(Some(ObjectType::Torch { lit })),
             ObjectType::Campfire { .. } => apply_single(Some(ObjectType::Campfire { lit })),
-            ObjectType::Tent2 { .. } => paint_multiple_object(
-                board,
-                pos,
-                ObjectType::Tent2 {
-                    orientation,
-                    rel: Pos { x: 0, y: 0 },
-                },
-            ),
-            ObjectType::Tent15 { .. } => paint_multiple_object(
-                board,
-                pos,
-                ObjectType::Tent15 {
-                    orientation,
-                    rel: Pos { x: 0, y: 0 },
-                },
-            ),
+            ObjectType::Tent2 { .. } => {
+                paint_multiple_object(board, pos, ObjectType::Tent2 { orientation })
+            }
+            ObjectType::Tent15 { .. } => {
+                paint_multiple_object(board, pos, ObjectType::Tent15 { orientation })
+            }
         },
     }
 }
@@ -2020,19 +2010,16 @@ fn paint_multiple_object(
         }
     }
 
-    // 為每個位置創建物件（多格物件的每個格子都需要獨立的 Object）
-    for pos in &positions {
-        let rel = Pos {
-            x: pos.x - main_pos.x,
-            y: pos.y - main_pos.y,
-        };
-        let obj_type = match object_type {
-            ObjectType::Tent2 { orientation, .. } => ObjectType::Tent2 { orientation, rel },
-            ObjectType::Tent15 { orientation, .. } => ObjectType::Tent15 { orientation, rel },
-            _ => unreachable!(),
-        };
-        create_object_at_pos(board, *pos, obj_type);
-    }
+    // 創建一個物件，包含所有位置
+    let id = generate_unique_object_id(board);
+    let new_obj = Object {
+        id,
+        affected_positions: positions,
+        object_type,
+        duration: -1,
+        creator_team: TEAM_NONE.to_string(),
+    };
+    board.objects.insert(id, new_obj);
     Ok(())
 }
 
