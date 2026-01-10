@@ -2146,6 +2146,17 @@ fn fill_selected_area(
                     remove_objects_at_pos(board, pos);
                 }
                 Some(obj) => {
+                    // 檢查位置是否已有物件，如果有則跳過
+                    let has_object = board
+                        .objects
+                        .values()
+                        .any(|obj| obj.affected_positions.contains(&pos));
+
+                    if has_object {
+                        skipped += 1;
+                        continue;
+                    }
+
                     let object_type = match obj {
                         ObjectType::Tree => ObjectType::Tree,
                         ObjectType::Wall => ObjectType::Wall,
