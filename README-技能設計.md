@@ -257,7 +257,7 @@
    - 實作 ObjectType 行為方法
    - 更新序列化格式
 
-2. **Phase 2: TurnEntity 和回合系統**
+2. **Phase 2: TurnEntity 和回合系統** (已完成)
 
    - 定義 TurnEntity 枚舉
    - 修改 Battle.turn_order 類型

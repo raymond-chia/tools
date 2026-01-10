@@ -282,12 +282,7 @@ impl BoardsEditor {
             return;
         };
         let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
-        show_tiles(
-            ui,
-            &mut self.camera,
-            &board.tiles,
-            show_static_others(board),
-        );
+        show_tiles(ui, &mut self.camera, board, show_static_others(board));
 
         // 繪製選取範圍外框
         if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
@@ -371,10 +366,7 @@ impl BoardsEditor {
             }
             BrushMode::Unit => {
                 let marker = if let Some(template_type) = &self.selected_unit {
-                    let mut rng = rand::rng();
-                    // 數字太大無法存入 toml
-                    // 使用 u32 max 當作 ID 上限
-                    let id = rng.random_range(0..u32::MAX);
+                    let id = generate_unique_unit_id(board);
                     Some(UnitMarker {
                         id,
                         unit_template_type: template_type.clone(),
@@ -410,8 +402,12 @@ impl BoardsEditor {
 
     fn show_sim(&mut self, ui: &mut Ui) {
         // 取得當前回合角色
-        let active_unit_id = match self.sim_battle.get_current_unit_id() {
-            Some(id) => *id,
+        let active_unit_id = match self.sim_battle.get_current_entity() {
+            Some(TurnEntity::Unit(id)) => *id,
+            Some(TurnEntity::Object(_)) => {
+                self.set_status("當前回合是物件，無法顯示".to_string(), true);
+                return;
+            }
             None => {
                 self.set_status(
                     format!(
@@ -481,7 +477,7 @@ impl BoardsEditor {
             show_tiles(
                 ui,
                 &mut self.camera,
-                &self.sim_board.tiles,
+                &self.sim_board,
                 show_skill_area_others(&self.sim_board, &casting_area, &affect_area),
             );
 
@@ -536,7 +532,7 @@ impl BoardsEditor {
             show_tiles(
                 ui,
                 &mut self.camera,
-                &self.sim_board.tiles,
+                &self.sim_board,
                 show_sim_others(&self.sim_board, &movable, &active_unit_id, &path),
             );
 
@@ -841,12 +837,9 @@ impl BoardsEditor {
                     self.selected_orientation,
                     self.selected_object_lit,
                 ) {
-                    Ok((success, skipped)) => {
+                    Ok(skipped) => {
                         self.has_unsaved_changes = true;
-                        status_msg = Some((
-                            format!("填滿完成：成功 {} 格，跳過 {} 格", success, skipped),
-                            skipped > 0,
-                        ));
+                        status_msg = Some((format!("填滿完成：跳過 {skipped} 格"), skipped > 0));
                     }
                     Err(err) => {
                         status_msg = Some((format!("填滿失敗：{}", err), true));
@@ -1234,7 +1227,10 @@ impl BoardsEditor {
                     .collect::<Vec<_>>();
                 let mut turn_order = turn_order;
                 turn_order.sort_by(|a, b| b.1.cmp(&a.1)); // 由大到小排序
-                let turn_order = turn_order.into_iter().map(|(id, _)| id).collect();
+                let turn_order: Vec<TurnEntity> = turn_order
+                    .into_iter()
+                    .map(|(id, _)| TurnEntity::Unit(id))
+                    .collect();
 
                 self.sim_board = board;
                 self.sim_battle = Battle::new(turn_order);
@@ -1250,8 +1246,12 @@ impl BoardsEditor {
     }
 
     fn show_sim_status(&mut self, ui: &mut Ui) {
-        let unit_id = match self.sim_battle.get_current_unit_id() {
-            Some(&id) => id,
+        let unit_id = match self.sim_battle.get_current_entity() {
+            Some(TurnEntity::Unit(id)) => *id,
+            Some(TurnEntity::Object(_)) => {
+                self.set_status("當前回合是物件，無法顯示狀態".to_string(), true);
+                return;
+            }
             None => {
                 self.set_status(
                     format!(
@@ -1436,37 +1436,52 @@ impl BoardsEditor {
         };
         let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
 
-        // 收集所有物件位置
-        let mut objects = vec![];
-        for (y, row) in board.tiles.iter().enumerate() {
-            for (x, tile) in row.iter().enumerate() {
-                if tile.object.is_some() {
-                    objects.push((Pos { x, y }, tile.object.clone()));
-                }
-            }
-        }
+        // 收集有效位置的物件（過濾掉會被移除的）
+        let objects_to_update: Vec<(ObjectID, Object)> = board
+            .objects
+            .iter()
+            .filter_map(|(&id, obj)| {
+                let new_positions: Vec<Pos> = obj
+                    .affected_positions
+                    .iter()
+                    .filter_map(|pos| {
+                        let new_x = pos.x as i32 + dx;
+                        let new_y = pos.y as i32 + dy;
+                        if new_x >= 0
+                            && new_y >= 0
+                            && (new_x as usize) < board.width()
+                            && (new_y as usize) < board.height()
+                        {
+                            Some(Pos {
+                                x: new_x as usize,
+                                y: new_y as usize,
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
 
-        // 清除所有物件
-        clear_all_objects(board);
-
-        // 重新放置到新位置
-        for (pos, obj) in objects {
-            let new_x = pos.x as i32 + dx;
-            let new_y = pos.y as i32 + dy;
-            if new_x >= 0
-                && new_y >= 0
-                && (new_x as usize) < board.width()
-                && (new_y as usize) < board.height()
-            {
-                let new_pos = Pos {
-                    x: new_x as usize,
-                    y: new_y as usize,
-                };
-                if let Some(tile) = board.get_tile_mut(new_pos) {
-                    tile.object = obj;
+                // 只保留有有效位置的物件，避免不必要的 clone
+                if new_positions.is_empty() {
+                    None
+                } else {
+                    let mut new_obj = obj.clone();
+                    new_obj.affected_positions = new_positions;
+                    Some((id, new_obj))
                 }
-            }
-            // 如果超出邊界，忽略
+            })
+            .collect();
+
+        // 收集要保留的物件 id
+        let ids_to_keep: HashSet<_> = objects_to_update.iter().map(|(id, _)| *id).collect();
+
+        // 移除所有位置都超出邊界的物件
+        board.objects.retain(|id, _| ids_to_keep.contains(id));
+
+        // 更新保留的物件
+        for (id, obj) in objects_to_update {
+            board.objects.insert(id, obj);
         }
 
         self.has_unsaved_changes = true;
@@ -1586,9 +1601,9 @@ fn draw_tile_border_and_background(painter: &Painter, rect: Rect, tile: &Tile, z
 }
 
 // - draw_tile_object: 負責在格子上繪製物件符號（若有）
-fn draw_tile_object(painter: &Painter, rect: Rect, tile: &Tile, zoom: f32) {
+fn draw_tile_object(painter: &Painter, rect: Rect, object: Option<&ObjectType>, zoom: f32) {
     // 畫 tile object（若有）
-    let symbol = object_symbol(tile);
+    let symbol = object_symbol(object);
     if symbol.is_empty() {
         return;
     }
@@ -1604,10 +1619,70 @@ fn draw_tile_object(painter: &Painter, rect: Rect, tile: &Tile, zoom: f32) {
     );
 }
 
+/// 抽象棋盤視圖介面，統一 BoardConfig 和 Board 的渲染操作
+trait BoardView {
+    /// 取得所有地塊的參照
+    fn tiles(&self) -> &Vec<Vec<Tile>>;
+
+    /// 取得所有物件的迭代器
+    fn objects(&self) -> Box<dyn Iterator<Item = &Object> + '_>;
+
+    /// 根據位置查找單位資訊，返回 (unit_template_type, team_id)
+    fn find_unit_at(&self, pos: Pos) -> Option<(&str, &str)>;
+
+    /// 根據 team_id 查找隊伍
+    fn get_team(&self, team_id: &str) -> Option<&Team>;
+}
+
+impl BoardView for BoardConfig {
+    fn tiles(&self) -> &Vec<Vec<Tile>> {
+        &self.tiles
+    }
+
+    fn objects(&self) -> Box<dyn Iterator<Item = &Object> + '_> {
+        Box::new(self.objects.values())
+    }
+
+    fn find_unit_at(&self, pos: Pos) -> Option<(&str, &str)> {
+        // BoardConfig: O(n) 線性搜尋
+        self.units
+            .values()
+            .find(|u| u.pos == pos)
+            .map(|u| (u.unit_template_type.as_str(), u.team.as_str()))
+    }
+
+    fn get_team(&self, team_id: &str) -> Option<&Team> {
+        self.teams.get(team_id)
+    }
+}
+
+impl BoardView for Board {
+    fn tiles(&self) -> &Vec<Vec<Tile>> {
+        &self.tiles
+    }
+
+    fn objects(&self) -> Box<dyn Iterator<Item = &Object> + '_> {
+        Box::new(self.objects.values())
+    }
+
+    fn find_unit_at(&self, pos: Pos) -> Option<(&str, &str)> {
+        // Board: O(1) hash 查找
+        self.pos_to_unit(pos).and_then(|unit_id| {
+            self.units
+                .get(&unit_id)
+                .map(|u| (u.unit_template_type.as_str(), u.team.as_str()))
+        })
+    }
+
+    fn get_team(&self, team_id: &str) -> Option<&Team> {
+        self.teams.get(team_id)
+    }
+}
+
 fn show_tiles(
     ui: &mut Ui,
     camera: &mut Camera2D,
-    tiles: &[Vec<Tile>],
+    board: &impl BoardView,
     show_others: impl Fn(&Painter, &Camera2D, Pos, Rect),
 ) {
     // 處理攝影機平移與縮放
@@ -1618,7 +1693,7 @@ fn show_tiles(
     let painter = ui.painter();
     let zoom = camera.zoom;
     let tile_size = vec2(TILE_SIZE, TILE_SIZE) * zoom;
-    for (row_idx, row) in tiles.iter().enumerate() {
+    for (row_idx, row) in board.tiles().iter().enumerate() {
         for (col_idx, tile) in row.iter().enumerate() {
             // 計算世界座標與螢幕矩形
             let world_pos = Pos2::new(col_idx as f32, row_idx as f32) * TILE_SIZE;
@@ -1636,7 +1711,11 @@ fn show_tiles(
             show_others(painter, camera, pos, rect);
 
             // 繪製格子上的物件（若有）
-            draw_tile_object(painter, rect, tile, zoom);
+            let object = board
+                .objects()
+                .find(|obj| obj.affected_positions.contains(&pos))
+                .map(|obj| &obj.object_type);
+            draw_tile_object(painter, rect, object, zoom);
         }
     }
 }
@@ -1654,54 +1733,20 @@ fn show_static_others(board: &BoardConfig) -> impl Fn(&Painter, &Camera2D, Pos, 
                 Color32::LIGHT_BLUE,
             );
         }
-        // 顯示單位（BoardConfig 沒有 pos_to_unit，因此以線性搜尋）
-        draw_unit_on_config(board, painter, camera, pos, rect);
+        // 顯示單位
+        draw_unit(board, painter, camera, pos, rect);
     }
 }
 
-/// 針對 Board 的單位繪製共用實作
-fn draw_unit_on_board(board: &Board, painter: &Painter, camera: &Camera2D, pos: Pos, rect: Rect) {
-    let Some(unit_id) = board.pos_to_unit(pos) else {
+/// 統一的單位繪製函數，支援 BoardConfig 和 Board
+fn draw_unit(board: &impl BoardView, painter: &Painter, camera: &Camera2D, pos: Pos, rect: Rect) {
+    let (unit_template, team) = match board.find_unit_at(pos) {
         // 該位置沒有單位
-        return;
-    };
-    let (unit_template, team) = board
-        .units
-        .get(&unit_id)
-        .map_or(("", ""), |u| (&u.unit_template_type, &u.team));
-    let team_color = board
-        .teams
-        .get(team)
-        .map_or(Color32::WHITE, |team| to_egui_color(team.color));
-    painter.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        unit_symbol(&unit_template).as_ref(),
-        FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
-        team_color,
-    );
-}
-
-/// 針對 BoardConfig 的單位繪製（BoardConfig 沒有 pos_to_unit helper，因此以 values() 找到對應 pos）
-fn draw_unit_on_config(
-    board: &BoardConfig,
-    painter: &Painter,
-    camera: &Camera2D,
-    pos: Pos,
-    rect: Rect,
-) {
-    let (unit_template, team) = match board
-        .units
-        .values()
-        .find(|u| u.pos == pos)
-        .map(|u| (&u.unit_template_type, &u.team))
-    {
-        None => return, // 該位置沒有單位
-        Some(v) => v,
+        None => return,
+        Some(u) => u,
     };
     let team_color = board
-        .teams
-        .get(team)
+        .get_team(team)
         .map_or(Color32::WHITE, |team| to_egui_color(team.color));
     painter.text(
         rect.center(),
@@ -1758,7 +1803,7 @@ fn show_sim_others(
         }
 
         // 顯示單位（使用共用函式）
-        draw_unit_on_board(board, painter, camera, pos, rect);
+        draw_unit(board, painter, camera, pos, rect);
     }
 }
 
@@ -1787,7 +1832,7 @@ fn show_skill_area_others(
             );
         }
         // 顯示單位（使用共用函式）
-        draw_unit_on_board(board, painter, camera, pos, rect);
+        draw_unit(board, painter, camera, pos, rect);
     }
 }
 
@@ -1885,11 +1930,19 @@ fn paint_object(
     lit: bool,
 ) -> Result<(), String> {
     // helper: 放置單格物件
-    let mut apply_single = |obj: Option<ObjectType>| {
-        board
-            .get_tile_mut(pos)
-            .unwrap_or_else(|| panic!("painting in race condition. {:?} in {:?}", obj, pos))
-            .object = obj.clone();
+    let mut apply_single = |obj_type: Option<ObjectType>| -> Result<(), String> {
+        // 檢查位置是否有效
+        if board.get_tile(pos).is_none() {
+            return Err(format!("位置超出邊界: {:?}", pos));
+        }
+
+        // 移除該位置上的所有物件
+        remove_objects_at_pos(board, pos);
+
+        // 如果有新物件，創建它
+        if let Some(obj_type) = obj_type {
+            create_object_at_pos(board, pos, obj_type);
+        }
         Ok(())
     };
 
@@ -1902,69 +1955,83 @@ fn paint_object(
             ObjectType::Pit => apply_single(Some(ObjectType::Pit)),
             ObjectType::Torch { .. } => apply_single(Some(ObjectType::Torch { lit })),
             ObjectType::Campfire { .. } => apply_single(Some(ObjectType::Campfire { lit })),
-            ObjectType::Tent2 { .. } => {
-                let (w, h) = match orientation {
-                    Orientation::Left | Orientation::Right => (2, 1),
-                    Orientation::Up | Orientation::Down => (1, 2),
-                };
-                paint_multiple_object(board, pos, (w, h), |rel| ObjectType::Tent2 {
+            ObjectType::Tent2 { .. } => paint_multiple_object(
+                board,
+                pos,
+                ObjectType::Tent2 {
                     orientation,
-                    rel,
-                })
-            }
-            ObjectType::Tent15 { .. } => {
-                let (w, h) = match orientation {
-                    Orientation::Left | Orientation::Right => (5, 3),
-                    Orientation::Up | Orientation::Down => (3, 5),
-                };
-                paint_multiple_object(board, pos, (w, h), |rel| ObjectType::Tent15 {
+                    rel: Pos { x: 0, y: 0 },
+                },
+            ),
+            ObjectType::Tent15 { .. } => paint_multiple_object(
+                board,
+                pos,
+                ObjectType::Tent15 {
                     orientation,
-                    rel,
-                })
-            }
+                    rel: Pos { x: 0, y: 0 },
+                },
+            ),
         },
     }
 }
 
-fn paint_multiple_object<F>(
+fn paint_multiple_object(
     board: &mut BoardConfig,
     main_pos: Pos,
-    size: (usize, usize),
-    make_object: F,
-) -> Result<(), String>
-where
-    F: Fn(Pos) -> ObjectType,
-{
+    object_type: ObjectType,
+) -> Result<(), String> {
+    // 根據物件類型和方向計算尺寸
+    let (w, h) = match &object_type {
+        ObjectType::Tent2 { orientation, .. } => match orientation {
+            Orientation::Left | Orientation::Right => (2, 1),
+            Orientation::Up | Orientation::Down => (1, 2),
+        },
+        ObjectType::Tent15 { orientation, .. } => match orientation {
+            Orientation::Left | Orientation::Right => (5, 3),
+            Orientation::Up | Orientation::Down => (3, 5),
+        },
+        _ => return Err("不支援的物件類型".to_string()),
+    };
+
     // 整理要放到哪些格子
-    let (w, h) = size;
     let mut positions = Vec::new();
     for dx in 0..w {
         for dy in 0..h {
-            positions.push(Pos {
+            let pos = Pos {
                 x: main_pos.x + dx,
                 y: main_pos.y + dy,
-            });
+            };
+            positions.push(pos);
         }
     }
 
-    // 檢查
+    // 檢查所有位置是否有效且沒有物件
     for pos in &positions {
-        let Some(tile) = board.get_tile(*pos) else {
-            return Err("some tiles are out of bounds".to_string());
-        };
-        if tile.object.is_some() {
-            return Err("some tiles already have objects".to_string());
+        if board.get_tile(*pos).is_none() {
+            return Err("某些格子超出邊界".to_string());
+        }
+        // 檢查是否有物件佔據該位置
+        if board
+            .objects
+            .values()
+            .any(|obj| obj.affected_positions.contains(pos))
+        {
+            return Err("某些格子已經有物件".to_string());
         }
     }
 
-    // 放置物件
+    // 為每個位置創建物件（多格物件的每個格子都需要獨立的 Object）
     for pos in &positions {
-        let tile = board.get_tile_mut(*pos).expect("just checked");
         let rel = Pos {
             x: pos.x - main_pos.x,
             y: pos.y - main_pos.y,
         };
-        tile.object = Some(make_object(rel));
+        let obj_type = match object_type {
+            ObjectType::Tent2 { orientation, .. } => ObjectType::Tent2 { orientation, rel },
+            ObjectType::Tent15 { orientation, .. } => ObjectType::Tent15 { orientation, rel },
+            _ => unreachable!(),
+        };
+        create_object_at_pos(board, *pos, obj_type);
     }
     Ok(())
 }
@@ -1997,11 +2064,60 @@ fn paint_unit(board: &mut BoardConfig, pos: Pos, unit: Option<UnitMarker>) -> Re
 }
 
 fn clear_all_objects(board: &mut BoardConfig) {
-    for row in &mut board.tiles {
-        for tile in row {
-            tile.object = None;
+    board.objects.clear();
+}
+
+/// 生成隨機 ID（內部使用）
+/// 數字太大無法存入 toml，使用 u32 max 當作 ID 上限
+fn generate_random_id() -> u32 {
+    let mut rng = rand::rng();
+    rng.random_range(0..u32::MAX)
+}
+
+/// 生成唯一的 ObjectID（檢查重複）
+fn generate_unique_object_id(board: &BoardConfig) -> ObjectID {
+    loop {
+        let id = generate_random_id();
+        if !board.objects.contains_key(&id) {
+            return id;
         }
     }
+}
+
+/// 生成唯一的 Unit ID（檢查重複）
+fn generate_unique_unit_id(board: &BoardConfig) -> u32 {
+    loop {
+        let id = generate_random_id();
+        if !board.units.iter().any(|(_, u)| u.id == id) {
+            return id;
+        }
+    }
+}
+
+/// 移除指定位置的所有物件
+fn remove_objects_at_pos(board: &mut BoardConfig, pos: Pos) {
+    let objects_to_remove: Vec<ObjectID> = board
+        .objects
+        .iter()
+        .filter(|(_, obj)| obj.affected_positions.contains(&pos))
+        .map(|(id, _)| *id)
+        .collect();
+    for id in objects_to_remove {
+        board.objects.remove(&id);
+    }
+}
+
+/// 在指定位置創建物件
+fn create_object_at_pos(board: &mut BoardConfig, pos: Pos, object_type: ObjectType) {
+    let id = generate_unique_object_id(board);
+    let new_obj = Object {
+        id,
+        affected_positions: vec![pos],
+        object_type,
+        duration: -1,
+        creator_team: TEAM_NONE.to_string(),
+    };
+    board.objects.insert(id, new_obj);
 }
 
 /// 填滿選取範圍（僅支援單格物件 Wall/Tree）
@@ -2012,7 +2128,7 @@ fn fill_selected_area(
     object: Option<&ObjectType>,
     orientation: Orientation,
     lit: bool,
-) -> Result<(usize, usize), String> {
+) -> Result<usize, String> {
     let (min_x, max_x) = if rect_start.x <= rect_end.x {
         (rect_start.x, rect_end.x)
     } else {
@@ -2024,43 +2140,42 @@ fn fill_selected_area(
         (rect_end.y, rect_start.y)
     };
 
-    let mut success = 0;
     let mut skipped = 0;
-    let mut apply_single = |pos, object| {
-        if let Some(tile) = board.get_tile_mut(pos) {
-            tile.object = object;
-            success += 1;
-        } else {
-            skipped += 1;
-        }
-    };
 
     for y in min_y..=max_y {
         for x in min_x..=max_x {
             let pos = Pos { x, y };
-            // 根據 object 類型分別處理
+
+            // 檢查位置是否有效
+            if board.get_tile(pos).is_none() {
+                skipped += 1;
+                continue;
+            }
+
+            // 根據 object 類型創建新物件
             match object {
-                None => apply_single(pos, None),
-                Some(obj) => match obj {
-                    ObjectType::Tree | ObjectType::Wall | ObjectType::Pit => {
-                        apply_single(pos, object.cloned())
-                    }
-                    ObjectType::Torch { .. } => apply_single(pos, Some(ObjectType::Torch { lit })),
-                    ObjectType::Campfire { .. } => {
-                        apply_single(pos, Some(ObjectType::Campfire { lit }))
-                    }
-                    ObjectType::Cliff { .. } => {
-                        apply_single(pos, Some(ObjectType::Cliff { orientation }))
-                    }
-                    ObjectType::Tent2 { .. } | ObjectType::Tent15 { .. } => {
-                        // 其他物件類型暫不支援
-                        return Err(format!("不支援多格物件類型：{:?}", obj));
-                    }
-                },
+                None => {
+                    // 移除該位置的所有物件
+                    remove_objects_at_pos(board, pos);
+                }
+                Some(obj) => {
+                    let object_type = match obj {
+                        ObjectType::Tree => ObjectType::Tree,
+                        ObjectType::Wall => ObjectType::Wall,
+                        ObjectType::Pit => ObjectType::Pit,
+                        ObjectType::Torch { .. } => ObjectType::Torch { lit },
+                        ObjectType::Campfire { .. } => ObjectType::Campfire { lit },
+                        ObjectType::Cliff { .. } => ObjectType::Cliff { orientation },
+                        ObjectType::Tent2 { .. } | ObjectType::Tent15 { .. } => {
+                            return Err(format!("不支援多格物件類型：{:?}", obj));
+                        }
+                    };
+                    create_object_at_pos(board, pos, object_type);
+                }
             }
         }
     }
-    Ok((success, skipped))
+    Ok(skipped)
 }
 
 /// 使用 drunkard's walk 演算法在選取範圍內部署物件
@@ -2124,10 +2239,14 @@ fn drunkards_walk_deploy(
             && current_pos.y >= min_y
             && current_pos.y <= max_y
         {
-            if let Some(tile) = board.get_tile(current_pos) {
+            if board.get_tile(current_pos).is_some() {
+                let has_object = board
+                    .objects
+                    .values()
+                    .any(|obj| obj.affected_positions.contains(&current_pos));
                 let should_act = match object {
-                    Some(_) => tile.object.is_none(),
-                    None => tile.object.is_some(),
+                    Some(_) => !has_object,
+                    None => has_object,
                 };
                 if should_act {
                     // 放置或清除物件
@@ -2245,8 +2364,8 @@ fn terrain_color(tile: &Tile) -> Color32 {
     }
 }
 
-fn object_symbol(tile: &Tile) -> &'static str {
-    match &tile.object {
+fn object_symbol(object: Option<&ObjectType>) -> &'static str {
+    match object {
         Some(ObjectType::Tree) => "🌳",
         Some(ObjectType::Wall) => "█",
         Some(ObjectType::Cliff { orientation }) => match orientation {
