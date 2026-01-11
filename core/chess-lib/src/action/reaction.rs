@@ -292,6 +292,7 @@ pub fn check_move_reactions(
 /// 5. 消耗 reaction 次數
 pub fn execute_reaction(
     board: &mut Board,
+    battle: &mut Battle,
     skills: &BTreeMap<SkillID, Skill>,
     reactor_id: UnitID,
     skill_id: &SkillID,
@@ -319,6 +320,7 @@ pub fn execute_reaction(
     // 4. 施放技能（共用邏輯）
     let msgs = cast_skill_internal(
         board,
+        battle,
         skills,
         reactor_id,
         skill_id,
@@ -617,8 +619,7 @@ mod tests {
             units,
             unit_map,
             ambient_light: LightLevel::default(),
-            objects: HashMap::new(),
-            pos_to_object: HashMap::new(),
+            object_map: ObjectMap::default(),
         };
 
         (board, 1, 2)
@@ -729,8 +730,7 @@ mod tests {
             units,
             unit_map,
             ambient_light: LightLevel::default(),
-            objects: HashMap::new(),
-            pos_to_object: HashMap::new(),
+            object_map: ObjectMap::default(),
         };
 
         // 給友方單位添加 reaction 技能（應該被忽略）

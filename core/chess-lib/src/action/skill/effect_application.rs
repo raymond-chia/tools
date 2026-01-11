@@ -2,6 +2,7 @@
 //! - 負責效果套用邏輯
 //! - 包含 Hp/Mp 效果、推擠效果、狀態效果等的實際套用
 use crate::*;
+use object_lib::{ObjectType, Orientation};
 use skills_lib::*;
 use std::collections::BTreeMap;
 
@@ -12,17 +13,19 @@ use super::targeting::calc_direction_manhattan;
 /// 處理空地效果（無單位的位置）
 pub(super) fn apply_effects_to_empty_tile(
     board: &mut Board,
+    battle: &mut Battle,
     skill: &Skill,
-    caster_pos: Pos,
+    (caster_id, caster_pos): (UnitID, Pos),
     pos: Pos,
 ) -> Vec<String> {
     let mut msgs = vec![];
     for effect in &skill.effects {
         if let Some(msg) = apply_effect_to_pos(
             board,
-            effect,
-            caster_pos,
+            battle,
+            (caster_id, caster_pos),
             pos,
+            effect,
             AttackResult::NoAttack,
             SaveResult::NoSave,
         ) {
@@ -35,6 +38,7 @@ pub(super) fn apply_effects_to_empty_tile(
 /// 套用所有效果並返回訊息（用於完全命中或普通命中）
 pub(super) fn apply_all_effects(
     board: &mut Board,
+    battle: &mut Battle,
     skills: &BTreeMap<SkillID, Skill>,
     (caster_id, caster_pos): (UnitID, Pos),
     (target_id, target_pos): (UnitID, Pos),
@@ -50,9 +54,10 @@ pub(super) fn apply_all_effects(
 
         if let Some(msg) = apply_effect_to_pos(
             board,
-            effect,
-            caster_pos,
+            battle,
+            (caster_id, caster_pos),
             target_pos,
+            effect,
             attack_result,
             save_result,
         ) {
@@ -66,6 +71,7 @@ pub(super) fn apply_all_effects(
 /// 套用效果（格擋時 Hp 效果減傷，其他效果正常套用）
 pub(super) fn apply_effects_with_block(
     board: &mut Board,
+    battle: &mut Battle,
     skills: &BTreeMap<SkillID, Skill>,
     (caster_id, caster_pos): (UnitID, Pos),
     (target_id, target_pos): (UnitID, Pos),
@@ -100,9 +106,10 @@ pub(super) fn apply_effects_with_block(
 
                 if let Some(msg) = apply_effect_to_pos(
                     board,
-                    &reduced_effect,
-                    caster_pos,
+                    battle,
+                    (caster_id, caster_pos),
                     target_pos,
+                    &reduced_effect,
                     attack_result,
                     save_result,
                 ) {
@@ -119,9 +126,10 @@ pub(super) fn apply_effects_with_block(
 
                 if let Some(msg) = apply_effect_to_pos(
                     board,
-                    effect,
-                    caster_pos,
+                    battle,
+                    (caster_id, caster_pos),
                     target_pos,
+                    effect,
                     attack_result,
                     save_result,
                 ) {
@@ -136,9 +144,10 @@ pub(super) fn apply_effects_with_block(
 
 pub(super) fn apply_effect_to_pos(
     board: &mut Board,
-    effect: &Effect,
-    caster_pos: Pos,
+    battle: &mut Battle,
+    (caster_id, caster_pos): (UnitID, Pos),
     target_pos: Pos,
+    effect: &Effect,
     attack_result: AttackResult,
     save_result: SaveResult,
 ) -> Option<String> {
@@ -234,6 +243,27 @@ pub(super) fn apply_effect_to_pos(
         } => Some(format!(
             "[未實作] CarriesLight 效果（明亮範圍: {bright_range}, 微光範圍: {dim_range}）, 持續 {duration} 回合"
         )),
+        Effect::CreateObject {
+            object_type,
+            duration,
+            ..
+        } => {
+            // 從 caster_id 取得 team ID（需要先提取以避免借用衝突）
+            let creator_team = board
+                .units
+                .get(&caster_id)
+                .map(|unit| unit.team.clone())
+                .unwrap_or_else(|| TEAM_NONE.to_string());
+
+            apply_create_object_effect(
+                board,
+                battle,
+                creator_team,
+                target_pos,
+                object_type,
+                *duration,
+            )
+        }
     }
 }
 
@@ -261,7 +291,7 @@ mod inner {
         // 檢查所有物體是否允許推擠通過
         let mut has_push_through = false;
 
-        for obj in &board.get_objects_at(next_pos) {
+        for obj in &board.object_map.get_objects_at(next_pos) {
             match &obj.object_type {
                 ObjectType::Cliff { orientation } => {
                     // 檢查推擠方向是否與 Cliff 方向一致
@@ -391,6 +421,7 @@ mod inner {
 
             // 檢查掉落
             if board
+                .object_map
                 .get_objects_at(final_pos)
                 .iter()
                 .any(|obj| matches!(obj.object_type, ObjectType::Pit))
@@ -492,6 +523,111 @@ mod inner {
             }
         }
     }
+
+    /// 檢查是否可以在指定位置放置物件
+    pub(super) fn can_place_object_at(
+        board: &Board,
+        pos: Pos,
+        _object_type: &ObjectType,
+    ) -> Result<(), String> {
+        // 檢查邊界
+        match board.get_tile(pos) {
+            None => return Err(format!("位置 {:?} 超出地圖邊界", pos)),
+            Some(_) => {}
+        }
+
+        // 檢查是否已有物件（初始規則：Tree/Wall/Torch/Campfire 不可疊加）
+        let existing_objects = board.object_map.get_objects_at(pos);
+        if !existing_objects.is_empty() {
+            // 目前任何物件都不允許疊加
+            return Err(format!("位置 {:?} 已有物件", pos));
+        }
+
+        Ok(())
+    }
+
+    /// 計算物件佔據的所有位置（以目標位置為中心）
+    /// 目前只支持 1x1 物件
+    pub(super) fn calculate_affected_positions(
+        target_pos: Pos,
+        _object_type: &ObjectType,
+    ) -> Vec<Pos> {
+        // 目前只支持 1x1 正方形物件
+        vec![target_pos]
+    }
+
+    /// 應用 CreateObject 效果：創造物件
+    pub(super) fn apply_create_object_effect(
+        board: &mut Board,
+        battle: &mut Battle,
+        creator_team: TeamID,
+        target_pos: Pos,
+        object_type: &ObjectType,
+        duration: i32,
+    ) -> Option<String> {
+        use rand::Rng;
+
+        // 1. 計算受影響的位置
+        let affected_positions = calculate_affected_positions(target_pos, object_type);
+
+        // 2. 逐格判定是否可以放置
+        let mut valid_positions = Vec::new();
+        let mut failed_count = 0;
+
+        for &pos in &affected_positions {
+            match can_place_object_at(board, pos, object_type) {
+                Ok(()) => valid_positions.push(pos),
+                Err(_) => failed_count += 1,
+            }
+        }
+
+        // 3. 如果所有位置都失敗，返回錯誤訊息
+        if valid_positions.is_empty() {
+            return Some(format!("創造 {:?} 失敗：所有位置都無法放置", object_type));
+        }
+
+        // 4. 對成功的位置創建物件
+        for pos in &valid_positions {
+            // 生成唯一 ObjectID（隨機 + 循環檢查）
+            let object_id = loop {
+                let mut rng = rand::rng();
+                let id = rng.random_range(0..u32::MAX);
+                if board.object_map.get(id).is_none() {
+                    break id;
+                }
+            };
+
+            // 創建 Object
+            let object = Object {
+                id: object_id,
+                affected_positions: vec![*pos],
+                object_type: object_type.clone(),
+                duration,
+                creator_team: creator_team.clone(),
+            };
+
+            board.object_map.insert(object);
+
+            // 插入 turn_order
+            battle.insert_object_before_next_turn(object_id);
+        }
+
+        // 5. 返回創建訊息
+        let total = affected_positions.len();
+        let success = valid_positions.len();
+
+        if failed_count > 0 {
+            Some(format!(
+                "創造 {:?} 於 {:?}：成功 {}/{} 格，持續 {} 回合",
+                object_type, target_pos, success, total, duration
+            ))
+        } else {
+            Some(format!(
+                "創造 {:?} 於 {:?}，持續 {} 回合",
+                object_type, target_pos, duration
+            ))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -553,8 +689,7 @@ mod tests {
             unit_map,
             units,
             ambient_light: LightLevel::default(),
-            objects: HashMap::new(),
-            pos_to_object: HashMap::new(),
+            object_map: ObjectMap::default(),
         };
         (board, unit_id, skills)
     }
@@ -571,14 +706,14 @@ mod tests {
             duration: -1,
             creator_team: TEAM_NONE.to_string(),
         };
-        board.pos_to_object.entry(pos).or_default().push(obj_id);
-        board.objects.insert(obj_id, obj);
+        board.object_map.insert(obj);
     }
 
     #[test]
     fn test_apply_effect_hp() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -592,9 +727,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -606,8 +742,9 @@ mod tests {
 
     #[test]
     fn test_apply_effect_hp_critical() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -621,9 +758,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Critical,
             SaveResult::NoSave,
         );
@@ -636,8 +774,9 @@ mod tests {
 
     #[test]
     fn test_apply_effect_mp() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -653,9 +792,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -667,8 +807,9 @@ mod tests {
 
     #[test]
     fn test_apply_effect_mp_overflow() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -683,9 +824,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -697,8 +839,9 @@ mod tests {
 
     #[test]
     fn test_apply_effect_mp_underflow() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -713,9 +856,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -727,8 +871,9 @@ mod tests {
 
     #[test]
     fn test_shove_basic() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -740,9 +885,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -756,8 +902,9 @@ mod tests {
 
     #[test]
     fn test_shove_into_pit() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -772,9 +919,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -792,8 +940,9 @@ mod tests {
 
     #[test]
     fn test_shove_over_cliff_into_pit() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -817,9 +966,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -837,8 +987,9 @@ mod tests {
 
     #[test]
     fn test_shove_cliff_wrong_direction() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -859,9 +1010,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -876,10 +1028,11 @@ mod tests {
 
     #[test]
     fn test_shove_over_cliff_collision() {
-        let (mut board, _unit_id, _skills) = prepare_test_board(
+        let (mut board, caster_unit_id, _skills) = prepare_test_board(
             Pos { x: 1, y: 1 },
             Some(vec![Pos { x: 1, y: 2 }, Pos { x: 1, y: 4 }]),
         );
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 2 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -900,9 +1053,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 1 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );
@@ -917,8 +1071,9 @@ mod tests {
 
     #[test]
     fn test_shove_beyond_boundary() {
-        let (mut board, _unit_id, _skills) =
+        let (mut board, caster_unit_id, _skills) =
             prepare_test_board(Pos { x: 1, y: 8 }, Some(vec![Pos { x: 1, y: 9 }]));
+        let mut battle = Battle::default();
         let target_pos = Pos { x: 1, y: 9 };
         let target_unit_id = board.pos_to_unit(target_pos).unwrap();
 
@@ -930,9 +1085,10 @@ mod tests {
 
         let msg = apply_effect_to_pos(
             &mut board,
-            &effect,
-            Pos { x: 1, y: 8 },
+            &mut battle,
+            (caster_unit_id, Pos { x: 1, y: 8 }),
             target_pos,
+            &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
         );

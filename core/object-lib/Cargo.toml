@@ -1,11 +1,9 @@
 [package]
-name = "skills-lib"
+name = "object-lib"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-object-lib = { path = "../object-lib" }
-
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

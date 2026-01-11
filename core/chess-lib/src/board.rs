@@ -3,6 +3,7 @@
 //! - 負責棋盤初始化、單位與位置對應、地形查詢等邏輯。
 //! - 不負責單位屬性計算、AI 決策或戰鬥流程。
 use crate::*;
+use object_lib::{ObjectType, Orientation};
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -14,15 +15,6 @@ pub enum Terrain {
     Plain,
     ShallowWater,
     DeepWater,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, Display, EnumIter, PartialEq)]
-pub enum Orientation {
-    #[default]
-    Up,
-    Down,
-    Left,
-    Right,
 }
 
 /// 光照等級
@@ -39,18 +31,6 @@ impl Default for LightLevel {
     fn default() -> Self {
         LightLevel::Bright
     }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, Display, EnumIter, PartialEq)]
-pub enum ObjectType {
-    Tree,
-    Wall,
-    Cliff { orientation: Orientation },
-    Pit,
-    Tent2 { orientation: Orientation },
-    Tent15 { orientation: Orientation },
-    Torch { lit: bool },
-    Campfire { lit: bool },
 }
 
 /// 物體：棋盤上的物件實例
@@ -177,9 +157,7 @@ pub struct Board {
     pub ambient_light: LightLevel,
     pub units: HashMap<UnitID, Unit>,
     pub unit_map: UnitMap,
-    // 物體系統
-    pub objects: HashMap<ObjectID, Object>,
-    pub pos_to_object: HashMap<Pos, Vec<ObjectID>>,
+    pub object_map: ObjectMap,
 }
 
 pub trait UnitTemplateGetter {
@@ -211,15 +189,9 @@ impl Board {
         }
 
         // 物體系統初始化
-        let mut objects = HashMap::new();
-        let mut pos_to_object: HashMap<Pos, Vec<ObjectID>> = HashMap::new();
-
-        // 從 config.objects 載入
-        for (obj_id, obj) in config.objects {
-            for &pos in &obj.affected_positions {
-                pos_to_object.entry(pos).or_default().push(obj_id);
-            }
-            objects.insert(obj_id, obj);
+        let mut object_map = ObjectMap::default();
+        for (_, obj) in config.objects {
+            object_map.insert(obj);
         }
 
         Ok(Board {
@@ -228,8 +200,7 @@ impl Board {
             ambient_light: config.ambient_light,
             units,
             unit_map,
-            objects,
-            pos_to_object,
+            object_map,
         })
     }
 
@@ -241,17 +212,14 @@ impl Board {
         self.unit_map.get_pos(unit_id)
     }
 
-    /// 取得位置上的所有物體
-    pub fn get_objects_at(&self, pos: Pos) -> Vec<&Object> {
-        self.pos_to_object
-            .get(&pos)
-            .map(|ids| ids.iter().filter_map(|id| self.objects.get(id)).collect())
-            .unwrap_or_default()
-    }
-
     /// 檢查位置的地形和物件是否可通行
     pub fn is_tile_passable(&self, pos: Pos) -> bool {
-        self.get_tile(pos).is_some() && self.get_objects_at(pos).iter().all(|obj| obj.is_passable())
+        self.get_tile(pos).is_some()
+            && self
+                .object_map
+                .get_objects_at(pos)
+                .iter()
+                .all(|obj| obj.is_passable())
     }
 
     /// 檢查觀察者是否能看到目標位置
@@ -320,7 +288,7 @@ impl Board {
         }
 
         // 檢查所有 Object 光源
-        for obj in self.objects.values() {
+        for obj in self.object_map.values() {
             // 先檢查是否是光源類型
             if !matches!(
                 obj.object_type,
@@ -440,6 +408,73 @@ impl UnitMap {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ObjectMap {
+    objects: HashMap<ObjectID, Object>,
+    pos_to_object: HashMap<Pos, Vec<ObjectID>>,
+}
+
+impl ObjectMap {
+    /// 插入物件並同步位置索引
+    pub fn insert(&mut self, object: Object) {
+        let object_id = object.id;
+        for &pos in &object.affected_positions {
+            self.pos_to_object.entry(pos).or_default().push(object_id);
+        }
+        self.objects.insert(object_id, object);
+    }
+
+    /// 移除物件並清理位置索引
+    /// 返回被移除的物件，如果物件不存在則返回 None
+    pub fn remove(&mut self, object_id: ObjectID) -> Option<Object> {
+        let object = self.objects.remove(&object_id)?;
+
+        for pos in &object.affected_positions {
+            if let Some(ids) = self.pos_to_object.get_mut(pos) {
+                ids.retain(|&id| id != object_id);
+                if ids.is_empty() {
+                    self.pos_to_object.remove(pos);
+                }
+            }
+        }
+
+        Some(object)
+    }
+
+    /// 取得物件參照
+    pub fn get(&self, object_id: ObjectID) -> Option<&Object> {
+        self.objects.get(&object_id)
+    }
+
+    /// 減少物件的 duration（永久物件 -1 不減少）
+    pub fn decrease_object_duration(&mut self, object_id: ObjectID) {
+        if let Some(object) = self.objects.get_mut(&object_id) {
+            if object.duration > 0 {
+                object.duration -= 1;
+            }
+        }
+    }
+
+    /// 取得位置上的所有物件
+    /// 因為封裝保證同步，pos_to_object 中的 ID 一定存在於 objects
+    pub fn get_objects_at(&self, pos: Pos) -> Vec<&Object> {
+        match self.pos_to_object.get(&pos) {
+            Some(ids) => ids.iter().map(|id| &self.objects[id]).collect(),
+            None => Vec::new(),
+        }
+    }
+
+    /// 遍歷所有物件
+    pub fn values(&self) -> impl Iterator<Item = &Object> {
+        self.objects.values()
+    }
+
+    /// 遍歷所有物件（ID, Object）
+    pub fn iter(&self) -> impl Iterator<Item = (&ObjectID, &Object)> {
+        self.objects.iter()
+    }
+}
+
 /// 計算曼哈頓距離
 pub fn manhattan_distance(a: Pos, b: Pos) -> usize {
     let dx = if a.x > b.x { a.x - b.x } else { b.x - a.x };
@@ -531,7 +566,7 @@ mod inner {
             }
 
             // 檢查中間路徑是否有物件阻擋視線（一律使用 blocks_sight_from）
-            for obj in board.get_objects_at(pos) {
+            for obj in board.object_map.get_objects_at(pos) {
                 if obj.blocks_sight_from(from, pos) {
                     return Ok(false);
                 }

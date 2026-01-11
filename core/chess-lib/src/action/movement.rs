@@ -336,6 +336,7 @@ mod inner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use object_lib::ObjectType;
     use rand::Rng;
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -422,8 +423,7 @@ mod tests {
             units,
             unit_map,
             ambient_light: LightLevel::default(),
-            objects: HashMap::new(),
-            pos_to_object: HashMap::new(),
+            object_map: ObjectMap::default(),
         };
         (board, unit_id)
     }
@@ -620,12 +620,7 @@ mod tests {
             duration: -1,
             creator_team: TEAM_NONE.to_string(),
         };
-        board
-            .pos_to_object
-            .entry(tree_pos)
-            .or_default()
-            .push(obj_id);
-        board.objects.insert(obj_id, obj);
+        board.object_map.insert(obj);
 
         let expect = BTreeSet::from([
             Pos { x: 0, y: 0 },

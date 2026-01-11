@@ -84,6 +84,17 @@ impl Battle {
         // index > next_turn_index: 不需調整
     }
 
+    /// 在 next_turn_index 前插入物件到回合順序
+    /// 插入後自動調整 next_turn_index（+1）
+    pub fn insert_object_before_next_turn(&mut self, object_id: ObjectID) {
+        let insert_idx = self.next_turn_index;
+        self.turn_order
+            .insert(insert_idx, TurnEntity::Object(object_id));
+
+        // 插入後 next_turn_index 需要 +1（因為在它前面插入了一個元素）
+        self.next_turn_index += 1;
+    }
+
     pub fn next_turn(&mut self, board: &mut Board, skill_selection: &mut SkillSelection) {
         if self.turn_order.is_empty() {
             return;
@@ -98,9 +109,7 @@ impl Battle {
                     }
                 }
                 TurnEntity::Object(object_id) => {
-                    if let Some(object) = board.objects.get_mut(&object_id) {
-                        process_object_turn(object);
-                    }
+                    board.object_map.decrease_object_duration(object_id);
                 }
             }
         }
@@ -169,21 +178,13 @@ pub fn process_status_effects_at_turn_end(unit: &mut Unit) {
     }
 }
 
-/// 在物件回合結束時處理
-pub fn process_object_turn(object: &mut Object) {
-    // 減少 duration（永久物件 -1 不減少）
-    if object.duration > 0 {
-        object.duration -= 1;
-    }
-}
-
 /// 在回合開始時檢查並移除過期物件（duration = 0）
 /// 返回是否移除了該物件
 pub fn remove_object_if_expired(board: &mut Board, object_id: ObjectID) -> bool {
     // 檢查物件是否存在且過期
     let should_remove = board
-        .objects
-        .get(&object_id)
+        .object_map
+        .get(object_id)
         .map(|obj| obj.duration == 0)
         .unwrap_or(false);
 
@@ -192,21 +193,7 @@ pub fn remove_object_if_expired(board: &mut Board, object_id: ObjectID) -> bool 
     }
 
     // 移除物件
-    let object = match board.objects.remove(&object_id) {
-        None => return false,
-        Some(object) => object,
-    };
-
-    for pos in &object.affected_positions {
-        if let Some(ids) = board.pos_to_object.get_mut(pos) {
-            ids.retain(|&id| id != object_id);
-            if ids.is_empty() {
-                board.pos_to_object.remove(pos);
-            }
-        }
-    }
-
-    true
+    board.object_map.remove(object_id).is_some()
 }
 
 #[cfg(test)]

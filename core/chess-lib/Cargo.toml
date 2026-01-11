@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 skills-lib = { path = "../../core/skills-lib" }
+object-lib = { path = "../../core/object-lib" }
 
 serde = { workspace = true }
 strum = { workspace = true }

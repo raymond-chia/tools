@@ -6,6 +6,7 @@
 
 - **core/chess-lib**: 核心遊戲邏輯（戰鬥系統、移動、技能施放、AI）
 - **core/skills-lib**: 技能定義、效果類型
+- **core/object-lib**: 物件類型定義（ObjectType、Orientation）
 - **core/dialogs-lib**: 對話系統
 - **editor**: egui GUI 編輯器（地圖、單位、技能編輯）
 

@@ -1,3 +1,4 @@
+use object_lib::ObjectType;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use strum_macros::{Display, EnumIter, EnumString};
@@ -273,6 +274,13 @@ pub enum Effect {
         dim_range: usize,
         duration: i32, // -1 代表永久
     },
+    /// 創造物件：在目標位置創造物件
+    CreateObject {
+        target_type: TargetType,
+        shape: Shape,
+        object_type: ObjectType,
+        duration: i32, // -1 代表永久，> 0 代表臨時
+    },
 }
 
 impl Default for Skill {
@@ -312,7 +320,8 @@ macro_rules! effect_field_ref {
             | Effect::Resistance { $field, .. }
             | Effect::Burn { $field, .. }
             | Effect::Sense { $field, .. }
-            | Effect::CarriesLight { $field, .. } => $field,
+            | Effect::CarriesLight { $field, .. }
+            | Effect::CreateObject { $field, .. } => $field,
         }
     };
 }
@@ -361,7 +370,8 @@ impl Effect {
             | Effect::Potency { .. }
             | Effect::Resistance { .. }
             | Effect::Sense { .. }
-            | Effect::CarriesLight { .. } => None,
+            | Effect::CarriesLight { .. }
+            | Effect::CreateObject { .. } => None,
         }
     }
 
@@ -384,7 +394,8 @@ impl Effect {
             | Effect::Resistance { duration, .. }
             | Effect::Burn { duration, .. }
             | Effect::Sense { duration, .. }
-            | Effect::CarriesLight { duration, .. } => *duration,
+            | Effect::CarriesLight { duration, .. }
+            | Effect::CreateObject { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
         }
     }
@@ -408,7 +419,8 @@ impl Effect {
             | Effect::Resistance { duration, .. }
             | Effect::Burn { duration, .. }
             | Effect::Sense { duration, .. }
-            | Effect::CarriesLight { duration, .. } => {
+            | Effect::CarriesLight { duration, .. }
+            | Effect::CreateObject { duration, .. } => {
                 // 只有 duration > 0 時才減少（永久效果 -1 不減少）
                 if *duration > 0 {
                     *duration -= 1;

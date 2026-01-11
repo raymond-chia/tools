@@ -133,6 +133,7 @@ pub(in crate::action) fn calc_skill_affect_area(
 /// 此函數不包含資源消耗（action/reaction），由調用者負責
 pub(in crate::action) fn cast_skill_internal(
     board: &mut Board,
+    battle: &mut Battle,
     skills: &BTreeMap<SkillID, Skill>,
     caster_id: UnitID,
     skill_id: &SkillID,
@@ -166,6 +167,7 @@ pub(in crate::action) fn cast_skill_internal(
     // 5. 應用技能效果
     let msgs = apply_skill_to_area(
         board,
+        battle,
         skills,
         caster_id,
         caster_pos,
@@ -246,6 +248,7 @@ pub(super) fn consume_skill_mp(
 /// 根據技能是否有命中數值，採用不同的應用邏輯
 pub(super) fn apply_skill_to_area(
     board: &mut Board,
+    battle: &mut Battle,
     skills: &BTreeMap<SkillID, Skill>,
     caster: UnitID,
     caster_pos: Pos,
@@ -277,9 +280,10 @@ pub(super) fn apply_skill_to_area(
                     };
                     if let Some(msg) = apply_effect_to_pos(
                         board,
-                        effect,
-                        caster_pos,
+                        battle,
+                        (caster, caster_pos),
                         pos,
+                        effect,
                         AttackResult::NoAttack,
                         save_result,
                     ) {
@@ -303,6 +307,7 @@ pub(super) fn apply_skill_to_area(
             msgs.extend(
                 calc_hit_result(
                     board,
+                    battle,
                     (caster, caster_pos),
                     skills,
                     skill,
@@ -376,8 +381,7 @@ mod tests {
             unit_map,
             units,
             ambient_light: LightLevel::default(),
-            objects: HashMap::new(),
-            pos_to_object: HashMap::new(),
+            object_map: ObjectMap::default(),
         };
         (board, unit_id, skills)
     }

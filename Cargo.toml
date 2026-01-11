@@ -2,6 +2,7 @@
 members = [
     "core/chess-lib",
     "core/dialogs-lib",
+    "core/object-lib",
     "core/skills-lib",
     "editor",
     "tools/map_generator",

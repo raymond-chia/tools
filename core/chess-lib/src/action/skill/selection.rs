@@ -26,6 +26,7 @@ impl SkillSelection {
     pub fn execute_action(
         &self,
         board: &mut Board,
+        battle: &mut Battle,
         skills: &BTreeMap<SkillID, Skill>,
         caster: UnitID,
         target: Pos,
@@ -37,7 +38,7 @@ impl SkillSelection {
             .wrap_context(func)?;
 
         // 2. 施放技能（共用邏輯）
-        let msgs = cast_skill_internal(board, skills, caster, &skill_id, (target, target))
+        let msgs = cast_skill_internal(board, battle, skills, caster, &skill_id, (target, target))
             .wrap_context(func)?;
 
         // 3. 消耗 action
@@ -159,8 +160,7 @@ mod tests {
             unit_map,
             units,
             ambient_light: LightLevel::default(),
-            objects: HashMap::new(),
-            pos_to_object: HashMap::new(),
+            object_map: ObjectMap::default(),
         };
         (board, unit_id, skills)
     }
@@ -179,6 +179,7 @@ mod tests {
     fn test_execute_action_basic() {
         let (mut board, unit_id, skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_unit_id = unit_id + 1;
 
         // 設置不同隊伍
@@ -188,7 +189,7 @@ mod tests {
         sel.select_skill(Some("slash".to_string()));
 
         let target = Pos { x: 1, y: 2 };
-        let result = sel.execute_action(&mut board, &skills, unit_id, target);
+        let result = sel.execute_action(&mut board, &mut battle, &skills, unit_id, target);
 
         assert!(result.is_ok());
         let msgs = result.unwrap();
@@ -201,10 +202,11 @@ mod tests {
     #[test]
     fn test_execute_action_no_selection() {
         let (mut board, unit_id, skills) = prepare_test_board(Pos { x: 1, y: 1 }, None);
+        let mut battle = Battle::default();
 
         let sel = SkillSelection::default();
         let target = Pos { x: 1, y: 2 };
-        let result = sel.execute_action(&mut board, &skills, unit_id, target);
+        let result = sel.execute_action(&mut board, &mut battle, &skills, unit_id, target);
 
         // 錯誤被包裝在 Error::Wrap 中
         assert!(matches!(result, Err(Error::Wrap { .. })));
@@ -214,6 +216,7 @@ mod tests {
     fn test_execute_action_twice() {
         let (mut board, unit_id, skills) =
             prepare_test_board(Pos { x: 1, y: 1 }, Some(vec![Pos { x: 1, y: 2 }]));
+        let mut battle = Battle::default();
         let target_unit_id = unit_id + 1;
         board.units.get_mut(&target_unit_id).unwrap().team = "enemy".to_string();
 
@@ -223,11 +226,11 @@ mod tests {
         let target = Pos { x: 1, y: 2 };
 
         // 第一次施放成功
-        let result1 = sel.execute_action(&mut board, &skills, unit_id, target);
+        let result1 = sel.execute_action(&mut board, &mut battle, &skills, unit_id, target);
         assert!(result1.is_ok());
 
         // 第二次施放失敗（已經施放過）
-        let result2 = sel.execute_action(&mut board, &skills, unit_id, target);
+        let result2 = sel.execute_action(&mut board, &mut battle, &skills, unit_id, target);
         // 可能因為目標已死亡而失敗，或因為已施放過而失敗
         assert!(result2.is_err(), "Expected error, got: {:?}", result2);
     }

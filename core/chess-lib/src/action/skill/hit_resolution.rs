@@ -35,6 +35,7 @@ pub enum SaveResult {
 /// 對影響區域內的每個目標進行命中判定，並應用相應效果
 pub fn calc_hit_result(
     board: &mut Board,
+    battle: &mut Battle,
     caster: (UnitID, Pos),
     skills: &BTreeMap<SkillID, Skill>,
     skill: &Skill,
@@ -54,7 +55,13 @@ pub fn calc_hit_result(
         let target_id = match board.pos_to_unit(pos) {
             // 無單位，直接套用效果（不需要豁免判定）
             None => {
-                msgs.extend(apply_effects_to_empty_tile(board, skill, caster_pos, pos));
+                msgs.extend(apply_effects_to_empty_tile(
+                    board,
+                    battle,
+                    skill,
+                    (caster_id, caster_pos),
+                    pos,
+                ));
                 continue;
             }
             Some(target_id) => target_id,
@@ -70,6 +77,7 @@ pub fn calc_hit_result(
 
         let result_msgs = process_target_hit(
             board,
+            battle,
             skills,
             (caster_id, caster_pos),
             (target_id, pos),
@@ -234,6 +242,7 @@ mod inner {
     /// 處理單一目標的命中判定與效果應用
     pub(super) fn process_target_hit(
         board: &mut Board,
+        battle: &mut Battle,
         skills: &BTreeMap<SkillID, Skill>,
         (caster_id, caster_pos): (UnitID, Pos),
         (target_id, target_pos): (UnitID, Pos),
@@ -312,6 +321,7 @@ mod inner {
         if hit_random > CRITICAL_SUCCESS_THRESHOLD {
             let effect_msgs = apply_all_effects(
                 board,
+                battle,
                 skills,
                 (caster_id, caster_pos),
                 (target_id, target_pos),
@@ -350,6 +360,7 @@ mod inner {
         if block_score <= 0 {
             let effect_results = apply_effects_with_block(
                 board,
+                battle,
                 skills,
                 (caster_id, caster_pos),
                 (target_id, target_pos),
@@ -371,6 +382,7 @@ mod inner {
         // 完全命中
         let effect_msgs = apply_all_effects(
             board,
+            battle,
             skills,
             (caster_id, caster_pos),
             (target_id, target_pos),
