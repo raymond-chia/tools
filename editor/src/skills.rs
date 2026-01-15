@@ -2,6 +2,7 @@ use crate::common::*;
 use eframe::{Frame, egui};
 use egui::emath::Numeric;
 use egui::{Button, DragValue, ScrollArea, Separator, Ui};
+use object_lib::ObjectType;
 use serde::{Deserialize, Serialize};
 use skills_lib::*;
 use std::collections::BTreeMap;
@@ -605,6 +606,7 @@ impl SkillsEditor {
                         Effect::Resistance { .. } => ui.button("新增抗性效果").clicked(),
                         Effect::Sense { .. } => ui.button("新增黑暗感知效果").clicked(),
                         Effect::CarriesLight { .. } => ui.button("新增攜帶光源效果").clicked(),
+                        Effect::CreateObject { .. } => ui.button("新增創造物件效果").clicked(),
                     };
                     effects.push((flag, effect));
                 }
@@ -1100,6 +1102,7 @@ fn show_skill_effect_editor(
             Effect::Resistance { .. } => ui.label("抗性"),
             Effect::Sense { .. } => ui.label("黑暗感知"),
             Effect::CarriesLight { .. } => ui.label("攜帶光源"),
+            Effect::CreateObject { .. } => ui.label("創造物件"),
         };
         // 種族效果不顯示刪除、上下移動
         if !is_basic_passive_effect {
@@ -1370,6 +1373,17 @@ fn show_effect_editor(ui: &mut Ui, effect: &mut Effect, skill_ids: &[SkillID]) -
             changed |= show_numeric_editor(ui, dim_range, "昏暗光照範圍：");
             changed |= show_duration_editor(ui, duration);
         }
+        Effect::CreateObject {
+            target_type,
+            shape,
+            object_type,
+            duration,
+        } => {
+            changed |= show_target_type_editor(ui, target_type);
+            changed |= show_shape_editor(ui, shape);
+            changed |= show_object_type_editor(ui, object_type);
+            changed |= show_duration_editor(ui, duration);
+        }
     }
     changed
 }
@@ -1533,6 +1547,28 @@ fn show_duration_editor(ui: &mut Ui, duration: &mut i32) -> bool {
             .changed()
         {
             changed = true;
+        }
+    });
+    changed
+}
+
+fn show_object_type_editor(ui: &mut Ui, object_type: &mut object_lib::ObjectType) -> bool {
+    let mut changed = false;
+    ui.vertical(|ui| {
+        ui.label("物件類型:");
+
+        // 檢查是否為支援的類型
+        match object_type {
+            ObjectType::Wall => {
+                ui.label("牆");
+            }
+            _ => {
+                ui.colored_label(egui::Color32::RED, "不支援的物件類型（目前只支援牆壁）");
+                if ui.button("改為牆壁").clicked() {
+                    *object_type = ObjectType::Wall;
+                    changed = true;
+                }
+            }
         }
     });
     changed

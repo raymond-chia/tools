@@ -7,6 +7,7 @@ edition = "2024"
 skills-lib = { path = "../core/skills-lib" }
 dialogs-lib = { path = "../core/dialogs-lib" }
 chess-lib = { path = "../core/chess-lib" }
+object-lib = { path = "../core/object-lib" }
 
 eframe = { workspace = true }
 egui = { workspace = true }

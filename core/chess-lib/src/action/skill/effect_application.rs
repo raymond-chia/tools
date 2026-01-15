@@ -3,6 +3,7 @@
 //! - 包含 Hp/Mp 效果、推擠效果、狀態效果等的實際套用
 use crate::*;
 use object_lib::{ObjectType, Orientation};
+use rand::Rng;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
@@ -565,8 +566,6 @@ mod inner {
         object_type: &ObjectType,
         duration: i32,
     ) -> Option<String> {
-        use rand::Rng;
-
         // 1. 計算受影響的位置
         let affected_positions = calculate_affected_positions(target_pos, object_type);
 

@@ -264,7 +264,7 @@
    - 實作 process_object_turn()（減少 duration）
    - 實作 remove_entity_from_turn_order()（統一移除邏輯）
 
-3. **Phase 3: 創造物系統**
+3. **Phase 3: 創造物系統** (已完成)
 
    - 新增 Effect::CreateObject
    - 實作創造邏輯（生成 Object、插入 turn_order）

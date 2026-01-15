@@ -3,6 +3,7 @@ use crate::player_progressions::{PlayerProgressionData, Unit as ProgressionUnit}
 use chess_lib::*;
 use egui::*;
 use indexmap::IndexMap;
+use object_lib::{ObjectType, Orientation};
 use rand::Rng;
 use skills_lib::*;
 use std::cell::RefCell;
@@ -28,6 +29,13 @@ struct PendingReactionState {
     reactions: Vec<PendingReaction>,
 }
 
+/// 單位拖曳狀態
+#[derive(Debug, Clone)]
+struct DraggingUnitState {
+    unit_id: UnitID,
+    original_pos: Pos,
+}
+
 #[derive(Debug, Default)]
 pub struct BoardsEditor {
     boards: BTreeMap<BoardID, BoardConfig>,
@@ -40,6 +48,8 @@ pub struct BoardsEditor {
     selected_orientation: Orientation,
     selected_unit: Option<UnitTemplateType>,
     selected_team: TeamID,
+    // 單位拖曳狀態
+    dragging_unit: Option<DraggingUnitState>,
     // 範圍選取狀態
     selecting: bool,
     selection_start: Option<Pos>,
@@ -277,25 +287,49 @@ impl BoardsEditor {
 
     fn show_board_editor(&mut self, ui: &mut Ui) {
         // 棋盤視覺化編輯區
-        let Some(board_id) = &self.selected_board else {
+        let Some(board_id) = self.selected_board.clone() else {
             ui.label("請先選擇戰場");
             return;
         };
-        let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
-        show_tiles(ui, &mut self.camera, board, show_static_others(board));
 
-        // 繪製選取範圍外框
-        if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
-            draw_selection_outline(ui.painter(), &self.camera, start, end);
-        }
+        // 繪製棋盤和視覺元素（在此作用域內借用 board）
+        {
+            let board = self.boards.get(&board_id).expect("選擇的戰場應該存在");
+            show_tiles(ui, &mut self.camera, board, show_static_others(board));
 
-        if let (Some(start), Some(end), Some(start_y)) = (
-            self.selection_start,
-            self.selection_end,
-            self.drunkards_start_y,
-        ) {
-            draw_drunkard_start_indicator(ui.painter(), &self.camera, board, start, end, start_y);
-        }
+            // 繪製拖曳視覺回饋
+            if let Some(dragging) = &self.dragging_unit {
+                let hover_pos = cursor_to_pos(&self.camera, ui).ok();
+                draw_unit_dragging_feedback(
+                    ui.painter(),
+                    &self.camera,
+                    board,
+                    &self.unit_templates,
+                    dragging,
+                    hover_pos,
+                );
+            }
+
+            // 繪製選取範圍外框
+            if let (Some(start), Some(end)) = (self.selection_start, self.selection_end) {
+                draw_selection_outline(ui.painter(), &self.camera, start, end);
+            }
+
+            if let (Some(start), Some(end), Some(start_y)) = (
+                self.selection_start,
+                self.selection_end,
+                self.drunkards_start_y,
+            ) {
+                draw_drunkard_start_indicator(
+                    ui.painter(),
+                    &self.camera,
+                    board,
+                    start,
+                    end,
+                    start_y,
+                );
+            }
+        } // 結束 board 借用作用域
 
         // 處理滑鼠選取（僅在 Object 筆刷且滑鼠在面板內啟用）
         let pointer_state = ui.ctx().input(|i| i.pointer.clone());
@@ -329,6 +363,11 @@ impl BoardsEditor {
             }
         }
 
+        // 處理單位拖曳（僅在 Unit 模式下）
+        if self.handle_unit_dragging(ui, &board_id, is_panel_hover, &pointer_state) {
+            return;
+        }
+
         // 僅處理點擊（其餘編輯互動）
         if !pointer_state.primary_down() {
             return;
@@ -337,12 +376,15 @@ impl BoardsEditor {
             return;
         };
         // 僅處理座標在棋盤內
-        if board.get_tile(painted).is_none() {
-            return;
+        {
+            let board = self.boards.get(&board_id).expect("選擇的戰場應該存在");
+            if board.get_tile(painted).is_none() {
+                return;
+            }
         }
 
         // 修改格子
-        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        let board = self.boards.get_mut(&board_id).expect("選擇的戰場應該存在");
         let mut err_msg = String::new();
         match self.brush {
             BrushMode::Terrain => {
@@ -365,19 +407,22 @@ impl BoardsEditor {
                 }
             }
             BrushMode::Unit => {
-                let marker = if let Some(template_type) = &self.selected_unit {
-                    let id = generate_unique_unit_id(board);
-                    Some(UnitMarker {
-                        id,
-                        unit_template_type: template_type.clone(),
-                        team: self.selected_team.clone(),
-                        pos: painted,
-                    })
-                } else {
-                    None
-                };
-                if let Err(e) = paint_unit(board, painted, marker) {
-                    err_msg = format!("Error painting unit: {}", e);
+                // 只在非拖曳狀態下新增單位
+                if self.dragging_unit.is_none() {
+                    let marker = if let Some(template_type) = &self.selected_unit {
+                        let id = generate_unique_unit_id(board);
+                        Some(UnitMarker {
+                            id,
+                            unit_template_type: template_type.clone(),
+                            team: self.selected_team.clone(),
+                            pos: painted,
+                        })
+                    } else {
+                        None
+                    };
+                    if let Err(e) = paint_unit(board, painted, marker) {
+                        err_msg = format!("Error painting unit: {}", e);
+                    }
                 }
             }
             BrushMode::Deploy => {
@@ -400,12 +445,87 @@ impl BoardsEditor {
         self.set_status(err_msg, true);
     }
 
+    /// 處理單位拖曳邏輯
+    /// 返回 true 表示需要提前返回（拖曳結束）
+    fn handle_unit_dragging(
+        &mut self,
+        ui: &mut Ui,
+        board_id: &BoardID,
+        is_panel_hover: bool,
+        pointer_state: &PointerState,
+    ) -> bool {
+        let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
+
+        // 僅在 Unit 模式且滑鼠在面板內處理拖曳
+        if self.brush == BrushMode::Unit && is_panel_hover {
+            // 拖曳開始：檢測滑鼠按下
+            if pointer_state.primary_pressed() {
+                if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
+                    // 查找該位置是否有單位
+                    if let Some(&unit_id) =
+                        board.units.values().find(|m| m.pos == pos).map(|m| &m.id)
+                    {
+                        // 開始拖曳
+                        self.dragging_unit = Some(DraggingUnitState {
+                            unit_id,
+                            original_pos: pos,
+                        });
+                    }
+                }
+            }
+            // 拖曳結束：記錄拖曳狀態，稍後更新
+            else if pointer_state.primary_released() {
+                // 拖曳結束的處理將在下方進行
+            }
+        }
+
+        // 處理拖曳結束：更新單位位置
+        if pointer_state.primary_released() && self.dragging_unit.is_some() {
+            let dragging = self.dragging_unit.take().expect("dragging_unit 應該存在");
+            let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+
+            // 取得目標位置
+            let target_pos = cursor_to_pos(&self.camera, ui)
+                .ok()
+                .filter(|&pos| {
+                    // 驗證位置有效性
+                    board.get_tile(pos).is_some() // 在棋盤內
+                        && pos != dragging.original_pos // 不是原位置
+                        && !board.units.values().any(|m| m.pos == pos ) // 無其他單位
+                })
+                .unwrap_or(dragging.original_pos); // 若無效，保持原位
+
+            // 更新單位位置
+            match board.units.get_mut(&dragging.unit_id) {
+                Some(marker) => {
+                    if target_pos != dragging.original_pos {
+                        marker.pos = target_pos;
+                        self.has_unsaved_changes = true;
+                        self.set_status("單位已移動".to_string(), false);
+                    }
+                }
+                None => {
+                    self.set_status("錯誤：單位不存在".to_string(), true);
+                }
+            }
+            return true;
+        }
+
+        false
+    }
+
     fn show_sim(&mut self, ui: &mut Ui) {
         // 取得當前回合角色
         let active_unit_id = match self.sim_battle.get_current_entity() {
             Some(TurnEntity::Unit(id)) => *id,
             Some(TurnEntity::Object(_)) => {
-                self.set_status("當前回合是物件，無法顯示".to_string(), true);
+                // 物件回合：顯示戰場但不允許操作
+                show_tiles(
+                    ui,
+                    &mut self.camera,
+                    &self.sim_board,
+                    show_object_turn_others(&self.sim_board),
+                );
                 return;
             }
             None => {
@@ -503,6 +623,7 @@ impl BoardsEditor {
             }
             match self.skill_selection.execute_action(
                 &mut self.sim_board,
+                &mut self.sim_battle,
                 &self.skills,
                 active_unit_id,
                 to,
@@ -1249,7 +1370,8 @@ impl BoardsEditor {
         let unit_id = match self.sim_battle.get_current_entity() {
             Some(TurnEntity::Unit(id)) => *id,
             Some(TurnEntity::Object(_)) => {
-                self.set_status("當前回合是物件，無法顯示狀態".to_string(), true);
+                ui.label("當前回合是物件，無法顯示狀態");
+                self.end_turn_button(ui);
                 return;
             }
             None => {
@@ -1528,6 +1650,7 @@ impl BoardsEditor {
         let reaction = &state.reactions[reaction_idx];
         match execute_reaction(
             &mut self.sim_board,
+            &mut self.sim_battle,
             &self.skills,
             reaction.reactor_id,
             &skill_id,
@@ -1662,7 +1785,7 @@ impl BoardView for Board {
     }
 
     fn objects(&self) -> Box<dyn Iterator<Item = &Object> + '_> {
-        Box::new(self.objects.values())
+        Box::new(self.object_map.values())
     }
 
     fn find_unit_at(&self, pos: Pos) -> Option<(&str, &str)> {
@@ -1807,6 +1930,13 @@ fn show_sim_others(
     }
 }
 
+/// 顯示物件回合的 overlay：只繪製單位，不顯示移動範圍或當前行動標記
+fn show_object_turn_others(board: &Board) -> impl Fn(&Painter, &Camera2D, Pos, Rect) + '_ {
+    move |painter, camera, pos, rect| {
+        draw_unit(board, painter, camera, pos, rect);
+    }
+}
+
 /// 顯示技能範圍的 overlay：高亮施放/預覽區域，並繪製單位
 fn show_skill_area_others(
     board: &Board,
@@ -1891,6 +2021,100 @@ fn draw_drunkard_start_indicator(
             rect.center(),
             TILE_ACTIVE_UNIT_MARKER_SIZE * camera.zoom,
             Color32::RED,
+        );
+    }
+}
+
+fn draw_unit_dragging_feedback(
+    painter: &Painter,
+    camera: &Camera2D,
+    board: &BoardConfig,
+    unit_templates: &IndexMap<UnitTemplateType, UnitTemplate>,
+    dragging: &DraggingUnitState,
+    hover_pos: Option<Pos>,
+) {
+    // 1. 在原始位置繪製半透明影子
+    let marker = match board.units.get(&dragging.unit_id) {
+        None => return,
+        Some(m) => m,
+    };
+
+    let world_pos = Pos2::new(
+        dragging.original_pos.x as f32 * TILE_SIZE,
+        dragging.original_pos.y as f32 * TILE_SIZE,
+    );
+    let screen_pos = camera.world_to_screen(world_pos);
+    let tile_size = vec2(TILE_SIZE, TILE_SIZE) * camera.zoom;
+    let rect = Rect::from_min_size(screen_pos, tile_size);
+
+    let template = unit_templates.get(&marker.unit_template_type);
+    let team_color = board
+        .teams
+        .get(&marker.team)
+        .map_or(Color32::WHITE, |t| to_egui_color(t.color));
+    let shadow_color = Color32::from_rgba_premultiplied(
+        team_color.r(),
+        team_color.g(),
+        team_color.b(),
+        128, // 半透明
+    );
+
+    painter.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        template.map_or("?", |t| t.name.as_str()),
+        FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
+        shadow_color,
+    );
+
+    // 在原始位置繪製框框提示
+    painter.rect_stroke(
+        rect,
+        2.0,
+        egui::Stroke::new(
+            2.0 * camera.zoom,
+            Color32::from_rgba_premultiplied(0, 255, 0, 180), // 綠色（與目標框相同）
+        ),
+        egui::StrokeKind::Middle,
+    );
+
+    // 2. 繪製目標位置預覽（文字 + 框）
+    if let Some(hover_pos) = hover_pos {
+        let is_valid = board.get_tile(hover_pos).is_some()
+            && hover_pos != dragging.original_pos
+            && !board
+                .units
+                .values()
+                .any(|m| m.pos == hover_pos && m.id != dragging.unit_id);
+
+        let preview_world_pos = Pos2::new(
+            hover_pos.x as f32 * TILE_SIZE,
+            hover_pos.y as f32 * TILE_SIZE,
+        );
+        let preview_screen_pos = camera.world_to_screen(preview_world_pos);
+        let preview_rect = Rect::from_min_size(preview_screen_pos, tile_size);
+
+        // 在目標位置繪製文字
+        painter.text(
+            preview_rect.center(),
+            Align2::CENTER_CENTER,
+            template.map_or("?", |t| t.name.as_str()),
+            FontId::proportional(TILE_UNIT_SIZE * camera.zoom),
+            team_color,
+        );
+
+        // 在目標位置繪製框
+        let stroke_color = if is_valid {
+            Color32::from_rgba_premultiplied(0, 255, 0, 180) // 綠色
+        } else {
+            Color32::from_rgba_premultiplied(255, 0, 0, 180) // 紅色
+        };
+
+        painter.rect_stroke(
+            preview_rect,
+            2.0,
+            egui::Stroke::new(2.0 * camera.zoom, stroke_color),
+            egui::StrokeKind::Middle,
         );
     }
 }
