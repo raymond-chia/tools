@@ -199,9 +199,13 @@ pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
         egui::Color32::GREEN
     };
 
-    egui::TopBottomPanel::bottom("status_panel").show(ctx, |ui| {
-        ui.label(RichText::new(message).color(color));
-    });
+    egui::TopBottomPanel::bottom("status_panel")
+        .max_height(100.0)
+        .show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.label(RichText::new(message).color(color));
+            });
+        });
 }
 
 pub type SkillByTags = BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>;

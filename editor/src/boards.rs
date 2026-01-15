@@ -29,11 +29,28 @@ struct PendingReactionState {
     reactions: Vec<PendingReaction>,
 }
 
-/// 單位拖曳狀態
-#[derive(Debug, Clone)]
-struct DraggingUnitState {
-    unit_id: UnitID,
-    original_pos: Pos,
+/// 單位編輯模式
+#[derive(Debug, Clone, Default, PartialEq)]
+enum UnitEditMode {
+    #[default]
+    Clear,
+    /// 拖曳模式：Option 內為正在拖曳的單位 (unit_id, original_pos)
+    Drag(Option<(UnitID, Pos)>),
+    Place(UnitTemplateType),
+}
+
+impl UnitEditMode {
+    fn is_clear(&self) -> bool {
+        matches!(self, UnitEditMode::Clear)
+    }
+
+    fn is_drag(&self) -> bool {
+        matches!(self, UnitEditMode::Drag(_))
+    }
+
+    fn is_place(&self, template: &UnitTemplateType) -> bool {
+        matches!(self, UnitEditMode::Place(t) if t == template)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -46,10 +63,8 @@ pub struct BoardsEditor {
     selected_object: Option<ObjectType>,
     selected_object_lit: bool,
     selected_orientation: Orientation,
-    selected_unit: Option<UnitTemplateType>,
+    unit_edit_mode: UnitEditMode,
     selected_team: TeamID,
-    // 單位拖曳狀態
-    dragging_unit: Option<DraggingUnitState>,
     // 範圍選取狀態
     selecting: bool,
     selection_start: Option<Pos>,
@@ -131,13 +146,11 @@ impl BoardsEditor {
                     .into_iter()
                     .map(|u| (u.name.clone(), u))
                     .collect();
-                let is_selected_exist = self
-                    .selected_unit
-                    .as_ref()
-                    .map_or(false, |selected| self.unit_templates.contains_key(selected));
-                if !is_selected_exist {
-                    // 如果選中的單位不存在，則清除選中狀態
-                    self.selected_unit = None;
+                // 如果選中的單位模板不存在，則重置為清除模式
+                if let UnitEditMode::Place(ref template) = self.unit_edit_mode {
+                    if !self.unit_templates.contains_key(template) {
+                        self.unit_edit_mode = UnitEditMode::Clear;
+                    }
                 }
             }
             Err(err) => {
@@ -298,14 +311,14 @@ impl BoardsEditor {
             show_tiles(ui, &mut self.camera, board, show_static_others(board));
 
             // 繪製拖曳視覺回饋
-            if let Some(dragging) = &self.dragging_unit {
+            if let UnitEditMode::Drag(Some(dragging)) = &self.unit_edit_mode {
                 let hover_pos = cursor_to_pos(&self.camera, ui).ok();
                 draw_unit_dragging_feedback(
                     ui.painter(),
                     &self.camera,
                     board,
                     &self.unit_templates,
-                    dragging,
+                    *dragging,
                     hover_pos,
                 );
             }
@@ -407,9 +420,10 @@ impl BoardsEditor {
                 }
             }
             BrushMode::Unit => {
-                // 只在非拖曳狀態下新增單位
-                if self.dragging_unit.is_none() {
-                    let marker = if let Some(template_type) = &self.selected_unit {
+                let marker = match &self.unit_edit_mode {
+                    UnitEditMode::Clear => None,
+                    UnitEditMode::Drag(_) => return, // 拖曳模式不執行 paint
+                    UnitEditMode::Place(template_type) => {
                         let id = generate_unique_unit_id(board);
                         Some(UnitMarker {
                             id,
@@ -417,12 +431,10 @@ impl BoardsEditor {
                             team: self.selected_team.clone(),
                             pos: painted,
                         })
-                    } else {
-                        None
-                    };
-                    if let Err(e) = paint_unit(board, painted, marker) {
-                        err_msg = format!("Error painting unit: {}", e);
                     }
+                };
+                if let Err(e) = paint_unit(board, painted, marker) {
+                    err_msg = format!("Error painting unit: {}", e);
                 }
             }
             BrushMode::Deploy => {
@@ -456,8 +468,8 @@ impl BoardsEditor {
     ) -> bool {
         let board = self.boards.get(board_id).expect("選擇的戰場應該存在");
 
-        // 僅在 Unit 模式且滑鼠在面板內處理拖曳
-        if self.brush == BrushMode::Unit && is_panel_hover {
+        // 僅在 Unit 拖曳模式且滑鼠在面板內處理拖曳
+        if self.brush == BrushMode::Unit && is_panel_hover && self.unit_edit_mode.is_drag() {
             // 拖曳開始：檢測滑鼠按下
             if pointer_state.primary_pressed() {
                 if let Ok(pos) = cursor_to_pos(&self.camera, ui) {
@@ -466,49 +478,45 @@ impl BoardsEditor {
                         board.units.values().find(|m| m.pos == pos).map(|m| &m.id)
                     {
                         // 開始拖曳
-                        self.dragging_unit = Some(DraggingUnitState {
-                            unit_id,
-                            original_pos: pos,
-                        });
+                        self.unit_edit_mode = UnitEditMode::Drag(Some((unit_id, pos)));
                     }
                 }
-            }
-            // 拖曳結束：記錄拖曳狀態，稍後更新
-            else if pointer_state.primary_released() {
-                // 拖曳結束的處理將在下方進行
             }
         }
 
         // 處理拖曳結束：更新單位位置
-        if pointer_state.primary_released() && self.dragging_unit.is_some() {
-            let dragging = self.dragging_unit.take().expect("dragging_unit 應該存在");
-            let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        if let UnitEditMode::Drag(Some((unit_id, original_pos))) = self.unit_edit_mode {
+            if pointer_state.primary_released() {
+                let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
 
-            // 取得目標位置
-            let target_pos = cursor_to_pos(&self.camera, ui)
-                .ok()
-                .filter(|&pos| {
-                    // 驗證位置有效性
-                    board.get_tile(pos).is_some() // 在棋盤內
-                        && pos != dragging.original_pos // 不是原位置
-                        && !board.units.values().any(|m| m.pos == pos ) // 無其他單位
-                })
-                .unwrap_or(dragging.original_pos); // 若無效，保持原位
+                // 取得目標位置
+                let target_pos = cursor_to_pos(&self.camera, ui)
+                    .ok()
+                    .filter(|&pos| {
+                        // 驗證位置有效性
+                        board.get_tile(pos).is_some() // 在棋盤內
+                            && pos != original_pos // 不是原位置
+                            && !board.units.values().any(|m| m.pos == pos) // 無其他單位
+                    })
+                    .unwrap_or(original_pos); // 若無效，保持原位
 
-            // 更新單位位置
-            match board.units.get_mut(&dragging.unit_id) {
-                Some(marker) => {
-                    if target_pos != dragging.original_pos {
-                        marker.pos = target_pos;
-                        self.has_unsaved_changes = true;
-                        self.set_status("單位已移動".to_string(), false);
+                // 更新單位位置
+                match board.units.get_mut(&unit_id) {
+                    Some(marker) => {
+                        if target_pos != original_pos {
+                            marker.pos = target_pos;
+                            self.has_unsaved_changes = true;
+                            self.set_status("單位已移動".to_string(), false);
+                        }
+                    }
+                    None => {
+                        self.set_status("錯誤：單位不存在".to_string(), true);
                     }
                 }
-                None => {
-                    self.set_status("錯誤：單位不存在".to_string(), true);
-                }
+                // 重置為未拖曳狀態
+                self.unit_edit_mode = UnitEditMode::Drag(None);
+                return true;
             }
-            return true;
         }
 
         false
@@ -1177,22 +1185,26 @@ impl BoardsEditor {
 
         ui.separator();
 
-        if ui
-            .selectable_label(self.selected_unit.is_none(), "清除")
-            .clicked()
-        {
-            self.selected_unit = None;
-            return;
-        }
-        for (template, _) in &self.unit_templates {
+        ui.horizontal(|ui| {
             if ui
-                .selectable_label(
-                    self.selected_unit.as_ref().map_or(false, |t| t == template),
-                    template,
-                )
+                .selectable_label(self.unit_edit_mode.is_clear(), "清除")
                 .clicked()
             {
-                self.selected_unit = Some(template.clone());
+                self.unit_edit_mode = UnitEditMode::Clear;
+            }
+            if ui
+                .selectable_label(self.unit_edit_mode.is_drag(), "拖曳")
+                .clicked()
+            {
+                self.unit_edit_mode = UnitEditMode::Drag(None);
+            }
+        });
+        for (template, _) in &self.unit_templates {
+            if ui
+                .selectable_label(self.unit_edit_mode.is_place(template), template)
+                .clicked()
+            {
+                self.unit_edit_mode = UnitEditMode::Place(template.clone());
             }
         }
     }
@@ -2030,18 +2042,20 @@ fn draw_unit_dragging_feedback(
     camera: &Camera2D,
     board: &BoardConfig,
     unit_templates: &IndexMap<UnitTemplateType, UnitTemplate>,
-    dragging: &DraggingUnitState,
+    dragging: (UnitID, Pos),
     hover_pos: Option<Pos>,
 ) {
+    let (unit_id, original_pos) = dragging;
+
     // 1. 在原始位置繪製半透明影子
-    let marker = match board.units.get(&dragging.unit_id) {
+    let marker = match board.units.get(&unit_id) {
         None => return,
         Some(m) => m,
     };
 
     let world_pos = Pos2::new(
-        dragging.original_pos.x as f32 * TILE_SIZE,
-        dragging.original_pos.y as f32 * TILE_SIZE,
+        original_pos.x as f32 * TILE_SIZE,
+        original_pos.y as f32 * TILE_SIZE,
     );
     let screen_pos = camera.world_to_screen(world_pos);
     let tile_size = vec2(TILE_SIZE, TILE_SIZE) * camera.zoom;
@@ -2081,11 +2095,11 @@ fn draw_unit_dragging_feedback(
     // 2. 繪製目標位置預覽（文字 + 框）
     if let Some(hover_pos) = hover_pos {
         let is_valid = board.get_tile(hover_pos).is_some()
-            && hover_pos != dragging.original_pos
+            && hover_pos != original_pos
             && !board
                 .units
                 .values()
-                .any(|m| m.pos == hover_pos && m.id != dragging.unit_id);
+                .any(|m| m.pos == hover_pos && m.id != unit_id);
 
         let preview_world_pos = Pos2::new(
             hover_pos.x as f32 * TILE_SIZE,

@@ -1642,6 +1642,7 @@ fn show_triggered_skill_editor(
                     } else {
                         id.as_str()
                     })
+                    .height(300.0)
                     .show_ui(ui, |ui| {
                         for skill_id in skill_ids {
                             if ui.selectable_label(id == skill_id, skill_id).clicked() {
