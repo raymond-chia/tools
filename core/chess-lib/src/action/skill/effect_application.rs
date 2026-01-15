@@ -537,6 +537,11 @@ mod inner {
             Some(_) => {}
         }
 
+        // 檢查是否有單位
+        if board.pos_to_unit(pos).is_some() {
+            return Err(format!("位置 {:?} 已有單位", pos));
+        }
+
         // 檢查是否已有物件（初始規則：Tree/Wall/Torch/Campfire 不可疊加）
         let existing_objects = board.object_map.get_objects_at(pos);
         if !existing_objects.is_empty() {
