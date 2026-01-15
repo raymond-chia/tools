@@ -39,7 +39,7 @@ pub fn calc_hit_result(
     caster: (UnitID, Pos),
     skills: &BTreeMap<SkillID, Skill>,
     skill: &Skill,
-    affect_area: Vec<Pos>,
+    affect_area: &[Pos],
     accuracy: i32,
 ) -> Result<Vec<String>, Error> {
     let func = "calc_hit_result";
@@ -51,7 +51,7 @@ pub fn calc_hit_result(
     let hit_random = rng.random_range(1..=100);
     let hit_score = accuracy + hit_random;
 
-    for pos in affect_area {
+    for &pos in affect_area {
         let target_id = match board.pos_to_unit(pos) {
             // 無單位，直接套用效果（不需要豁免判定）
             None => {

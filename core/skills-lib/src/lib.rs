@@ -79,6 +79,9 @@ pub enum Tag {
     // 其他
     Heal,
     Fire,
+    // 物件交互
+    Ignite,     // 點燃範圍內的可燃物件
+    Extinguish, // 熄滅範圍內的物件
 }
 
 /// 豁免檢定類型

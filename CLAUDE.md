@@ -30,9 +30,10 @@
 ### core/chess-lib
 
 **棋盤操作** (`board.rs`)
+
 - `Board::from_config(config, unit_templates, skills) -> Result<Board, Error>` - 從配置建立棋盤
-- `Board::pos_to_unit(&self, pos: Pos) -> Option<UnitID>` - 位置→單位 ID
-- `Board::unit_to_pos(&self, unit_id: UnitID) -> Option<Pos>` - 單位 ID→位置
+- `Board::pos_to_unit(&self, pos: Pos) -> Option<UnitID>` - 位置 → 單位 ID
+- `Board::unit_to_pos(&self, unit_id: UnitID) -> Option<Pos>` - 單位 ID→ 位置
 - `Board::is_tile_passable(&self, pos: Pos) -> bool` - 檢查格子可通行性
 - `Board::can_see_target(&self, (observer_id, from), to, skills) -> Result<bool, Error>` - 視線檢查
 - `Board::get_light_level(&self, pos: Pos, skills) -> Result<LightLevel, Error>` - 取得光照等級
@@ -49,11 +50,19 @@
 - `ObjectMap::get(&self, object_id) -> Option<&Object>` - 取得物件
 - `ObjectMap::get_objects_at(&self, pos) -> Vec<&Object>` - 查詢位置的所有物件
 - `ObjectMap::decrease_object_duration(&mut self, object_id)` - 減少物件持續時間
+- `ObjectMap::ignite_objects_at(&mut self, pos) -> usize` - 點燃位置上的可燃物件
+- `ObjectMap::extinguish_objects_at(&mut self, pos) -> usize` - 熄滅位置上的物件
 - `Object::is_passable(&self) -> bool` - 物件是否可通行
 - `Object::blocks_sight_from(&self, from_pos, obj_pos) -> bool` - 是否阻擋視線
 - `Object::light_level_at(&self, distance) -> LightLevel` - 物件在距離的光照等級
 
+**ObjectMap 封裝規則**:
+
+- 禁止 `ObjectMap::get_mut()` - 避免外部修改 `affected_positions` 導致索引不同步
+- 若需修改物件狀態，在 `ObjectMap` 上新增專用方法（如 `ignite_object`、`extinguish_object`）
+
 **戰鬥管理** (`battle.rs`)
+
 - `Battle::new(turn_order: Vec<TurnEntity>) -> Battle` - 建立戰鬥
 - `Battle::get_current_entity(&self) -> Option<&TurnEntity>` - 取得當前回合實體
 - `Battle::remove_entity_from_turn_order(&mut self, entity)` - 從回合順序移除實體
@@ -64,26 +73,28 @@
 - `remove_object_if_expired(board, object_id) -> bool` - 移除過期物件
 
 **單位系統** (`unit.rs`)
+
 - `Unit::from_template(marker, template, skills) -> Result<Unit, Error>` - 從模板建立單位
 - `Unit::recalc_from_skills(&mut self, skills) -> Result<(), Error>` - 從技能重新計算屬性
 - `calc_initiative(rng, skill_ids, skills) -> Result<i32, Error>` - 計算先攻
-- `skills_to_max_hp(skill_ids, skills) -> Result<i32, Error>` - 技能→最大 HP
-- `skills_to_max_mp(skill_ids, skills) -> Result<i32, Error>` - 技能→最大 MP
-- `skills_to_move_points(skill_ids, skills) -> Result<MovementCost, Error>` - 技能→移動力
-- `skills_to_max_reactions(skill_ids, skills) -> Result<ReactionCount, Error>` - 技能→最大反應次數
-- `skills_to_accuracy(skill_ids, skills) -> Result<i32, Error>` - 技能→命中
-- `skills_to_evasion(skill_ids, skills) -> Result<i32, Error>` - 技能→閃避
-- `skills_to_block(skill_ids, skills) -> Result<i32, Error>` - 技能→格擋
-- `skills_to_block_reduction(skill_ids, skills) -> Result<i32, Error>` - 技能→破甲
-- `skills_to_flanking(skill_ids, skills) -> Result<i32, Error>` - 技能→側翼加成
-- `skills_to_hit_and_run(skill_ids, skills) -> Result<bool, Error>` - 技能→打帶跑
-- `skills_to_potency(skill_ids, skills, tag) -> Result<i32, Error>` - 技能→威力
-- `skills_to_resistance(skill_ids, skills, save_type) -> Result<i32, Error>` - 技能→抗性
-- `skills_to_sense(skill_ids, skills, distance) -> Result<bool, Error>` - 技能→感知能力
-- `effects_to_light_level(effects, distance) -> LightLevel` - 效果→光照等級
-- `effects_to_sense(effects, distance) -> bool` - 效果→感知能力
+- `skills_to_max_hp(skill_ids, skills) -> Result<i32, Error>` - 技能 → 最大 HP
+- `skills_to_max_mp(skill_ids, skills) -> Result<i32, Error>` - 技能 → 最大 MP
+- `skills_to_move_points(skill_ids, skills) -> Result<MovementCost, Error>` - 技能 → 移動力
+- `skills_to_max_reactions(skill_ids, skills) -> Result<ReactionCount, Error>` - 技能 → 最大反應次數
+- `skills_to_accuracy(skill_ids, skills) -> Result<i32, Error>` - 技能 → 命中
+- `skills_to_evasion(skill_ids, skills) -> Result<i32, Error>` - 技能 → 閃避
+- `skills_to_block(skill_ids, skills) -> Result<i32, Error>` - 技能 → 格擋
+- `skills_to_block_reduction(skill_ids, skills) -> Result<i32, Error>` - 技能 → 破甲
+- `skills_to_flanking(skill_ids, skills) -> Result<i32, Error>` - 技能 → 側翼加成
+- `skills_to_hit_and_run(skill_ids, skills) -> Result<bool, Error>` - 技能 → 打帶跑
+- `skills_to_potency(skill_ids, skills, tag) -> Result<i32, Error>` - 技能 → 威力
+- `skills_to_resistance(skill_ids, skills, save_type) -> Result<i32, Error>` - 技能 → 抗性
+- `skills_to_sense(skill_ids, skills, distance) -> Result<bool, Error>` - 技能 → 感知能力
+- `effects_to_light_level(effects, distance) -> LightLevel` - 效果 → 光照等級
+- `effects_to_sense(effects, distance) -> bool` - 效果 → 感知能力
 
 **技能施放** (`action/skill/mod.rs`, `action/skill/casting.rs`)
+
 - `SkillSelection::select_skill(&mut self, skill_id: Option<SkillID>)` - 選擇技能
 - `SkillSelection::execute_action(&self, board, battle, skills, caster, target) -> Result<Vec<String>, Error>` - 執行技能
 - `SkillSelection::skill_affect_area(&self, board, skills, caster_pos, to) -> Vec<Pos>` - 技能影響範圍
@@ -97,10 +108,12 @@
 - `clamp_pi(rad: f64) -> f64` - 限制角度在 [-π, π]
 
 **命中與豁免** (`action/skill/hit.rs`, `action/skill/save.rs`)
-- `calc_hit_result(board, battle, caster, skills, skill, affect_area, accuracy) -> Result<Vec<String>, Error>` - 計算命中結果
+
+- `calc_hit_result(board, battle, caster, skills, skill, &[Pos], accuracy) -> Result<Vec<String>, Error>` - 計算命中結果
 - `calc_save_result(board, skills, caster_id, target_id, skill, effect) -> Result<SaveResult, Error>` - 計算豁免結果
 
 **移動系統** (`action/movement.rs`)
+
 - `get_adjacent_positions(pos: Pos) -> Vec<Pos>` - 取得相鄰位置
 - `movable_area(board, from, skills_map) -> HashMap<Pos, (MovementCost, Pos)>` - 計算可移動範圍
 - `reconstruct_path(map, from, to) -> Result<Vec<Pos>, Error>` - 重建路徑
@@ -108,6 +121,7 @@
 - `movement_tile_color(board, movable, active_unit_id, path, pos) -> Result<RGBA, Error>` - 移動格子顏色
 
 **反應系統** (`action/reaction.rs`)
+
 - `find_reaction_skills(triggered_skill, unit_skills, all_skills) -> Result<Vec<SkillID>, Error>` - 尋找反應技能
 - `is_able_to_react(unit) -> Result<(), Error>` - 檢查是否能反應
 - `consume_reaction(unit) -> Result<(), Error>` - 消耗反應次數
@@ -117,20 +131,24 @@
 - `execute_reaction(board, battle, reactor, skills, reaction_skill, target) -> Result<Vec<String>, Error>` - 執行反應
 
 **AI 系統** (`ai.rs`)
+
 - `decide_action(board, skills, config, unit_id) -> Result<ScoredAction, Error>` - AI 決定行動
 - `score_actions(board, skills, config, unit_id) -> Result<Vec<ScoredAction>, Error>` - AI 評估所有行動
 
 **路徑尋找** (`action/algo.rs`)
+
 - `dijkstra<T: PathfindingBoard>(graph: &T, start: Pos) -> HashMap<Pos, (MovementCost, Pos)>` - Dijkstra 最短路徑
 - `bresenham_line(from, to, len, is_valid) -> Vec<Pos>` - Bresenham 直線
 
 **輔助函數** (`terrain.rs`, `lib.rs`)
+
 - `manhattan_distance(a: Pos, b: Pos) -> usize` - 曼哈頓距離
 - `movement_cost(terrain: Terrain) -> MovementCost` - 地形移動成本
 
 ### core/skills-lib
 
 **方法**
+
 - `Effect::target_type(&self) -> &TargetType` - 效果目標類型
 - `Effect::is_targeting_unit(&self) -> bool` - 是否針對單位
 - `Effect::shape(&self) -> &Shape` - 效果形狀
@@ -142,12 +160,18 @@
 ### core/dialogs-lib
 
 **方法**
+
 - `Node::pos(&self) -> Pos` - 節點位置
 - `Node::set_pos(&mut self, p: Pos)` - 設定節點位置
 
 ### core/object-lib
 
-（此庫主要提供型別定義，無公開函數）
+**方法**
+
+- `ObjectType::is_ignitable(&self) -> bool` - 檢查物件是否可被點燃
+- `ObjectType::is_extinguishable(&self) -> bool` - 檢查物件是否可被熄滅
+- `ObjectType::try_ignite(&mut self) -> bool` - 嘗試點燃物件
+- `ObjectType::try_extinguish(&mut self) -> bool` - 嘗試熄滅物件
 
 ## 基本指令
 

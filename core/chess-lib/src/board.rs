@@ -446,6 +446,40 @@ impl ObjectMap {
         self.objects.get(&object_id)
     }
 
+    /// 點燃指定位置上的所有可燃物件，回傳被點燃的數量
+    pub fn ignite_objects_at(&mut self, pos: Pos) -> usize {
+        let ids = match self.pos_to_object.get(&pos) {
+            Some(ids) => ids.clone(),
+            None => return 0,
+        };
+        let mut count = 0;
+        for id in ids {
+            if let Some(obj) = self.objects.get_mut(&id) {
+                if obj.object_type.try_ignite() {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    /// 熄滅指定位置上的所有物件，回傳被熄滅的數量
+    pub fn extinguish_objects_at(&mut self, pos: Pos) -> usize {
+        let ids = match self.pos_to_object.get(&pos) {
+            Some(ids) => ids.clone(),
+            None => return 0,
+        };
+        let mut count = 0;
+        for id in ids {
+            if let Some(obj) = self.objects.get_mut(&id) {
+                if obj.object_type.try_extinguish() {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
     /// 減少物件的 duration（永久物件 -1 不減少）
     pub fn decrease_object_duration(&mut self, object_id: ObjectID) {
         if let Some(object) = self.objects.get_mut(&object_id) {

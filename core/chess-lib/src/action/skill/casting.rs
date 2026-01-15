@@ -268,7 +268,7 @@ pub(super) fn apply_skill_to_area(
     match skill.accuracy {
         None => {
             // 無命中數值，所有格子直接套用效果（無爆擊）
-            for pos in affect_area {
+            for &pos in &affect_area {
                 for effect in &skill.effects {
                     // 只對有單位的目標進行豁免判定
                     let save_result = match board.pos_to_unit(pos) {
@@ -311,11 +311,29 @@ pub(super) fn apply_skill_to_area(
                     (caster, caster_pos),
                     skills,
                     skill,
-                    affect_area,
+                    &affect_area,
                     total_accuracy,
                 )
                 .wrap_context(func)?,
             );
+        }
+    }
+
+    // 根據技能 Tag 執行點燃/熄滅
+    if skill.tags.contains(&Tag::Ignite) {
+        for &pos in &affect_area {
+            let count = board.object_map.ignite_objects_at(pos);
+            if count > 0 {
+                msgs.push(format!("在 ({}, {}) 點燃了 {} 個物件", pos.x, pos.y, count));
+            }
+        }
+    }
+    if skill.tags.contains(&Tag::Extinguish) {
+        for &pos in &affect_area {
+            let count = board.object_map.extinguish_objects_at(pos);
+            if count > 0 {
+                msgs.push(format!("在 ({}, {}) 熄滅了 {} 個物件", pos.x, pos.y, count));
+            }
         }
     }
 

@@ -270,7 +270,7 @@
    - 實作創造邏輯（生成 Object、插入 turn_order）
    - Object 消失時的清理
 
-4. **Phase 4: Tag 點燃/熄滅機制**
+4. **Phase 4: Tag 點燃/熄滅機制** (已完成)
 
    - 新增 Tag::Ignite、Tag::Extinguish
    - 實作 ignite_objects_at()、extinguish_objects_at()
