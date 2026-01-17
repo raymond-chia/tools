@@ -3,8 +3,8 @@
 //! 本模組負責技能效果、技能施放與解析邏輯。
 //! 僅處理技能本身，不負責戰鬥流程、AI 決策或棋盤初始化。
 
-pub use hit_resolution::{AttackResult, SaveResult};
 pub use selection::*;
+pub use skills_lib::{AttackResult, DefenseResult, SaveResult};
 pub use targeting::*;
 // 重新導出供 reaction 系統使用
 pub(in crate::action) use casting::cast_skill_internal;

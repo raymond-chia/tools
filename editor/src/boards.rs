@@ -82,6 +82,8 @@ pub struct BoardsEditor {
     pending_reactions: Option<PendingReactionState>,
     // AI 評分結果
     ai_score_result: Option<String>,
+    // 統計面板
+    show_statistics_panel: bool,
     // 其他
     camera: Camera2D,
     unit_templates: IndexMap<UnitTemplateType, UnitTemplate>,
@@ -215,6 +217,12 @@ impl BoardsEditor {
         });
         self.show_status_message(ctx);
         self.show_reaction_dialog(ctx);
+        // 統計面板 popup
+        if self.show_statistics_panel {
+            Window::new("戰鬥統計").show(ctx, |ui| {
+                self.show_statistics_panel_content(ui);
+            });
+        }
     }
 
     fn show_board_list(&mut self, ui: &mut Ui) {
@@ -685,7 +693,13 @@ impl BoardsEditor {
                     self.set_status("無法到達目標位置".to_string(), true);
                     return;
                 }
-                match move_unit_along_path(&mut self.sim_board, path, false, &self.skills) {
+                match move_unit_along_path(
+                    &mut self.sim_board,
+                    path,
+                    false,
+                    &self.skills,
+                    &mut self.sim_battle.statistics,
+                ) {
                     Ok(MoveResult::Completed) => {}
                     Ok(MoveResult::ReactionTriggered {
                         target_actual_pos,
@@ -782,7 +796,13 @@ impl BoardsEditor {
             let (target_actual_pos, mut remaining_path) =
                 (state.target_actual_pos, state.remaining_path);
             remaining_path[0] = target_actual_pos;
-            match move_unit_along_path(&mut self.sim_board, remaining_path, true, &self.skills) {
+            match move_unit_along_path(
+                &mut self.sim_board,
+                remaining_path,
+                true,
+                &self.skills,
+                &mut self.sim_battle.statistics,
+            ) {
                 Ok(MoveResult::Completed) => {}
                 Ok(MoveResult::ReactionTriggered {
                     target_actual_pos,
@@ -1367,6 +1387,16 @@ impl BoardsEditor {
 
                 self.sim_board = board;
                 self.sim_battle = Battle::new(turn_order);
+
+                // 註冊所有單位到統計系統（確保死亡後仍能查詢名稱與隊伍）
+                for (unit_id, unit) in &self.sim_board.units {
+                    self.sim_battle.statistics.register_unit(
+                        *unit_id,
+                        unit.unit_template_type.clone(),
+                        unit.team.clone(),
+                    );
+                }
+
                 self.set_status(
                     format!("轉換成功: BoardConfig 已成功轉換為 Board，並覆蓋玩家單位內容。"),
                     false,
@@ -1404,6 +1434,15 @@ impl BoardsEditor {
                 return;
             }
         };
+
+        // 統計面板
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.show_statistics_panel, false, "隱藏統計");
+            ui.selectable_value(&mut self.show_statistics_panel, true, "顯示統計");
+        });
+
+        ui.separator();
         ui.label(format!("當前行動單位種類: {}", unit.unit_template_type));
 
         // 以繁體中文註解：只顯示單位擁有的技能列表
@@ -1535,6 +1574,160 @@ impl BoardsEditor {
                     ui.label(result);
                 });
         }
+    }
+
+    /// 顯示統計面板內容
+    fn show_statistics_panel_content(&self, ui: &mut Ui) {
+        let stats = &self.sim_battle.statistics;
+
+        ui.heading("戰鬥統計");
+        ui.label(format!("回合數: {}", stats.total_turns));
+
+        // 按隊伍分組，並在隊伍內按名稱排序
+        let mut teams: BTreeMap<&str, Vec<_>> = BTreeMap::new();
+        for (unit_id, unit_stats) in &stats.unit_stats {
+            teams
+                .entry(&unit_stats.team)
+                .or_default()
+                .push((unit_id, unit_stats));
+        }
+        for units in teams.values_mut() {
+            units.sort_by(|a, b| a.1.unit_name.cmp(&b.1.unit_name));
+        }
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (team_name, units) in &teams {
+                egui::CollapsingHeader::new(format!("隊伍: {}", team_name))
+                    .id_salt(format!("team_{}", team_name))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        for (unit_id, unit_stats) in units {
+                            egui::CollapsingHeader::new(&unit_stats.unit_name)
+                                .id_salt(format!("unit_stats_{}", unit_id))
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    // 傷害統計
+                                    ui.label("【傷害統計】");
+                                    ui.label(format!(
+                                        "  造成傷害: {}",
+                                        unit_stats.damage.damage_dealt
+                                    ));
+                                    ui.label(format!(
+                                        "  最高單次傷害: {}",
+                                        unit_stats.damage.max_single_damage
+                                    ));
+                                    ui.label(format!(
+                                        "  受到傷害: {}",
+                                        unit_stats.damage.damage_taken
+                                    ));
+                                    ui.label(format!(
+                                        "  治療造成: {}",
+                                        unit_stats.damage.healing_dealt
+                                    ));
+                                    ui.label(format!(
+                                        "  治療受到: {}",
+                                        unit_stats.damage.healing_received
+                                    ));
+
+                                    ui.separator();
+
+                                    // 命中統計
+                                    ui.label("【命中統計】");
+                                    let hit_rate = if unit_stats.hit.attack_count > 0 {
+                                        (unit_stats.hit.hit_count as f32
+                                            / unit_stats.hit.attack_count as f32)
+                                            * 100.0
+                                    } else {
+                                        0.0
+                                    };
+                                    ui.label(format!(
+                                        "  命中率: {:.1}% ({}/{})",
+                                        hit_rate,
+                                        unit_stats.hit.hit_count,
+                                        unit_stats.hit.attack_count
+                                    ));
+                                    ui.label(format!(
+                                        "  爆擊次數: {}",
+                                        unit_stats.hit.critical_count
+                                    ));
+                                    ui.label(format!(
+                                        "  完全命中: {}",
+                                        unit_stats.hit.guaranteed_hit_count
+                                    ));
+                                    ui.label(format!("  閃避次數: {}", unit_stats.hit.evade_count));
+                                    ui.label(format!("  格擋次數: {}", unit_stats.hit.block_count));
+                                    ui.label(format!(
+                                        "  完全閃避: {}",
+                                        unit_stats.hit.guaranteed_evade_count
+                                    ));
+                                    ui.label(format!(
+                                        "  豁免: 成功 {} / 失敗 {}",
+                                        unit_stats.hit.save_success_count,
+                                        unit_stats.hit.save_fail_count
+                                    ));
+
+                                    ui.separator();
+
+                                    // 資源統計
+                                    ui.label("【資源統計】");
+                                    ui.label(format!(
+                                        "  MP 消耗: {}",
+                                        unit_stats.resource.mp_consumed
+                                    ));
+                                    ui.label(format!(
+                                        "  行動次數: {}",
+                                        unit_stats.resource.action_count
+                                    ));
+                                    ui.label(format!(
+                                        "  反應次數: {}",
+                                        unit_stats.resource.reaction_count
+                                    ));
+                                    ui.label(format!(
+                                        "  移動格數: {}",
+                                        unit_stats.resource.tiles_moved
+                                    ));
+
+                                    // 技能統計
+                                    if !unit_stats.skill_stats.is_empty() {
+                                        ui.separator();
+                                        egui::CollapsingHeader::new("技能詳情")
+                                            .id_salt(format!("skill_details_{}", unit_id))
+                                            .default_open(false)
+                                            .show(ui, |ui| {
+                                                for (skill_id, skill_stats) in
+                                                    &unit_stats.skill_stats
+                                                {
+                                                    ui.label(format!("【{}】", skill_id));
+                                                    ui.label(format!(
+                                                        "  使用次數: {}",
+                                                        skill_stats.use_count
+                                                    ));
+                                                    ui.label(format!(
+                                                        "  總傷害: {}",
+                                                        skill_stats.total_damage
+                                                    ));
+                                                    if skill_stats.attack_count > 0 {
+                                                        let skill_hit_rate = (skill_stats.hit_count
+                                                            as f32
+                                                            / skill_stats.attack_count as f32)
+                                                            * 100.0;
+                                                        ui.label(format!(
+                                                            "  命中率: {:.1}%",
+                                                            skill_hit_rate
+                                                        ));
+                                                    }
+                                                    ui.label(format!(
+                                                        "  爆擊次數: {}",
+                                                        skill_stats.critical_count
+                                                    ));
+                                                }
+                                            });
+                                    }
+                                });
+                        }
+                    });
+            }
+        });
     }
 
     /// 在模擬模式下顯示「結束回合」按鈕，並切換到下一角色

@@ -9,6 +9,7 @@ mod ai;
 mod battle;
 mod board;
 mod error;
+mod statistics;
 mod unit;
 
 pub use action::*;
@@ -16,6 +17,7 @@ pub use ai::*;
 pub use battle::*;
 pub use board::*;
 pub use error::*;
+pub use statistics::*;
 pub use unit::*;
 
 pub type BoardID = String;
@@ -38,6 +40,9 @@ pub const TORCH_BRIGHT_RANGE: usize = 1;
 pub const TORCH_DIM_RANGE: usize = 3;
 pub const CAMPFIRE_BRIGHT_RANGE: usize = 6;
 pub const CAMPFIRE_DIM_RANGE: usize = 12;
+
+/// Burn 效果每回合造成的固定傷害
+const BURN_DAMAGE_PER_TURN: i32 = 5;
 
 #[derive(
     Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash,

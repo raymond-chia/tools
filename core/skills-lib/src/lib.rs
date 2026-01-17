@@ -14,6 +14,16 @@ pub enum AttackResult {
     Critical, // 爆擊（2x 傷害）
 }
 
+/// 防禦結果
+#[derive(Debug, Deserialize, Serialize, Clone, Copy)]
+pub enum DefenseResult {
+    Hit,             // 命中
+    Evaded,          // 閃避
+    Blocked,         // 格擋
+    GuaranteedHit,   // 完全命中（亂數 > 95）
+    GuaranteedEvade, // 完全閃避（亂數 <= 5）
+}
+
 /// 豁免結果
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 pub enum SaveResult {

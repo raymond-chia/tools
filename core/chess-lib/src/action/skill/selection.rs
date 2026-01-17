@@ -37,9 +37,17 @@ impl SkillSelection {
         let skill_id = validate_skill_casting(board, skills, caster, &self.selected_skill, target)
             .wrap_context(func)?;
 
-        // 2. 施放技能（共用邏輯）
-        let msgs = cast_skill_internal(board, battle, skills, caster, &skill_id, (target, target))
-            .wrap_context(func)?;
+        // 2. 施放技能（共用邏輯，非反應）
+        let msgs = cast_skill_internal(
+            board,
+            battle,
+            skills,
+            caster,
+            &skill_id,
+            (target, target),
+            false,
+        )
+        .wrap_context(func)?;
 
         // 3. 消耗 action
         let caster = board.units.get_mut(&caster).ok_or(Error::NoActingUnit {
@@ -123,10 +131,13 @@ mod tests {
             let shoot_skill: Skill = serde_json::from_str(shoot_data).unwrap();
             let splash_data = include_str!("../../../tests/skill_splash.json");
             let splash_skill: Skill = serde_json::from_str(splash_data).unwrap();
+            let max_hp_data = include_str!("../../../tests/skill_max_hp.json");
+            let max_hp_skill: Skill = serde_json::from_str(max_hp_data).unwrap();
             BTreeMap::from([
                 ("shoot".to_string(), shoot_skill),
                 ("slash".to_string(), slash_skill),
                 ("splash".to_string(), splash_skill),
+                ("max_hp".to_string(), max_hp_skill),
             ])
         };
         let template = {
@@ -191,7 +202,7 @@ mod tests {
         let target = Pos { x: 1, y: 2 };
         let result = sel.execute_action(&mut board, &mut battle, &skills, unit_id, target);
 
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
         let msgs = result.unwrap();
         assert!(msgs.iter().any(|m| m.contains("slash 在 (1, 2) 施放")));
 

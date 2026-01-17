@@ -15,22 +15,6 @@ use crate::action::skill::effect_application::{
     apply_all_effects, apply_effects_to_empty_tile, apply_effects_with_block,
 };
 
-/// 攻擊結果（用於判斷是否爆擊）
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AttackResult {
-    NoAttack, // 無攻擊（非傷害技能）
-    Normal,   // 普通攻擊
-    Critical, // 爆擊
-}
-
-/// 豁免檢定結果
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SaveResult {
-    NoSave,  // 不需要豁免
-    Success, // 豁免成功
-    Failure, // 豁免失敗
-}
-
 /// 計算技能命中結果（包含閃避、格擋、爆擊判定）
 /// 對影響區域內的每個目標進行命中判定，並應用相應效果
 pub fn calc_hit_result(
@@ -38,6 +22,7 @@ pub fn calc_hit_result(
     battle: &mut Battle,
     caster: (UnitID, Pos),
     skills: &BTreeMap<SkillID, Skill>,
+    skill_id: &SkillID,
     skill: &Skill,
     affect_area: &[Pos],
     accuracy: i32,
@@ -58,6 +43,7 @@ pub fn calc_hit_result(
                 msgs.extend(apply_effects_to_empty_tile(
                     board,
                     battle,
+                    skill_id,
                     skill,
                     (caster_id, caster_pos),
                     pos,
@@ -81,6 +67,7 @@ pub fn calc_hit_result(
             skills,
             (caster_id, caster_pos),
             (target_id, pos),
+            skill_id,
             skill,
             hit_random,
             hit_score + flanking_bonus,
@@ -99,6 +86,7 @@ pub fn calc_hit_result(
 pub fn calc_save_result(
     board: &Board,
     skills: &BTreeMap<SkillID, Skill>,
+    statistics: &mut statistics::BattleStatistics,
     caster_id: UnitID,
     target_id: UnitID,
     skill: &Skill,
@@ -143,11 +131,16 @@ pub fn calc_save_result(
     let mut rng = rand::rng();
     let save_score = target_resistance + rng.random_range(1..=100);
 
-    if save_score <= caster_potency {
-        Ok(SaveResult::Failure)
+    let result = if save_score <= caster_potency {
+        SaveResult::Failure
     } else {
-        Ok(SaveResult::Success)
-    }
+        SaveResult::Success
+    };
+
+    // 記錄豁免結果
+    statistics.record_save(target_id, matches!(result, SaveResult::Success));
+
+    Ok(result)
 }
 
 use inner::*;
@@ -246,12 +239,18 @@ mod inner {
         skills: &BTreeMap<SkillID, Skill>,
         (caster_id, caster_pos): (UnitID, Pos),
         (target_id, target_pos): (UnitID, Pos),
+        skill_id: &SkillID,
         skill: &Skill,
         hit_random: i32,
         hit_score: i32,
     ) -> Result<Vec<String>, Error> {
         let func = "process_target_hit";
         let mut msgs = vec![];
+
+        // 記錄攻擊嘗試
+        battle
+            .statistics
+            .record_attack(caster_id, target_id, skill_id);
 
         let target_unit = board
             .units
@@ -307,24 +306,42 @@ mod inner {
             msgs.push(format!("閃避光照影響: {:.0}%", caster_light_mult * 100.0));
         }
 
+        // 先決定攻擊結果（普通/爆擊），以便統計
+        let (attack_result, crit_msg) = determine_attack_result(skill, hit_random);
+
         // 完全閃避
         if hit_random <= CRITICAL_FAILURE_THRESHOLD {
+            // 記錄完全閃避
+            battle.statistics.record_hit(
+                caster_id,
+                target_id,
+                skill_id,
+                DefenseResult::GuaranteedEvade,
+                attack_result,
+            );
             msgs.push(format!(
                 "亂數={hit_random} <= {CRITICAL_FAILURE_THRESHOLD}%，單位 {target_unit_type} 完全閃避了攻擊！"
             ));
             return Ok(msgs);
         }
 
-        let (attack_result, crit_msg) = determine_attack_result(skill, hit_random);
-
         // 完全命中
         if hit_random > CRITICAL_SUCCESS_THRESHOLD {
+            // 記錄完全命中
+            battle.statistics.record_hit(
+                caster_id,
+                target_id,
+                skill_id,
+                DefenseResult::GuaranteedHit,
+                attack_result,
+            );
             let effect_msgs = apply_all_effects(
                 board,
                 battle,
                 skills,
                 (caster_id, caster_pos),
                 (target_id, target_pos),
+                skill_id,
                 skill,
                 attack_result,
             )
@@ -343,6 +360,14 @@ mod inner {
         let adjusted_evasion = (base_evasion as f32 * caster_light_mult) as i32;
         let evade_score = adjusted_hit_score - adjusted_evasion;
         if evade_score <= 0 {
+            // 記錄閃避
+            battle.statistics.record_hit(
+                caster_id,
+                target_id,
+                skill_id,
+                DefenseResult::Evaded,
+                attack_result,
+            );
             msgs.push(format!(
                 "單位 {target_unit_type} 閃避了{crit_msg}！(命中={adjusted_hit_score}, 閃避={adjusted_evasion})",
             ));
@@ -358,12 +383,21 @@ mod inner {
             .clamp(MIN_BLOCK_REDUCTION_PERCENT, MAX_BLOCK_REDUCTION_PERCENT);
 
         if block_score <= 0 {
+            // 記錄格擋
+            battle.statistics.record_hit(
+                caster_id,
+                target_id,
+                skill_id,
+                DefenseResult::Blocked,
+                attack_result,
+            );
             let effect_results = apply_effects_with_block(
                 board,
                 battle,
                 skills,
                 (caster_id, caster_pos),
                 (target_id, target_pos),
+                skill_id,
                 skill,
                 attack_result,
                 block_reduction,
@@ -379,13 +413,23 @@ mod inner {
             return Ok(msgs);
         }
 
-        // 完全命中
+        // 記錄命中
+        battle.statistics.record_hit(
+            caster_id,
+            target_id,
+            skill_id,
+            DefenseResult::Hit,
+            attack_result,
+        );
+
+        // 普通命中
         let effect_msgs = apply_all_effects(
             board,
             battle,
             skills,
             (caster_id, caster_pos),
             (target_id, target_pos),
+            skill_id,
             skill,
             attack_result,
         )

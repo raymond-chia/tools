@@ -317,7 +317,7 @@ pub fn execute_reaction(
     is_targeting_valid_target(board, skill_id, skill, reactor_id, target_logical_pos)
         .wrap_context(func)?;
 
-    // 4. 施放技能（共用邏輯）
+    // 4. 施放技能（共用邏輯，這是反應）
     let msgs = cast_skill_internal(
         board,
         battle,
@@ -325,6 +325,7 @@ pub fn execute_reaction(
         reactor_id,
         skill_id,
         (target_actual_pos, target_logical_pos),
+        true, // is_reaction
     )
     .wrap_context(func)?;
 

@@ -158,6 +158,7 @@ pub fn move_unit_along_path(
     path: Vec<Pos>,
     reacted: bool,
     skills_map: &BTreeMap<String, Skill>,
+    statistics: &mut BattleStatistics,
 ) -> Result<MoveResult, Error> {
     let func = "move_unit_along_path";
 
@@ -193,6 +194,7 @@ pub fn move_unit_along_path(
     }
 
     let mut actual_pos = *actor_pos; // 考量重疊
+    let mut tiles_moved: usize = 0;
 
     // 遍歷路徑，從第二個位置開始（第一個是起始位置）
     for (i, &next_pos) in path.iter().enumerate().skip(1) {
@@ -208,6 +210,8 @@ pub fn move_unit_along_path(
 
             // 如果有 reactions 被觸發，返回給 UI 處理
             if !reactions.is_empty() {
+                // 記錄到目前為止的移動格數
+                statistics.record_movement(actor_id, tiles_moved);
                 return Ok(MoveResult::ReactionTriggered {
                     target_actual_pos: actual_pos,
                     target_logical_pos: logical_pos,
@@ -222,15 +226,18 @@ pub fn move_unit_along_path(
         match result {
             Ok(_) => {
                 actual_pos = next_pos;
+                tiles_moved += 1;
             }
             Err(Error::AlliedUnitAtPos { .. }) => {
                 // 被友軍阻擋，跳過這一格
+                tiles_moved += 1;
             }
             Err(e) => return Err(e).wrap_context(func),
         }
     }
 
-    // 所有移動完成
+    // 所有移動完成，記錄統計
+    statistics.record_movement(actor_id, tiles_moved);
     Ok(MoveResult::Completed)
 }
 
@@ -336,6 +343,7 @@ mod inner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::statistics::BattleStatistics;
     use object_lib::ObjectType;
     use rand::Rng;
     use std::collections::{BTreeMap, BTreeSet};
@@ -501,7 +509,8 @@ mod tests {
         for (is_ok, path) in test_data {
             let to = path.last().cloned().unwrap();
             let (mut board, unit_id) = basic_board_and_unit(start, ally, enemy);
-            let res = move_unit_along_path(&mut board, path, false, &skills_map);
+            let mut statistics = BattleStatistics::default();
+            let res = move_unit_along_path(&mut board, path, false, &skills_map, &mut statistics);
             if is_ok {
                 // 檢查返回值是 MoveResult::Completed
                 assert!(res.is_ok(), "移動到 {:?} 應該成功", to);
@@ -540,7 +549,14 @@ mod tests {
                 unit.skills.clear();
             }
 
-            let res = move_unit_along_path(&mut board, path.clone(), false, &skills_map);
+            let mut statistics = BattleStatistics::default();
+            let res = move_unit_along_path(
+                &mut board,
+                path.clone(),
+                false,
+                &skills_map,
+                &mut statistics,
+            );
             assert!(
                 matches!(
                     res,
@@ -561,9 +577,10 @@ mod tests {
                 unit.skills.insert("hit_and_run".to_string());
             }
 
-            let res = move_unit_along_path(&mut board, path, false, &skills_map);
+            let mut statistics = BattleStatistics::default();
+            let res = move_unit_along_path(&mut board, path, false, &skills_map, &mut statistics);
             assert!(res.is_ok(), "有打帶跑技能時應可移動");
-            assert_eq!(res.unwrap(), MoveResult::Completed);
+            assert!(matches!(res.unwrap(), MoveResult::Completed));
         }
     }
 
@@ -688,7 +705,14 @@ mod tests {
         // 當離開 (0,0) 時，相鄰的 (1,0) 的敵人會觸發 reaction
         let path = vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }];
 
-        let res = move_unit_along_path(&mut board, path.clone(), false, &skills_map);
+        let mut statistics = BattleStatistics::default();
+        let res = move_unit_along_path(
+            &mut board,
+            path.clone(),
+            false,
+            &skills_map,
+            &mut statistics,
+        );
 
         // 應該返回 ReactionTriggered
         assert!(res.is_ok());
@@ -736,7 +760,8 @@ mod tests {
         // 路徑：(0,0) -> (0,1) -> (0,2)
         let path = vec![Pos { x: 0, y: 0 }, Pos { x: 0, y: 1 }, Pos { x: 0, y: 2 }];
 
-        let res = move_unit_along_path(&mut board, path, false, &skills_map);
+        let mut statistics = BattleStatistics::default();
+        let res = move_unit_along_path(&mut board, path, false, &skills_map, &mut statistics);
 
         // 應該返回 Completed（沒有 reaction）
         assert!(res.is_ok());

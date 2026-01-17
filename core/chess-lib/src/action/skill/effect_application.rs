@@ -8,13 +8,14 @@ use skills_lib::*;
 use std::collections::BTreeMap;
 
 use super::CRITICAL_HIT_MULTIPLIER;
-use super::hit_resolution::{AttackResult, SaveResult, calc_save_result};
+use super::hit_resolution::calc_save_result;
 use super::targeting::calc_direction_manhattan;
 
 /// 處理空地效果（無單位的位置）
 pub(super) fn apply_effects_to_empty_tile(
     board: &mut Board,
     battle: &mut Battle,
+    skill_id: &SkillID,
     skill: &Skill,
     (caster_id, caster_pos): (UnitID, Pos),
     pos: Pos,
@@ -26,6 +27,7 @@ pub(super) fn apply_effects_to_empty_tile(
             battle,
             (caster_id, caster_pos),
             pos,
+            skill_id,
             effect,
             AttackResult::NoAttack,
             SaveResult::NoSave,
@@ -43,6 +45,7 @@ pub(super) fn apply_all_effects(
     skills: &BTreeMap<SkillID, Skill>,
     (caster_id, caster_pos): (UnitID, Pos),
     (target_id, target_pos): (UnitID, Pos),
+    skill_id: &SkillID,
     skill: &Skill,
     attack_result: AttackResult,
 ) -> Result<Vec<String>, Error> {
@@ -50,14 +53,23 @@ pub(super) fn apply_all_effects(
     let mut msgs = vec![];
 
     for effect in &skill.effects {
-        let save_result = calc_save_result(board, skills, caster_id, target_id, skill, effect)
-            .wrap_context(func)?;
+        let save_result = calc_save_result(
+            board,
+            skills,
+            &mut battle.statistics,
+            caster_id,
+            target_id,
+            skill,
+            effect,
+        )
+        .wrap_context(func)?;
 
         if let Some(msg) = apply_effect_to_pos(
             board,
             battle,
             (caster_id, caster_pos),
             target_pos,
+            skill_id,
             effect,
             attack_result,
             save_result,
@@ -76,6 +88,7 @@ pub(super) fn apply_effects_with_block(
     skills: &BTreeMap<SkillID, Skill>,
     (caster_id, caster_pos): (UnitID, Pos),
     (target_id, target_pos): (UnitID, Pos),
+    skill_id: &SkillID,
     skill: &Skill,
     attack_result: AttackResult,
     block_reduction: i32,
@@ -101,15 +114,23 @@ pub(super) fn apply_effects_with_block(
                     shape: shape.clone(),
                 };
 
-                let save_result =
-                    calc_save_result(board, skills, caster_id, target_id, skill, &reduced_effect)
-                        .wrap_context(func)?;
+                let save_result = calc_save_result(
+                    board,
+                    skills,
+                    &mut battle.statistics,
+                    caster_id,
+                    target_id,
+                    skill,
+                    &reduced_effect,
+                )
+                .wrap_context(func)?;
 
                 if let Some(msg) = apply_effect_to_pos(
                     board,
                     battle,
                     (caster_id, caster_pos),
                     target_pos,
+                    skill_id,
                     &reduced_effect,
                     attack_result,
                     save_result,
@@ -121,15 +142,23 @@ pub(super) fn apply_effects_with_block(
             }
             _ => {
                 // 其他效果不受格擋影響，直接套用
-                let save_result =
-                    calc_save_result(board, skills, caster_id, target_id, skill, effect)
-                        .wrap_context(func)?;
+                let save_result = calc_save_result(
+                    board,
+                    skills,
+                    &mut battle.statistics,
+                    caster_id,
+                    target_id,
+                    skill,
+                    effect,
+                )
+                .wrap_context(func)?;
 
                 if let Some(msg) = apply_effect_to_pos(
                     board,
                     battle,
                     (caster_id, caster_pos),
                     target_pos,
+                    skill_id,
                     effect,
                     attack_result,
                     save_result,
@@ -148,6 +177,7 @@ pub(super) fn apply_effect_to_pos(
     battle: &mut Battle,
     (caster_id, caster_pos): (UnitID, Pos),
     target_pos: Pos,
+    skill_id: &SkillID,
     effect: &Effect,
     attack_result: AttackResult,
     save_result: SaveResult,
@@ -160,7 +190,9 @@ pub(super) fn apply_effect_to_pos(
     };
 
     match effect {
-        Effect::Hp { value, .. } => apply_hp_effect(board, target_pos, *value, multiplier),
+        Effect::Hp { value, .. } => apply_hp_effect(
+            board, battle, caster_id, skill_id, target_pos, *value, multiplier,
+        ),
         Effect::Mp { value, .. } => apply_mp_effect(board, target_pos, *value),
         Effect::MaxHp {
             duration, value, ..
@@ -211,9 +243,9 @@ pub(super) fn apply_effect_to_pos(
             trigger
         )),
         Effect::HitAndRun { .. } => Some("[未實作] 打帶跑".to_string()),
-        Effect::Shove { distance, .. } => {
-            apply_shove_effect(board, caster_pos, target_pos, distance)
-        }
+        Effect::Shove { distance, .. } => apply_shove_effect(
+            board, battle, caster_id, caster_pos, target_pos, skill_id, distance,
+        ),
         Effect::Potency {
             value, duration, ..
         } => Some(format!(
@@ -361,8 +393,11 @@ mod inner {
     /// 推擠效果的輔助函數
     pub(super) fn apply_shove_effect(
         board: &mut Board,
+        battle: &mut Battle,
+        caster_id: UnitID,
         caster_pos: Pos,
         mut target_pos: Pos,
+        skill_id: &SkillID,
         distance: &usize,
     ) -> Option<String> {
         // 只有在格子上有單位時才處理
@@ -429,7 +464,13 @@ mod inner {
             {
                 // 單位掉落坑洞，立即死亡
                 if let Some(unit) = board.units.get_mut(&unit_id) {
+                    let old_hp = unit.hp;
                     unit.hp = 0;
+
+                    // 記錄傷害統計（坑洞死亡視為傷害）
+                    battle
+                        .statistics
+                        .record_hp_change(caster_id, unit_id, skill_id, -old_hp);
                 }
                 return Some(format!("單位 {} 被推入坑洞並墜落死亡！", unit_type));
             }
@@ -444,6 +485,9 @@ mod inner {
     /// 應用 Hp 效果
     pub(super) fn apply_hp_effect(
         board: &mut Board,
+        battle: &mut Battle,
+        caster_id: UnitID,
+        skill_id: &SkillID,
         target_pos: Pos,
         value: i32,
         multiplier: i32,
@@ -462,6 +506,13 @@ mod inner {
         }
 
         let new_hp = unit.hp;
+        let actual_change = new_hp - old_hp;
+
+        // 記錄 HP 變化統計
+        battle
+            .statistics
+            .record_hp_change(caster_id, unit_id, skill_id, actual_change);
+
         Some(format!(
             "單位 {} HP: {old_hp} → {new_hp}",
             &unit.unit_template_type,
@@ -729,11 +780,13 @@ mod tests {
 
         let orig_hp = board.units.get(&target_unit_id).unwrap().hp;
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -760,11 +813,13 @@ mod tests {
 
         let orig_hp = board.units.get(&target_unit_id).unwrap().hp;
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Critical,
             SaveResult::NoSave,
@@ -794,11 +849,13 @@ mod tests {
             value: 30,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -826,11 +883,13 @@ mod tests {
             value: 50,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -858,11 +917,13 @@ mod tests {
             value: -50,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -887,11 +948,13 @@ mod tests {
             distance: 1,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -921,11 +984,13 @@ mod tests {
             distance: 1,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -968,11 +1033,13 @@ mod tests {
             distance: 1,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -1012,11 +1079,13 @@ mod tests {
             distance: 1,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -1055,11 +1124,13 @@ mod tests {
             distance: 1,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 1 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,
@@ -1087,11 +1158,13 @@ mod tests {
             distance: 1,
         };
 
+        let test_skill_id = "test_skill".to_string();
         let msg = apply_effect_to_pos(
             &mut board,
             &mut battle,
             (caster_unit_id, Pos { x: 1, y: 8 }),
             target_pos,
+            &test_skill_id,
             &effect,
             AttackResult::Normal,
             SaveResult::NoSave,

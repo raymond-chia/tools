@@ -42,6 +42,7 @@
 - `Board::width(&self) -> usize` - 棋盤寬度
 - `Board::height(&self) -> usize` - 棋盤高度
 - `UnitMap::insert(&mut self, unit_id, pos)` - 插入單位
+- `UnitMap::remove(&mut self, unit_id) -> Option<Pos>` - 移除單位並返回原位置
 - `UnitMap::move_unit(&mut self, unit_id, from, to) -> Result<(), Error>` - 移動單位
 - `UnitMap::get_unit(&self, pos) -> Option<UnitID>` - 查詢位置的單位
 - `UnitMap::get_pos(&self, unit_id) -> Option<Pos>` - 查詢單位位置
@@ -69,8 +70,9 @@
 - `Battle::insert_object_before_next_turn(&mut self, object_id)` - 在下一回合前插入物件
 - `Battle::next_turn(&mut self, board, skill_selection)` - 推進回合
 - `remove_expired_status_effects(unit: &mut Unit)` - 移除過期狀態效果
-- `process_status_effects_at_turn_end(unit: &mut Unit)` - 處理回合結束狀態
+- `process_status_effects_at_turn_end(unit, statistics) -> bool` - 處理回合結束狀態並記錄燃燒傷害
 - `remove_object_if_expired(board, object_id) -> bool` - 移除過期物件
+- `check_and_remove_dead_unit(board, battle, unit_id, cause) -> Option<UnitID>` - 檢查並移除死亡單位
 
 **單位系統** (`unit.rs`)
 

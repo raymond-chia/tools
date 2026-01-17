@@ -6,12 +6,15 @@
 //! - 狀態效果檢查
 //! - 效果應用協調
 
+use crate::battle::check_and_remove_dead_unit;
+use crate::statistics::DeathCause;
 use crate::*;
+use object_lib::ObjectType;
 use skills_lib::*;
 use std::collections::BTreeMap;
 
 use super::effect_application::apply_effect_to_pos;
-use super::hit_resolution::{AttackResult, SaveResult, calc_hit_result, calc_save_result};
+use super::hit_resolution::{calc_hit_result, calc_save_result};
 use super::targeting::{
     calc_shape_area, is_able_to_act, is_in_skill_range_manhattan, is_targeting_valid_target,
 };
@@ -138,6 +141,7 @@ pub(in crate::action) fn cast_skill_internal(
     caster_id: UnitID,
     skill_id: &SkillID,
     (actual_pos, logical_pos): (Pos, Pos),
+    is_reaction: bool,
 ) -> Result<Vec<String>, Error> {
     let func = "cast_skill_internal";
 
@@ -164,8 +168,13 @@ pub(in crate::action) fn cast_skill_internal(
     // 4. 消耗 MP
     consume_skill_mp(board, caster_id, skill_id, skill).wrap_context(func)?;
 
+    // 記錄技能施放統計
+    battle
+        .statistics
+        .record_skill_cast(caster_id, skill_id, -skill.cost, is_reaction);
+
     // 5. 應用技能效果
-    let msgs = apply_skill_to_area(
+    let mut msgs = apply_skill_to_area(
         board,
         battle,
         skills,
@@ -177,6 +186,47 @@ pub(in crate::action) fn cast_skill_internal(
         actual_pos,
     )
     .wrap_context(func)?;
+
+    // 6. 統一處理死亡單位
+    let dead_units: Vec<(UnitID, String, bool)> = board
+        .units
+        .iter()
+        .filter(|(_, unit)| unit.hp <= 0)
+        .map(|(&id, unit)| {
+            let unit_type = unit.unit_template_type.clone();
+            // 檢查是否在坑洞上（坑洞死亡）
+            let is_pit_death = board
+                .unit_map
+                .get_pos(id)
+                .map(|pos| {
+                    board
+                        .object_map
+                        .get_objects_at(pos)
+                        .iter()
+                        .any(|obj| matches!(obj.object_type, ObjectType::Pit))
+                })
+                .unwrap_or(false);
+            (id, unit_type, is_pit_death)
+        })
+        .collect();
+
+    for (unit_id, unit_type, is_pit_death) in dead_units {
+        let cause = if is_pit_death {
+            DeathCause::Pit {
+                pusher_id: caster_id,
+                skill_id: skill_id.clone(),
+            }
+        } else {
+            DeathCause::Skill {
+                killer_id: caster_id,
+                skill_id: skill_id.clone(),
+            }
+        };
+
+        if check_and_remove_dead_unit(board, battle, unit_id, cause).is_some() {
+            msgs.push(format!("單位 {} 死亡！", unit_type));
+        }
+    }
 
     Ok(msgs)
 }
@@ -272,10 +322,16 @@ pub(super) fn apply_skill_to_area(
                 for effect in &skill.effects {
                     // 只對有單位的目標進行豁免判定
                     let save_result = match board.pos_to_unit(pos) {
-                        Some(target_id) => {
-                            calc_save_result(board, skills, caster, target_id, skill, effect)
-                                .wrap_context(func)?
-                        }
+                        Some(target_id) => calc_save_result(
+                            board,
+                            skills,
+                            &mut battle.statistics,
+                            caster,
+                            target_id,
+                            skill,
+                            effect,
+                        )
+                        .wrap_context(func)?,
                         None => SaveResult::NoSave,
                     };
                     if let Some(msg) = apply_effect_to_pos(
@@ -283,6 +339,7 @@ pub(super) fn apply_skill_to_area(
                         battle,
                         (caster, caster_pos),
                         pos,
+                        skill_id,
                         effect,
                         AttackResult::NoAttack,
                         save_result,
@@ -310,6 +367,7 @@ pub(super) fn apply_skill_to_area(
                     battle,
                     (caster, caster_pos),
                     skills,
+                    skill_id,
                     skill,
                     &affect_area,
                     total_accuracy,

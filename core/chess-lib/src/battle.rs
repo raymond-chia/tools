@@ -2,11 +2,9 @@
 //! - 負責戰鬥流程、回合管理，以及所有專案自訂的戰鬥判定邏輯（如命中、閃避、格擋、傷害計算等）。
 //! - 命中機制（HitContext、HitResult、resolve_hit 等）應放於此，並由呼叫端負責所有修正來源的加總與 context 組裝。
 //! - 不負責單位屬性衍生值（如先攻、移動力等）的計算。
+use crate::statistics::{BattleStatistics, DeathCause};
 use crate::*;
 use skills_lib::Effect;
-
-/// Burn 效果每回合造成的固定傷害
-const BURN_DAMAGE_PER_TURN: i32 = 5;
 
 /// 回合實體：可以是單位或物件
 #[derive(Debug, Clone, PartialEq)]
@@ -15,11 +13,18 @@ pub enum TurnEntity {
     Object(ObjectID),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Battle {
     pub turn_order: Vec<TurnEntity>,
     pub current_turn_index: Option<usize>,
     pub next_turn_index: usize,
+    pub statistics: BattleStatistics,
+}
+
+impl Default for Battle {
+    fn default() -> Self {
+        Self::new(vec![])
+    }
 }
 
 impl Battle {
@@ -31,6 +36,7 @@ impl Battle {
             turn_order,
             current_turn_index,
             next_turn_index,
+            statistics: BattleStatistics::new(),
         }
     }
 
@@ -101,17 +107,46 @@ impl Battle {
         }
 
         // 1. 處理當前實體的回合結束效果
+        let mut burn_death_unit: Option<UnitID> = None;
         if let Some(current_entity) = self.get_current_entity().cloned() {
             match current_entity {
                 TurnEntity::Unit(unit_id) => {
-                    if let Some(unit) = board.units.get_mut(&unit_id) {
-                        process_status_effects_at_turn_end(unit);
+                    let took_burn_damage = {
+                        match board.units.get_mut(&unit_id) {
+                            Some(unit) => {
+                                process_status_effects_at_turn_end(unit, &mut self.statistics)
+                            }
+                            None => false,
+                        }
+                    };
+
+                    // 如果受到燃燒傷害，檢查死亡
+                    if took_burn_damage {
+                        if board
+                            .units
+                            .get(&unit_id)
+                            .map(|u| u.hp <= 0)
+                            .unwrap_or(false)
+                        {
+                            burn_death_unit = Some(unit_id);
+                        }
                     }
                 }
                 TurnEntity::Object(object_id) => {
                     board.object_map.decrease_object_duration(object_id);
                 }
             }
+        }
+
+        // 處理燃燒死亡（在取得 current_entity 後處理，避免借用衝突）
+        if let Some(unit_id) = burn_death_unit {
+            check_and_remove_dead_unit(board, self, unit_id, DeathCause::Burn);
+        }
+
+        // 檢查是否即將完成一輪（所有實體都行動過）
+        let completing_round = self.next_turn_index == 0 && self.turn_order.len() > 1;
+        if completing_round {
+            self.statistics.record_turn_end();
         }
 
         // 2. 切換到下一個實體
@@ -161,14 +196,26 @@ pub fn remove_expired_status_effects(unit: &mut Unit) {
 }
 
 /// 在回合結束時處理狀態效果
-pub fn process_status_effects_at_turn_end(unit: &mut Unit) {
+/// 返回是否受到燃燒傷害（用於後續死亡檢查）
+pub fn process_status_effects_at_turn_end(
+    unit: &mut Unit,
+    statistics: &mut BattleStatistics,
+) -> bool {
+    let mut took_burn_damage = false;
+
     // 1. 處理持續傷害效果（Burn）
     for effect in &unit.status_effects {
         if let Effect::Burn { .. } = effect {
+            let old_hp = unit.hp;
             unit.hp -= BURN_DAMAGE_PER_TURN;
             if unit.hp < 0 {
                 unit.hp = 0;
             }
+            let damage = old_hp - unit.hp;
+
+            // 記錄燃燒傷害統計
+            statistics.record_burn_damage(unit.id, damage);
+            took_burn_damage = true;
         }
     }
 
@@ -176,6 +223,8 @@ pub fn process_status_effects_at_turn_end(unit: &mut Unit) {
     for effect in unit.status_effects.iter_mut() {
         effect.decrease_duration();
     }
+
+    took_burn_damage
 }
 
 /// 在回合開始時檢查並移除過期物件（duration = 0）
@@ -194,6 +243,41 @@ pub fn remove_object_if_expired(board: &mut Board, object_id: ObjectID) -> bool 
 
     // 移除物件
     board.object_map.remove(object_id).is_some()
+}
+
+/// 檢查並處理單位死亡
+/// 如果單位 HP <= 0，從棋盤和戰鬥中移除
+/// 返回死亡的單位 ID（如果有的話）
+pub fn check_and_remove_dead_unit(
+    board: &mut Board,
+    battle: &mut Battle,
+    unit_id: UnitID,
+    cause: DeathCause,
+) -> Option<UnitID> {
+    // 檢查單位是否存在且死亡
+    let should_remove = board
+        .units
+        .get(&unit_id)
+        .map(|unit| unit.hp <= 0)
+        .unwrap_or(false);
+
+    if !should_remove {
+        return None;
+    }
+
+    // 記錄死亡統計
+    battle.statistics.record_death(unit_id, cause);
+
+    // 從 board.units 移除
+    board.units.remove(&unit_id);
+
+    // 從 board.unit_map 移除
+    board.unit_map.remove(unit_id);
+
+    // 從 battle.turn_order 移除
+    battle.remove_entity_from_turn_order(&TurnEntity::Unit(unit_id));
+
+    Some(unit_id)
 }
 
 #[cfg(test)]

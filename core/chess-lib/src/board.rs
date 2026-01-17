@@ -380,6 +380,14 @@ impl UnitMap {
         self.unit_to_pos.insert(unit_id, pos);
     }
 
+    /// 從映射中移除單位
+    /// 如果單位不存在則返回 None，否則返回單位原來的位置
+    pub fn remove(&mut self, unit_id: UnitID) -> Option<Pos> {
+        let pos = self.unit_to_pos.remove(&unit_id)?;
+        self.pos_to_unit.remove(&pos);
+        Some(pos)
+    }
+
     pub fn move_unit(&mut self, unit_id: UnitID, from: Pos, to: Pos) -> Result<(), Error> {
         let func = "UnitMap::move_unit";
 

@@ -200,11 +200,14 @@ pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
     };
 
     egui::TopBottomPanel::bottom("status_panel")
-        .max_height(100.0)
+        .min_height(150.0)
         .show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.label(RichText::new(message).color(color));
-            });
+            egui::ScrollArea::vertical()
+                // 以免只有佔據一半的寬度
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.label(RichText::new(message).color(color));
+                });
         });
 }
 
