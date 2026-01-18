@@ -112,15 +112,15 @@ impl DialogsEditor {
             });
         });
 
+        // 底部狀態面板必須在 CentralPanel 之前顯示，egui 才會正確計算剩餘空間
+        self.show_status_message(ctx);
+
         // 側邊欄：顯示選中節點的詳細內容
         // 先產生 right panel, 以免 central panel 偵測到 right panel 滑鼠
         self.right_panel(ctx);
 
         // 主畫布：顯示節點和連線
         self.central_panel(ctx);
-
-        // 顯示狀態訊息
-        self.show_status_message(ctx);
 
         // 顯示添加節點和編輯節點的視窗
         if self.adding_node {

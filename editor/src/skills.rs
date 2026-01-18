@@ -319,6 +319,9 @@ impl SkillsEditor {
             });
         });
 
+        // 底部狀態面板必須在 CentralPanel 之前顯示，egui 才會正確計算剩餘空間
+        self.show_status_message(ctx);
+
         egui::SidePanel::left("skills_list_panel")
             .default_width(200.0)
             .show(ctx, |ui| {
@@ -331,7 +334,6 @@ impl SkillsEditor {
 
         self.show_add_effect_popup(ctx);
         self.show_confirmation_dialog(ctx);
-        self.show_status_message(ctx);
     }
 
     fn show_skills_list(&mut self, ui: &mut Ui) {
@@ -430,14 +432,9 @@ impl SkillsEditor {
         ui.add_space(8.0);
         ui.add(Separator::default());
 
-        // 計算 ScrollArea 的最大高度，為底部留出空間
-        let available_height = ui.available_height();
-        let scroll_height = available_height.max(100.0) - 40.0; // 為底部狀態欄保留空間
-
-        // 添加可捲動區域，設定最大高度
+        // 添加可捲動區域
         ScrollArea::vertical()
             .auto_shrink([false; 2])
-            .max_height(scroll_height)
             .show(ui, |ui| {
                 // 在可捲動區域內編輯技能，直接使用 skills_data 中的技能
                 // 基本屬性編輯

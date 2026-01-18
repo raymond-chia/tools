@@ -67,6 +67,9 @@ impl AIEditor {
     }
 
     pub fn update(&mut self, ctx: &Context, _: &mut Frame) {
+        // 底部狀態面板必須在 CentralPanel 之前顯示，egui 才會正確計算剩餘空間
+        self.show_status_message(ctx);
+
         SidePanel::left("ai_list_panel")
             .default_width(200.0)
             .show(ctx, |ui| {
@@ -87,8 +90,6 @@ impl AIEditor {
         CentralPanel::default().show(ctx, |ui| {
             self.show_tendency_editor(ui);
         });
-
-        self.show_status_message(ctx);
     }
 
     fn show_unit_type_list(&mut self, ui: &mut Ui) {

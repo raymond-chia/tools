@@ -116,6 +116,9 @@ impl PlayerProgressionEditor {
     }
 
     pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // 底部狀態面板必須在 CentralPanel 之前顯示，egui 才會正確計算剩餘空間
+        self.show_status_message(ctx);
+
         egui::SidePanel::left("player_progression_left_panel")
             .default_width(220.0)
             .show(ctx, |ui| {
@@ -125,8 +128,6 @@ impl PlayerProgressionEditor {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.show_central_panel(ui);
         });
-
-        self.show_status_message(ctx);
     }
 
     fn show_side_panel(&mut self, ui: &mut Ui) {

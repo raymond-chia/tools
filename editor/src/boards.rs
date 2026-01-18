@@ -197,6 +197,9 @@ impl BoardsEditor {
     }
 
     pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // 底部狀態面板必須在 CentralPanel 之前顯示，egui 才會正確計算剩餘空間
+        self.show_status_message(ctx);
+
         SidePanel::left("board_list_panel")
             .default_width(180.0)
             .show(ctx, |ui| {
@@ -215,7 +218,6 @@ impl BoardsEditor {
                 self.show_sim(ui);
             }
         });
-        self.show_status_message(ctx);
         self.show_reaction_dialog(ctx);
         // 統計面板 popup
         if self.show_statistics_panel {

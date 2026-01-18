@@ -82,6 +82,9 @@ impl UnitsEditor {
     }
 
     pub fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // 底部狀態面板必須在 CentralPanel 之前顯示，egui 才會正確計算剩餘空間
+        self.show_status_message(ctx);
+
         SidePanel::left("unit_list_panel")
             .default_width(200.0)
             .show(ctx, |ui| {
@@ -108,7 +111,6 @@ impl UnitsEditor {
         CentralPanel::default().show(ctx, |ui| {
             self.show_unit_editor(ui);
         });
-        self.show_status_message(ctx);
     }
 
     fn show_unit_list(&mut self, ui: &mut Ui) {
