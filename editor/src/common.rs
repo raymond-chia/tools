@@ -216,6 +216,7 @@ pub type SkillByTags = BTreeMap<Vec<Tag>, Vec<SkillID>>;
 /// 互斥 tag 分組（每組只能選一個）
 /// 用於技能分類和 UI 編輯器
 /// 注意：每組的第一個 tag 是 basic passive 技能的預設值
+/// 需要同步到 D:\Mega\prog\rust\tools\core\skills-lib\src\lib.rs 的 default_tags 函式
 pub const EXCLUSIVE_TAG_GROUPS: [&[Tag]; 4] = [
     &[Tag::Passive, Tag::Active],
     &[Tag::Character, Tag::Equipment],

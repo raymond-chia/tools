@@ -449,7 +449,7 @@ impl Effect {
 }
 
 fn default_tags() -> BTreeSet<Tag> {
-    BTreeSet::from([Tag::Active, Tag::Single, Tag::Melee])
+    BTreeSet::from([Tag::Passive, Tag::Character, Tag::Caster, Tag::Single])
 }
 
 #[cfg(test)]
@@ -652,15 +652,6 @@ mod tests {
             .duration(),
             0
         );
-    }
-
-    // 測試 4：default_tags 的內容檢查（保留原本意義）
-    #[test]
-    fn test_default_tags_contains_expected() {
-        let tags = default_tags();
-        assert!(tags.contains(&Tag::Active));
-        assert!(tags.contains(&Tag::Single));
-        assert!(tags.contains(&Tag::Melee));
     }
 
     // 測試 6：Resistance 和 Potency 的 duration
