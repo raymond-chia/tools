@@ -211,7 +211,23 @@ pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
         });
 }
 
-pub type SkillByTags = BTreeMap<(Tag, Tag, Tag), Vec<SkillID>>;
+pub type SkillByTags = BTreeMap<Vec<Tag>, Vec<SkillID>>;
+
+/// 互斥 tag 分組（每組只能選一個）
+/// 用於技能分類和 UI 編輯器
+/// 注意：每組的第一個 tag 是 basic passive 技能的預設值
+pub const EXCLUSIVE_TAG_GROUPS: [&[Tag]; 4] = [
+    &[Tag::Passive, Tag::Active],
+    &[Tag::Character, Tag::Equipment],
+    &[Tag::Caster, Tag::Melee, Tag::Ranged],
+    &[Tag::Single, Tag::Area],
+];
+
+/// 可選多選 tag 分組（可同時選多個）
+pub const OPTIONAL_TAG_GROUPS: [&[Tag]; 2] = [
+    &[Tag::Physical, Tag::Magical],
+    &[Tag::Attack, Tag::Heal, Tag::Buff, Tag::Debuff],
+];
 
 pub fn grouped_unit_skills(skill_group: &SkillByTags, unit: &UnitTemplate) -> SkillByTags {
     let mut result = BTreeMap::new();
@@ -230,50 +246,30 @@ pub fn grouped_unit_skills(skill_group: &SkillByTags, unit: &UnitTemplate) -> Sk
 }
 
 pub fn must_group_skills_by_tags(skills: &BTreeMap<SkillID, Skill>) -> Result<SkillByTags, String> {
-    let (mut matched, unmatched) = group_non_basic_skills_by_tags(&skills);
-    let mut basic_passive_skill_ids = Vec::new();
+    let (matched, unmatched) = group_skills_by_tags(&skills);
     for id in &unmatched {
         let skill = skills
             .get(id)
             .ok_or_else(|| format!("Skill ID '{}' not found in skills data.", id))?;
-        if skill.tags.contains(&Tag::BasicPassive) {
-            basic_passive_skill_ids.push(id.clone());
-        } else {
-            return Err(format!(
-                "Warning: Skill ID '{}' has unmatched tags: {:?}",
-                id, skill.tags
-            ));
-        }
-    }
-    if !basic_passive_skill_ids.is_empty() {
-        matched.insert(
-            (Tag::BasicPassive, Tag::Single, Tag::Caster),
-            basic_passive_skill_ids,
-        );
+        return Err(format!(
+            "Warning: Skill ID '{}' has unmatched tags: {:?}",
+            id, skill.tags
+        ));
     }
     return Ok(matched);
 }
 
-pub fn group_non_basic_skills_by_tags(
-    skills: &BTreeMap<SkillID, Skill>,
-) -> (SkillByTags, Vec<SkillID>) {
-    const PRIMARY: [Tag; 2] = [Tag::Active, Tag::Passive];
-    const SECONDARY: [Tag; 2] = [Tag::Physical, Tag::Magical];
-    const TERTIARY: [Tag; 3] = [Tag::Caster, Tag::Melee, Tag::Ranged];
-
+pub fn group_skills_by_tags(skills: &BTreeMap<SkillID, Skill>) -> (SkillByTags, Vec<SkillID>) {
     let mut matched = SkillByTags::new();
     let mut unmatched = Vec::new();
     for (id, skill) in skills {
-        let p = PRIMARY.iter().find(|t| skill.tags.contains(t)).cloned();
-        let s = SECONDARY.iter().find(|t| skill.tags.contains(t)).cloned();
-        let t = TERTIARY.iter().find(|t| skill.tags.contains(t)).cloned();
-        if let (Some(p), Some(s), Some(t)) = (p, s, t) {
-            matched
-                .entry((p, s, t))
-                .or_insert_with(Vec::new)
-                .push(id.clone());
-        } else {
-            unmatched.push(id.clone());
+        let tags: Option<Vec<Tag>> = EXCLUSIVE_TAG_GROUPS
+            .iter()
+            .map(|g| g.iter().find(|t| skill.tags.contains(t)).cloned())
+            .collect();
+        match tags {
+            Some(t) => matched.entry(t).or_default().push(id.clone()),
+            None => unmatched.push(id.clone()),
         }
     }
     (matched, unmatched)
@@ -289,7 +285,11 @@ pub mod skill_by_tags_key_map {
         let string_map: BTreeMap<String, &Vec<SkillID>> = map
             .iter()
             .map(|(k, v)| {
-                let key_str = format!("{}-{}-{}", k.0, k.1, k.2);
+                let key_str = k
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join("-");
                 (key_str, v)
             })
             .collect();
@@ -305,17 +305,19 @@ pub mod skill_by_tags_key_map {
         string_map
             .into_iter()
             .map(|(k, v)| {
-                let tags: Vec<&str> = k.split('-').collect();
-                if tags.len() != 3 {
+                let tag_strs: Vec<&str> = k.split('-').collect();
+                if tag_strs.len() != EXCLUSIVE_TAG_GROUPS.len() {
                     return Err(serde::de::Error::custom(format!(
-                        "Key must have 3 tags: {}",
+                        "Key must have {} tags: {}",
+                        EXCLUSIVE_TAG_GROUPS.len(),
                         k
                     )));
                 }
-                let tag0 = Tag::from_str(tags[0]).map_err(serde::de::Error::custom)?;
-                let tag1 = Tag::from_str(tags[1]).map_err(serde::de::Error::custom)?;
-                let tag2 = Tag::from_str(tags[2]).map_err(serde::de::Error::custom)?;
-                Ok(((tag0, tag1, tag2), v))
+                let tags: Vec<Tag> = tag_strs
+                    .iter()
+                    .map(|s| Tag::from_str(s).map_err(serde::de::Error::custom))
+                    .collect::<Result<_, _>>()?;
+                Ok((tags, v))
             })
             .collect()
     }

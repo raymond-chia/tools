@@ -205,8 +205,13 @@ impl UnitsEditor {
         ComboBox::from_id_salt("add_skill_combo")
             .selected_text(format!("選擇技能: {}", &self.selected_skill))
             .show_ui(ui, |ui| {
-                for ((p, s, t), skill_ids) in &self.skill_groups {
-                    let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
+                for (tags, skill_ids) in &self.skill_groups {
+                    let tags_str = tags
+                        .iter()
+                        .map(|t| format!("{:?}", t))
+                        .collect::<Vec<_>>()
+                        .join("-");
+                    let title = format!("─── {} ───", tags_str);
                     ui.label(title);
                     for skill in skill_ids {
                         if ui.button(skill).clicked() {
@@ -221,8 +226,13 @@ impl UnitsEditor {
             self.has_unsaved_changes = true;
         }
         let mut deleted_skill = None;
-        for ((p, s, t), skill_ids) in &grouped_skills {
-            let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
+        for (tags, skill_ids) in &grouped_skills {
+            let tags_str = tags
+                .iter()
+                .map(|t| format!("{:?}", t))
+                .collect::<Vec<_>>()
+                .join("-");
+            let title = format!("─── {} ───", tags_str);
             ui.label(&title);
             ScrollArea::horizontal()
                 .id_salt(format!("skills_scroll-{}", &title))

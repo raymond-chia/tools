@@ -1027,24 +1027,24 @@ mod tests {
         }];
         skills.insert("fire_pot2".to_string(), s2);
 
-        // 技能 3：MindControl Potency +20
+        // 技能 3：Debuff Potency +20
         let mut s3 = Skill::default();
         s3.effects = vec![Effect::Potency {
             target_type: TargetType::Caster,
             shape: Shape::Point,
-            tag: Tag::MindControl,
+            tag: Tag::Debuff,
             value: 20,
             duration: -1,
         }];
-        skills.insert("mind_pot".to_string(), s3);
+        skills.insert("debuff_pot".to_string(), s3);
 
         // 測試 Fire tag 的 potency
         let fire_potency = skills_to_potency(skills.keys(), &skills, &Tag::Fire);
         assert_eq!(fire_potency.unwrap(), 25);
 
-        // 測試 MindControl tag 的 potency
-        let mind_potency = skills_to_potency(skills.keys(), &skills, &Tag::MindControl);
-        assert_eq!(mind_potency.unwrap(), 20);
+        // 測試 Debuff tag 的 potency
+        let debuff_potency = skills_to_potency(skills.keys(), &skills, &Tag::Debuff);
+        assert_eq!(debuff_potency.unwrap(), 20);
 
         // 測試 Physical tag 的 potency（沒有）
         let physical_potency = skills_to_potency(skills.keys(), &skills, &Tag::Physical);

@@ -279,17 +279,16 @@ impl PlayerProgressionEditor {
                         let empty_vec: Vec<SkillID> = Vec::new();
                         let skill_ids = unit.skills.get(tag_tuple).unwrap_or(&empty_vec);
                         ui.vertical(|ui| {
-                            let label = format!(
-                                "分類: ─── {:?}-{:?}-{:?} ───",
-                                tag_tuple.0, tag_tuple.1, tag_tuple.2
-                            );
+                            let tags_str = tag_tuple
+                                .iter()
+                                .map(|t| format!("{:?}", t))
+                                .collect::<Vec<_>>()
+                                .join("-");
+                            let label = format!("分類: ─── {} ───", tags_str);
                             ui.label(label);
                             // 已有技能列表 + 移除技能
                             egui::ScrollArea::horizontal()
-                                .id_salt(format!(
-                                    "skills_scroll_{:?}_{:?}_{:?}_{}",
-                                    tag_tuple.0, tag_tuple.1, tag_tuple.2, typ
-                                ))
+                                .id_salt(format!("skills_scroll_{}_{}", tags_str, typ))
                                 .max_height(32.0)
                                 .show(ui, |ui| {
                                     ui.horizontal(|ui| {
@@ -324,8 +323,8 @@ impl PlayerProgressionEditor {
                                 .collect();
                             let mut add_skill: Option<SkillID> = None;
                             egui::ComboBox::from_id_salt(format!(
-                                "unit_skill_combo_{:?}_{:?}_{:?}_{}",
-                                tag_tuple.0, tag_tuple.1, tag_tuple.2, typ
+                                "unit_skill_combo_{}_{}",
+                                tags_str, typ
                             ))
                             .selected_text("新增技能")
                             .show_ui(ui, |ui| {

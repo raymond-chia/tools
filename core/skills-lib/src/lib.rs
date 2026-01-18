@@ -67,31 +67,33 @@ pub struct Skill {
 #[strum(serialize_all = "snake_case")]
 pub enum Tag {
     // 主動; 被動
-    BasicPassive,
+    #[default]
     Passive,
     Active,
-    // 範圍
-    Single,
-    Area,
+    Basic, // 額外標記，必須與 Passive 一起使用
+    // 來源標記
+    Character, // 角色本身的技能
+    Equipment, // 裝備賦予的技能
     // 距離
     Caster,
     Melee,
     Ranged,
+    // 範圍
+    Single,
+    Area,
     // 物理或者魔法
-    #[default]
     Physical,
     Magical,
     // 特性
     Attack,
-    Beneficial,
-    BodyControl,
-    MindControl,
-    // 其他
     Heal,
-    Fire,
+    Buff,
+    Debuff,
     // 物件交互
     Ignite,     // 點燃範圍內的可燃物件
     Extinguish, // 熄滅範圍內的物件
+    // 其他
+    Fire,
 }
 
 /// 豁免檢定類型

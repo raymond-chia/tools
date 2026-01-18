@@ -109,46 +109,37 @@ impl SkillsData {
             return Err("技能範圍的最小值不能大於最大值".to_string());
         }
 
-        // 檢查標籤的互斥條件
-        // 條件1: active, passive, basic passive 只能擇一
-        let mut count = 0;
-        for tag in [&Tag::BasicPassive, &Tag::Passive, &Tag::Active] {
-            if skill.tags.contains(tag) {
-                count += 1;
+        // 檢查互斥 tag 分組（每組必須恰好有一個）
+        for group in EXCLUSIVE_TAG_GROUPS.iter() {
+            let count = group.iter().filter(|t| skill.tags.contains(t)).count();
+            if count != 1 {
+                let group_names: Vec<_> = group.iter().map(|t| format!("{:?}", t)).collect();
+                return Err(format!(
+                    "技能必須在 {} 中選擇恰好一個",
+                    group_names.join("/")
+                ));
             }
         }
-        if count != 1 {
-            return Err(
-                "技能不能同時是基礎被動 (Basic Passive)、被動 (Passive)、主動 (Active) 標籤"
-                    .to_string(),
-            );
+
+        // Basic 標籤特殊處理
+        if skill.tags.contains(&Tag::Basic) && !skill.tags.contains(&Tag::Passive) {
+            return Err("Basic 標籤必須與 Passive 一起使用".to_string());
         }
-        if skill.tags.contains(&Tag::BasicPassive) {
+        if skill.tags.contains(&Tag::Basic) && skill.tags.contains(&Tag::Passive) {
             if let Err(msg) = validate_basic_passive_skill(skill) {
                 return Err(format!("種族被動技能格式錯誤: {}", msg));
             }
         }
 
-        // 條件2: single, area 只能擇一
-        let mut count = 0;
-        for tag in [&Tag::Single, &Tag::Area] {
-            if skill.tags.contains(tag) {
-                count += 1;
+        // 檢查施法者技能
+        if skill.tags.contains(&Tag::Caster) {
+            if skill.range.0 != 0 || skill.range.1 != 0 {
+                return Err("施法者技能的範圍必須是 (0, 0)".to_string());
             }
-        }
-        if count != 1 {
-            return Err("技能不能同時是單體 (Single) 和範圍 (Area)".to_string());
-        }
 
-        // 條件3: caster, melee, ranged 只能擇一
-        let mut count = 0;
-        for tag in [&Tag::Caster, &Tag::Melee, &Tag::Ranged] {
-            if skill.tags.contains(tag) {
-                count += 1;
+            if skill.effects[0].target_type() != &TargetType::Caster {
+                return Err("施法者技能的目標類型必須是施法者".to_string());
             }
-        }
-        if count != 1 {
-            return Err("技能的作用範圍 (Caster/Melee/Ranged) 只能擇一".to_string());
         }
 
         // 檢查單體技能
@@ -181,17 +172,6 @@ impl SkillsData {
                         );
                     }
                 }
-            }
-        }
-
-        // 檢查施法者技能
-        if skill.tags.contains(&Tag::Caster) {
-            if skill.range.0 != 0 || skill.range.1 != 0 {
-                return Err("施法者技能的範圍必須是 (0, 0)".to_string());
-            }
-
-            if skill.effects[0].target_type() != &TargetType::Caster {
-                return Err("施法者技能的目標類型必須是施法者".to_string());
             }
         }
 
@@ -368,9 +348,14 @@ impl SkillsEditor {
         ui.add_space(10.0);
 
         ScrollArea::vertical().show(ui, |ui| {
-            let (grouped, unmatched) = group_non_basic_skills_by_tags(&self.skills_data.skills);
-            for ((p, s, t), skill_ids) in grouped {
-                let title = format!("─── {:?}-{:?}-{:?} ───", p, s, t);
+            let (grouped, unmatched) = group_skills_by_tags(&self.skills_data.skills);
+            for (tags, skill_ids) in grouped {
+                let tags_str = tags
+                    .iter()
+                    .map(|t| format!("{:?}", t))
+                    .collect::<Vec<_>>()
+                    .join("-");
+                let title = format!("─── {} ───", tags_str);
                 self.show_skill_category(ui, &title, &skill_ids);
             }
             // 顯示未完全分組的技能
@@ -437,7 +422,7 @@ impl SkillsEditor {
             copy_clicked = ui.button("複製技能").clicked();
 
             // 新增「初始化種族被動技能」按鈕
-            if skill.tags.contains(&Tag::BasicPassive) {
+            if skill.tags.contains(&Tag::Basic) && skill.tags.contains(&Tag::Passive) {
                 init_basic_passive = ui.button("初始化種族被動技能").clicked();
             }
         });
@@ -480,7 +465,8 @@ impl SkillsEditor {
 
                 // 處理效果編輯
                 let effects_len = skill.effects.len();
-                let is_basic_passive_skill = skill.tags.contains(&Tag::BasicPassive);
+                let is_basic_passive_skill =
+                    skill.tags.contains(&Tag::Basic) && skill.tags.contains(&Tag::Passive);
                 let mut show_effects = |ui: &mut Ui| {
                     for (index, effect) in skill.effects.iter_mut().enumerate() {
                         ui.vertical(|ui| {
@@ -714,70 +700,71 @@ impl SkillsEditor {
 
     fn show_tags_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
         let mut changed = false;
-        let active = [Tag::BasicPassive, Tag::Passive, Tag::Active];
-        let area = [Tag::Single, Tag::Area];
-        let range = [Tag::Caster, Tag::Melee, Tag::Ranged];
-        let pm_group = [Tag::Physical, Tag::Magical];
 
-        ui.group(|ui| {
-            // 0: Basic Passive, 1: Passive, 2: Active
-            let mut selected = if skill.tags.contains(&Tag::BasicPassive) {
-                active.iter().position(|e| e == &Tag::BasicPassive).unwrap()
-            } else if skill.tags.contains(&Tag::Passive) {
-                active.iter().position(|e| e == &Tag::Passive).unwrap()
-            } else {
-                // 默認為 Active
-                active.iter().position(|e| e == &Tag::Active).unwrap()
-            };
-            changed |= tag_button_group(ui, &active, skill, &mut selected);
-        });
+        // 使用共用的互斥 tag 分組
+        for (i, group) in EXCLUSIVE_TAG_GROUPS.iter().enumerate() {
+            ui.group(|ui| {
+                let mut selected = group
+                    .iter()
+                    .position(|t| skill.tags.contains(t))
+                    .unwrap_or(0);
+                changed |= tag_button_group(ui, group, skill, &mut selected);
 
-        ui.group(|ui| {
-            let mut selected = if skill.tags.contains(&Tag::Area) {
-                area.iter().position(|e| e == &Tag::Area).unwrap()
-            } else {
-                // 默認為 Single
-                area.iter().position(|e| e == &Tag::Single).unwrap()
-            };
-            changed |= tag_button_group(ui, &area, skill, &mut selected);
-        });
-
-        ui.group(|ui| {
-            let mut selected = if skill.tags.contains(&Tag::Caster) {
-                range.iter().position(|e| e == &Tag::Caster).unwrap()
-            } else if skill.tags.contains(&Tag::Ranged) {
-                range.iter().position(|e| e == &Tag::Ranged).unwrap()
-            } else {
-                // 默認為 Melee
-                range.iter().position(|e| e == &Tag::Melee).unwrap()
-            };
-            changed |= tag_button_group(ui, &range, skill, &mut selected);
-        });
-
-        ui.group(|ui| {
-            for tag in pm_group.iter() {
-                let tag_str = format!("{:?}", tag).to_lowercase();
-                let mut checked = skill.tags.contains(tag);
-                if ui.checkbox(&mut checked, tag_str).changed() {
-                    if checked {
-                        skill.tags.insert(tag.clone());
-                    } else {
-                        skill.tags.remove(tag);
+                // 第一組（Active/Passive）特殊處理：顯示 Basic checkbox
+                if i == 0 {
+                    let is_passive = skill.tags.contains(&Tag::Passive);
+                    let mut has_basic = skill.tags.contains(&Tag::Basic);
+                    ui.add_enabled_ui(is_passive, |ui| {
+                        if ui.checkbox(&mut has_basic, "basic").changed() {
+                            if has_basic {
+                                skill.tags.insert(Tag::Basic);
+                            } else {
+                                skill.tags.remove(&Tag::Basic);
+                            }
+                            changed = true;
+                        }
+                    });
+                    // 如果切換到 Active，自動移除 Basic
+                    if !is_passive && skill.tags.contains(&Tag::Basic) {
+                        skill.tags.remove(&Tag::Basic);
+                        changed = true;
                     }
-                    changed = true;
                 }
-            }
-        });
+            });
+        }
 
-        // 其他 tag 多選
+        // 可選多選 tag 分組
+        for group in OPTIONAL_TAG_GROUPS.iter() {
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    for tag in group.iter() {
+                        let tag_str = format!("{:?}", tag).to_lowercase();
+                        let mut checked = skill.tags.contains(tag);
+                        if ui.checkbox(&mut checked, tag_str).changed() {
+                            if checked {
+                                skill.tags.insert(tag.clone());
+                            } else {
+                                skill.tags.remove(tag);
+                            }
+                            changed = true;
+                        }
+                    }
+                });
+            });
+        }
+
+        // 其他 tag 多選（排除互斥組、Basic、可選組）
         ui.group(|ui| {
             ui.horizontal_wrapped(|ui| {
+                let excluded: std::collections::BTreeSet<_> = EXCLUSIVE_TAG_GROUPS
+                    .iter()
+                    .flat_map(|g| g.iter())
+                    .chain(OPTIONAL_TAG_GROUPS.iter().flat_map(|g| g.iter()))
+                    .chain(std::iter::once(&Tag::Basic))
+                    .collect();
+
                 for tag in Tag::iter() {
-                    if active.contains(&tag)
-                        || area.contains(&tag)
-                        || range.contains(&tag)
-                        || pm_group.contains(&tag)
-                    {
+                    if excluded.contains(&tag) {
                         continue;
                     }
                     let tag_str = format!("{:?}", tag).to_lowercase();
@@ -865,8 +852,8 @@ impl SkillsEditor {
             new_basic_passive_effects.push((meta.make)(value));
         }
 
-        skill.tags = [Tag::BasicPassive, Tag::Single, Tag::Caster]
-            .into_iter()
+        skill.tags = std::iter::once(Tag::Basic)
+            .chain(EXCLUSIVE_TAG_GROUPS.iter().map(|group| group[0].clone()))
             .collect();
         skill.effects.clear();
         // 依順序排列於最前面，其他效果保留順序在末尾
@@ -935,12 +922,18 @@ impl SkillsEditor {
 }
 
 fn validate_basic_passive_skill(skill: &Skill) -> Result<(), String> {
-    if skill.tags.len() != 3
-        || !skill.tags.contains(&Tag::BasicPassive)
-        || !skill.tags.contains(&Tag::Single)
-        || !skill.tags.contains(&Tag::Caster)
-    {
-        return Err("基礎被動標籤不對".to_string());
+    // 預期 tag 數量：Basic + 每個 EXCLUSIVE_TAG_GROUPS 的第一個
+    let expected_tags: Vec<Tag> = std::iter::once(Tag::Basic)
+        .chain(EXCLUSIVE_TAG_GROUPS.iter().map(|group| group[0].clone()))
+        .collect();
+
+    for tag in &expected_tags {
+        if !skill.tags.contains(tag) {
+            return Err(format!(
+                "基礎被動缺少標籤 {:?}，應為 {:?}",
+                tag, expected_tags
+            ));
+        }
     }
     if skill.range != (0, 0) {
         return Err("基礎被動不該有範圍".to_string());
@@ -995,7 +988,7 @@ fn tag_button_group(ui: &mut Ui, tags: &[Tag], skill: &mut Skill, selected: &mut
 
 fn show_basic_skill_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
     let mut changed = false;
-    if skill.tags.contains(&Tag::BasicPassive) {
+    if skill.tags.contains(&Tag::Basic) && skill.tags.contains(&Tag::Passive) {
         return changed;
     }
     ui.horizontal(|ui| {
