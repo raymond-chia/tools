@@ -12,31 +12,31 @@ use std::str::FromStr;
 
 /// 取得跨平台對話資料路徑
 pub fn dialogs_file() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-dialogs.toml"])
+    PathBuf::from_iter(["ignore-data", "ignore-dialogs.toml"])
 }
 /// 取得跨平台技能資料路徑
 pub fn skills_file() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-skills.toml"])
+    PathBuf::from_iter(["ignore-data", "ignore-skills.toml"])
 }
 /// 取得跨平台單位模板資料路徑
 pub fn unit_templates_file() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-unit-templates.toml"])
+    PathBuf::from_iter(["ignore-data", "ignore-unit-templates.toml"])
 }
 /// 取得跨平台玩家進度資料路徑
 pub fn progressions_file() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-player-progressions.toml"])
+    PathBuf::from_iter(["ignore-data", "ignore-player-progressions.toml"])
 }
 /// 取得跨平台棋盤資料路徑
 pub fn boards_file() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-boards.toml"])
+    PathBuf::from_iter(["ignore-data", "ignore-boards.toml"])
 }
 /// 取得跨平台棋盤分開存放目錄
 pub fn boards_separate_dir() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-boards"])
+    PathBuf::from_iter(["ignore-data", "ignore-boards"])
 }
 /// 取得跨平台 AI 設定檔路徑
 pub fn ai_file() -> PathBuf {
-    PathBuf::from_iter(["test-data", "ignore-ai.toml"])
+    PathBuf::from_iter(["ignore-data", "ignore-ai.toml"])
 }
 
 #[derive(Debug, Clone)]
