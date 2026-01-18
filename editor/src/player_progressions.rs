@@ -181,6 +181,14 @@ impl PlayerProgressionEditor {
 
         ui.heading(format!("編輯戰場: {board_id} 的 Roster"));
 
+        // 延遲處理變數（須在 progress 借用前定義）
+        let mut to_add_unit: Option<UnitTemplateType> = None;
+        let mut copy_all_units = false;
+        let mut to_remove_unit: Option<UnitTemplateType> = None;
+        let mut to_edit_unit: Option<Unit> = None;
+        let mut to_rename_unit: Option<(UnitTemplateType, UnitTemplateType)> = None;
+        let mut status_messages: Vec<(String, bool)> = Vec::new();
+
         let progress = self.data.boards.get_mut(board_id).unwrap();
 
         ui.separator();
@@ -211,146 +219,170 @@ impl PlayerProgressionEditor {
                 });
             if ui.button("新增").clicked() {
                 if let Some(typ) = unit_types.get(selected_idx) {
-                    progress.roster.insert(
-                        (*typ).clone(),
-                        Unit {
-                            unit_type: (*typ).clone(),
-                            ..Default::default()
-                        },
-                    );
-                    self.has_unsaved_changes = true;
+                    to_add_unit = Some((*typ).clone());
                 }
+            }
+            if ui
+                .button("從模板複製所有單位")
+                .on_hover_text("將所有單位模板複製到此戰場，並複製其技能")
+                .clicked()
+            {
+                copy_all_units = true;
             }
         });
 
         ui.heading("單位列表");
-        let mut to_remove_unit: Option<UnitTemplateType> = None;
-        let mut to_edit_unit: Option<Unit> = None;
-        let mut to_rename_unit: Option<(UnitTemplateType, UnitTemplateType)> = None;
-        let mut status_messages: Vec<(String, bool)> = Vec::new();
 
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            if progress.roster.is_empty() {
-                ui.label("此戰場尚無單位");
-                return;
-            }
-            for (typ, unit) in progress.roster.iter() {
-                // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
-                // 若需編輯，需複製出來再處理
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                if progress.roster.is_empty() {
+                    ui.label("此戰場尚無單位");
+                    return;
+                }
+                for (typ, unit) in progress.roster.iter() {
+                    // BTreeSet 的 iter() 回傳不可變參考，無法直接編輯 unit
+                    // 若需編輯，需複製出來再處理
 
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("種類:");
-                        // 顯示可編輯的單位名稱
-                        let mut new_name = typ.clone();
-                        let resp = ui.text_edit_singleline(&mut new_name);
-                        if resp.changed() && new_name != *typ {
-                            // 檢查新名稱是否有效
-                            if self.unit_templates.contains_key(&new_name)
-                                && !progress.roster.contains_key(&new_name)
-                            {
-                                to_rename_unit = Some((typ.clone(), new_name));
-                            } else if !self.unit_templates.contains_key(&new_name) {
-                                status_messages
-                                    .push((format!("單位模板 '{}' 不存在", new_name), true));
-                            } else {
-                                status_messages
-                                    .push((format!("單位名稱 '{}' 已經存在", new_name), true));
-                            }
-                        }
-                        if ui
-                            .button("從模板複製技能")
-                            .on_hover_text("將單位模板的技能複製到此單位")
-                            .clicked()
-                        {
-                            if let Some(template) = self.unit_templates.get(typ) {
-                                let mut new_unit = unit.clone();
-                                new_unit.skills = grouped_unit_skills(&self.skill_group, template);
-                                to_edit_unit = Some(new_unit);
-                            } else {
-                                status_messages.push((format!("找不到單位模板 '{}'", typ), true));
-                            }
-                        }
-                        if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
-                            to_remove_unit = Some(typ.clone());
-                        }
-                    });
-
-                    for (tag_tuple, all_skill_ids) in self.skill_group.iter() {
-                        let empty_vec: Vec<SkillID> = Vec::new();
-                        let skill_ids = unit.skills.get(tag_tuple).unwrap_or(&empty_vec);
-                        ui.vertical(|ui| {
-                            let tags_str = tag_tuple
-                                .iter()
-                                .map(|t| format!("{:?}", t))
-                                .collect::<Vec<_>>()
-                                .join("-");
-                            let label = format!("分類: ─── {} ───", tags_str);
-                            ui.label(label);
-                            // 已有技能列表 + 移除技能
-                            egui::ScrollArea::horizontal()
-                                .id_salt(format!("skills_scroll_{}_{}", tags_str, typ))
-                                .max_height(32.0)
-                                .show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        for (idx, skill) in skill_ids.iter().enumerate() {
-                                            ui.label(skill);
-                                            if ui
-                                                .small_button("x")
-                                                .on_hover_text("移除技能")
-                                                .clicked()
-                                            {
-                                                let mut new_unit = unit.clone();
-                                                if let Some(new_unit_skills) =
-                                                    new_unit.skills.get_mut(tag_tuple)
-                                                {
-                                                    new_unit_skills.remove(idx);
-                                                    if new_unit_skills.is_empty() {
-                                                        new_unit.skills.remove(tag_tuple);
-                                                    }
-                                                }
-                                                to_edit_unit = Some(new_unit);
-                                            }
-                                        }
-                                    });
-                                });
-                            // 可新增技能選項
-                            let owned_skill_ids: HashSet<&SkillID> =
-                                unit.skills.values().flat_map(|v| v).collect();
-                            let unowned_skill_ids: Vec<SkillID> = all_skill_ids
-                                .iter()
-                                .filter(|skill_id| !owned_skill_ids.contains(skill_id))
-                                .cloned()
-                                .collect();
-                            let mut add_skill: Option<SkillID> = None;
-                            egui::ComboBox::from_id_salt(format!(
-                                "unit_skill_combo_{}_{}",
-                                tags_str, typ
-                            ))
-                            .selected_text("新增技能")
-                            .show_ui(ui, |ui| {
-                                for skill_id in unowned_skill_ids.iter() {
-                                    if ui.selectable_label(false, skill_id).clicked() {
-                                        add_skill = Some(skill_id.clone());
-                                    }
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("種類:");
+                            // 顯示可編輯的單位名稱
+                            let mut new_name = typ.clone();
+                            let resp = ui.text_edit_singleline(&mut new_name);
+                            if resp.changed() && new_name != *typ {
+                                // 檢查新名稱是否有效
+                                if self.unit_templates.contains_key(&new_name)
+                                    && !progress.roster.contains_key(&new_name)
+                                {
+                                    to_rename_unit = Some((typ.clone(), new_name));
+                                } else if !self.unit_templates.contains_key(&new_name) {
+                                    status_messages
+                                        .push((format!("單位模板 '{}' 不存在", new_name), true));
+                                } else {
+                                    status_messages
+                                        .push((format!("單位名稱 '{}' 已經存在", new_name), true));
                                 }
-                            });
-                            if let Some(skill_id) = add_skill {
-                                let mut new_unit = unit.clone();
-                                new_unit
-                                    .skills
-                                    .entry(tag_tuple.clone())
-                                    .or_insert_with(Vec::new)
-                                    .push(skill_id);
-                                to_edit_unit = Some(new_unit);
+                            }
+                            if ui
+                                .button("從模板複製技能")
+                                .on_hover_text("將單位模板的技能複製到此單位")
+                                .clicked()
+                            {
+                                if let Some(template) = self.unit_templates.get(typ) {
+                                    let mut new_unit = unit.clone();
+                                    new_unit.skills =
+                                        grouped_unit_skills(&self.skill_group, template);
+                                    to_edit_unit = Some(new_unit);
+                                } else {
+                                    status_messages
+                                        .push((format!("找不到單位模板 '{}'", typ), true));
+                                }
+                            }
+                            if ui.small_button("x").on_hover_text("刪除此單位").clicked() {
+                                to_remove_unit = Some(typ.clone());
                             }
                         });
-                    }
-                });
-            }
-        });
+
+                        for (tag_tuple, all_skill_ids) in self.skill_group.iter() {
+                            let empty_vec: Vec<SkillID> = Vec::new();
+                            let skill_ids = unit.skills.get(tag_tuple).unwrap_or(&empty_vec);
+                            ui.vertical(|ui| {
+                                let tags_str = tag_tuple
+                                    .iter()
+                                    .map(|t| format!("{:?}", t))
+                                    .collect::<Vec<_>>()
+                                    .join("-");
+                                let label = format!("分類: ─── {} ───", tags_str);
+                                ui.label(label);
+                                // 已有技能列表 + 移除技能
+                                egui::ScrollArea::horizontal()
+                                    .id_salt(format!("skills_scroll_{}_{}", tags_str, typ))
+                                    .max_height(32.0)
+                                    .show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            for (idx, skill) in skill_ids.iter().enumerate() {
+                                                ui.label(skill);
+                                                if ui
+                                                    .small_button("x")
+                                                    .on_hover_text("移除技能")
+                                                    .clicked()
+                                                {
+                                                    let mut new_unit = unit.clone();
+                                                    if let Some(new_unit_skills) =
+                                                        new_unit.skills.get_mut(tag_tuple)
+                                                    {
+                                                        new_unit_skills.remove(idx);
+                                                        if new_unit_skills.is_empty() {
+                                                            new_unit.skills.remove(tag_tuple);
+                                                        }
+                                                    }
+                                                    to_edit_unit = Some(new_unit);
+                                                }
+                                            }
+                                        });
+                                    });
+                                // 可新增技能選項
+                                let owned_skill_ids: HashSet<&SkillID> =
+                                    unit.skills.values().flat_map(|v| v).collect();
+                                let unowned_skill_ids: Vec<SkillID> = all_skill_ids
+                                    .iter()
+                                    .filter(|skill_id| !owned_skill_ids.contains(skill_id))
+                                    .cloned()
+                                    .collect();
+                                let mut add_skill: Option<SkillID> = None;
+                                egui::ComboBox::from_id_salt(format!(
+                                    "unit_skill_combo_{}_{}",
+                                    tags_str, typ
+                                ))
+                                .selected_text("新增技能")
+                                .show_ui(ui, |ui| {
+                                    for skill_id in unowned_skill_ids.iter() {
+                                        if ui.selectable_label(false, skill_id).clicked() {
+                                            add_skill = Some(skill_id.clone());
+                                        }
+                                    }
+                                });
+                                if let Some(skill_id) = add_skill {
+                                    let mut new_unit = unit.clone();
+                                    new_unit
+                                        .skills
+                                        .entry(tag_tuple.clone())
+                                        .or_insert_with(Vec::new)
+                                        .push(skill_id);
+                                    to_edit_unit = Some(new_unit);
+                                }
+                            });
+                        }
+                    });
+                }
+            });
 
         // 在 closure 外面處理修改
+        if let Some(typ) = to_add_unit {
+            progress.roster.insert(
+                typ.clone(),
+                Unit {
+                    unit_type: typ,
+                    ..Default::default()
+                },
+            );
+            self.has_unsaved_changes = true;
+        }
+        if copy_all_units {
+            for (typ, template) in &self.unit_templates {
+                let skills = grouped_unit_skills(&self.skill_group, template);
+                progress.roster.insert(
+                    typ.clone(),
+                    Unit {
+                        unit_type: typ.clone(),
+                        skills,
+                    },
+                );
+            }
+            self.has_unsaved_changes = true;
+            status_messages.push(("已從模板複製所有單位".to_string(), false));
+        }
         if let Some(typ) = to_remove_unit {
             progress.roster.remove(&typ);
             status_messages.push((format!("單位 '{}' 已經刪除", typ), false));
@@ -374,9 +406,15 @@ impl PlayerProgressionEditor {
                 ));
             }
         }
-        // 設定狀態訊息
-        for (msg, is_error) in status_messages {
-            self.set_status(msg, is_error);
+        // 設定狀態訊息（合併多個訊息避免覆蓋）
+        if !status_messages.is_empty() {
+            let has_error = status_messages.iter().any(|(_, is_error)| *is_error);
+            let combined_msg = status_messages
+                .into_iter()
+                .map(|(msg, _)| msg)
+                .collect::<Vec<_>>()
+                .join("；");
+            self.set_status(combined_msg, has_error);
         }
     }
 
