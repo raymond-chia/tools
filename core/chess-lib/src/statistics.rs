@@ -218,13 +218,16 @@ impl BattleStatistics {
                 attacker_stats.hit.guaranteed_hit_count += 1;
                 skill_stats.hit_count += 1;
             }
+            DefenseResult::Blocked => {
+                // 格擋代表攻擊命中但被減傷，仍計入命中
+                attacker_stats.hit.hit_count += 1;
+                skill_stats.hit_count += 1;
+                let target_stats = self.unit_stats.entry(target_id).or_default();
+                target_stats.hit.block_count += 1;
+            }
             DefenseResult::Evaded => {
                 let target_stats = self.unit_stats.entry(target_id).or_default();
                 target_stats.hit.evade_count += 1;
-            }
-            DefenseResult::Blocked => {
-                let target_stats = self.unit_stats.entry(target_id).or_default();
-                target_stats.hit.block_count += 1;
             }
             DefenseResult::GuaranteedEvade => {
                 let target_stats = self.unit_stats.entry(target_id).or_default();

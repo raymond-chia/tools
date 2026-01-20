@@ -206,6 +206,7 @@ impl UnitsEditor {
         ui.label("技能：");
         ComboBox::from_id_salt("add_skill_combo")
             .selected_text(format!("選擇技能: {}", &self.selected_skill))
+            .height(ui.available_height())
             .show_ui(ui, |ui| {
                 for (tags, skill_ids) in &self.skill_groups {
                     let tags_str = tags

@@ -93,6 +93,7 @@ pub enum Tag {
     Ignite,     // 點燃範圍內的可燃物件
     Extinguish, // 熄滅範圍內的物件
     // 其他
+    CanBeReaction,
     Fire,
 }
 

@@ -48,6 +48,14 @@ impl Battle {
 
     /// 從回合順序中移除實體（單位或物件）
     /// 會自動調整 current_turn_index 和 next_turn_index
+    ///
+    /// # 重要：當前實體死亡的處理
+    ///
+    /// 當移除的是當前回合實體時，`current_turn_index` 會被設為 `None`。
+    /// 這種情況會發生在：藉機攻擊、陷阱、AOE 傷害自己等導致當前單位死亡。
+    ///
+    /// **UI 層必須處理這種情況**：檢查 `get_current_entity()` 返回 `None` 且
+    /// `turn_order` 不為空時，應調用 `next_turn()` 推進到下一回合。
     pub fn remove_entity_from_turn_order(&mut self, entity: &TurnEntity) {
         let index = match self.turn_order.iter().position(|e| e == entity) {
             Some(index) => index,

@@ -43,13 +43,13 @@ macro_rules! basic_passive_effect_meta {
     };
 }
 const BASIC_PASSIVE_EFFECTS: &[BasicPassiveEffectMeta] = &[
-    basic_passive_effect_meta!(MaxHp, "max_hp", 10),
-    basic_passive_effect_meta!(MaxMp, "max_mp", 30),
-    basic_passive_effect_meta!(Initiative, "initiative", 0),
+    basic_passive_effect_meta!(MaxHp, "max_hp", 80),
+    basic_passive_effect_meta!(MaxMp, "max_mp", 40),
+    basic_passive_effect_meta!(Initiative, "initiative", 10),
     basic_passive_effect_meta!(Evasion, "evasion", 100),
-    basic_passive_effect_meta!(Block, "block", 0),
     basic_passive_effect_meta!(Flanking, "flanking", 10),
     basic_passive_effect_meta!(MovePoints, "move_points", 50),
+    basic_passive_effect_meta!(MaxReactions, "max_reactions", 1),
 ];
 
 // 判斷是否為 basic passive 效果（依 meta 陣列 validate 規則）
@@ -178,11 +178,6 @@ impl SkillsData {
         // effect 跟 tag 需要一起存在
         let checklist = [
             // 雖然不是 effect, 但是條件跟標籤要一起存在
-            (
-                skill.cost < 0,
-                Tag::Magical,
-                "有魔力標籤的技能必須消耗魔力（cost < 0）",
-            ),
             (
                 skill.effects.iter().any(|e| match e {
                     Effect::Hp { value, .. } => *value < 0,
@@ -1018,7 +1013,11 @@ fn show_basic_skill_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
         ui.label("命中數值:");
         let mut has_accuracy = skill.accuracy.is_some();
         if ui.checkbox(&mut has_accuracy, "").changed() {
-            skill.accuracy = if has_accuracy { Some(100) } else { None };
+            skill.accuracy = if has_accuracy {
+                Some(DEFAULT_ACCURACY)
+            } else {
+                None
+            };
             changed = true;
         }
 
@@ -1036,7 +1035,11 @@ fn show_basic_skill_editor(ui: &mut Ui, skill: &mut Skill) -> bool {
         ui.label("爆擊率:");
         let mut has_crit_rate = skill.crit_rate.is_some();
         if ui.checkbox(&mut has_crit_rate, "").changed() {
-            skill.crit_rate = if has_crit_rate { Some(10) } else { None };
+            skill.crit_rate = if has_crit_rate {
+                Some(DEFAULT_CRIT_RATE)
+            } else {
+                None
+            };
             changed = true;
         }
 
@@ -1429,7 +1432,7 @@ fn show_tag_editor(ui: &mut Ui, tag: &mut Tag) -> bool {
         let response = egui::ComboBox::new("tag", "")
             .selected_text(format!("{:?}", tag.clone()).to_lowercase())
             .show_ui(ui, |ui| {
-                ui.selectable_value(tag, Tag::Fire, "火焰");
+                ui.selectable_value(tag, Tag::CanBeReaction, "可作為反應");
             });
         if response.response.changed() {
             changed = true;
@@ -1615,7 +1618,9 @@ fn show_triggered_skill_editor(
             .clicked()
         {
             if !matches!(triggered_skill, TriggeredSkill::Tag { .. }) {
-                *triggered_skill = TriggeredSkill::Tag { tag: Tag::Active };
+                *triggered_skill = TriggeredSkill::Tag {
+                    tag: Tag::CanBeReaction,
+                };
                 changed = true;
             }
         }

@@ -1419,13 +1419,15 @@ impl BoardsEditor {
                 return;
             }
             None => {
-                self.set_status(
-                    format!(
-                        "無當前回合角色，回合順序：{:?}",
-                        &self.sim_battle.turn_order,
-                    ),
-                    true,
-                );
+                // 當前實體不存在，應該已經在 show_sim 中處理
+                // 這裡作為防禦性編程，同樣自動推進回合
+                if !self.sim_battle.turn_order.is_empty() {
+                    self.pending_reactions = None;
+                    self.sim_battle
+                        .next_turn(&mut self.sim_board, &mut self.skill_selection);
+                    return;
+                }
+                ui.label("戰鬥結束");
                 return;
             }
         };
@@ -1482,6 +1484,7 @@ impl BoardsEditor {
             } else {
                 ""
             })
+            .height(ui.available_height())
             .show_ui(ui, |ui| {
                 ui.label("─── 主動技能 ───");
                 for (i, name) in active_skill_ids.iter().enumerate() {

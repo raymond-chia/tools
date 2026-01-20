@@ -39,6 +39,26 @@ pub fn ai_file() -> PathBuf {
     PathBuf::from_iter(["ignore-data", "ignore-ai.toml"])
 }
 
+pub const DEFAULT_ACCURACY: i32 = 80;
+pub const DEFAULT_CRIT_RATE: u16 = 5;
+
+/// 互斥 tag 分組（每組只能選一個）
+/// 用於技能分類和 UI 編輯器
+/// 注意：每組的第一個 tag 是 basic passive 技能的預設值
+/// 需要同步到 D:\Mega\prog\rust\tools\core\skills-lib\src\lib.rs 的 default_tags 函式
+pub const EXCLUSIVE_TAG_GROUPS: [&[Tag]; 4] = [
+    &[Tag::Passive, Tag::Active],
+    &[Tag::Character, Tag::Equipment],
+    &[Tag::Caster, Tag::Melee, Tag::Ranged],
+    &[Tag::Single, Tag::Area],
+];
+
+/// 可選多選 tag 分組（可同時選多個）
+pub const OPTIONAL_TAG_GROUPS: [&[Tag]; 2] = [
+    &[Tag::Physical, Tag::Magical],
+    &[Tag::Attack, Tag::Heal, Tag::Buff, Tag::Debuff],
+];
+
 #[derive(Debug, Clone)]
 pub struct Camera2D {
     pub offset: Vec2,
@@ -212,23 +232,6 @@ pub fn show_status_message(ctx: &egui::Context, message: &str, is_error: bool) {
 }
 
 pub type SkillByTags = BTreeMap<Vec<Tag>, Vec<SkillID>>;
-
-/// 互斥 tag 分組（每組只能選一個）
-/// 用於技能分類和 UI 編輯器
-/// 注意：每組的第一個 tag 是 basic passive 技能的預設值
-/// 需要同步到 D:\Mega\prog\rust\tools\core\skills-lib\src\lib.rs 的 default_tags 函式
-pub const EXCLUSIVE_TAG_GROUPS: [&[Tag]; 4] = [
-    &[Tag::Passive, Tag::Active],
-    &[Tag::Character, Tag::Equipment],
-    &[Tag::Caster, Tag::Melee, Tag::Ranged],
-    &[Tag::Single, Tag::Area],
-];
-
-/// 可選多選 tag 分組（可同時選多個）
-pub const OPTIONAL_TAG_GROUPS: [&[Tag]; 2] = [
-    &[Tag::Physical, Tag::Magical],
-    &[Tag::Attack, Tag::Heal, Tag::Buff, Tag::Debuff],
-];
 
 pub fn grouped_unit_skills(skill_group: &SkillByTags, unit: &UnitTemplate) -> SkillByTags {
     let mut result = BTreeMap::new();
