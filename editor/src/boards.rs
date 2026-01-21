@@ -267,31 +267,40 @@ impl BoardsEditor {
 
             let mut to_delete = None;
             let mut edited_id: Option<(String, String)> = None;
-            for (board_id, _) in &self.boards {
-                let selected = self.selected_board.as_ref() == Some(board_id);
-                if selected {
-                    let mut id_buf = board_id.clone();
-                    let resp = ui.text_edit_singleline(&mut id_buf);
-                    if resp.changed() && !id_buf.is_empty() && !self.boards.contains_key(&id_buf) {
-                        edited_id = Some((board_id.clone(), id_buf.clone()));
-                    }
-                } else {
-                    let button = Button::new(board_id).fill(Color32::TRANSPARENT);
-                    if ui.add(button).clicked() {
-                        self.selected_team = self
-                            .boards
-                            .get(board_id)
-                            .and_then(|b| b.teams.keys().next().cloned())
-                            .unwrap_or_default();
-                        self.selected_board = Some(board_id.clone());
-                    }
-                }
-                ui.horizontal(|ui| {
-                    if ui.button("刪除").clicked() {
-                        to_delete = Some(board_id.clone());
+
+            egui::ScrollArea::vertical()
+                .max_height(ui.available_height())
+                .show(ui, |ui| {
+                    for (board_id, _) in &self.boards {
+                        let selected = self.selected_board.as_ref() == Some(board_id);
+                        if selected {
+                            let mut id_buf = board_id.clone();
+                            let resp = ui.text_edit_singleline(&mut id_buf);
+                            if resp.changed()
+                                && !id_buf.is_empty()
+                                && !self.boards.contains_key(&id_buf)
+                            {
+                                edited_id = Some((board_id.clone(), id_buf.clone()));
+                            }
+                        } else {
+                            let button = Button::new(board_id).fill(Color32::TRANSPARENT);
+                            if ui.add(button).clicked() {
+                                self.selected_team = self
+                                    .boards
+                                    .get(board_id)
+                                    .and_then(|b| b.teams.keys().next().cloned())
+                                    .unwrap_or_default();
+                                self.selected_board = Some(board_id.clone());
+                            }
+                        }
+                        ui.horizontal(|ui| {
+                            if ui.button("刪除").clicked() {
+                                to_delete = Some(board_id.clone());
+                            }
+                        });
                     }
                 });
-            }
+
             if let Some((old_id, new_id)) = edited_id {
                 if let Some(board) = self.boards.remove(&old_id) {
                     self.selected_team = board.teams.keys().next().cloned().unwrap_or_default();
