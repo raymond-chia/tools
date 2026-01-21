@@ -266,7 +266,8 @@ impl BoardsEditor {
             ui.separator();
 
             let mut to_delete = None;
-            let mut edited_id: Option<(String, String)> = None;
+            let mut to_copy: Option<String> = None;
+            let mut to_edit: Option<(String, String)> = None;
 
             egui::ScrollArea::vertical()
                 .max_height(ui.available_height())
@@ -280,7 +281,7 @@ impl BoardsEditor {
                                 && !id_buf.is_empty()
                                 && !self.boards.contains_key(&id_buf)
                             {
-                                edited_id = Some((board_id.clone(), id_buf.clone()));
+                                to_edit = Some((board_id.clone(), id_buf.clone()));
                             }
                         } else {
                             let button = Button::new(board_id).fill(Color32::TRANSPARENT);
@@ -294,6 +295,9 @@ impl BoardsEditor {
                             }
                         }
                         ui.horizontal(|ui| {
+                            if ui.button("複製").clicked() {
+                                to_copy = Some(board_id.clone());
+                            }
                             if ui.button("刪除").clicked() {
                                 to_delete = Some(board_id.clone());
                             }
@@ -301,12 +305,30 @@ impl BoardsEditor {
                     }
                 });
 
-            if let Some((old_id, new_id)) = edited_id {
+            if let Some((old_id, new_id)) = to_edit {
                 if let Some(board) = self.boards.remove(&old_id) {
                     self.selected_team = board.teams.keys().next().cloned().unwrap_or_default();
                     self.selected_board = Some(new_id.clone());
                     self.boards.insert(new_id, board);
                     self.has_unsaved_changes = true;
+                }
+            }
+            if let Some(board_id) = to_copy {
+                if let Some(board) = self.boards.get(&board_id).cloned() {
+                    // 產生不重複的新 id
+                    let mut new_id = format!("{}-copy", board_id);
+                    let mut idx = 2;
+                    while self.boards.contains_key(&new_id) {
+                        new_id = format!("{}-copy{}", board_id, idx);
+                        idx += 1;
+                    }
+                    self.selected_team = board.teams.keys().next().cloned().unwrap_or_default();
+                    self.selected_board = Some(new_id.clone());
+                    self.boards.insert(new_id, board);
+                    self.has_unsaved_changes = true;
+                    self.set_status(format!("已複製戰場 {}", board_id), false);
+                } else {
+                    self.set_status(format!("複製失敗: 找不到戰場 {}", board_id), true);
                 }
             }
             if let Some(board_id) = to_delete {
