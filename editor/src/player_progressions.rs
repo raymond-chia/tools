@@ -122,7 +122,11 @@ impl PlayerProgressionEditor {
         egui::SidePanel::left("player_progression_left_panel")
             .default_width(220.0)
             .show(ctx, |ui| {
-                self.show_side_panel(ui);
+                egui::ScrollArea::vertical()
+                    .max_height(ui.available_height())
+                    .show(ui, |ui| {
+                        self.show_side_panel(ui);
+                    });
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
