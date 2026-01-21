@@ -267,32 +267,24 @@ impl BoardsEditor {
 
             let mut to_delete = None;
             let mut to_copy: Option<String> = None;
-            let mut to_edit: Option<(String, String)> = None;
 
             egui::ScrollArea::vertical()
                 .max_height(ui.available_height())
                 .show(ui, |ui| {
                     for (board_id, _) in &self.boards {
                         let selected = self.selected_board.as_ref() == Some(board_id);
-                        if selected {
-                            let mut id_buf = board_id.clone();
-                            let resp = ui.text_edit_singleline(&mut id_buf);
-                            if resp.changed()
-                                && !id_buf.is_empty()
-                                && !self.boards.contains_key(&id_buf)
-                            {
-                                to_edit = Some((board_id.clone(), id_buf.clone()));
-                            }
+                        let button = Button::new(board_id).fill(if selected {
+                            ui.visuals().selection.bg_fill
                         } else {
-                            let button = Button::new(board_id).fill(Color32::TRANSPARENT);
-                            if ui.add(button).clicked() {
-                                self.selected_team = self
-                                    .boards
-                                    .get(board_id)
-                                    .and_then(|b| b.teams.keys().next().cloned())
-                                    .unwrap_or_default();
-                                self.selected_board = Some(board_id.clone());
-                            }
+                            Color32::TRANSPARENT
+                        });
+                        if ui.add(button).clicked() && !selected {
+                            self.selected_team = self
+                                .boards
+                                .get(board_id)
+                                .and_then(|b| b.teams.keys().next().cloned())
+                                .unwrap_or_default();
+                            self.selected_board = Some(board_id.clone());
                         }
                         ui.horizontal(|ui| {
                             if ui.button("複製").clicked() {
@@ -305,14 +297,6 @@ impl BoardsEditor {
                     }
                 });
 
-            if let Some((old_id, new_id)) = to_edit {
-                if let Some(board) = self.boards.remove(&old_id) {
-                    self.selected_team = board.teams.keys().next().cloned().unwrap_or_default();
-                    self.selected_board = Some(new_id.clone());
-                    self.boards.insert(new_id, board);
-                    self.has_unsaved_changes = true;
-                }
-            }
             if let Some(board_id) = to_copy {
                 if let Some(board) = self.boards.get(&board_id).cloned() {
                     // 產生不重複的新 id
@@ -791,7 +775,15 @@ impl BoardsEditor {
 
             match self.brush {
                 BrushMode::BoardSettings => {
-                    self.show_board_settings(ui);
+                    if let Some((old_id, new_id)) = self.show_board_settings(ui) {
+                        if let Some(board) = self.boards.remove(&old_id) {
+                            self.selected_team =
+                                board.teams.keys().next().cloned().unwrap_or_default();
+                            self.selected_board = Some(new_id.clone());
+                            self.boards.insert(new_id, board);
+                            self.has_unsaved_changes = true;
+                        }
+                    }
                 }
                 BrushMode::Terrain => {
                     self.show_terrain_brush(ui);
@@ -924,13 +916,31 @@ impl BoardsEditor {
         }
     }
 
-    fn show_board_settings(&mut self, ui: &mut Ui) {
-        // 棋盤格子數調整
+    fn show_board_settings(&mut self, ui: &mut Ui) -> Option<(String, String)> {
         let Some(board_id) = &self.selected_board else {
             ui.label("請先選擇戰場");
-            return;
+            return None;
         };
-        let board = self.boards.get_mut(board_id).expect("選擇的戰場應該存在");
+        let board_id = board_id.clone();
+
+        // 戰場名稱編輯
+        let mut rename_result = None;
+        let mut id_buf = board_id.clone();
+        ui.horizontal(|ui| {
+            ui.label("名稱");
+            if ui.text_edit_singleline(&mut id_buf).changed()
+                && !id_buf.is_empty()
+                && id_buf != board_id
+                && !self.boards.contains_key(&id_buf)
+            {
+                rename_result = Some((board_id.clone(), id_buf));
+            }
+        });
+
+        ui.separator();
+
+        // 棋盤格子數調整
+        let board = self.boards.get_mut(&board_id).expect("選擇的戰場應該存在");
         let mut rows = board.tiles.len();
         let mut cols = board.tiles.get(0).map(|row| row.len()).unwrap_or(0);
         let mut changed = false;
@@ -978,6 +988,8 @@ impl BoardsEditor {
                 }
             }
         });
+
+        rename_result
     }
 
     fn show_terrain_brush(&mut self, ui: &mut Ui) {
