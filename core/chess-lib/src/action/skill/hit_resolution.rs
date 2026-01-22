@@ -267,9 +267,7 @@ mod inner {
             unit_id: caster_id,
         })?;
         let distance_to_target = manhattan_distance(caster_pos, target_pos);
-        let caster_can_sense_target =
-            unit::skills_to_sense(caster_unit.skills.iter(), skills, distance_to_target)?
-                || unit::effects_to_sense(caster_unit.status_effects.iter(), distance_to_target);
+        let caster_can_sense_target = board.can_perceive_target()?;
 
         // 取得目標光照等級（影響施法者命中值）
         // 如果施法者能感知目標，則忽略目標位置的光照影響
@@ -290,9 +288,7 @@ mod inner {
 
         // 取得攻擊者光照等級（影響目標閃避值）
         // 如果目標能感知攻擊者，則忽略攻擊者位置的光照影響
-        let target_can_sense_caster =
-            unit::skills_to_sense(target_unit.skills.iter(), skills, distance_to_target)?
-                || unit::effects_to_sense(target_unit.status_effects.iter(), distance_to_target);
+        let target_can_sense_caster = board.can_perceive_target()?;
 
         let caster_light = if target_can_sense_caster {
             LightLevel::Bright

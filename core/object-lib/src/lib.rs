@@ -22,6 +22,7 @@ pub enum ObjectType {
     Tent15 { orientation: Orientation },
     Torch { lit: bool },
     Campfire { lit: bool },
+    Smoke,
 }
 
 impl Default for ObjectType {

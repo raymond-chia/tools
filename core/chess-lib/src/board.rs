@@ -55,7 +55,7 @@ impl Object {
             | ObjectType::Tent2 { .. }
             | ObjectType::Tent15 { .. }
             | ObjectType::Campfire { .. } => false,
-            ObjectType::Torch { .. } => true,
+            ObjectType::Torch { .. } | ObjectType::Smoke => true,
         }
     }
 
@@ -73,7 +73,8 @@ impl Object {
             ObjectType::Wall
             | ObjectType::Tree
             | ObjectType::Tent2 { .. }
-            | ObjectType::Tent15 { .. } => true,
+            | ObjectType::Tent15 { .. }
+            | ObjectType::Smoke => true,
             // 不阻擋視線的物件
             ObjectType::Pit | ObjectType::Torch { .. } | ObjectType::Campfire { .. } => false,
             // Cliff 有方向性：只有從下方往上看才阻擋
@@ -93,6 +94,16 @@ impl Object {
                 };
                 is_from_below
             }
+        }
+    }
+
+    /// 從特定方向查看時是否阻擋聽覺
+    /// 只有物理障礙（牆壁、樹木、帳篷、懸崖）才阻擋聽覺
+    /// 視覺障礙（煙霧）不阻擋聽覺
+    pub fn blocks_hearing_from(&self, from_pos: Pos, obj_pos: Pos) -> bool {
+        match &self.object_type {
+            ObjectType::Smoke => false,
+            _ => self.blocks_sight_from(from_pos, obj_pos),
         }
     }
 
@@ -125,7 +136,8 @@ impl Object {
             | ObjectType::Tent2 { .. }
             | ObjectType::Tent15 { .. }
             | ObjectType::Torch { lit: false }
-            | ObjectType::Campfire { lit: false } => LightLevel::Darkness,
+            | ObjectType::Campfire { lit: false }
+            | ObjectType::Smoke => LightLevel::Darkness,
         }
     }
 }
@@ -254,25 +266,30 @@ impl Board {
         // 2. 檢查目標位置光照
         let light_level = self.get_light_level(to, skills)?;
 
-        // 3. 如果是黑暗，檢查觀察者是否有 Sense 能力
-        if light_level == LightLevel::Darkness {
-            let observer =
-                self.units
-                    .get(&observer_unit_id)
-                    .ok_or_else(|| Error::NoActingUnit {
-                        func,
-                        unit_id: observer_unit_id,
-                    })?;
+        // 3. 根據光照等級決定可見性
+        match light_level {
+            LightLevel::Bright => Ok(true),
+            LightLevel::Dim => {
+                // 微光中需要低光視覺才能看到
+                let observer =
+                    self.units
+                        .get(&observer_unit_id)
+                        .ok_or_else(|| Error::NoActingUnit {
+                            func,
+                            unit_id: observer_unit_id,
+                        })?;
 
-            let distance = manhattan_distance(from, to);
-            let has_sense = skills_to_sense(observer.skills.iter(), skills, distance)?;
+                let distance = manhattan_distance(from, to);
+                let has_low_light_vision =
+                    skills_to_low_light_vision(observer.skills.iter(), skills, distance)?;
 
-            if !has_sense {
-                return Ok(false); // 黑暗中沒有 Sense 能力
+                Ok(has_low_light_vision)
+            }
+            LightLevel::Darkness => {
+                // 黑暗中無法用視覺看到（需要聽覺或其他感知）
+                Ok(false)
             }
         }
-
-        Ok(true)
     }
 
     pub fn get_light_level(
@@ -326,6 +343,79 @@ impl Board {
         }
 
         Ok(max_light)
+    }
+
+    /// 檢查觀察者是否能聽到目標位置的單位
+    ///
+    /// 參數：
+    /// - observer_unit_id, from: 觀察者單位 ID 和位置
+    /// - target_unit_id, to: 目標單位 ID 和位置
+    /// - skills: 技能定義表
+    ///
+    /// 檢查流程：
+    /// 1. 檢查聽覺通路（只被物理障礙阻擋）
+    /// 2. 檢查觀察者是否有 Hearing 能力
+    /// 3. 檢查目標是否有 Noise 效果（被噪音干擾）
+    pub fn can_hear_target(
+        &self,
+        (observer_unit_id, from): (UnitID, Pos),
+        (target_unit_id, to): (UnitID, Pos),
+        skills: &BTreeMap<SkillID, Skill>,
+    ) -> Result<bool, Error> {
+        let func = "can_hear_target";
+
+        // 1. 檢查聽覺通路
+        if !has_hearing_line(self, from, to)? {
+            return Ok(false);
+        }
+
+        // 2. 檢查觀察者是否有 Hearing 能力
+        let observer = self
+            .units
+            .get(&observer_unit_id)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: observer_unit_id,
+            })?;
+
+        let distance = manhattan_distance(from, to);
+        let has_hearing = skills_to_hearing(observer.skills.iter(), skills, distance)?;
+        if !has_hearing {
+            return Ok(false);
+        }
+
+        // 3. 檢查目標是否有 Noise 效果（被噪音干擾）
+        let target = self
+            .units
+            .get(&target_unit_id)
+            .ok_or_else(|| Error::NoActingUnit {
+                func,
+                unit_id: target_unit_id,
+            })?;
+
+        if unit::effects_to_noise(target.status_effects.iter()) {
+            return Ok(false); // 目標被噪音干擾，無法被聽覺定位
+        }
+
+        Ok(true)
+    }
+
+    /// 綜合感知檢查（視覺或聽覺）
+    ///
+    /// 只要能看到或聽到目標，就算能感知到
+    pub fn can_perceive_target(
+        &self,
+        (observer_unit_id, from): (UnitID, Pos),
+        (target_unit_id, to): (UnitID, Pos),
+        skills: &BTreeMap<SkillID, Skill>,
+    ) -> Result<bool, Error> {
+        // 先嘗試視覺
+        if self.can_see_target((observer_unit_id, from), to, skills)? {
+            return Ok(true);
+        }
+
+        // 再嘗試聽覺
+        self.can_hear_target((observer_unit_id, from), (target_unit_id, to), skills)
     }
 }
 
@@ -561,20 +651,18 @@ use inner::*;
 mod inner {
     use super::*;
 
-    /// 檢查從 from 到 to 是否有視線（line of sight）
+    /// 通用路徑檢查函數
     ///
-    /// 純粹檢查物理視線，考慮因素：
-    /// 1. 障礙物阻擋視線（使用 Bresenham 追蹤路徑）
-    /// 2. Cliff 的方向性視線（高地優勢）
-    /// 3. 一律使用 blocks_sight_from 進行方向性判斷
-    ///
-    /// 注意：
-    /// - 此函數只檢查「物理視線」，不考慮單位阻擋
-    /// - 不考慮光照影響（黑暗狀態由上層邏輯處理）
-    pub fn has_line_of_sight(board: &Board, from: Pos, to: Pos) -> Result<bool, Error> {
-        let func = "has_line_of_sight";
+    /// 使用 Bresenham 算法追蹤路徑，並用提供的閉包檢查每個物件是否阻擋
+    fn has_clear_path(
+        board: &Board,
+        from: Pos,
+        to: Pos,
+        is_blocked: impl Fn(&Object, Pos, Pos) -> bool,
+    ) -> Result<bool, Error> {
+        let func = "has_clear_path";
 
-        // 同一位置永遠可見
+        // 同一位置永遠暢通
         if from == to {
             return Ok(true);
         }
@@ -590,7 +678,7 @@ mod inner {
         // 計算距離用於 Bresenham 路徑長度
         let distance = manhattan_distance(from, to);
 
-        // 使用 Bresenham 算法追蹤視線路徑
+        // 使用 Bresenham 算法追蹤路徑
         let path = bresenham_line(from, to, distance + 1, |pos| {
             pos.x < board.width() && pos.y < board.height()
         });
@@ -602,21 +690,38 @@ mod inner {
                 continue;
             }
 
-            // 到達目標位置，停止檢查（目標本身總是可見）
+            // 到達目標位置，停止檢查
             if pos == to {
                 break;
             }
 
-            // 檢查中間路徑是否有物件阻擋視線（一律使用 blocks_sight_from）
+            // 檢查中間路徑是否有物件阻擋
             for obj in board.object_map.get_objects_at(pos) {
-                if obj.blocks_sight_from(from, pos) {
+                if is_blocked(obj, from, pos) {
                     return Ok(false);
                 }
             }
         }
 
-        // 視線暢通或已到達目標
         Ok(true)
+    }
+
+    /// 檢查從 from 到 to 是否有視線（line of sight）
+    pub fn has_line_of_sight(board: &Board, from: Pos, to: Pos) -> Result<bool, Error> {
+        let func = "has_line_of_sight";
+        has_clear_path(board, from, to, |obj, from_pos, obj_pos| {
+            obj.blocks_sight_from(from_pos, obj_pos)
+        })
+        .wrap_context(func)
+    }
+
+    /// 檢查從 from 到 to 是否有聽覺通路
+    pub fn has_hearing_line(board: &Board, from: Pos, to: Pos) -> Result<bool, Error> {
+        let func = "has_hearing_line";
+        has_clear_path(board, from, to, |obj, from_pos, obj_pos| {
+            obj.blocks_hearing_from(from_pos, obj_pos)
+        })
+        .wrap_context(func)
     }
 }
 
@@ -1701,8 +1806,8 @@ mod tests {
     }
 
     #[test]
-    fn test_can_see_target_darkness_with_sense() {
-        // 測試黑暗中有 Sense 能力
+    fn test_can_see_target_dim_light_with_low_light_vision() {
+        // 測試微光中有 LowLightVision 能力
         use skills_lib::{Effect, Shape, Skill, TargetType};
 
         let tiles = vec![vec![Tile::default(); 10]; 10];
@@ -1721,7 +1826,7 @@ mod tests {
         let config = BoardConfig {
             tiles,
             teams: BTreeMap::new(),
-            ambient_light: LightLevel::Darkness, // 黑暗環境
+            ambient_light: LightLevel::Dim, // 微光環境
             deployable: BTreeSet::new(),
             units,
             objects: BTreeMap::new(),
@@ -1729,14 +1834,14 @@ mod tests {
 
         let mut skills = BTreeMap::new();
         skills.insert(
-            "sense_skill".to_string(),
+            "low_light_vision_skill".to_string(),
             Skill {
                 tags: BTreeSet::new(),
                 range: (0, 0),
                 cost: 0,
                 accuracy: None,
                 crit_rate: None,
-                effects: vec![Effect::Sense {
+                effects: vec![Effect::LowLightVision {
                     target_type: TargetType::Caster,
                     shape: Shape::Point,
                     range: 10,
@@ -1746,7 +1851,7 @@ mod tests {
         );
 
         let mut observer_skills = BTreeSet::new();
-        observer_skills.insert("sense_skill".to_string());
+        observer_skills.insert("low_light_vision_skill".to_string());
 
         let template = UnitTemplate {
             name: "observer".to_string(),
@@ -1768,14 +1873,14 @@ mod tests {
 
         let board = Board::from_config(config, &TestGetter { template }, &skills).unwrap();
 
-        // 黑暗中有 Sense 能力（range=10，距離 < 10），可以看到
+        // 微光中有 LowLightVision 能力（range=10，距離 < 10），可以看到
         assert!(
             board
                 .can_see_target((1, Pos { x: 0, y: 0 }), Pos { x: 5, y: 5 }, &skills)
                 .unwrap()
         );
 
-        // 超出 Sense 範圍（距離 > 10），看不到
+        // 超出 LowLightVision 範圍（距離 > 10），看不到
         assert!(
             !board
                 .can_see_target((1, Pos { x: 0, y: 0 }), Pos { x: 9, y: 9 }, &skills)

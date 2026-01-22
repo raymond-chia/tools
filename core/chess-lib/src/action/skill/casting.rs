@@ -74,7 +74,7 @@ pub(in crate::action) fn calc_skill_affect_area(
     }
 
     // 檢查視線：是否能看到目標位置
-    match board.can_see_target((caster_id, caster_pos), logical_pos, skills) {
+    match board.can_perceive_target((caster_id, caster_pos), logical_pos, skills) {
         Ok(true) => {} // 可以看到，繼續
         Ok(false) => {
             return Err(Error::SkillOutOfRange {

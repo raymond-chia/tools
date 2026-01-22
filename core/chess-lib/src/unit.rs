@@ -274,13 +274,13 @@ pub fn skills_to_resistance(
     .wrap_context(func)
 }
 
-/// 檢查單位的技能中是否有 Sense 效果覆蓋目標位置
-pub fn skills_to_sense(
+/// 檢查單位的技能中是否有 LowLightVision 效果覆蓋目標位置
+pub fn skills_to_low_light_vision(
     skill_ids: impl Iterator<Item = impl AsRef<str>>,
     skills: &BTreeMap<SkillID, Skill>,
     distance: usize,
 ) -> Result<bool, Error> {
-    let func = "skills_to_sense";
+    let func = "skills_to_low_light_vision";
 
     for skill_id in skill_ids {
         let skill = skills
@@ -290,7 +290,31 @@ pub fn skills_to_sense(
                 skill_id: skill_id.as_ref().to_string(),
             })?;
 
-        if effects_to_sense(skill.effects.iter(), distance) {
+        if effects_to_low_light_vision(skill.effects.iter(), distance) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// 檢查單位的技能中是否有 Hearing 效果覆蓋目標位置
+pub fn skills_to_hearing(
+    skill_ids: impl Iterator<Item = impl AsRef<str>>,
+    skills: &BTreeMap<SkillID, Skill>,
+    distance: usize,
+) -> Result<bool, Error> {
+    let func = "skills_to_hearing";
+
+    for skill_id in skill_ids {
+        let skill = skills
+            .get(skill_id.as_ref())
+            .ok_or_else(|| Error::SkillNotFound {
+                func,
+                skill_id: skill_id.as_ref().to_string(),
+            })?;
+
+        if effects_to_hearing(skill.effects.iter(), distance) {
             return Ok(true);
         }
     }
@@ -333,18 +357,37 @@ pub fn effects_to_light_level<'a>(
     max_light
 }
 
-/// 檢查效果集合中是否有 Sense 效果覆蓋目標位置
-pub fn effects_to_sense<'a>(
+/// 檢查效果集合中是否有 LowLightVision 效果覆蓋目標位置
+pub fn effects_to_low_light_vision<'a>(
     mut effects: impl Iterator<Item = &'a Effect>,
     distance: usize,
 ) -> bool {
     effects.any(|effect| {
-        if let Effect::Sense { range, .. } = effect {
-            distance <= *range
+        if let Effect::LowLightVision { perceive_range, .. } = effect {
+            distance <= *perceive_range
         } else {
             false
         }
     })
+}
+
+/// 檢查效果集合中是否有 Hearing 效果覆蓋目標位置
+pub fn effects_to_hearing<'a>(
+    mut effects: impl Iterator<Item = &'a Effect>,
+    distance: usize,
+) -> bool {
+    effects.any(|effect| {
+        if let Effect::Hearing { perceive_range, .. } = effect {
+            distance <= *perceive_range
+        } else {
+            false
+        }
+    })
+}
+
+/// 檢查效果集合中是否有 Noise 效果（無法被聽覺定位）
+pub fn effects_to_noise<'a>(mut effects: impl Iterator<Item = &'a Effect>) -> bool {
+    effects.any(|effect| matches!(effect, Effect::Noise { .. }))
 }
 
 use inner::*;

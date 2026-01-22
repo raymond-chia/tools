@@ -36,6 +36,8 @@
 - `Board::unit_to_pos(&self, unit_id: UnitID) -> Option<Pos>` - 單位 ID→ 位置
 - `Board::is_tile_passable(&self, pos: Pos) -> bool` - 檢查格子可通行性
 - `Board::can_see_target(&self, (observer_id, from), to, skills) -> Result<bool, Error>` - 視線檢查
+- `Board::can_hear_target(&self, (observer_id, from), (target_id, to), skills) -> Result<bool, Error>` - 聽覺檢查
+- `Board::can_perceive_target(&self, (observer_id, from), (target_id, to), skills) -> Result<bool, Error>` - 綜合感知（視覺或聽覺）
 - `Board::get_light_level(&self, pos: Pos, skills) -> Result<LightLevel, Error>` - 取得光照等級
 - `Board::get_tile(&self, pos: Pos) -> Option<&Tile>` - 取得格子
 - `Board::get_tile_mut(&mut self, pos: Pos) -> Option<&mut Tile>` - 取得可變格子
@@ -55,6 +57,7 @@
 - `ObjectMap::extinguish_objects_at(&mut self, pos) -> usize` - 熄滅位置上的物件
 - `Object::is_passable(&self) -> bool` - 物件是否可通行
 - `Object::blocks_sight_from(&self, from_pos, obj_pos) -> bool` - 是否阻擋視線
+- `Object::blocks_hearing_from(&self, from_pos, obj_pos) -> bool` - 是否阻擋聽覺（只有物理障礙阻擋）
 - `Object::light_level_at(&self, distance) -> LightLevel` - 物件在距離的光照等級
 
 **ObjectMap 封裝規則**:
@@ -91,9 +94,12 @@
 - `skills_to_hit_and_run(skill_ids, skills) -> Result<bool, Error>` - 技能 → 打帶跑
 - `skills_to_potency(skill_ids, skills, tag) -> Result<i32, Error>` - 技能 → 威力
 - `skills_to_resistance(skill_ids, skills, save_type) -> Result<i32, Error>` - 技能 → 抗性
-- `skills_to_sense(skill_ids, skills, distance) -> Result<bool, Error>` - 技能 → 感知能力
+- `skills_to_low_light_vision(skill_ids, skills, distance) -> Result<bool, Error>` - 技能 → 低光視覺
+- `skills_to_hearing(skill_ids, skills, distance) -> Result<bool, Error>` - 技能 → 聽覺感知
 - `effects_to_light_level(effects, distance) -> LightLevel` - 效果 → 光照等級
-- `effects_to_sense(effects, distance) -> bool` - 效果 → 感知能力
+- `effects_to_low_light_vision(effects, distance) -> bool` - 效果 → 低光視覺
+- `effects_to_hearing(effects, distance) -> bool` - 效果 → 聽覺感知
+- `effects_to_noise(effects) -> bool` - 效果 → 噪音干擾（無法被聽覺定位）
 
 **技能施放** (`action/skill/mod.rs`, `action/skill/casting.rs`)
 

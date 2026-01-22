@@ -275,8 +275,24 @@ pub enum Effect {
         save_type: SaveType,
         duration: i32, // -1 代表永久
     },
-    /// 黑暗感知：在指定範圍內忽略光照懲罰
-    Sense {
+    /// 低光視覺：在指定範圍內忽略光照懲罰
+    LowLightVision {
+        target_type: TargetType,
+        shape: Shape,
+        range: usize,
+        perceive_range: usize,
+        duration: i32, // -1 代表永久
+    },
+    /// 聽覺感知：可透過聽覺定位目標（繞過煙霧，無法繞過牆壁）
+    Hearing {
+        target_type: TargetType,
+        shape: Shape,
+        range: usize,
+        perceive_range: usize,
+        duration: i32, // -1 代表永久
+    },
+    /// 噪音干擾：範圍內的單位無法被聽覺定位
+    Noise {
         target_type: TargetType,
         shape: Shape,
         range: usize,
@@ -335,7 +351,9 @@ macro_rules! effect_field_ref {
             | Effect::Potency { $field, .. }
             | Effect::Resistance { $field, .. }
             | Effect::Burn { $field, .. }
-            | Effect::Sense { $field, .. }
+            | Effect::LowLightVision { $field, .. }
+            | Effect::Hearing { $field, .. }
+            | Effect::Noise { $field, .. }
             | Effect::CarriesLight { $field, .. }
             | Effect::CreateObject { $field, .. } => $field,
         }
@@ -385,7 +403,9 @@ impl Effect {
             | Effect::Shove { .. }
             | Effect::Potency { .. }
             | Effect::Resistance { .. }
-            | Effect::Sense { .. }
+            | Effect::LowLightVision { .. }
+            | Effect::Hearing { .. }
+            | Effect::Noise { .. }
             | Effect::CarriesLight { .. }
             | Effect::CreateObject { .. } => None,
         }
@@ -409,7 +429,9 @@ impl Effect {
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
             | Effect::Burn { duration, .. }
-            | Effect::Sense { duration, .. }
+            | Effect::LowLightVision { duration, .. }
+            | Effect::Hearing { duration, .. }
+            | Effect::Noise { duration, .. }
             | Effect::CarriesLight { duration, .. }
             | Effect::CreateObject { duration, .. } => *duration,
             Effect::Hp { .. } | Effect::Mp { .. } | Effect::Shove { .. } => 0,
@@ -434,7 +456,9 @@ impl Effect {
             | Effect::Potency { duration, .. }
             | Effect::Resistance { duration, .. }
             | Effect::Burn { duration, .. }
-            | Effect::Sense { duration, .. }
+            | Effect::LowLightVision { duration, .. }
+            | Effect::Hearing { duration, .. }
+            | Effect::Noise { duration, .. }
             | Effect::CarriesLight { duration, .. }
             | Effect::CreateObject { duration, .. } => {
                 // 只有 duration > 0 時才減少（永久效果 -1 不減少）

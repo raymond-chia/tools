@@ -263,11 +263,19 @@ pub(super) fn apply_effect_to_pos(
         Effect::Burn { duration, .. } => {
             apply_burn_effect(board, target_pos, effect, *duration, save_result)
         }
-        Effect::Sense {
+        Effect::LowLightVision {
             range, duration, ..
         } => Some(format!(
-            "[未實作] Sense 效果（範圍: {range}）, 持續 {duration} 回合"
+            "[未實作] LowLightVision 效果（範圍: {range}）, 持續 {duration} 回合"
         )),
+        Effect::Hearing {
+            range, duration, ..
+        } => Some(format!(
+            "[未實作] Hearing 效果（範圍: {range}）, 持續 {duration} 回合"
+        )),
+        Effect::Noise { duration, .. } => {
+            Some(format!("[未實作] Noise 效果, 持續 {duration} 回合"))
+        }
         Effect::CarriesLight {
             bright_range,
             dim_range,
@@ -351,7 +359,8 @@ mod inner {
                 | ObjectType::Tent2 { .. }
                 | ObjectType::Tent15 { .. }
                 | ObjectType::Torch { .. }
-                | ObjectType::Campfire { .. } => {
+                | ObjectType::Campfire { .. }
+                | ObjectType::Smoke => {
                     if !obj.is_passable() {
                         return PushResult::Stopped(format!(
                             "單位 {} 被推到障礙物並停止",

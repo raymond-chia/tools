@@ -52,7 +52,7 @@ pub fn skill_casting_area(
             }
 
             // 檢查視線：是否能看到目標位置
-            match board.can_see_target((active_unit_id, active_unit_pos), target, skills) {
+            match board.can_perceive_target((active_unit_id, active_unit_pos), target, skills) {
                 Ok(true) => area.push(target),
                 _ => continue, // 看不到或出錯，跳過此位置
             }
