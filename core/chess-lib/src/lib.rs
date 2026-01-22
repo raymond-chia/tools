@@ -35,6 +35,10 @@ pub const TEAM_PLAYER: &str = "player";
 pub const TEAM_NONE: &str = "none"; // 中立物件的 TeamID
 pub const MAX_MOVEMENT_COST: MovementCost = 999;
 
+pub const BRIGHT_LIGHT_HIT_RATE: f32 = 1.0;
+pub const DIM_LIGHT_HIT_RATE: f32 = 0.7;
+pub const DARKNESS_HIT_RATE: f32 = 0.4;
+
 // 光源範圍（曼哈頓距離）
 pub const TORCH_BRIGHT_RANGE: usize = 1;
 pub const TORCH_DIM_RANGE: usize = 3;

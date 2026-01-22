@@ -150,9 +150,9 @@ mod inner {
     /// 根據光照等級計算倍率
     pub(super) fn get_lighting_multiplier(light_level: LightLevel) -> f32 {
         match light_level {
-            LightLevel::Darkness => 0.7,
-            LightLevel::Dim => 0.9,
-            LightLevel::Bright => 1.0,
+            LightLevel::Darkness => DARKNESS_HIT_RATE,
+            LightLevel::Dim => DIM_LIGHT_HIT_RATE,
+            LightLevel::Bright => BRIGHT_LIGHT_HIT_RATE,
         }
     }
 

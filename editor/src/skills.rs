@@ -47,7 +47,7 @@ const BASIC_PASSIVE_EFFECTS: &[BasicPassiveEffectMeta] = &[
     basic_passive_effect_meta!(MaxMp, "max_mp", 40),
     basic_passive_effect_meta!(Initiative, "initiative", 10),
     basic_passive_effect_meta!(Evasion, "evasion", 100),
-    basic_passive_effect_meta!(Flanking, "flanking", 10),
+    basic_passive_effect_meta!(Flanking, "flanking", 20),
     basic_passive_effect_meta!(MovePoints, "move_points", 50),
     basic_passive_effect_meta!(MaxReactions, "max_reactions", 1),
 ];
