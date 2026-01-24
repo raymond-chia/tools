@@ -2,5 +2,7 @@
 members = ["core/board", "editor"]
 resolver = "2"
 
+# cargo add -p board ${dependency}
 [workspace.dependencies]
 thiserror = "2.0.18"
+backtrace = "0.3.76"
