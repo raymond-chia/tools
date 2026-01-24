@@ -1,70 +1,64 @@
 use crate::common::SceneBuilder;
 
 #[test]
-fn test_parse_board_size() {
-    let scene_str = r#"
-        5x5 board
+fn test_scene_builder_dimensions_success() {
+    let cases = vec![
+        (
+            r#"
+            5x5 board
 
-        . . . . .
-        . . . . .
-        . . . . .
-        . . . . .
-        . . . . .
-    "#;
+            . . . . .
+            . . . . .
+            . . . . .
+            . . . . .
+            . . . . .
+        "#,
+            5,
+            5,
+        ),
+        (
+            r#"
+            3x4 board
 
-    let scene = SceneBuilder::parse(scene_str).expect("應能解析棋盤");
-    assert_eq!(scene.width(), 5);
-    assert_eq!(scene.height(), 5);
+            . . .
+            . . .
+            . . .
+            . . .
+        "#,
+            3,
+            4,
+        ),
+    ];
+
+    for (scene_str, expected_width, expected_height) in cases {
+        let scene = SceneBuilder::parse(scene_str).expect("應能解析棋盤");
+        assert_eq!(scene.width(), expected_width);
+        assert_eq!(scene.height(), expected_height);
+    }
 }
 
 #[test]
-fn test_parse_board_3x4() {
-    let scene_str = r#"
-        3x4 board
+fn test_scene_builder_dimensions_failure() {
+    let cases = vec![
+        r#"
+            5-5 board
 
-        . . .
-        . . .
-        . . .
-        . . .
-    "#;
+            . . . . .
+        "#,
+        r#"
+            0x5 board
+        "#,
+        r#"
+            3x3 board
 
-    let scene = SceneBuilder::parse(scene_str).expect("應能解析棋盤");
-    assert_eq!(scene.width(), 3);
-    assert_eq!(scene.height(), 4);
-}
+            . . .
+            . .
+            . . .
+        "#,
+    ];
 
-#[test]
-fn test_invalid_dimensions_format() {
-    let scene_str = r#"
-        5-5 board
-
-        . . . . .
-    "#;
-
-    let result = SceneBuilder::parse(scene_str);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_zero_dimension() {
-    let scene_str = r#"
-        0x5 board
-    "#;
-
-    let result = SceneBuilder::parse(scene_str);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_row_width_mismatch() {
-    let scene_str = r#"
-        3x3 board
-
-        . . .
-        . .
-        . . .
-    "#;
-
-    let result = SceneBuilder::parse(scene_str);
-    assert!(result.is_err());
+    for scene_str in cases {
+        let result = SceneBuilder::parse(scene_str);
+        assert!(result.is_err());
+    }
 }

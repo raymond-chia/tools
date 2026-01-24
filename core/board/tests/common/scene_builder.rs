@@ -56,7 +56,7 @@ impl SceneBuilder {
 
                 let ch = cell.chars().next().unwrap();
                 if ch != '.' {
-                    let pos = Pos::new(col, row);
+                    let pos = Pos { x: col, y: row };
                     Self::validate_symbol(ch)?;
                     symbols.insert(pos, ch);
                 }

@@ -1,6 +1,6 @@
 # 通用規則
 
-- **語言**: 繁體中文（程式碼、註解、文件），禁止簡體中文
+- **語言**: 繁體中文（註解、文件），禁止簡體中文
 - 使用 match 而不要 let else
 - match arm 使用編譯器的 exhaustiveness checking 保護，避免未來忘記添加 match arm
 - 撰寫計畫的時候不要添加程式碼，請保持精簡
@@ -34,6 +34,7 @@ cargo test
 
 - 不替以下撰寫測試: `editor` crate、inner functions
 - 只有在副作用難以測試時才修改程式碼邏輯
+- 請視覺化測試資料
 
 ## 專案索引
 
@@ -56,5 +57,3 @@ core/
 ### function 集
 
 **core/board:**
-
-- `Pos::new(x: usize, y: usize) -> Pos` - 建立新的位置座標
