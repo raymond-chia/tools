@@ -1,0 +1,9 @@
+[package]
+name = "board"
+version = "0.1.0"
+edition = "2024"
+
+# cargo add -p board thiserror 
+# 可以嘗試 cargo add -p board thiserror --workspace
+[dependencies]
+thiserror.workspace = true
