@@ -4,11 +4,12 @@
 - 使用 match 而不要 let else
 - match arm 使用編譯器的 exhaustiveness checking 保護，避免未來忘記添加 match arm
 - 撰寫計畫的時候不要添加程式碼，請保持精簡
-- 如果多數 function caller 已經知道具體類型，不要只傳遞基本型別再反推
 - 確保型別安全，有完整錯誤處理（錯誤訊息包含豐富上下文）
 - 禁止 magic numbers/strings
-- `use` 語句放在檔案頂部，不要放在 function 裡面
 - 不確定時詢問使用者，不要自行決定
+- 如果多數 function caller 已經知道具體類型，不要只傳遞基本型別再反推
+- `use` 語句放在檔案頂部，不要放在 function 裡面
+- **Fail fast**：在函數開頭進行所有驗證和檢查，不在執行中間檢查
 
 # 本專案
 
@@ -16,6 +17,7 @@
 - 禁止向後相容
 - 使用 test driven (TDD)
   - 測試請集中在 core\board\tests 的子資料夾
+- 禁止查看 bak 開頭的資料夾或檔案
 
 ## 基本指令
 
@@ -35,11 +37,33 @@ cargo test
 
 - 不替以下撰寫測試: `editor` crate、inner functions
 - 只有在副作用難以測試時才修改程式碼邏輯
-- 請視覺化測試資料
+- **視覺化測試資料**：所有測試都應該盡量用視覺化方式呈現測試資料
+  - 使用 scene_builder 等工具構建可視化的測試場景
+  - 使用 ASCII art 或圖示化方式展示棋盤狀態
+  - 讓測試資料一目瞭然，便於理解測試意圖
+
+## 分層設計
+
+### Types 層（types/）
+
+- **責任**：純數據容器，無業務邏輯
+- **設計**：所有 struct 的 field 都應該是 `pub`，外層直接訪問
+
+### Logic 層（logic/）
+
+- **責任**：所有遊戲規則和操作邏輯
+- **設計**：操作函數接收 Board 的可變引用，進行驗證和修改
+- **依賴方向**：Logic 依賴 Types；Types 不依賴 Logic
+
+### Error 層（types/error.rs）
+
+- **責任**：集中管理所有錯誤類型
+- **設計**：所有業務邏輯的錯誤都在 error.rs 定義，確保錯誤訊息包含豐富上下文
 
 ## 專案索引
 
-- 如果發現 core 底下的檔案結構跟本檔案紀錄不合的時候，請更新本檔案 `專案結構`
+- 如果發現 core 底下的檔案結構跟本檔案紀錄不合的時候，請更新本檔案 `專案結構`  
+  不需要紀錄太細，以免需要常常變動
 - 如果發現 core 底下的 function 與本檔案紀錄不合的時候，請更新本檔案 `function 集`  
   只列出公開函數（pub fn），不包含 struct/enum 定義  
   格式：`函數簽名` - 簡短說明
@@ -47,18 +71,21 @@ cargo test
 ### 專案結構
 
 ```
-core/
-└── board/          戰棋板邏輯與數據結構
-    ├── logic/      (暫未實現)
-    └── types/
-        ├── board.rs     - Board (棋盤)
-        ├── error.rs     - 錯誤
-        └── position.rs  - Pos (位置座標)
+core/board/
+├── src/
+│   ├── logic/  - 遊戲邏輯層
+│   └── types/  - 數據層
+└── tests/      - 測試
 ```
 
 ### function 集
 
 **core/board::types::Board:**
 
-- `pub fn new(width: usize, height: usize) -> Result<Self>` - 創建新棋盤
+- `pub fn new(width: Coord, height: Coord) -> Result<Self>` - 創建新棋盤
 - `pub fn is_valid_position(&self, pos: &Pos) -> bool` - 檢查位置是否在棋盤範圍內
+
+**core/board::logic:**
+
+- `pub fn add_unit(board: &mut Board, unit_id: UnitId, pos: Pos) -> Result<()>` - 添加單位
+- `pub fn move_unit(board: &mut Board, unit_id: UnitId, new_pos: Pos) -> Result<Option<(Pos, Pos)>>` - 移動單位

@@ -19,9 +19,9 @@ fn test_create_board_with_invalid_dimensions() {
 fn test_is_valid_position() {
     let board = Board::new(5, 5).expect("應該成功建立棋盤");
 
-    assert!(board.is_valid_position(&Pos { x: 0, y: 0 }));
-    assert!(board.is_valid_position(&Pos { x: 4, y: 4 }));
-    assert!(!board.is_valid_position(&Pos { x: 5, y: 0 }));
-    assert!(!board.is_valid_position(&Pos { x: 0, y: 5 }));
-    assert!(!board.is_valid_position(&Pos { x: 10, y: 10 }));
+    assert!(board.is_valid_position(Pos { x: 0, y: 0 }));
+    assert!(board.is_valid_position(Pos { x: 4, y: 4 }));
+    assert!(!board.is_valid_position(Pos { x: 5, y: 0 }));
+    assert!(!board.is_valid_position(Pos { x: 0, y: 5 }));
+    assert!(!board.is_valid_position(Pos { x: 10, y: 10 }));
 }

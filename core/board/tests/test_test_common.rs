@@ -1,4 +1,6 @@
-use crate::common::SceneBuilder;
+#[path = "common/mod.rs"]
+mod common;
+use common::scene_builder::SceneBuilder;
 
 #[test]
 fn test_scene_builder_dimensions_success() {

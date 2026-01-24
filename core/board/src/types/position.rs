@@ -1,5 +1,7 @@
-#[derive(Debug, PartialEq, Eq, Hash)]
+use crate::types::Coord;
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Pos {
-    pub x: usize,
-    pub y: usize,
+    pub x: Coord,
+    pub y: Coord,
 }

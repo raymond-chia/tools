@@ -1,4 +1,4 @@
-use board::types::{Pos, SceneError};
+use board::types::{BoardError, Pos};
 use std::collections::HashMap;
 
 pub struct SceneBuilder {
@@ -18,13 +18,13 @@ impl SceneBuilder {
     /// . . . . .
     /// . . . . .
     /// . . . . .
-    pub fn parse(input: &str) -> Result<Self, SceneError> {
+    pub fn parse(input: &str) -> Result<Self, BoardError> {
         let mut lines = input.lines().map(|l| l.trim()).filter(|l| !l.is_empty());
 
         // 解析第一行維度
         let dimension_line = lines
             .next()
-            .ok_or_else(|| SceneError::ParseError("缺少維度行".to_string()))?;
+            .ok_or_else(|| BoardError::ParseError("缺少維度行".to_string()))?;
 
         let (width, height) = Self::parse_dimensions(dimension_line)?;
 
@@ -32,7 +32,7 @@ impl SceneBuilder {
         let mut symbols = HashMap::new();
         for (row, line) in lines.enumerate() {
             if row >= height {
-                return Err(SceneError::ParseError(format!(
+                return Err(BoardError::ParseError(format!(
                     "列數超過預期 (期望 {}，收到 {})",
                     height,
                     row + 1
@@ -41,7 +41,7 @@ impl SceneBuilder {
 
             let cells: Vec<&str> = line.split_whitespace().collect();
             if cells.len() != width {
-                return Err(SceneError::ParseError(format!(
+                return Err(BoardError::ParseError(format!(
                     "第 {} 列的寬度不匹配 (期望 {}，收到 {})",
                     row,
                     width,
@@ -51,7 +51,7 @@ impl SceneBuilder {
 
             for (col, cell) in cells.iter().enumerate() {
                 if cell.len() != 1 {
-                    return Err(SceneError::ParseError(format!("無效格子：'{}'", cell)));
+                    return Err(BoardError::ParseError(format!("無效格子：'{}'", cell)));
                 }
 
                 let ch = cell.chars().next().unwrap();
@@ -70,44 +70,39 @@ impl SceneBuilder {
         })
     }
 
-    fn parse_dimensions(line: &str) -> Result<(usize, usize), SceneError> {
+    fn parse_dimensions(line: &str) -> Result<(usize, usize), BoardError> {
         // 期望格式："5x5 board" 或 "5x5"
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.is_empty() {
-            return Err(SceneError::InvalidDimensions("缺少維度資訊".to_string()));
+            return Err(BoardError::InvalidDimensions(0, 0));
         }
 
         let dimension_part = parts[0];
         let dims: Vec<&str> = dimension_part.split('x').collect();
 
         if dims.len() != 2 {
-            return Err(SceneError::InvalidDimensions(format!(
-                "無效格式，期望 'WxH'，收到 '{}'",
-                dimension_part
-            )));
+            return Err(BoardError::InvalidDimensions(0, 0));
         }
 
         let width = dims[0]
             .parse::<usize>()
-            .map_err(|_| SceneError::InvalidDimensions(format!("寬度不是數字：{}", dims[0])))?;
+            .map_err(|_| BoardError::InvalidDimensions(0, 0))?;
 
         let height = dims[1]
             .parse::<usize>()
-            .map_err(|_| SceneError::InvalidDimensions(format!("高度不是數字：{}", dims[1])))?;
+            .map_err(|_| BoardError::InvalidDimensions(0, 0))?;
 
         if width == 0 || height == 0 {
-            return Err(SceneError::InvalidDimensions(
-                "寬度和高度必須大於 0".to_string(),
-            ));
+            return Err(BoardError::InvalidDimensions(width, height));
         }
 
         Ok((width, height))
     }
 
-    fn validate_symbol(ch: char) -> Result<(), SceneError> {
+    fn validate_symbol(ch: char) -> Result<(), BoardError> {
         match ch {
             'P' | 'E' => Ok(()),
-            _ => Err(SceneError::InvalidSymbol(ch)),
+            _ => Err(BoardError::InvalidSymbol(ch)),
         }
     }
 
