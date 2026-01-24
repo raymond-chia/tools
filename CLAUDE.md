@@ -15,6 +15,7 @@
 - 本專案是戰術回合制 RPG 遊戲（Rust）。
 - 禁止向後相容
 - 使用 test driven (TDD)
+  - 測試請集中在 core\board\tests 的子資料夾
 
 ## 基本指令
 
@@ -50,10 +51,14 @@ core/
 └── board/          戰棋板邏輯與數據結構
     ├── logic/      (暫未實現)
     └── types/
+        ├── board.rs     - Board (棋盤)
         ├── error.rs     - 錯誤
         └── position.rs  - Pos (位置座標)
 ```
 
 ### function 集
 
-**core/board:**
+**core/board::types::Board:**
+
+- `pub fn new(width: usize, height: usize) -> Result<Self>` - 創建新棋盤
+- `pub fn is_valid_position(&self, pos: &Pos) -> bool` - 檢查位置是否在棋盤範圍內
