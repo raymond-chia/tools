@@ -6,7 +6,6 @@
 //! - AI 時代開發速度無差異
 //! - 維護成本低
 
-use crate::types::{Coord, UnitId};
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -28,18 +27,6 @@ pub enum ErrorKind {
 /// 棋盤錯誤
 #[derive(Debug, ThisError)]
 pub enum BoardError {
-    #[error("無效的棋盤維度: width={0}, height={1}")]
-    InvalidDimensions(Coord, Coord),
-
-    #[error("位置超出範圍: x={0}, y={1} (棋盤: {2}x{3})")]
-    PositionOutOfBounds(Coord, Coord, Coord, Coord),
-
-    #[error("單位不存在: unit_id={0}")]
-    UnitNotFound(UnitId),
-
-    #[error("未知符號: '{0}'")]
-    InvalidSymbol(char),
-
     #[error("解析失敗: {0}")]
     ParseError(String),
 }
