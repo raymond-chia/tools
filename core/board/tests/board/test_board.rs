@@ -11,7 +11,7 @@ fn test_ascii_to_board_3x3() {
 . . .
     "#;
 
-    let (board, positions) = load_from_ascii(ascii).unwrap();
+    let (board, positions, _markers) = load_from_ascii(ascii).unwrap();
 
     assert_eq!(board.width, 3);
     assert_eq!(board.height, 3);
@@ -47,7 +47,7 @@ fn test_ascii_to_board_8x8() {
 . . . . . . . .
     "#;
 
-    let (board, positions) = load_from_ascii(ascii).unwrap();
+    let (board, positions, _markers) = load_from_ascii(ascii).unwrap();
 
     assert_eq!(board.width, 8);
     assert_eq!(board.height, 8);

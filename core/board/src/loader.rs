@@ -2,17 +2,23 @@
 
 use crate::component::{Board, Position};
 use crate::error::{BoardError, Result};
+use std::collections::HashMap;
 
 /// 從 ASCII 格式載入棋盤
 ///
-/// ASCII 格式：每行用空格分隔的符號，`.` 代表有效位置
+/// ASCII 格式：每行用空格分隔的符號
+/// - `.` = 有效位置
+/// - 其他字符串（`S`、`E` 等）= 標記位置（也作為有效位置）
+///
+/// 返回：(棋盤, 所有位置, 標記映射)
+///
 /// 例如：
 /// ```text
-/// . . .
-/// . . .
+/// S . .
+/// . . E
 /// . . .
 /// ```
-pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>)> {
+pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>, HashMap<String, Position>)> {
     let lines: Vec<&str> = ascii
         .lines()
         .map(|l| l.trim())
@@ -38,11 +44,19 @@ pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>)> {
     let board = Board { width, height };
 
     let mut positions = Vec::new();
+    let mut markers = HashMap::new();
+
     for (y, line) in lines.iter().enumerate() {
-        for (x, _cell) in line.split_whitespace().enumerate() {
-                positions.push(Position { x, y });
+        for (x, cell) in line.split_whitespace().enumerate() {
+            let pos = Position { x, y };
+            positions.push(pos);
+
+            // 非 `.` 的符號記為標記
+            if cell != "." {
+                markers.insert(cell.to_string(), pos);
+            }
         }
     }
 
-    Ok((board, positions))
+    Ok((board, positions, markers))
 }

@@ -6,6 +6,7 @@
 //! - AI 時代開發速度無差異
 //! - 維護成本低
 
+use crate::typ::Coord;
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -29,6 +30,15 @@ pub enum ErrorKind {
 pub enum BoardError {
     #[error("解析失敗: {0}")]
     ParseError(String),
+    #[error("位置超出棋盤邊界: ({x}, {y}) 邊界 ({width}, {height})")]
+    OutOfBounds {
+        x: Coord,
+        y: Coord,
+        width: Coord,
+        height: Coord,
+    },
+    #[error("內部錯誤: {0}")]
+    InternalError(String),
 }
 
 impl Error {

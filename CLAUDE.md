@@ -14,6 +14,8 @@
 
 - 本專案是戰術回合制 RPG 遊戲（Rust）。
 - 禁止向後相容
+- 使用 functional programming
+  - 禁止使用 oop
 - 使用 test driven (TDD)
   - 測試請集中在 core\board\tests 的子資料夾
 - 禁止查看 bak 開頭的資料夾或檔案
@@ -34,8 +36,8 @@ cargo test
    邏輯代碼只處理「如何執行」，不寫死「執行什麼」
 2. ECS 架構
    使用 bevy_ecs 管理所有遊戲狀態
-   Component 只存資料，沒有註解說明原因的情況下禁止包含邏輯
-   System 處理邏輯，通過 Query 操作 Component
+   Component 只存資料。禁止出現 impl
+   System 處理邏輯，通過 Query 操作 Component (system/ 禁止存放 Struct/Enum)
 
 ## **Struct/Enum 設計**
 
@@ -55,6 +57,7 @@ cargo test
 - 只有在副作用難以測試時才修改程式碼邏輯
 - **視覺化測試資料**：所有測試都應該盡量用視覺化方式呈現測試資料
   - 使用 ASCII art 或圖示化方式展示棋盤狀態
+    - 請用 load_from_ascii 解析
   - 讓測試資料一目瞭然，便於理解測試意圖
 
 ## 專案索引
@@ -70,7 +73,28 @@ cargo test
 ```
 core/board/
 ├── src/
-└── tests/      - 測試
+│   ├── component.rs      - ECS Component 定義
+│   ├── error.rs          - 錯誤型別定義
+│   ├── loader.rs         - 資料載入（TOML 解析）
+│   ├── typ.rs            - 遊戲類型定義（Direction 等）
+│   └── system/           - ECS System
+│       ├── board.rs      - 棋盤 System
+│       └── movement.rs   - 移動路徑計算
+└── tests/                - 測試
+    ├── board/            - 棋盤測試
+    │   ├── test_board.rs
+    │   └── test_movement.rs
+    ├── test.rs
+    └── test_error.rs
 ```
 
 ### function 集
+
+#### system/board.rs
+
+- `pub fn is_valid_position(board: Board, pos: Position) -> bool` - 驗證位置是否在棋盤邊界內
+
+#### system/movement.rs
+
+- `pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算從位置往方向移動一格，檢查棋盤邊界
+- `pub fn manhattan_path(from: Position, to: Position, board: Board) -> Result<Vec<Position>>` - 計算從起點到終點的移動路徑（水平+垂直）

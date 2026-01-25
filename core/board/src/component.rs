@@ -1,9 +1,7 @@
 //! ECS Component 定義
 
+use crate::typ::{Coord, ID};
 use bevy_ecs::component::Component;
-
-pub type Coord = usize;
-pub type ID = u32;
 
 /// 棋盤位置（座標）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
