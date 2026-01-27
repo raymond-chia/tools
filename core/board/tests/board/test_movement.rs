@@ -1,9 +1,8 @@
 //! 移動路徑測試
 
-use board::component::{Board, Position};
+use board::component::{Board, Faction, Position};
 use board::loader::load_from_ascii;
-use board::system::movement::{manhattan_path, step_in_direction};
-use board::typ::Direction;
+use board::logic::movement::{Direction, Mover, manhattan_path, step_in_direction};
 
 #[test]
 fn test_step_in_direction_normal() {
@@ -56,12 +55,12 @@ S
         ),
     ];
 
-    for (ascii, direction) in test_data {
+    for (idx, (ascii, direction)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
         let pos = markers["S"];
         let expected = markers["E"];
-        let result = step_in_direction(board, pos, direction);
-        assert_eq!(result, Some(expected));
+        let result = step_in_direction(board, pos, *direction);
+        assert_eq!(result, Some(expected), "Case {}", idx);
     }
 }
 
@@ -127,12 +126,12 @@ S
         ),
     ];
 
-    for (ascii, directions) in test_data {
+    for (idx, (ascii, directions)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
         let pos = markers["S"];
         for d in directions {
-            let result = step_in_direction(board, pos, d);
-            assert_eq!(result, None);
+            let result = step_in_direction(board, pos, *d);
+            assert_eq!(result, None, "Case {}, direction {:?}", idx, d);
         }
     }
 }
@@ -141,7 +140,6 @@ S
 fn test_manhattan_path_valid() {
     let test_data = [
         (
-            // 水平移動：S → → → E
             r#"
 S . . E .
 . . . . .
@@ -156,7 +154,6 @@ S . . E .
             ],
         ),
         (
-            // 垂直移動：S ↓ ↓ ↓ E
             r#"
 S . . . .
 . . . . .
@@ -171,7 +168,6 @@ E . . . .
             ],
         ),
         (
-            // L 形移動：S → → ↓ ↓ E
             r#"
 S . . . .
 . . . . .
@@ -187,7 +183,6 @@ S . . . .
             ],
         ),
         (
-            // 反向 L 形移動：S ← ← ↑ ↑ E
             r#"
 E . . . .
 . . . . .
@@ -205,7 +200,28 @@ E . . . .
             ],
         ),
         (
-            // 反向 L 形移動：S ← ← ↑ ↑ E
+            r#"
+. . . . . E .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. . . . . . .
+. S . . . . .
+. . . . . . .
+            "#,
+            vec![
+                Position { x: 2, y: 5 },
+                Position { x: 3, y: 5 },
+                Position { x: 4, y: 5 },
+                Position { x: 5, y: 5 },
+                Position { x: 5, y: 4 },
+                Position { x: 5, y: 3 },
+                Position { x: 5, y: 2 },
+                Position { x: 5, y: 1 },
+                Position { x: 5, y: 0 },
+            ],
+        ),
+        (
             r#"
 E . . . .
 . . . S .
@@ -219,12 +235,17 @@ E . . . .
         ),
     ];
 
-    for (ascii, expected) in test_data {
+    for (idx, (ascii, expected)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"];
         let to = markers["E"];
-        let path = manhattan_path(board, from, to).unwrap();
-        assert_eq!(path, expected);
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+        let path = manhattan_path(board, mover, to, |_| None)
+            .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
+        assert_eq!(path, *expected, "Case {} path mismatch", idx);
     }
 }
 
@@ -251,9 +272,13 @@ fn test_manhattan_path_out_of_bounds() {
         ),
     ];
 
-    for (board, from, to) in test_data {
-        let result = manhattan_path(board, from, to);
-        assert!(result.is_err());
+    for (idx, (board, from, to)) in test_data.iter().enumerate() {
+        let mover = Mover {
+            pos: *from,
+            faction: Faction(1),
+        };
+        let result = manhattan_path(*board, mover, *to, |_| None);
+        assert!(result.is_err(), "Case {} should fail", idx);
     }
 }
 
@@ -270,6 +295,85 @@ fn test_manhattan_path_edge_cases() {
     let (board, _, markers) = load_from_ascii(ascii).unwrap();
     let from = markers["S"];
     let to = from;
-    let path = manhattan_path(board, from, to).unwrap();
+    let mover = Mover {
+        pos: from,
+        faction: Faction(1),
+    };
+    let path = manhattan_path(board, mover, to, |_| None).unwrap();
     assert_eq!(path, vec![]);
+}
+
+#[test]
+fn test_manhattan_path_around_obstacle() {
+    let test_data = [
+        (
+            r#"
+S X . E
+. . . .
+. . . .
+            "#,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 1, y: 1 },
+                Position { x: 2, y: 1 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S X . . . E
+. . . . . .
+. . . . . .
+            "#,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 1, y: 1 },
+                Position { x: 2, y: 1 },
+                Position { x: 3, y: 1 },
+                Position { x: 4, y: 1 },
+                Position { x: 5, y: 1 },
+                Position { x: 5, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . . . .
+X . . . .
+. . . . E
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+                Position { x: 4, y: 0 },
+                Position { x: 4, y: 1 },
+                Position { x: 4, y: 2 },
+            ],
+        ),
+    ];
+
+    for (idx, (ascii, expected_path)) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"];
+        let to = markers["E"];
+        let obstacle_pos = markers["X"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        let get_occupant = |pos: Position| {
+            if pos == obstacle_pos {
+                Some(Faction(2))
+            } else {
+                None
+            }
+        };
+
+        let path = manhattan_path(board, mover, to, get_occupant)
+            .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
+        assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
+    }
 }

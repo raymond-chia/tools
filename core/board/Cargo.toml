@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 bevy_ecs.workspace = true
+pathfinding.workspace = true
 thiserror.workspace = true

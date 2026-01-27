@@ -1,6 +1,6 @@
 use board::component::Position;
 use board::loader::load_from_ascii;
-use board::system::board::is_valid_position;
+use board::logic::board::is_valid_position;
 
 #[test]
 fn test_ascii_to_board_3x3() {

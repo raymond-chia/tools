@@ -1,10 +1,21 @@
 //! ECS Component 定義
 
-use crate::typ::{Coord, ID};
+use crate::alias::{Coord, ID};
 use bevy_ecs::component::Component;
 
+/// 標記地圖所有者
+#[derive(Debug, Clone, Copy, Component)]
+pub struct MapOwner(pub ID);
+
+/// 棋盤
+#[derive(Debug, Clone, Copy, Component)]
+pub struct Board {
+    pub width: Coord,
+    pub height: Coord,
+}
+
 /// 棋盤位置（座標）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]
 pub struct Position {
     pub x: Coord,
     pub y: Coord,
@@ -18,13 +29,6 @@ pub struct Unit;
 #[derive(Debug, Component)]
 pub struct Object;
 
-/// 標記地圖所有者
-#[derive(Debug, Clone, Copy, Component)]
-pub struct MapOwner(pub ID);
-
-/// 棋盤
-#[derive(Debug, Clone, Copy, Component)]
-pub struct Board {
-    pub width: Coord,
-    pub height: Coord,
-}
+/// 陣營（用於區分友軍/敵軍）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+pub struct Faction(pub ID);

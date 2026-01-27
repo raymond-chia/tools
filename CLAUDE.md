@@ -19,6 +19,7 @@
 - 使用 test driven (TDD)
   - 測試請集中在 core\board\tests 的子資料夾
 - 禁止查看 bak 開頭的資料夾或檔案
+- 寫完後檢查是否有違反 D:\Mega\prog\rust\tools\README-設計機制.md。如果只是尚未實作完畢，只要提示尚未實作就好。如果違反請警告使用者。
 
 ## 基本指令
 
@@ -36,8 +37,6 @@ cargo test
    邏輯代碼只處理「如何執行」，不寫死「執行什麼」
 2. ECS 架構
    使用 bevy_ecs 管理所有遊戲狀態
-   Component 只存資料。禁止出現 impl
-   System 處理邏輯，通過 Query 操作 Component (system/ 禁止存放 Struct/Enum)
 
 ## **Struct/Enum 設計**
 
@@ -46,10 +45,44 @@ cargo test
   - 只補齊必要的 derive，不嘗試預先 derive
   - 有需要時再添加，不要預測未來需求
 
-## **Error 層**
+## **檔案放置原則**
 
-- **責任**：集中管理所有錯誤類型
-- **設計**：所有業務邏輯的錯誤都在 error.rs 定義，確保錯誤訊息包含豐富上下文
+### component.rs
+
+- 存放 ECS Component：只存資料，不含業務邏輯
+- 必須 derive `Component` 和 `Debug`
+- 禁止出現 impl
+
+### alias.rs
+
+- 存放類型別名（type alias）
+
+### primitive.rs
+
+- 保留給基本資料類型定義（未來使用）
+
+### logic/ 中的參數類型
+
+- 函數參數類型放在同一個檔案中（與函數一起）
+- 例：`Direction` 和 `Mover` 在 `logic/movement.rs`
+- 這些類型可以組合來自 `component.rs` 的 Component
+
+### error.rs
+
+- 集中定義所有錯誤類型
+- 確保錯誤訊息包含豐富上下文
+
+### logic/
+
+- 存放核心業務邏輯函數（純邏輯運算，不依賴 ECS Query）
+- 可以依賴 component.rs 和 typ.rs 的類型
+- 不含 Struct/Enum 定義
+
+### system/
+
+- 存放真正的 ECS System（通過 Query 操作 Component）
+- 不存放 Struct/Enum 定義
+- 函數簽名包含 Query 或系統相關參數
 
 ## **測試**:
 
@@ -73,15 +106,17 @@ cargo test
 ```
 core/board/
 ├── src/
+│   ├── alias.rs          - 類型別名（Coord, ID）
 │   ├── component.rs      - ECS Component 定義
 │   ├── error.rs          - 錯誤型別定義
 │   ├── loader.rs         - 資料載入（TOML 解析）
-│   ├── typ.rs            - 遊戲類型定義（Direction 等）
-│   └── system/           - ECS System
-│       ├── board.rs      - 棋盤 System
-│       └── movement.rs   - 移動路徑計算
+│   ├── primitive.rs      - 基本資料類型定義（未來使用）
+│   ├── logic/            - 核心業務邏輯（非 ECS System）
+│   │   ├── board.rs      - 棋盤驗證
+│   │   └── movement.rs   - 移動邏輯
+│   └── system/           - ECS System（目前未實作）
 └── tests/                - 測試
-    ├── board/            - 棋盤測試
+    ├── board/
     │   ├── test_board.rs
     │   └── test_movement.rs
     ├── test.rs
@@ -90,11 +125,11 @@ core/board/
 
 ### function 集
 
-#### system/board.rs
+#### logic/board.rs
 
 - `pub fn is_valid_position(board: Board, pos: Position) -> bool` - 驗證位置是否在棋盤邊界內
 
-#### system/movement.rs
+#### logic/movement.rs
 
 - `pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算從位置往方向移動一格，檢查棋盤邊界
-- `pub fn manhattan_path(from: Position, to: Position, board: Board) -> Result<Vec<Position>>` - 計算從起點到終點的移動路徑（水平+垂直）
+- `pub fn manhattan_path<F>(board: Board, mover: Mover, to: Position, get_occupant: F) -> Result<Vec<Position>>` - 計算從起點到終點的移動路徑（水平+垂直），檢查碰撞
