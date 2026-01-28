@@ -37,7 +37,7 @@ pub enum BoardError {
         width: Coord,
         height: Coord,
     },
-    #[error("路徑被阻擋: 位置 ({x}, {y}) 有敵軍")]
+    #[error("路徑被阻擋: 位置 ({x}, {y})")]
     PathBlocked { x: Coord, y: Coord },
     #[error("內部錯誤: {0}")]
     InternalError(String),

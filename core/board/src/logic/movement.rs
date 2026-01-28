@@ -112,9 +112,9 @@ where
         .into());
     }
 
-    // Fail fast：驗證終點可通行
+    // Fail fast：驗證終點必須是空的（無任何單位）
     let to_occupant_faction = get_occupant_faction(to);
-    if !is_passable(mover_faction, to_occupant_faction) {
+    if to_occupant_faction.is_some() {
         return Err(BoardError::PathBlocked { x: to.x, y: to.y }.into());
     }
 
@@ -162,10 +162,10 @@ where
     );
 
     match path {
-        Some((_path, _cost)) => {
+        Some((path, _cost)) => {
             // path 是從 from 到 to 的完整路徑（包含起點）
             // 去掉起點並返回
-            let mut result = _path;
+            let mut result = path;
             result.remove(0);
             Ok(result)
         }

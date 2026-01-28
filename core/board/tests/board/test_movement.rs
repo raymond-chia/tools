@@ -304,7 +304,7 @@ fn test_manhattan_path_edge_cases() {
 }
 
 #[test]
-fn test_manhattan_path_around_obstacle() {
+fn test_manhattan_path_around_enemy() {
     let test_data = [
         (
             r#"
@@ -375,5 +375,122 @@ X . . . .
         let path = manhattan_path(board, mover, to, get_occupant)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
         assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
+    }
+}
+
+#[test]
+fn test_manhattan_path_through_ally() {
+    // 友軍可穿越，不阻擋路徑
+    let test_data = [
+        (
+            r#"
+S X . E
+. . . .
+. . . .
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . . .
+X . . .
+. . . E
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 2 },
+            ],
+        ),
+        (
+            r#"
+S X . .
+. . . .
+. . E .
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 2, y: 1 },
+                Position { x: 2, y: 2 },
+            ],
+        ),
+    ];
+
+    for (idx, (ascii, expected_path)) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"];
+        let to = markers["E"];
+        let ally_pos = markers["X"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        let get_occupant = |pos: Position| {
+            if pos == ally_pos {
+                Some(Faction(1)) // 友軍（同陣營）
+            } else {
+                None
+            }
+        };
+
+        let path = manhattan_path(board, mover, to, get_occupant)
+            .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
+        assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
+    }
+}
+
+#[test]
+fn test_manhattan_path_unit_at_destination() {
+    let test_data = [
+        r#"
+S . . X
+. . . .
+. . . .
+        "#,
+        r#"
+S . . .
+. . . .
+. . . .
+X . . .
+        "#,
+        r#"
+S . . . .
+. . . . .
+. . X . .
+        "#,
+    ];
+
+    for (idx, ascii) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"];
+        let to = markers["X"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        for faction in [Faction(1), Faction(2)] {
+            let get_occupant = |pos: Position| {
+                if pos == to { Some(faction) } else { None }
+            };
+
+            let result = manhattan_path(board, mover, to, get_occupant);
+            assert!(
+                result.is_err(),
+                "Case {} should fail - destination blocked by unit of faction {:?}",
+                idx,
+                faction
+            );
+        }
     }
 }
