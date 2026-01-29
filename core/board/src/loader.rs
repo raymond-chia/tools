@@ -9,6 +9,7 @@ use std::collections::HashMap;
 /// ASCII 格式：每行用空格分隔的符號
 /// - `.` = 有效位置
 /// - 其他字符串（`S`、`E` 等）= 標記位置（也作為有效位置）
+/// - 相同的標記會全部收集成 Vec
 ///
 /// 返回：(棋盤, 所有位置, 標記映射)
 ///
@@ -18,7 +19,9 @@ use std::collections::HashMap;
 /// . . E
 /// . . .
 /// ```
-pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>, HashMap<String, Position>)> {
+pub fn load_from_ascii(
+    ascii: &str,
+) -> Result<(Board, Vec<Position>, HashMap<String, Vec<Position>>)> {
     let lines: Vec<&str> = ascii
         .lines()
         .map(|l| l.trim())
@@ -44,7 +47,7 @@ pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>, HashMap<Str
     let board = Board { width, height };
 
     let mut positions = Vec::new();
-    let mut markers = HashMap::new();
+    let mut markers: HashMap<String, Vec<Position>> = HashMap::new();
 
     for (y, line) in lines.iter().enumerate() {
         for (x, cell) in line.split_whitespace().enumerate() {
@@ -53,7 +56,10 @@ pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>, HashMap<Str
 
             // 非 `.` 的符號記為標記
             if cell != "." {
-                markers.insert(cell.to_string(), pos);
+                markers
+                    .entry(cell.to_string())
+                    .or_insert_with(Vec::new)
+                    .push(pos);
             }
         }
     }

@@ -3,6 +3,6 @@
 pub mod board;
 pub mod movement;
 
-use crate::alias::Coord;
+use crate::alias::MovementCost;
 
-const BASIC_MOVEMENT_COST: Coord = 10;
+pub const BASIC_MOVEMENT_COST: MovementCost = 10;

@@ -1,8 +1,8 @@
 //! 移動邏輯
 
+use crate::alias::MovementCost;
 use crate::component::{Board, Faction, Position};
 use crate::error::{BoardError, Result};
-use crate::logic::BASIC_MOVEMENT_COST;
 use crate::logic::board::is_valid_position;
 use pathfinding::prelude::astar;
 
@@ -79,14 +79,20 @@ pub struct Mover {
 /// - 友軍（相同 Faction）可穿越
 /// - 敵軍（不同 Faction）不可穿越
 /// - 無單位的位置可通行
-pub fn manhattan_path<F>(
+///
+/// # 地形消耗：
+/// - `get_terrain_cost` 返回該位置的移動成本
+/// - `usize::MAX` 表示不可通行（例如牆壁）
+pub fn manhattan_path<F, G>(
     board: Board,
     mover: Mover,
     to: Position,
     get_occupant_faction: F,
-) -> Result<Vec<Position>>
+    get_terrain_cost: G,
+) -> Result<(Vec<Position>, MovementCost)>
 where
     F: Fn(Position) -> Option<Faction> + Copy,
+    G: Fn(Position) -> MovementCost + Copy,
 {
     let from = mover.pos;
     let mover_faction = mover.faction;
@@ -120,7 +126,7 @@ where
 
     // 起點等於終點的特殊情況
     if from == to {
-        return Ok(vec![]);
+        return Ok((vec![], 0));
     }
 
     // 使用 A* 尋路
@@ -135,9 +141,13 @@ where
                 Direction::Right,
             ] {
                 if let Some(next_pos) = step_in_direction(board, pos, *direction) {
+                    let terrain_cost = get_terrain_cost(next_pos);
+                    if terrain_cost == MovementCost::MAX {
+                        continue;
+                    }
                     let occupant_faction = get_occupant_faction(next_pos);
                     if is_passable(mover_faction, occupant_faction) {
-                        successors.push((next_pos, BASIC_MOVEMENT_COST));
+                        successors.push((next_pos, terrain_cost));
                     }
                 }
             }
@@ -156,18 +166,21 @@ where
             } else {
                 to.y - pos.y
             };
+            // 需要小於 BASIC_MOVEMENT_COST * (dx + dy)
+            // 以免高估成本
+            // 導致 A* 無法找到最短路徑
             dx * 3 + dy * 2
         },
         |&pos| pos == to,
     );
 
     match path {
-        Some((path, _cost)) => {
+        Some((path, cost)) => {
             // path 是從 from 到 to 的完整路徑（包含起點）
             // 去掉起點並返回
             let mut result = path;
             result.remove(0);
-            Ok(result)
+            Ok((result, cost))
         }
         None => {
             // 找不到路徑

@@ -92,6 +92,7 @@ cargo test
   - 使用 ASCII art 或圖示化方式展示棋盤狀態
     - 請用 load_from_ascii 解析
   - 讓測試資料一目瞭然，便於理解測試意圖
+  - **使用 test_data 陣列**：多個測試案例應使用 `let test_data = [...]` 的形式，用迴圈遍歷，不要寫單一測試案例
 
 ## 專案索引
 

@@ -1,8 +1,13 @@
 //! 移動路徑測試
 
+use board::alias::MovementCost;
 use board::component::{Board, Faction, Position};
 use board::loader::load_from_ascii;
+use board::logic::BASIC_MOVEMENT_COST;
 use board::logic::movement::{Direction, Mover, manhattan_path, step_in_direction};
+
+const NORMAL_COST: MovementCost = BASIC_MOVEMENT_COST;
+const WATER_COST: MovementCost = BASIC_MOVEMENT_COST * 3;
 
 #[test]
 fn test_step_in_direction_normal() {
@@ -57,8 +62,8 @@ S
 
     for (idx, (ascii, direction)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
-        let pos = markers["S"];
-        let expected = markers["E"];
+        let pos = markers["S"][0];
+        let expected = markers["E"][0];
         let result = step_in_direction(board, pos, *direction);
         assert_eq!(result, Some(expected), "Case {}", idx);
     }
@@ -128,7 +133,7 @@ S
 
     for (idx, (ascii, directions)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
-        let pos = markers["S"];
+        let pos = markers["S"][0];
         for d in directions {
             let result = step_in_direction(board, pos, *d);
             assert_eq!(result, None, "Case {}, direction {:?}", idx, d);
@@ -237,13 +242,13 @@ E . . . .
 
     for (idx, (ascii, expected)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
-        let from = markers["S"];
-        let to = markers["E"];
+        let from = markers["S"][0];
+        let to = markers["E"][0];
         let mover = Mover {
             pos: from,
             faction: Faction(1),
         };
-        let path = manhattan_path(board, mover, to, |_| None)
+        let (path, _cost) = manhattan_path(board, mover, to, |_| None, |_| 1)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
         assert_eq!(path, *expected, "Case {} path mismatch", idx);
     }
@@ -277,7 +282,7 @@ fn test_manhattan_path_out_of_bounds() {
             pos: *from,
             faction: Faction(1),
         };
-        let result = manhattan_path(*board, mover, *to, |_| None);
+        let result = manhattan_path(*board, mover, *to, |_| None, |_| 1);
         assert!(result.is_err(), "Case {} should fail", idx);
     }
 }
@@ -293,14 +298,15 @@ fn test_manhattan_path_edge_cases() {
 . . . . .
     "#;
     let (board, _, markers) = load_from_ascii(ascii).unwrap();
-    let from = markers["S"];
+    let from = markers["S"][0];
     let to = from;
     let mover = Mover {
         pos: from,
         faction: Faction(1),
     };
-    let path = manhattan_path(board, mover, to, |_| None).unwrap();
+    let (path, cost) = manhattan_path(board, mover, to, |_| None, |_| 1).unwrap();
     assert_eq!(path, vec![]);
+    assert_eq!(cost, 0);
 }
 
 #[test]
@@ -355,9 +361,9 @@ X . . . .
 
     for (idx, (ascii, expected_path)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
-        let from = markers["S"];
-        let to = markers["E"];
-        let obstacle_pos = markers["X"];
+        let from = markers["S"][0];
+        let to = markers["E"][0];
+        let obstacle_pos = markers["X"][0];
 
         let mover = Mover {
             pos: from,
@@ -372,7 +378,7 @@ X . . . .
             }
         };
 
-        let path = manhattan_path(board, mover, to, get_occupant)
+        let (path, _cost) = manhattan_path(board, mover, to, get_occupant, |_| 1)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
         assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
     }
@@ -425,9 +431,9 @@ S X . .
 
     for (idx, (ascii, expected_path)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
-        let from = markers["S"];
-        let to = markers["E"];
-        let ally_pos = markers["X"];
+        let from = markers["S"][0];
+        let to = markers["E"][0];
+        let ally_pos = markers["X"][0];
 
         let mover = Mover {
             pos: from,
@@ -442,7 +448,7 @@ S X . .
             }
         };
 
-        let path = manhattan_path(board, mover, to, get_occupant)
+        let (path, _cost) = manhattan_path(board, mover, to, get_occupant, |_| 1)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
         assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
     }
@@ -471,8 +477,8 @@ S . . . .
 
     for (idx, ascii) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
-        let from = markers["S"];
-        let to = markers["X"];
+        let from = markers["S"][0];
+        let to = markers["X"][0];
 
         let mover = Mover {
             pos: from,
@@ -484,7 +490,7 @@ S . . . .
                 if pos == to { Some(faction) } else { None }
             };
 
-            let result = manhattan_path(board, mover, to, get_occupant);
+            let result = manhattan_path(board, mover, to, get_occupant, |_| 1);
             assert!(
                 result.is_err(),
                 "Case {} should fail - destination blocked by unit of faction {:?}",
@@ -492,5 +498,366 @@ S . . . .
                 faction
             );
         }
+    }
+}
+
+#[test]
+fn test_manhattan_path_with_wall_obstacles() {
+    // 測試牆壁（不可通行）阻擋路徑
+    let test_data = [
+        (
+            r#"
+S # . E
+. # . .
+. . . .
+            "#,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 0, y: 2 },
+                Position { x: 1, y: 2 },
+                Position { x: 2, y: 2 },
+                Position { x: 3, y: 2 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . . . E
+# . . . .
+# . . . .
+. . . . .
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+                Position { x: 4, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . . E .
+. # # . .
+. . . . .
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . . . .
+# # # . .
+. E . . .
+            "#,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 2 },
+                Position { x: 2, y: 2 },
+                Position { x: 1, y: 2 },
+            ],
+        ),
+    ];
+
+    for (idx, (ascii, expected)) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"][0];
+        let to = markers["E"][0];
+        let wall_positions = &markers["#"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        let get_terrain_cost = |pos: Position| {
+            if wall_positions.contains(&pos) {
+                MovementCost::MAX // 牆壁不可通行
+            } else {
+                BASIC_MOVEMENT_COST // 普通地形
+            }
+        };
+
+        let (path, _cost) = manhattan_path(board, mover, to, |_| None, get_terrain_cost)
+            .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
+
+        assert_eq!(path, *expected, "Case {} path mismatch", idx);
+    }
+}
+
+#[test]
+fn test_manhattan_path_wall_completely_blocks() {
+    // 測試牆壁完全阻擋的情況
+    let test_data = [
+        r#"
+S # E
+# # .
+. . .
+            "#,
+        r#"
+S # . E
+. # . .
+. # . .
+            "#,
+        r#"
+S # . E
+. # # #
+. . . .
+            "#,
+        r#"
+S . .
+# # #
+E . .
+            "#,
+    ];
+
+    for (idx, ascii) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"][0];
+        let to = markers["E"][0];
+        let wall_positions = &markers["#"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        let get_terrain_cost = |pos: Position| {
+            if wall_positions.contains(&pos) {
+                MovementCost::MAX
+            } else {
+                BASIC_MOVEMENT_COST
+            }
+        };
+
+        let result = manhattan_path(board, mover, to, |_| None, get_terrain_cost);
+        assert!(result.is_err(), "Case {} should be unreachable", idx);
+    }
+}
+
+#[test]
+fn test_manhattan_path_with_water_terrain() {
+    let test_data = [
+        (
+            r#"
+S w . E
+w w w .
+. . . .
+            "#,
+            WATER_COST + NORMAL_COST * 2,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . . .
+w . . E
+. . . .
+            "#,
+            NORMAL_COST * 4,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+                Position { x: 3, y: 1 },
+            ],
+        ),
+        (
+            r#"
+S w . .
+. . . E
+. . . .
+            "#,
+            NORMAL_COST * 4,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 1, y: 1 },
+                Position { x: 2, y: 1 },
+                Position { x: 3, y: 1 },
+            ],
+        ),
+        (
+            r#"
+S w w E 
+. . . .
+. . . .
+            "#,
+            NORMAL_COST * 5,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 1, y: 1 },
+                Position { x: 2, y: 1 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S w w w E
+. w . . .
+. . w . .
+            "#,
+            WATER_COST + NORMAL_COST * 5,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 1, y: 1 },
+                Position { x: 2, y: 1 },
+                Position { x: 3, y: 1 },
+                Position { x: 4, y: 1 },
+                Position { x: 4, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S w w w E
+. w . w .
+. . . . .
+            "#,
+            NORMAL_COST * 8,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 0, y: 2 },
+                Position { x: 1, y: 2 },
+                Position { x: 2, y: 2 },
+                Position { x: 3, y: 2 },
+                Position { x: 4, y: 2 },
+                Position { x: 4, y: 1 },
+                Position { x: 4, y: 0 },
+            ],
+        ),
+    ];
+
+    for (idx, (ascii, expected_cost, expected_path)) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"][0];
+        let to = markers["E"][0];
+        let water_positions = &markers["w"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        let get_terrain_cost = |pos: Position| {
+            if water_positions.contains(&pos) {
+                WATER_COST
+            } else {
+                NORMAL_COST
+            }
+        };
+
+        // enough movement cost
+        let (path, cost) = manhattan_path(board, mover, to, |_| None, get_terrain_cost)
+            .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
+        assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
+        assert_eq!(cost, *expected_cost, "Case {} cost mismatch", idx);
+    }
+}
+
+#[test]
+fn test_manhattan_path_mixed_wall_and_water() {
+    let test_data = [
+        (
+            r#"
+S . # . E
+. w # w .
+. . . . .
+            "#,
+            NORMAL_COST * 8,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 0, y: 2 },
+                Position { x: 1, y: 2 },
+                Position { x: 2, y: 2 },
+                Position { x: 3, y: 2 },
+                Position { x: 4, y: 2 },
+                Position { x: 4, y: 1 },
+                Position { x: 4, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S . w . E
+. . . # .
+. . . # .
+            "#,
+            WATER_COST + NORMAL_COST * 3,
+            vec![
+                Position { x: 1, y: 0 },
+                Position { x: 2, y: 0 },
+                Position { x: 3, y: 0 },
+                Position { x: 4, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S # . E 
+w w . .
+. w . .
+            "#,
+            WATER_COST * 2 + NORMAL_COST * 3,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 1, y: 1 },
+                Position { x: 2, y: 1 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+        (
+            r#"
+S # . E 
+w w w .
+. . . .
+            "#,
+            WATER_COST + NORMAL_COST * 6,
+            vec![
+                Position { x: 0, y: 1 },
+                Position { x: 0, y: 2 },
+                Position { x: 1, y: 2 },
+                Position { x: 2, y: 2 },
+                Position { x: 3, y: 2 },
+                Position { x: 3, y: 1 },
+                Position { x: 3, y: 0 },
+            ],
+        ),
+    ];
+
+    for (idx, (ascii, expected_cost, expected_path)) in test_data.iter().enumerate() {
+        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let from = markers["S"][0];
+        let to = markers["E"][0];
+        let wall_positions = &markers["#"];
+        let water_positions = &markers["w"];
+
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+
+        let get_terrain_cost = |pos: Position| {
+            if wall_positions.contains(&pos) {
+                MovementCost::MAX // 牆壁不可通行
+            } else if water_positions.contains(&pos) {
+                WATER_COST
+            } else {
+                NORMAL_COST
+            }
+        };
+
+        // enough movement cost
+        let (path, cost) = manhattan_path(board, mover, to, |_| None, get_terrain_cost)
+            .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
+        assert_eq!(path, *expected_path, "Case {} path mismatch", idx);
+        assert_eq!(cost, *expected_cost, "Case {} cost mismatch", idx);
     }
 }
