@@ -4,7 +4,7 @@ use crate::alias::MovementCost;
 use crate::component::{Board, Faction, Position};
 use crate::error::{BoardError, Result};
 use crate::logic::board::is_valid_position;
-use pathfinding::prelude::astar;
+use std::collections::{HashSet, VecDeque};
 
 /// 移動方向（四方向）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,18 +62,16 @@ pub struct Mover {
     pub faction: Faction,
 }
 
-/// 計算從起點到終點的移動路徑（含碰撞檢測，使用 A* 尋路）
+/// 計算給定移動力預算內可到達的所有位置
 ///
-/// 演算法：A* 尋路，優先考慮曼哈頓距離
-/// 1. 使用 A* 找出最短路徑
+/// 使用 BFS 探索所有可到達位置
+/// 1. 從起點開始擴展
 /// 2. 檢查每一步是否可通行（碰撞檢測）
-/// 3. 如果有敵軍阻擋，自動迂迴
-/// 4. 返回完整路徑（不包含起點）
+/// 3. 只包含消耗成本 <= 預算的位置
+/// 4. 返回所有可到達位置（不包含起點）
 ///
 /// # Fail fast 驗證：
 /// - 起點必須在棋盤內
-/// - 終點必須在棋盤內
-/// - 終點必須可通行（無敵軍）
 ///
 /// # 碰撞規則：
 /// - 友軍（相同 Faction）可穿越
@@ -83,13 +81,13 @@ pub struct Mover {
 /// # 地形消耗：
 /// - `get_terrain_cost` 返回該位置的移動成本
 /// - `usize::MAX` 表示不可通行（例如牆壁）
-pub fn manhattan_path<F, G>(
+pub fn reachable_positions<F, G>(
     board: Board,
     mover: Mover,
-    to: Position,
+    budget: MovementCost,
     get_occupant_faction: F,
     get_terrain_cost: G,
-) -> Result<(Vec<Position>, MovementCost)>
+) -> Result<Vec<Position>>
 where
     F: Fn(Position) -> Option<Faction> + Copy,
     G: Fn(Position) -> MovementCost + Copy,
@@ -97,7 +95,7 @@ where
     let from = mover.pos;
     let mover_faction = mover.faction;
 
-    // Fail fast：驗證起點和終點都在棋盤內
+    // Fail fast：驗證起點在棋盤內
     if !is_valid_position(board, from) {
         return Err(BoardError::OutOfBounds {
             x: from.x,
@@ -108,85 +106,53 @@ where
         .into());
     }
 
-    if !is_valid_position(board, to) {
-        return Err(BoardError::OutOfBounds {
-            x: to.x,
-            y: to.y,
-            width: board.width,
-            height: board.height,
+    let mut visited = HashSet::new();
+    let mut queue = VecDeque::new();
+    let mut reachable = Vec::new();
+
+    visited.insert(from);
+    queue.push_back((from, 0));
+
+    while let Some((pos, cost)) = queue.pop_front() {
+        // 不包含起點，且只包含無單位佔據的位置
+        if pos != from && get_occupant_faction(pos).is_none() {
+            reachable.push(pos);
         }
-        .into());
-    }
 
-    // Fail fast：驗證終點必須是空的（無任何單位）
-    let to_occupant_faction = get_occupant_faction(to);
-    if to_occupant_faction.is_some() {
-        return Err(BoardError::PathBlocked { x: to.x, y: to.y }.into());
-    }
-
-    // 起點等於終點的特殊情況
-    if from == to {
-        return Ok((vec![], 0));
-    }
-
-    // 使用 A* 尋路
-    let path = astar(
-        &from,
-        |&pos| {
-            let mut successors = Vec::new();
-            for direction in &[
-                Direction::Up,
-                Direction::Down,
-                Direction::Left,
-                Direction::Right,
-            ] {
-                if let Some(next_pos) = step_in_direction(board, pos, *direction) {
-                    let terrain_cost = get_terrain_cost(next_pos);
-                    if terrain_cost == MovementCost::MAX {
-                        continue;
-                    }
-                    let occupant_faction = get_occupant_faction(next_pos);
-                    if is_passable(mover_faction, occupant_faction) {
-                        successors.push((next_pos, terrain_cost));
-                    }
+        // 探索相鄰位置
+        for direction in &[
+            Direction::Up,
+            Direction::Down,
+            Direction::Left,
+            Direction::Right,
+        ] {
+            if let Some(next_pos) = step_in_direction(board, pos, *direction) {
+                if visited.contains(&next_pos) {
+                    continue;
                 }
-            }
-            successors
-        },
-        |&pos| {
-            // 啟發式函數：曼哈頓距離 + 方向偏好
-            // 優先走左右（水平），後走上下（垂直）
-            let dx = if pos.x > to.x {
-                pos.x - to.x
-            } else {
-                to.x - pos.x
-            };
-            let dy = if pos.y > to.y {
-                pos.y - to.y
-            } else {
-                to.y - pos.y
-            };
-            // 需要小於 BASIC_MOVEMENT_COST * (dx + dy)
-            // 以免高估成本
-            // 導致 A* 無法找到最短路徑
-            dx * 3 + dy * 2
-        },
-        |&pos| pos == to,
-    );
 
-    match path {
-        Some((path, cost)) => {
-            // path 是從 from 到 to 的完整路徑（包含起點）
-            // 去掉起點並返回
-            let mut result = path;
-            result.remove(0);
-            Ok((result, cost))
-        }
-        None => {
-            // 找不到路徑
-            Err(BoardError::PathBlocked { x: to.x, y: to.y }.into())
+                let terrain_cost = get_terrain_cost(next_pos);
+                if terrain_cost == MovementCost::MAX {
+                    continue;
+                }
+
+                let new_cost = cost + terrain_cost;
+                if new_cost > budget {
+                    continue;
+                }
+
+                let occupant_faction = get_occupant_faction(next_pos);
+                if !is_passable(mover_faction, occupant_faction) {
+                    continue;
+                }
+
+                visited.insert(next_pos);
+                queue.push_back((next_pos, new_cost));
+            }
         }
     }
+
+    Ok(reachable)
 }
 
 /// 碰撞檢測：檢查位置是否可通行

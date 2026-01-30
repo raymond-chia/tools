@@ -122,7 +122,13 @@ core/board/
     │   └── test_movement.rs
     ├── test.rs
     └── test_error.rs
+
+editor/
+└── src/
 ```
+
+- **core/board**：模擬邏輯、序列化
+- **editor**：編輯操作、GUI
 
 ### function 集
 
