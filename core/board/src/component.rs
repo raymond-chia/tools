@@ -15,7 +15,7 @@ pub struct Board {
 }
 
 /// 棋盤位置（座標）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Component)]
 pub struct Position {
     pub x: Coord,
     pub y: Coord,

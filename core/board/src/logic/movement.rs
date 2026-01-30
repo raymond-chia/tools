@@ -4,7 +4,8 @@ use crate::alias::MovementCost;
 use crate::component::{Board, Faction, Position};
 use crate::error::{BoardError, Result};
 use crate::logic::board::is_valid_position;
-use std::collections::{HashSet, VecDeque};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
 
 /// 移動方向（四方向）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,13 +63,20 @@ pub struct Mover {
     pub faction: Faction,
 }
 
+/// 可到達位置的資訊（含成本與前驅節點）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReachableInfo {
+    pub cost: MovementCost,
+    pub prev: Position, // 上一個位置（可能是起點）
+}
+
 /// 計算給定移動力預算內可到達的所有位置
 ///
-/// 使用 BFS 探索所有可到達位置
+/// 使用 Dijkstra 算法探索所有可到達位置
 /// 1. 從起點開始擴展
 /// 2. 檢查每一步是否可通行（碰撞檢測）
 /// 3. 只包含消耗成本 <= 預算的位置
-/// 4. 返回所有可到達位置（不包含起點）
+/// 4. 返回所有可到達位置及其成本與前驅節點（不包含起點）
 ///
 /// # Fail fast 驗證：
 /// - 起點必須在棋盤內
@@ -87,7 +95,7 @@ pub fn reachable_positions<F, G>(
     budget: MovementCost,
     get_occupant_faction: F,
     get_terrain_cost: G,
-) -> Result<Vec<Position>>
+) -> Result<HashMap<Position, ReachableInfo>>
 where
     F: Fn(Position) -> Option<Faction> + Copy,
     G: Fn(Position) -> MovementCost + Copy,
@@ -106,37 +114,35 @@ where
         .into());
     }
 
-    let mut visited = HashSet::new();
-    let mut queue = VecDeque::new();
-    let mut reachable = Vec::new();
+    let mut dist: HashMap<Position, MovementCost> = HashMap::new();
+    let mut prev: HashMap<Position, Position> = HashMap::new();
+    let mut queue: BinaryHeap<Reverse<(MovementCost, Position)>> = BinaryHeap::new();
 
-    visited.insert(from);
-    queue.push_back((from, 0));
+    dist.insert(from, 0);
+    queue.push(Reverse((0, from)));
 
-    while let Some((pos, cost)) = queue.pop_front() {
-        // 不包含起點，且只包含無單位佔據的位置
-        if pos != from && get_occupant_faction(pos).is_none() {
-            reachable.push(pos);
+    // Dijkstra 探索
+    while let Some(Reverse((cost, pos))) = queue.pop() {
+        // 跳過過時的隊列項（已有更優路徑）
+        if cost > dist.get(&pos).copied().unwrap_or(MovementCost::MAX) {
+            continue;
         }
 
         // 探索相鄰位置
-        for direction in &[
+        const DIRECTIONS: [Direction; 4] = [
             Direction::Up,
             Direction::Down,
             Direction::Left,
             Direction::Right,
-        ] {
-            if let Some(next_pos) = step_in_direction(board, pos, *direction) {
-                if visited.contains(&next_pos) {
-                    continue;
-                }
-
+        ];
+        for direction in DIRECTIONS {
+            if let Some(next_pos) = step_in_direction(board, pos, direction) {
                 let terrain_cost = get_terrain_cost(next_pos);
                 if terrain_cost == MovementCost::MAX {
                     continue;
                 }
 
-                let new_cost = cost + terrain_cost;
+                let new_cost = dist[&pos] + terrain_cost;
                 if new_cost > budget {
                     continue;
                 }
@@ -146,11 +152,33 @@ where
                     continue;
                 }
 
-                visited.insert(next_pos);
-                queue.push_back((next_pos, new_cost));
+                // 如果是更優路徑，更新距離和前驅
+                let best_cost = dist.get(&next_pos).copied().unwrap_or(MovementCost::MAX);
+                if new_cost < best_cost {
+                    dist.insert(next_pos, new_cost);
+                    prev.insert(next_pos, pos);
+                    queue.push(Reverse((new_cost, next_pos)));
+                }
             }
         }
     }
+
+    // 分離結果收集邏輯
+    let reachable = dist
+        .into_iter()
+        .filter_map(|(pos, cost)| {
+            if pos == from || get_occupant_faction(pos).is_some() {
+                return None;
+            }
+            Some((
+                pos,
+                ReachableInfo {
+                    cost,
+                    prev: prev[&pos],
+                },
+            ))
+        })
+        .collect();
 
     Ok(reachable)
 }

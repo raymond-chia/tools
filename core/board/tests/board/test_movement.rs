@@ -4,7 +4,10 @@ use board::alias::MovementCost;
 use board::component::{Faction, Position};
 use board::loader::load_from_ascii;
 use board::logic::BASIC_MOVEMENT_COST;
-use board::logic::movement::{Direction, Mover, reachable_positions, step_in_direction};
+use board::logic::movement::{
+    Direction, Mover, ReachableInfo, reachable_positions, step_in_direction,
+};
+use std::collections::HashSet;
 
 const NORMAL_COST: MovementCost = BASIC_MOVEMENT_COST;
 const WATER_COST: MovementCost = BASIC_MOVEMENT_COST * 3;
@@ -153,7 +156,22 @@ S . . . .
 . . . . .
             "#,
             NORMAL_COST * 1,
-            vec![Position { x: 1, y: 0 }, Position { x: 0, y: 1 }],
+            vec![
+                (
+                    Position { x: 1, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+            ],
         ),
         (
             r#"
@@ -164,7 +182,22 @@ S . . . .
 . . . . S
             "#,
             NORMAL_COST * 1,
-            vec![Position { x: 3, y: 4 }, Position { x: 4, y: 3 }],
+            vec![
+                (
+                    Position { x: 3, y: 4 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 4, y: 4 },
+                    },
+                ),
+                (
+                    Position { x: 4, y: 3 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 4, y: 4 },
+                    },
+                ),
+            ],
         ),
         (
             r#"
@@ -174,15 +207,29 @@ S . . . .
 . . . . .
 . . . . .
             "#,
-            NORMAL_COST * 2,
+            NORMAL_COST * 1,
             vec![
-                Position { x: 0, y: 0 },
-                Position { x: 1, y: 0 },
-                Position { x: 1, y: 1 },
-                Position { x: 2, y: 1 },
-                Position { x: 0, y: 2 },
-                Position { x: 1, y: 2 },
-                Position { x: 0, y: 3 },
+                (
+                    Position { x: 0, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
             ],
         ),
     ];
@@ -196,8 +243,8 @@ S . . . .
         };
         let result = reachable_positions(board, mover, *budget, |_| None, |_| NORMAL_COST)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
-        let expected_set: std::collections::HashSet<_> = expected.iter().cloned().collect();
-        let result_set: std::collections::HashSet<_> = result.iter().cloned().collect();
+        let expected_set: HashSet<_> = expected.iter().cloned().collect();
+        let result_set: HashSet<_> = result.iter().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(result_set, expected_set, "Case {} mismatch", idx);
     }
 }
@@ -212,7 +259,13 @@ S X . . .
 . . . . .
             "#,
             NORMAL_COST * 1,
-            vec![Position { x: 0, y: 1 }],
+            vec![(
+                Position { x: 0, y: 1 },
+                ReachableInfo {
+                    cost: NORMAL_COST * 1,
+                    prev: Position { x: 0, y: 0 },
+                },
+            )],
         ),
         (
             r#"
@@ -222,9 +275,27 @@ S X . . .
             "#,
             NORMAL_COST * 2,
             vec![
-                Position { x: 0, y: 1 },
-                Position { x: 1, y: 1 },
-                Position { x: 0, y: 2 },
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
             ],
         ),
         (
@@ -235,10 +306,34 @@ S X . . .
             "#,
             NORMAL_COST * 2,
             vec![
-                Position { x: 2, y: 0 },
-                Position { x: 2, y: 1 },
-                Position { x: 0, y: 2 },
-                Position { x: 1, y: 2 },
+                (
+                    Position { x: 2, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 2, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 2, y: 2 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 1, y: 2 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 2, y: 2 },
+                    },
+                ),
             ],
         ),
     ];
@@ -263,8 +358,8 @@ S X . . .
 
         let result = reachable_positions(board, mover, *budget, get_occupant, |_| NORMAL_COST)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
-        let expected_set: std::collections::HashSet<_> = expected.iter().cloned().collect();
-        let result_set: std::collections::HashSet<_> = result.iter().cloned().collect();
+        let expected_set: HashSet<_> = expected.iter().cloned().collect();
+        let result_set: HashSet<_> = result.iter().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(result_set, expected_set, "Case {} mismatch", idx);
     }
 }
@@ -279,34 +374,74 @@ S X . . .
 . . . . .
             "#,
             NORMAL_COST * 1,
-            vec![Position { x: 0, y: 1 }],
+            vec![(
+                Position { x: 0, y: 1 },
+                ReachableInfo {
+                    cost: NORMAL_COST * 1,
+                    prev: Position { x: 0, y: 0 },
+                },
+            )],
         ),
         (
             r#"
 S X . . .
-. . . . .
+. X . . .
 . . . . .
             "#,
             NORMAL_COST * 2,
             vec![
-                Position { x: 2, y: 0 },
-                Position { x: 0, y: 1 },
-                Position { x: 1, y: 1 },
-                Position { x: 0, y: 2 },
+                (
+                    Position { x: 2, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 1, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
             ],
         ),
         (
             r#"
 . . S
-. . X
-. . . 
+. X X
+. . .
             "#,
             NORMAL_COST * 2,
             vec![
-                Position { x: 0, y: 0 },
-                Position { x: 1, y: 0 },
-                Position { x: 1, y: 1 },
-                Position { x: 2, y: 2 },
+                (
+                    Position { x: 0, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 1, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 2, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 2, y: 1 },
+                    },
+                ),
             ],
         ),
     ];
@@ -314,7 +449,7 @@ S X . . .
     for (idx, (ascii, budget, expected)) in test_data.iter().enumerate() {
         let (board, _, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"][0];
-        let ally_pos = markers["X"][0];
+        let ally_positions = &markers["X"];
 
         let mover = Mover {
             pos: from,
@@ -322,7 +457,7 @@ S X . . .
         };
 
         let get_occupant = |pos: Position| {
-            if pos == ally_pos {
+            if ally_positions.contains(&pos) {
                 Some(Faction(1))
             } else {
                 None
@@ -332,8 +467,8 @@ S X . . .
         let result = reachable_positions(board, mover, *budget, get_occupant, |_| NORMAL_COST)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
 
-        let expected_set: std::collections::HashSet<_> = expected.iter().cloned().collect();
-        let result_set: std::collections::HashSet<_> = result.iter().cloned().collect();
+        let expected_set: HashSet<_> = expected.iter().cloned().collect();
+        let result_set: HashSet<_> = result.iter().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(result_set, expected_set, "Case {} mismatch", idx);
     }
 }
@@ -348,7 +483,13 @@ S # . . .
 . . . . .
             "#,
             NORMAL_COST * 1,
-            vec![Position { x: 0, y: 1 }],
+            vec![(
+                Position { x: 0, y: 1 },
+                ReachableInfo {
+                    cost: NORMAL_COST * 1,
+                    prev: Position { x: 0, y: 0 },
+                },
+            )],
         ),
         (
             r#"
@@ -358,10 +499,34 @@ S . . . .
             "#,
             NORMAL_COST * 2,
             vec![
-                Position { x: 1, y: 0 },
-                Position { x: 2, y: 0 },
-                Position { x: 0, y: 1 },
-                Position { x: 0, y: 2 },
+                (
+                    Position { x: 1, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 1, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
             ],
         ),
         (
@@ -395,8 +560,8 @@ S # . . .
 
         let result = reachable_positions(board, mover, *budget, |_| None, get_terrain_cost)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
-        let expected_set: std::collections::HashSet<_> = expected.iter().cloned().collect();
-        let result_set: std::collections::HashSet<_> = result.iter().cloned().collect();
+        let expected_set: HashSet<_> = expected.iter().cloned().collect();
+        let result_set: HashSet<_> = result.iter().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(result_set, expected_set, "Case {} mismatch", idx);
     }
 }
@@ -416,33 +581,84 @@ w . . . .
         (
             r#"
 S w . . .
-. . . . .
+. w . . .
 . . . . .
             "#,
             NORMAL_COST * 2,
             vec![
-                Position { x: 0, y: 1 },
-                Position { x: 1, y: 1 },
-                Position { x: 0, y: 2 },
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
             ],
         ),
         (
             r#"
 S w . . .
-. . . . .
+. w . . .
 . . . . .
             "#,
             NORMAL_COST * 4,
             vec![
-                Position { x: 1, y: 0 },
-                Position { x: 2, y: 0 },
-                Position { x: 0, y: 1 },
-                Position { x: 1, y: 1 },
-                Position { x: 2, y: 1 },
-                Position { x: 3, y: 1 },
-                Position { x: 0, y: 2 },
-                Position { x: 1, y: 2 },
-                Position { x: 2, y: 2 },
+                (
+                    Position { x: 1, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 3,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 4,
+                        prev: Position { x: 1, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 4,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 3,
+                        prev: Position { x: 0, y: 2 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 2 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 4,
+                        prev: Position { x: 1, y: 2 },
+                    },
+                ),
             ],
         ),
         (
@@ -452,15 +668,69 @@ S w w . .
             "#,
             NORMAL_COST * 7,
             vec![
-                Position { x: 1, y: 0 },
-                Position { x: 2, y: 0 },
-                Position { x: 3, y: 0 },
-                Position { x: 4, y: 0 },
-                Position { x: 0, y: 1 },
-                Position { x: 1, y: 1 },
-                Position { x: 2, y: 1 },
-                Position { x: 3, y: 1 },
-                Position { x: 4, y: 1 },
+                (
+                    Position { x: 1, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 3,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 6,
+                        prev: Position { x: 1, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 3, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 5,
+                        prev: Position { x: 3, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 4, y: 0 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 6,
+                        prev: Position { x: 3, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 0, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 1,
+                        prev: Position { x: 0, y: 0 },
+                    },
+                ),
+                (
+                    Position { x: 1, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 2,
+                        prev: Position { x: 0, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 2, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 3,
+                        prev: Position { x: 1, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 3, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 4,
+                        prev: Position { x: 2, y: 1 },
+                    },
+                ),
+                (
+                    Position { x: 4, y: 1 },
+                    ReachableInfo {
+                        cost: NORMAL_COST * 5,
+                        prev: Position { x: 3, y: 1 },
+                    },
+                ),
             ],
         ),
     ];
@@ -485,8 +755,8 @@ S w w . .
 
         let result = reachable_positions(board, mover, *budget, |_| None, get_terrain_cost)
             .unwrap_or_else(|e| panic!("Case {} failed: {:?}", idx, e));
-        let expected_set: std::collections::HashSet<_> = expected.iter().cloned().collect();
-        let result_set: std::collections::HashSet<_> = result.iter().cloned().collect();
+        let expected_set: HashSet<_> = expected.iter().cloned().collect();
+        let result_set: HashSet<_> = result.iter().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(result_set, expected_set, "Case {} mismatch", idx);
     }
 }

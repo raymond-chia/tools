@@ -10,6 +10,32 @@
 - **Fail fast**：在函數開頭進行所有驗證和檢查，不在執行中間檢查
 - 每當 claude code 提出設計建議時，要求 claude code 先明確引用 CLAUDE.md 的具體條文來論證為什麼這個設計符合規則
 
+## **技術判斷原則**
+
+- **優先驗證而非同意**
+  - 對技術建議必須驗證（測試、推導、實驗），不盲目同意
+  - 即使用戶提出建議，也要確認其正確性才認可
+
+- **明確表達確定性等級**
+  - ✅ **確定**：已驗證過、有測試或推導支撐
+  - ⚠️ **可能**：邏輯上合理但未驗證，需要測試
+  - ❌ **不確定**：無法判斷，應說「我不清楚，需要驗證」
+
+- **避免過度同意**
+  - 不因為用戶同意就改變已驗證的結論
+  - 不因為用戶提出就馬上認可，而不驗證
+  - 區分「這在理論上可能」與「這確實有效」
+
+- **質疑時的標準**
+  - 對優化建議：必須寫代碼驗證，運行測試
+  - 對邏輯主張：必須詳細推導，考慮邊界情況
+  - 對設計決定：必須引用 CLAUDE.md 或已驗證的原則
+
+- **不確定時的做法**
+  - 明確說「我不能確認」或「需要驗證」
+  - 建議：「讓我們寫測試驗證」或「讓我詳細推導」
+  - 不承諾已驗證但其實沒有的優化
+
 # 本專案
 
 - 本專案是戰術回合制 RPG 遊戲（Rust）。
@@ -139,4 +165,4 @@ editor/
 #### logic/movement.rs
 
 - `pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算從位置往方向移動一格，檢查棋盤邊界
-- `pub fn manhattan_path<F>(board: Board, mover: Mover, to: Position, get_occupant: F) -> Result<Vec<Position>>` - 計算從起點到終點的移動路徑（水平+垂直），檢查碰撞
+- `pub fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_faction: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 使用 Dijkstra 算法計算預算內可到達的所有位置，返回位置、成本與前驅節點
