@@ -1,6 +1,7 @@
 # 通用規則
 
 - **語言**: 繁體中文（註解、文件），禁止簡體中文
+  - ⚠️ **所有回應禁止簡體中文**
 - 撰寫計畫的時候不要添加程式碼，請保持精簡
 - 使用 match 而不要 let else
 - match arm 使用編譯器的 exhaustiveness checking 保護，避免未來忘記添加 match arm
@@ -171,3 +172,9 @@ editor/
 
 - `pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算從位置往方向移動一格，檢查棋盤邊界
 - `pub fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_faction: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 使用 Dijkstra 算法計算預算內可到達的所有位置，返回位置、成本與前驅節點
+
+#### loader.rs
+
+- `pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤，返回棋盤、所有位置、標記映射
+- `pub fn load_level(toml_content: &str) -> Result<LevelData>` - 從 TOML 字符串載入關卡數據
+- `pub fn save_level(level: &LevelData) -> Result<String>` - 將關卡數據序列化為 TOML 字符串
