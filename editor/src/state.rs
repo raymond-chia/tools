@@ -6,11 +6,13 @@ pub enum Page {
 }
 
 #[derive(Debug, Default)]
-pub struct EditorApp {
-    pub state: EditorState,
+pub struct Message {
+    pub text: String,
+    pub visible: bool,
 }
 
 #[derive(Debug, Default)]
-pub struct EditorState {
+pub struct EditorApp {
     pub current_page: Page,
+    pub message: Message,
 }

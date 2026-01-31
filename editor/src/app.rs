@@ -5,5 +5,6 @@ impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.render_top_bar(ctx);
         self.render_page_content(ctx);
+        self.render_message_window(ctx);
     }
 }
