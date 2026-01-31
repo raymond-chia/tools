@@ -4,6 +4,7 @@ resolver = "2"
 
 # cargo add -p board ${dependency}
 [workspace.dependencies]
-egui = "0.33.3"
 bevy_ecs = "0.18.0"
 thiserror = "2.0.18"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9.11"

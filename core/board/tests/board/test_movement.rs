@@ -145,6 +145,31 @@ S
 }
 
 #[test]
+fn test_reachable_positions_out_of_bound() {
+    let ascii = r#"
+. . 
+. . 
+            "#;
+    let (board, _, _) = load_from_ascii(ascii).unwrap();
+    for from in [
+        Position { x: 0, y: 2 },
+        Position { x: 2, y: 0 },
+        Position { x: 2, y: 1 },
+    ] {
+        let mover = Mover {
+            pos: from,
+            faction: Faction(1),
+        };
+        let result = reachable_positions(board, mover, NORMAL_COST, |_| None, |_| NORMAL_COST);
+        assert!(
+            result.is_err(),
+            "From position {:?} should be out of bound",
+            from
+        );
+    }
+}
+
+#[test]
 fn test_reachable_positions_normal() {
     let test_data = [
         (

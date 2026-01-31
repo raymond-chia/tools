@@ -1,1 +1,0 @@
-C:\Users\renyu\.local\bin\claude.exe

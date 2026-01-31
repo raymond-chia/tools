@@ -23,13 +23,13 @@ pub struct Error {
 pub enum ErrorKind {
     #[error(transparent)]
     Board(#[from] BoardError),
+    #[error(transparent)]
+    Load(#[from] LoadError),
 }
 
 /// 棋盤錯誤
 #[derive(Debug, ThisError)]
 pub enum BoardError {
-    #[error("解析失敗: {0}")]
-    ParseError(String),
     #[error("位置超出棋盤邊界: ({x}, {y}) 邊界 ({width}, {height})")]
     OutOfBounds {
         x: Coord,
@@ -37,10 +37,17 @@ pub enum BoardError {
         width: Coord,
         height: Coord,
     },
-    #[error("路徑被阻擋: 位置 ({x}, {y})")]
-    PathBlocked { x: Coord, y: Coord },
-    #[error("內部錯誤: {0}")]
-    InternalError(String),
+}
+
+/// 格式載入錯誤
+#[derive(Debug, ThisError)]
+pub enum LoadError {
+    #[error("解析失敗: {0}")]
+    ParseError(String),
+    #[error("{format} 反序列化失敗: {reason}")]
+    DeserializeError { format: String, reason: String },
+    #[error("{format} 序列化失敗: {reason}")]
+    SerializeError { format: String, reason: String },
 }
 
 impl Error {

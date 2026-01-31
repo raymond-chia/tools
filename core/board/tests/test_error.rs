@@ -1,9 +1,9 @@
-use board::error::{BoardError, Error};
+use board::error::{Error, LoadError};
 
 // clear; cargo fmt; cargo test -- --nocapture
 #[test]
 fn show_error_messages() {
-    let scene_err = BoardError::ParseError("Invalid symbol".to_string());
+    let scene_err = LoadError::ParseError("Invalid symbol".to_string());
     let err: Error = scene_err.into();
     let err = err
         .context("解析行：5")

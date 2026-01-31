@@ -44,7 +44,6 @@
   - 禁止使用 oop
 - 使用 test driven (TDD)
   - 測試請集中在 core\board\tests 的子資料夾
-- 禁止查看 bak 開頭的資料夾或檔案
 - 寫完後檢查是否有違反 D:\Mega\prog\rust\tools\README-設計機制.md。如果只是尚未實作完畢，只要提示尚未實作就好。如果違反請警告使用者。
 
 ## 基本指令
@@ -101,7 +100,7 @@ cargo test
 ### logic/
 
 - 存放核心業務邏輯函數（純邏輯運算，不依賴 ECS Query）
-- 可以依賴 component.rs 和 typ.rs 的類型
+- 可以依賴 component.rs 和 primitive.rs 的類型
 - 不含 Struct/Enum 定義
 
 ### system/
@@ -112,7 +111,7 @@ cargo test
 
 ## **測試**:
 
-- 不替以下撰寫測試: `editor` crate、inner functions
+- 不替以下撰寫測試: `editor` crate、inner functions、serialize/deserialize
 - 只有在副作用難以測試時才修改程式碼邏輯
 - **視覺化測試資料**：所有測試都應該盡量用視覺化方式呈現測試資料
   - 使用 ASCII art 或圖示化方式展示棋盤狀態
@@ -150,7 +149,13 @@ core/board/
     └── test_error.rs
 
 editor/
-└── src/
+├── src/
+│   ├── main.rs       - 入口函數、字體設置、模組聲明
+│   ├── constants.rs  - 設定常數
+│   ├── state.rs      - 數據結構（EditorApp、EditorState、EditorTool）
+│   ├── app.rs        - eframe::App trait 實現（update 方法、面板渲染）
+│   ├── ui.rs         - UI 渲染方法
+│   └── handlers.rs   - 事件處理和文件操作
 ```
 
 - **core/board**：模擬邏輯、序列化
