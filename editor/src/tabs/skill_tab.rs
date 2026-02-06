@@ -4,7 +4,7 @@ use crate::constants::*;
 use crate::editor_item::EditorItem;
 use board::alias::Coord;
 use board::loader_schema::{
-    AoeShape, Attribute, AttributeSource, DamageType, Mechanic, SaveType, SkillEffect, SkillType,
+    AoeShape, AttackStyle, Attribute, AttributeSource, Mechanic, SaveType, SkillEffect, SkillType,
     TargetFilter, TargetMode, ValueFormula,
 };
 use strum::IntoEnumIterator;
@@ -105,7 +105,7 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType) {
                     filter: TargetFilter::All,
                 },
                 formula: ValueFormula::Fixed { value: 0 },
-                damage_type: DamageType::Physical,
+                style: AttackStyle::Physical,
             });
         }
         if ui.button("新增屬性修正").clicked() {
@@ -345,7 +345,7 @@ fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index:
             mechanic,
             target_mode,
             formula,
-            damage_type,
+            style,
         } => {
             ui.label("類型：HP 修正");
 
@@ -358,25 +358,15 @@ fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index:
             let hp_formula_salt = format!("effect_{}_hp_modify_formula", effect_index);
             render_formula_form(ui, formula, hp_formula_salt.as_str());
             ui.separator();
-
-            ui.horizontal(|ui| {
-                ui.label("傷害類型：");
-                egui::ComboBox::from_id_salt(format!(
-                    "effect_{}_hp_modify_damage_type",
-                    effect_index
-                ))
-                .selected_text(format!("{:?}", damage_type))
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(damage_type, DamageType::Physical, "Physical");
-                    ui.selectable_value(damage_type, DamageType::Magical, "Magical");
-                });
-            });
+            
+            let hp_style_salt = format!("effect_{}_hp_modify_style", effect_index);
+            render_style_form(ui, style, &hp_style_salt);
         }
         SkillEffect::AttributeModify {
             mechanic,
             target_mode,
-            attribute,
             formula,
+            attribute,
             duration,
         } => {
             ui.label("類型：屬性修正");
@@ -530,6 +520,19 @@ fn render_formula_form(ui: &mut egui::Ui, formula: &mut ValueFormula, salt: &str
             });
         }
     }
+}
+
+/// 渲染攻擊風格（傷害類型）選擇器
+fn render_style_form(ui: &mut egui::Ui, style: &mut AttackStyle, salt: &str) {
+    ui.horizontal(|ui| {
+        ui.label("傷害類型：");
+        egui::ComboBox::from_id_salt(salt)
+            .selected_text(format!("{:?}", style))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(style, AttackStyle::Physical, "Physical");
+                ui.selectable_value(style, AttackStyle::Magical, "Magical");
+            });
+    });
 }
 
 /// 渲染目標過濾器編輯表單

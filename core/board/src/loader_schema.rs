@@ -46,7 +46,7 @@ pub enum AttributeSource {
 
 /// 傷害類型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum DamageType {
+pub enum AttackStyle {
     /// 物理傷害
     Physical,
     /// 魔法傷害
@@ -175,7 +175,7 @@ pub enum SkillEffect {
         mechanic: Mechanic,
         target_mode: TargetMode,
         formula: ValueFormula,
-        damage_type: DamageType,
+        style: AttackStyle,
     },
     /// 屬性修正效果（buff/debuff/被動技能）
     AttributeModify {
