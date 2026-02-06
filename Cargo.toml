@@ -1,0 +1,12 @@
+[workspace]
+members = ["core/board", "editor"]
+resolver = "2"
+
+# cargo add -p board ${dependency}
+[workspace.dependencies]
+strum_macros = "0.27.2"
+strum = "0.27.2"
+bevy_ecs = "0.18.0"
+thiserror = "2.0.18"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9.11"
