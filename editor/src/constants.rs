@@ -16,6 +16,9 @@ pub const SPACING_MEDIUM: f32 = 10.0;
 // UI 尺寸
 pub const LIST_PANEL_WIDTH: f32 = 300.0;
 
+// UI 數值
+pub const DRAG_VALUE_SPEED: f64 = 1.0;
+
 // 檔案相關
 pub const DATA_DIRECTORY_PATH: &str = "ignore-data/";
 pub const FILE_EXTENSION_TOML: &str = ".toml";
@@ -39,5 +42,13 @@ pub const AOE_SHAPE_CROSS: &str = "Cross";
 pub const AOE_SHAPE_LINE: &str = "Line";
 pub const AOE_SHAPE_RECTANGLE: &str = "Rectangle";
 
-// 技能編輯器 - UI 數值
-pub const DRAG_VALUE_SPEED: f64 = 1.0;
+// 關卡編輯器 - 戰場預覽
+pub const BATTLEFIELD_CELL_SIZE: f32 = 36.0;
+pub const BATTLEFIELD_GRID_SPACING: f32 = 2.0;
+pub const BATTLEFIELD_TEXT_SIZE: f32 = 14.0;
+
+// 關卡編輯器 - 戰場預覽 - 顏色
+pub const BATTLEFIELD_COLOR_PLAYER: egui::Color32 = egui::Color32::LIGHT_BLUE;
+pub const BATTLEFIELD_COLOR_ENEMY: egui::Color32 = egui::Color32::LIGHT_RED;
+pub const BATTLEFIELD_COLOR_OBJECT: egui::Color32 = egui::Color32::GRAY;
+pub const BATTLEFIELD_COLOR_EMPTY: egui::Color32 = egui::Color32::DARK_GREEN;

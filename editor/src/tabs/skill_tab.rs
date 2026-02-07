@@ -358,7 +358,7 @@ fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index:
             let hp_formula_salt = format!("effect_{}_hp_modify_formula", effect_index);
             render_formula_form(ui, formula, hp_formula_salt.as_str());
             ui.separator();
-            
+
             let hp_style_salt = format!("effect_{}_hp_modify_style", effect_index);
             render_style_form(ui, style, &hp_style_salt);
         }

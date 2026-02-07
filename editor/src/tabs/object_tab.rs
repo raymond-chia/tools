@@ -1,5 +1,6 @@
 //! 物件編輯器 tab
 
+use crate::constants::DRAG_VALUE_SPEED;
 use crate::editor_item::EditorItem;
 use board::constants::{CONTACT_HEALTH_DAMAGE, IMPASSABLE_MOVEMENT_COST};
 use board::loader_schema::ObjectType;
@@ -39,7 +40,7 @@ pub fn render_form(ui: &mut egui::Ui, obj: &mut ObjectType) {
         let mut cost = obj.movement_cost as i32;
         ui.add(
             egui::DragValue::new(&mut cost)
-                .speed(1)
+                .speed(DRAG_VALUE_SPEED)
                 .range(0..=IMPASSABLE_MOVEMENT_COST as i32),
         );
         obj.movement_cost = cost as usize;
@@ -59,7 +60,7 @@ pub fn render_form(ui: &mut egui::Ui, obj: &mut ObjectType) {
         ui.label("立即 HP 效果：");
         ui.add(
             egui::DragValue::new(&mut obj.contact_health)
-                .speed(1)
+                .speed(DRAG_VALUE_SPEED)
                 .range(-CONTACT_HEALTH_DAMAGE..=CONTACT_HEALTH_DAMAGE),
         );
     });
