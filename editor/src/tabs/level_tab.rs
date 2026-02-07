@@ -39,6 +39,26 @@ impl EditorItem for LevelType {
                 self.max_player_units
             ));
         }
+
+        // 檢查玩家部署點互相重複
+        let player_positions_set: HashSet<Position> =
+            self.player_placement_positions.iter().cloned().collect();
+        if player_positions_set.len() != self.player_placement_positions.len() {
+            return Err("玩家部署點存在重複位置".to_string());
+        }
+
+        // 檢查敵人位置互相重複
+        let enemy_positions_set: HashSet<Position> =
+            self.enemy_units.iter().map(|u| u.position).collect();
+        if enemy_positions_set.len() != self.enemy_units.len() {
+            return Err("敵人位置存在重複".to_string());
+        }
+
+        // 檢查玩家部署點與敵人位置不重複
+        if !player_positions_set.is_disjoint(&enemy_positions_set) {
+            return Err("玩家部署點和敵人位置存在重複".to_string());
+        }
+
         Ok(())
     }
 }
