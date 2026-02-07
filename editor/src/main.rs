@@ -1,16 +1,17 @@
 mod app;
 mod constants;
 mod editor_item;
+#[macro_use]
+mod editor_macros;
 mod generic_editor;
 mod generic_io;
-mod state;
 mod tabs;
 
+use app::EditorApp;
 use constants::{
     APP_TITLE, FONT_FILE_PATH, FONT_NAME, FONT_SIZE_BODY, FONT_SIZE_BUTTON, FONT_SIZE_HEADING,
     FONT_SIZE_MONOSPACE, FONT_SIZE_SMALL,
 };
-use state::EditorApp;
 use std::sync::Arc;
 
 fn main() -> Result<(), eframe::Error> {

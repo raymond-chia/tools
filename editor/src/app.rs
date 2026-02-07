@@ -1,13 +1,165 @@
 use crate::constants::{
     DATA_DIRECTORY_PATH, FILE_EXTENSION_TOML, LIST_PANEL_WIDTH, SPACING_MEDIUM, SPACING_SMALL,
 };
+use crate::define_editors;
 use crate::editor_item::EditorItem;
 use crate::generic_editor::{EditMode, GenericEditorState};
 use crate::generic_io::{load_file, save_file};
-use crate::state::{EditorApp, EditorTab};
 use crate::tabs;
+use board::loader_schema::{LevelType, ObjectType, SkillType, UnitType};
 use std::path::PathBuf;
 use strum::IntoEnumIterator;
+use strum_macros::{Display, EnumIter};
+
+define_editors! {
+    default: Object,
+
+    Object => {
+        display: "物件",
+        field: object_editor,
+        type: ObjectType,
+        file_fn: tabs::object_tab::file_name,
+    },
+    Skill => {
+        display: "技能",
+        field: skill_editor,
+        type: SkillType,
+        file_fn: tabs::skill_tab::file_name,
+    },
+    Unit => {
+        display: "單位",
+        field: unit_editor,
+        type: UnitType,
+        file_fn: tabs::unit_tab::file_name,
+    },
+    Level => {
+        display: "關卡",
+        field: level_editor,
+        type: LevelType,
+        file_fn: tabs::level_tab::file_name,
+    },
+}
+
+impl eframe::App for EditorApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                EditorTab::iter().for_each(|tab: EditorTab| {
+                    ui.selectable_value(&mut self.current_tab, tab, tab.to_string());
+                });
+            });
+        });
+
+        egui::CentralPanel::default().show(ctx, |ui| match self.current_tab {
+            EditorTab::Object => render_editor_ui(
+                ui,
+                &mut self.object_editor,
+                tabs::object_tab::file_name(),
+                tabs::object_tab::render_form,
+            ),
+            EditorTab::Skill => render_editor_ui(
+                ui,
+                &mut self.skill_editor,
+                tabs::skill_tab::file_name(),
+                tabs::skill_tab::render_form,
+            ),
+            EditorTab::Unit => {
+                self.unit_editor.ui_state.available_skills = self
+                    .skill_editor
+                    .items
+                    .iter()
+                    .map(|skill| skill.name.clone())
+                    .collect();
+
+                render_editor_ui(
+                    ui,
+                    &mut self.unit_editor,
+                    tabs::unit_tab::file_name(),
+                    tabs::unit_tab::render_form,
+                )
+            }
+            EditorTab::Level => {
+                self.level_editor.ui_state.available_units = self
+                    .unit_editor
+                    .items
+                    .iter()
+                    .map(|unit| unit.name.clone())
+                    .collect();
+
+                self.level_editor.ui_state.available_objects = self
+                    .object_editor
+                    .items
+                    .iter()
+                    .map(|obj| obj.name.clone())
+                    .collect();
+
+                render_editor_ui(
+                    ui,
+                    &mut self.level_editor,
+                    tabs::level_tab::file_name(),
+                    tabs::level_tab::render_form,
+                )
+            }
+        });
+    }
+}
+
+/// 渲染泛型編輯器 UI
+fn render_editor_ui<T: EditorItem>(
+    ui: &mut egui::Ui,
+    state: &mut GenericEditorState<T>,
+    data_key: &str,
+    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState),
+) {
+    ui.heading(format!("{}編輯器", T::type_name()));
+    ui.add_space(SPACING_MEDIUM);
+
+    let file_path =
+        PathBuf::from(DATA_DIRECTORY_PATH).join(format!("{}{}", data_key, FILE_EXTENSION_TOML));
+
+    // 頂部按鈕列
+    ui.horizontal(|ui| {
+        if ui.button("載入").clicked() {
+            load_file(state, &file_path, data_key);
+        }
+        if ui.button("儲存").clicked() {
+            save_file(state, &file_path, data_key);
+        }
+
+        ui.add_space(SPACING_MEDIUM);
+
+        // 訊息區域
+        if state.message_visible {
+            if ui.button("隱藏").clicked() {
+                state.message_visible = false;
+            }
+            let color = if state.is_error {
+                egui::Color32::RED
+            } else {
+                egui::Color32::GREEN
+            };
+            ui.colored_label(color, &state.message);
+        } else {
+            if ui.button("顯示訊息").clicked() {
+                state.message_visible = true;
+            }
+        }
+    });
+
+    ui.add_space(SPACING_MEDIUM);
+
+    let left_width = LIST_PANEL_WIDTH;
+    let height = ui.available_height();
+
+    // 主內容區域
+    ui.horizontal(|ui| {
+        // 左側：項目列表
+        render_item_list(ui, state, left_width, height);
+        ui.separator();
+        // 右側：編輯區域
+        render_edit_area(ui, state, render_form);
+    });
+}
 
 /// 渲染項目列表（左側）
 fn render_item_list<T: EditorItem>(
@@ -127,125 +279,4 @@ fn render_edit_area<T: EditorItem>(
             }
         }
     });
-}
-
-/// 渲染泛型編輯器 UI
-fn render_editor_ui<T: EditorItem>(
-    ui: &mut egui::Ui,
-    state: &mut GenericEditorState<T>,
-    data_key: &str,
-    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState),
-) {
-    ui.heading(format!("{}編輯器", T::type_name()));
-    ui.add_space(SPACING_MEDIUM);
-
-    let file_path =
-        PathBuf::from(DATA_DIRECTORY_PATH).join(format!("{}{}", data_key, FILE_EXTENSION_TOML));
-
-    // 頂部按鈕列
-    ui.horizontal(|ui| {
-        if ui.button("載入").clicked() {
-            load_file(state, &file_path, data_key);
-        }
-        if ui.button("儲存").clicked() {
-            save_file(state, &file_path, data_key);
-        }
-
-        ui.add_space(SPACING_MEDIUM);
-
-        // 訊息區域
-        if state.message_visible {
-            if ui.button("隱藏").clicked() {
-                state.message_visible = false;
-            }
-            let color = if state.is_error {
-                egui::Color32::RED
-            } else {
-                egui::Color32::GREEN
-            };
-            ui.colored_label(color, &state.message);
-        } else {
-            if ui.button("顯示訊息").clicked() {
-                state.message_visible = true;
-            }
-        }
-    });
-
-    ui.add_space(SPACING_MEDIUM);
-
-    let left_width = LIST_PANEL_WIDTH;
-    let height = ui.available_height();
-
-    // 主內容區域
-    ui.horizontal(|ui| {
-        // 左側：項目列表
-        render_item_list(ui, state, left_width, height);
-        ui.separator();
-        // 右側：編輯區域
-        render_edit_area(ui, state, render_form);
-    });
-}
-
-impl eframe::App for EditorApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                EditorTab::iter().for_each(|tab| {
-                    ui.selectable_value(&mut self.current_tab, tab, tab.to_string());
-                });
-            });
-        });
-
-        egui::CentralPanel::default().show(ctx, |ui| match self.current_tab {
-            EditorTab::Object => render_editor_ui(
-                ui,
-                &mut self.object_editor,
-                tabs::object_tab::file_name(),
-                tabs::object_tab::render_form,
-            ),
-            EditorTab::Skill => render_editor_ui(
-                ui,
-                &mut self.skill_editor,
-                tabs::skill_tab::file_name(),
-                tabs::skill_tab::render_form,
-            ),
-            EditorTab::Unit => {
-                self.unit_editor.ui_state.available_skills = self
-                    .skill_editor
-                    .items
-                    .iter()
-                    .map(|skill| skill.name.clone())
-                    .collect();
-
-                render_editor_ui(
-                    ui,
-                    &mut self.unit_editor,
-                    tabs::unit_tab::file_name(),
-                    tabs::unit_tab::render_form,
-                )
-            }
-            EditorTab::Level => {
-                self.level_editor.ui_state.available_units = self
-                    .unit_editor
-                    .items
-                    .iter()
-                    .map(|unit| unit.name.clone())
-                    .collect();
-
-                self.level_editor.ui_state.available_objects = self
-                    .object_editor
-                    .items
-                    .iter()
-                    .map(|obj| obj.name.clone())
-                    .collect();
-
-                render_editor_ui(
-                    ui,
-                    &mut self.level_editor,
-                    tabs::level_tab::file_name(),
-                    tabs::level_tab::render_form,
-                )
-            }
-        });
-    }
 }
