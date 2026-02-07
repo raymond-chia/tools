@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize};
 pub trait EditorItem:
     Clone + Default + std::fmt::Debug + Serialize + for<'de> Deserialize<'de>
 {
+    /// 該編輯器的 UI 狀態類型（如搜尋、篩選等）
+    /// 不需要 UI 狀態的編輯器可使用 ()
+    type UIState: Default;
+
     /// 取得項目名稱（用於列表顯示和驗證）
     fn name(&self) -> &str;
 

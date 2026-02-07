@@ -12,6 +12,8 @@ use strum::IntoEnumIterator;
 // ==================== EditorItem 實作 ====================
 
 impl EditorItem for SkillType {
+    type UIState = ();
+
     fn name(&self) -> &str {
         &self.name
     }
@@ -43,7 +45,7 @@ pub fn file_name() -> &'static str {
 // ==================== 表單渲染 ====================
 
 /// 渲染技能編輯表單
-pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType) {
+pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ()) {
     ui.horizontal(|ui| {
         ui.label("名稱：");
         ui.text_edit_singleline(&mut skill.name);

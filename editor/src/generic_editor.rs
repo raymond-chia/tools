@@ -29,6 +29,8 @@ pub struct GenericEditorState<T: EditorItem> {
     pub editing_item: Option<T>,
     /// 當前編輯模式
     pub edit_mode: EditMode,
+    /// 編輯器 UI 狀態（搜尋、拖曳等）
+    pub ui_state: T::UIState,
 }
 
 impl<T: EditorItem> GenericEditorState<T> {

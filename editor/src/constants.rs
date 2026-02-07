@@ -52,3 +52,5 @@ pub const BATTLEFIELD_COLOR_PLAYER: egui::Color32 = egui::Color32::LIGHT_BLUE;
 pub const BATTLEFIELD_COLOR_ENEMY: egui::Color32 = egui::Color32::LIGHT_RED;
 pub const BATTLEFIELD_COLOR_OBJECT: egui::Color32 = egui::Color32::GRAY;
 pub const BATTLEFIELD_COLOR_EMPTY: egui::Color32 = egui::Color32::DARK_GREEN;
+pub const BATTLEFIELD_COLOR_DRAG_HIGHLIGHT: egui::Color32 = egui::Color32::YELLOW;
+pub const BATTLEFIELD_DRAG_STROKE_WIDTH: f32 = 3.0;

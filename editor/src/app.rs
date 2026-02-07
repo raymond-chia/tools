@@ -6,7 +6,6 @@ use crate::generic_editor::{EditMode, GenericEditorState};
 use crate::generic_io::{load_file, save_file};
 use crate::state::{EditorApp, EditorTab};
 use crate::tabs;
-use board::alias::{SkillName, TypeName};
 use std::path::PathBuf;
 use strum::IntoEnumIterator;
 
@@ -69,13 +68,11 @@ fn render_item_list<T: EditorItem>(
 }
 
 /// 渲染編輯區域（右側）
-fn render_edit_area<T: EditorItem, F>(
+fn render_edit_area<T: EditorItem>(
     ui: &mut egui::Ui,
     state: &mut GenericEditorState<T>,
-    render_form: F,
-) where
-    F: Fn(&mut egui::Ui, &mut T),
-{
+    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState),
+) {
     ui.vertical(|ui| {
         ui.heading("編輯區域");
         ui.add_space(SPACING_SMALL);
@@ -103,7 +100,7 @@ fn render_edit_area<T: EditorItem, F>(
                 .show(ui, |ui| {
                     if let Some(item) = &mut state.editing_item {
                         ui.add_enabled_ui(true, |ui| {
-                            render_form(ui, item);
+                            render_form(ui, item, &mut state.ui_state);
                         });
                     }
                 });
@@ -117,7 +114,7 @@ fn render_edit_area<T: EditorItem, F>(
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             ui.add_enabled_ui(false, |ui| {
-                                render_form(ui, &mut item_copy);
+                                render_form(ui, &mut item_copy, &mut state.ui_state);
                             });
                         });
                 }
@@ -133,14 +130,12 @@ fn render_edit_area<T: EditorItem, F>(
 }
 
 /// 渲染泛型編輯器 UI
-fn render_editor_ui<T: EditorItem, F>(
+fn render_editor_ui<T: EditorItem>(
     ui: &mut egui::Ui,
     state: &mut GenericEditorState<T>,
     data_key: &str,
-    render_form: F,
-) where
-    F: Fn(&mut egui::Ui, &mut T),
-{
+    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState),
+) {
     ui.heading(format!("{}編輯器", T::type_name()));
     ui.add_space(SPACING_MEDIUM);
 
@@ -215,7 +210,7 @@ impl eframe::App for EditorApp {
                 tabs::skill_tab::render_form,
             ),
             EditorTab::Unit => {
-                let available_skills: Vec<SkillName> = self
+                self.unit_editor.ui_state.available_skills = self
                     .skill_editor
                     .items
                     .iter()
@@ -226,18 +221,18 @@ impl eframe::App for EditorApp {
                     ui,
                     &mut self.unit_editor,
                     tabs::unit_tab::file_name(),
-                    |ui, unit| tabs::unit_tab::render_form(ui, unit, &available_skills),
+                    tabs::unit_tab::render_form,
                 )
             }
             EditorTab::Level => {
-                let available_units: Vec<TypeName> = self
+                self.level_editor.ui_state.available_units = self
                     .unit_editor
                     .items
                     .iter()
                     .map(|unit| unit.name.clone())
                     .collect();
 
-                let available_objects: Vec<TypeName> = self
+                self.level_editor.ui_state.available_objects = self
                     .object_editor
                     .items
                     .iter()
@@ -248,14 +243,7 @@ impl eframe::App for EditorApp {
                     ui,
                     &mut self.level_editor,
                     tabs::level_tab::file_name(),
-                    |ui, level| {
-                        tabs::level_tab::render_form(
-                            ui,
-                            level,
-                            &available_units,
-                            &available_objects,
-                        )
-                    },
+                    tabs::level_tab::render_form,
                 )
             }
         });
