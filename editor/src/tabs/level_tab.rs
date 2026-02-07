@@ -85,6 +85,16 @@ impl EditorItem for LevelType {
 
         Ok(())
     }
+
+    fn after_confirm(&mut self) {
+        // 按位置排序（X 座標優先，再按 Y 座標）
+        self.player_placement_positions
+            .sort_by_key(|pos| (pos.x, pos.y));
+        self.enemy_units
+            .sort_by_key(|unit| (unit.position.x, unit.position.y));
+        self.object_placements
+            .sort_by_key(|obj| (obj.position.x, obj.position.y));
+    }
 }
 
 /// 取得關卡的檔案名稱

@@ -16,6 +16,14 @@ pub trait EditorItem:
     /// 設定項目名稱（用於複製功能）
     fn set_name(&mut self, name: String);
 
+    /// 項目類型名稱（用於訊息顯示，如「物件」、「技能」）
+    fn type_name() -> &'static str;
+
+    /// 項目類型名稱複數形式（用於訊息顯示，如「物件」、「技能」）
+    fn type_name_plural() -> &'static str {
+        Self::type_name()
+    }
+
     /// 驗證項目（confirm_edit 時呼叫）
     /// 返回 Ok(()) 表示驗證通過，Err(String) 表示驗證失敗
     fn validate(&self) -> Result<(), String> {
@@ -26,11 +34,7 @@ pub trait EditorItem:
         Ok(())
     }
 
-    /// 項目類型名稱（用於訊息顯示，如「物件」、「技能」）
-    fn type_name() -> &'static str;
-
-    /// 項目類型名稱複數形式（用於訊息顯示，如「物件」、「技能」）
-    fn type_name_plural() -> &'static str {
-        Self::type_name()
-    }
+    /// 編輯確認後的鉤子（驗證通過後呼叫）
+    /// 用於進行排序、正規化等操作
+    fn after_confirm(&mut self) {}
 }

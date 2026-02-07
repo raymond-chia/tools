@@ -5,6 +5,7 @@
 - [ ] **Single-responsibility principle**：每個函數和型別只負責一項職責
 - [ ] **變數命名**：使用有辨識度的名稱，避免相似的縮寫（例如同一作用域內不要同時使用 `attr` 和 `attribute`）
 - [ ] **錯誤訊息包含豐富上下文**：包含操作、預期值、實際值等
+- [ ] **禁止 `unwrap()`**：使用 `expect()` 並提供清晰的錯誤訊息
 - [ ] **禁止 magic numbers/strings**：使用常數替代
 - [ ] **使用 match 而不要 let else**
 - [ ] **match arm 有編譯器 exhaustiveness 保護**：避免遺漏 arm，依賴編譯器檢查

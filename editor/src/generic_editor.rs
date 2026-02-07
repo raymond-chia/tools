@@ -88,20 +88,28 @@ impl<T: EditorItem> GenericEditorState<T> {
             return;
         }
 
-        let item = match &self.editing_item {
-            Some(i) => i,
-            None => {
-                self.set_error(format!("編輯{}不存在", T::type_name()));
-                self.edit_mode = EditMode::None;
-                return;
-            }
-        };
+        // Fail Fast: 驗證項目是否存在且有效
+        if self.editing_item.is_none() {
+            self.set_error(format!("編輯{}不存在", T::type_name()));
+            self.edit_mode = EditMode::None;
+            return;
+        }
 
-        // Fail Fast: 驗證項目
-        if let Err(e) = item.validate() {
+        if let Err(e) = self.editing_item.as_ref().unwrap().validate() {
             self.set_error(e);
             return;
         }
+
+        // 驗證通過後的鉤子（如排序、正規化等）
+        if let Some(item) = &mut self.editing_item {
+            item.after_confirm();
+        }
+
+        // 此時 editing_item 已確保不為 None
+        let item = self
+            .editing_item
+            .as_ref()
+            .expect("內部邏輯錯誤：前面已驗證過，editing_item 不應為 None");
 
         match self.edit_mode {
             EditMode::Creating => {
