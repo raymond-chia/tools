@@ -1,7 +1,7 @@
 //! 泛型 TOML I/O 功能
 
 use crate::editor_item::EditorItem;
-use crate::generic_editor::{EditMode, GenericEditorState};
+use crate::generic_editor::GenericEditorState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -35,7 +35,7 @@ pub fn load_file<T: EditorItem>(
     data_key: &str, // "objects", "skills" 等
 ) {
     // Fail Fast: 檢查是否正在編輯
-    if state.edit_mode != EditMode::None {
+    if state.is_editing() {
         state.set_error("請先完成或取消當前的編輯");
         return;
     }
@@ -79,7 +79,7 @@ pub fn load_file<T: EditorItem>(
 /// 儲存檔案
 pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, data_key: &str) {
     // Fail Fast: 檢查是否正在編輯
-    if state.edit_mode != EditMode::None {
+    if state.is_editing() {
         state.set_error("請先完成或取消當前的編輯");
         return;
     }

@@ -26,15 +26,39 @@ pub trait EditorItem:
 
     /// 驗證項目（confirm_edit 時呼叫）
     /// 返回 Ok(()) 表示驗證通過，Err(String) 表示驗證失敗
-    fn validate(&self) -> Result<(), String> {
-        // 預設實現：檢查名稱非空
-        if self.name().trim().is_empty() {
-            return Err("名稱不能為空".to_string());
-        }
-        Ok(())
+    fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String> {
+        validate_name(self, all_items, editing_index)
     }
 
     /// 編輯確認後的鉤子（驗證通過後呼叫）
     /// 用於進行排序、正規化等操作
     fn after_confirm(&mut self) {}
+}
+
+/// 驗證項目名稱的輔助函數（用於檢查名稱非空和重複）
+pub fn validate_name<T: EditorItem>(
+    item: &T,
+    all_items: &[T],
+    editing_index: Option<usize>,
+) -> Result<(), String> {
+    if item.name().trim().is_empty() {
+        return Err("名稱不能為空".to_string());
+    }
+
+    for (idx, existing_item) in all_items.iter().enumerate() {
+        if let Some(edit_idx) = editing_index {
+            if idx == edit_idx {
+                continue;
+            }
+        }
+        if existing_item.name() == item.name() {
+            return Err(format!(
+                "{}「{}」已存在，請使用不同的名稱",
+                T::type_name(),
+                item.name()
+            ));
+        }
+    }
+
+    Ok(())
 }

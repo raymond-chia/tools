@@ -1,7 +1,7 @@
 //! 技能編輯器 tab
 
 use crate::constants::*;
-use crate::editor_item::EditorItem;
+use crate::editor_item::{EditorItem, validate_name};
 use board::alias::Coord;
 use board::loader_schema::{
     AoeShape, AttackStyle, Attribute, AttributeSource, Mechanic, SaveType, SkillEffect, SkillType,
@@ -26,10 +26,10 @@ impl EditorItem for SkillType {
         "技能"
     }
 
-    fn validate(&self) -> Result<(), String> {
-        if self.name.trim().is_empty() {
-            return Err("名稱不能為空".to_string());
-        }
+    fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String> {
+        validate_name(self, all_items, editing_index)?;
+
+        // 檢查 MP 消耗
         if self.mp_change > 0 {
             return Err("MP 消耗不能為正數".to_string());
         }
@@ -142,10 +142,10 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
     for (index, effect) in skill.effects.iter_mut().enumerate() {
         ui.group(|ui| {
             ui.horizontal(|ui| {
-                ui.label(format!("效果 #{}", index + 1));
                 if ui.button("刪除").clicked() {
                     to_remove = Some(index);
                 }
+                ui.label(format!("效果 #{}", index + 1));
             });
             ui.separator();
             render_effect_form(ui, effect, index);
@@ -156,6 +156,114 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
     // 刪除標記的效果
     if let Some(index) = to_remove {
         skill.effects.remove(index);
+    }
+}
+
+/// 渲染單個效果的編輯表單
+fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index: usize) {
+    match effect {
+        SkillEffect::HpModify {
+            mechanic,
+            target_mode,
+            formula,
+            style,
+        } => {
+            ui.label("類型：HP 修正");
+
+            let hp_mechanic_salt = format!("effect_{}_hp_modify_mechanic", effect_index);
+            render_mechanic_form(ui, mechanic, hp_mechanic_salt.as_str());
+            ui.separator();
+            let hp_target_salt = format!("effect_{}_hp_modify_target_mode", effect_index);
+            render_target_mode_form(ui, target_mode, hp_target_salt.as_str());
+            ui.separator();
+            let hp_formula_salt = format!("effect_{}_hp_modify_formula", effect_index);
+            render_formula_form(ui, formula, hp_formula_salt.as_str());
+            ui.separator();
+
+            let hp_style_salt = format!("effect_{}_hp_modify_style", effect_index);
+            render_style_form(ui, style, &hp_style_salt);
+        }
+        SkillEffect::AttributeModify {
+            mechanic,
+            target_mode,
+            formula,
+            attribute,
+            duration,
+        } => {
+            ui.label("類型：屬性修正");
+
+            let attr_mechanic_salt = format!("effect_{}_attr_modify_mechanic", effect_index);
+            render_mechanic_form(ui, mechanic, attr_mechanic_salt.as_str());
+            ui.separator();
+            let attr_target_salt = format!("effect_{}_attr_modify_target_mode", effect_index);
+            render_target_mode_form(ui, target_mode, attr_target_salt.as_str());
+            ui.separator();
+            let attr_formula_salt = format!("effect_{}_attr_modify_formula", effect_index);
+            render_formula_form(ui, formula, attr_formula_salt.as_str());
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.label("屬性：");
+                egui::ComboBox::from_id_salt(format!(
+                    "effect_{}_attr_modify_attribute",
+                    effect_index
+                ))
+                .selected_text(format!("{:?}", attribute))
+                .show_ui(ui, |ui| {
+                    for attr_option in Attribute::iter() {
+                        ui.selectable_value(attribute, attr_option, format!("{:?}", attr_option));
+                    }
+                });
+            });
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.label("時效（回合，留空=永久）：");
+                if let Some(d) = duration {
+                    let mut d_val = *d;
+                    if ui
+                        .add(
+                            egui::DragValue::new(&mut d_val)
+                                .speed(DRAG_VALUE_SPEED)
+                                .range(1..=i32::MAX),
+                        )
+                        .changed()
+                    {
+                        *d = d_val;
+                    }
+                    if ui.button("清除").clicked() {
+                        *duration = None;
+                    }
+                } else {
+                    if ui.button("設定時效").clicked() {
+                        *duration = Some(1);
+                    }
+                }
+            });
+        }
+        SkillEffect::Push {
+            mechanic,
+            target_mode,
+            distance,
+        } => {
+            ui.label("類型：推離");
+
+            let push_mechanic_salt = format!("effect_{}_push_mechanic", effect_index);
+            render_mechanic_form(ui, mechanic, push_mechanic_salt.as_str());
+            ui.separator();
+            let push_target_salt = format!("effect_{}_push_target_mode", effect_index);
+            render_target_mode_form(ui, target_mode, push_target_salt.as_str());
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                ui.label("推離距離：");
+                ui.add(
+                    egui::DragValue::new(distance)
+                        .speed(DRAG_VALUE_SPEED)
+                        .range(1..=Coord::MAX),
+                );
+            });
+        }
     }
 }
 
@@ -336,114 +444,6 @@ fn render_target_mode_form(ui: &mut egui::Ui, target_mode: &mut TargetMode, salt
             render_aoe_shape_form(ui, aoe_shape, salt);
             ui.separator();
             render_target_filter_form(ui, filter, salt);
-        }
-    }
-}
-
-/// 渲染單個效果的編輯表單
-fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index: usize) {
-    match effect {
-        SkillEffect::HpModify {
-            mechanic,
-            target_mode,
-            formula,
-            style,
-        } => {
-            ui.label("類型：HP 修正");
-
-            let hp_mechanic_salt = format!("effect_{}_hp_modify_mechanic", effect_index);
-            render_mechanic_form(ui, mechanic, hp_mechanic_salt.as_str());
-            ui.separator();
-            let hp_target_salt = format!("effect_{}_hp_modify_target_mode", effect_index);
-            render_target_mode_form(ui, target_mode, hp_target_salt.as_str());
-            ui.separator();
-            let hp_formula_salt = format!("effect_{}_hp_modify_formula", effect_index);
-            render_formula_form(ui, formula, hp_formula_salt.as_str());
-            ui.separator();
-
-            let hp_style_salt = format!("effect_{}_hp_modify_style", effect_index);
-            render_style_form(ui, style, &hp_style_salt);
-        }
-        SkillEffect::AttributeModify {
-            mechanic,
-            target_mode,
-            formula,
-            attribute,
-            duration,
-        } => {
-            ui.label("類型：屬性修正");
-
-            let attr_mechanic_salt = format!("effect_{}_attr_modify_mechanic", effect_index);
-            render_mechanic_form(ui, mechanic, attr_mechanic_salt.as_str());
-            ui.separator();
-            let attr_target_salt = format!("effect_{}_attr_modify_target_mode", effect_index);
-            render_target_mode_form(ui, target_mode, attr_target_salt.as_str());
-            ui.separator();
-            let attr_formula_salt = format!("effect_{}_attr_modify_formula", effect_index);
-            render_formula_form(ui, formula, attr_formula_salt.as_str());
-            ui.separator();
-
-            ui.horizontal(|ui| {
-                ui.label("屬性：");
-                egui::ComboBox::from_id_salt(format!(
-                    "effect_{}_attr_modify_attribute",
-                    effect_index
-                ))
-                .selected_text(format!("{:?}", attribute))
-                .show_ui(ui, |ui| {
-                    for attr_option in Attribute::iter() {
-                        ui.selectable_value(attribute, attr_option, format!("{:?}", attr_option));
-                    }
-                });
-            });
-            ui.separator();
-
-            ui.horizontal(|ui| {
-                ui.label("時效（回合，留空=永久）：");
-                if let Some(d) = duration {
-                    let mut d_val = *d;
-                    if ui
-                        .add(
-                            egui::DragValue::new(&mut d_val)
-                                .speed(DRAG_VALUE_SPEED)
-                                .range(1..=i32::MAX),
-                        )
-                        .changed()
-                    {
-                        *d = d_val;
-                    }
-                    if ui.button("清除").clicked() {
-                        *duration = None;
-                    }
-                } else {
-                    if ui.button("設定時效").clicked() {
-                        *duration = Some(1);
-                    }
-                }
-            });
-        }
-        SkillEffect::Push {
-            mechanic,
-            target_mode,
-            distance,
-        } => {
-            ui.label("類型：推離");
-
-            let push_mechanic_salt = format!("effect_{}_push_mechanic", effect_index);
-            render_mechanic_form(ui, mechanic, push_mechanic_salt.as_str());
-            ui.separator();
-            let push_target_salt = format!("effect_{}_push_target_mode", effect_index);
-            render_target_mode_form(ui, target_mode, push_target_salt.as_str());
-            ui.separator();
-
-            ui.horizontal(|ui| {
-                ui.label("推離距離：");
-                ui.add(
-                    egui::DragValue::new(distance)
-                        .speed(DRAG_VALUE_SPEED)
-                        .range(1..=Coord::MAX),
-                );
-            });
         }
     }
 }

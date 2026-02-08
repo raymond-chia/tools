@@ -30,3 +30,10 @@
 - [ ] **禁止向後相容**
 - [ ] **優先使用 alias**：使用 `core/board/src/alias.rs` 中的類型別名（`Coord`、`MovementCost`、`ID`、`TypeName`、`SkillName`）提升語義清晰度
 - [ ] **檢查設計機制**：寫完後檢查是否有違反 D:\Mega\prog\rust\tools\README-設計機制.md。如果只是尚未實作完畢，只要提示尚未實作就好。如果違反請警告使用者
+
+## 檢查指令
+
+- [ ] **檢查指令：只用 `cargo check`**
+  - ⚠️ 禁止用 `cargo run` 或 `cargo build`
+  - ⚠️ 禁止用 `cd` 改變目錄後再執行
+  - ✅ 正確：`cargo check` 或 `cargo check -p <crate_name>`

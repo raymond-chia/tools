@@ -1,7 +1,8 @@
 //! 關卡編輯器 tab
 
 use crate::constants::*;
-use crate::editor_item::EditorItem;
+use crate::editor_item::{EditorItem, validate_name};
+use crate::utils::search::{filter_by_search, render_search_input};
 use board::alias::{Coord, TypeName};
 use board::component::Position;
 use board::loader_schema::{LevelType, ObjectPlacement, UnitPlacement};
@@ -24,9 +25,13 @@ pub struct DragState {
 /// 關卡編輯器的 UI 狀態
 #[derive(Debug, Clone, Default)]
 pub struct LevelTabUIState {
-    pub drag_state: Option<DragState>,
     pub available_units: Vec<TypeName>,
     pub available_objects: Vec<TypeName>,
+
+    pub unit_search_query: TypeName,
+    pub object_search_query: TypeName,
+
+    pub drag_state: Option<DragState>,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -46,10 +51,9 @@ impl EditorItem for LevelType {
         "關卡"
     }
 
-    fn validate(&self) -> Result<(), String> {
-        if self.name.trim().is_empty() {
-            return Err("名稱不能為空".to_string());
-        }
+    fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String> {
+        validate_name(self, all_items, editing_index)?;
+
         if self.board_width == 0 || self.board_height == 0 {
             return Err("棋盤尺寸必須大於 0".to_string());
         }
@@ -62,6 +66,21 @@ impl EditorItem for LevelType {
                 self.player_placement_positions.len(),
                 self.max_player_units
             ));
+        }
+
+        // 檢查玩家部署點超出棋盤範圍
+        for (idx, pos) in self.player_placement_positions.iter().enumerate() {
+            check_position_in_bounds(&self, *pos, idx + 1, "玩家部署點")?;
+        }
+
+        // 檢查敵人位置超出棋盤範圍
+        for (idx, unit) in self.enemy_units.iter().enumerate() {
+            check_position_in_bounds(&self, unit.position, idx + 1, "敵人")?;
+        }
+
+        // 檢查物件位置超出棋盤範圍
+        for (idx, obj) in self.object_placements.iter().enumerate() {
+            check_position_in_bounds(&self, obj.position, idx + 1, "物件")?;
         }
 
         // 檢查玩家部署點互相重複
@@ -102,12 +121,48 @@ pub fn file_name() -> &'static str {
     "levels"
 }
 
+fn check_position_in_bounds(
+    level: &LevelType,
+    pos: Position,
+    index: usize,
+    label: &str,
+) -> Result<(), String> {
+    if !is_position_in_bounds(level, pos) {
+        return Err(format!(
+            "{} #{} ({}, {}) 超出棋盤範圍 (寬: {}, 高: {})",
+            label, index, pos.x, pos.y, level.board_width, level.board_height
+        ));
+    }
+    Ok(())
+}
+
+/// 檢查位置是否在棋盤邊界內
+fn is_position_in_bounds(level: &LevelType, pos: Position) -> bool {
+    pos.x < level.board_width && pos.y < level.board_height
+}
+
+// ==================== 本地輔助函數 ====================
+
+/// 在 ComboBox 中渲染過濾後的選項
+fn render_filtered_options(
+    ui: &mut egui::Ui,
+    visible_items: &[&TypeName],
+    selected_value: &mut String,
+    query: &str,
+) {
+    if !query.is_empty() && visible_items.is_empty() {
+        ui.label("找不到符合的項目");
+    } else {
+        for item_name in visible_items {
+            ui.selectable_value(selected_value, item_name.to_string(), item_name.as_str());
+        }
+    }
+}
+
 // ==================== 表單渲染 ====================
 
 /// 渲染關卡編輯表單
 pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState) {
-    let available_units = &ui_state.available_units;
-    let available_objects = &ui_state.available_objects;
     // 基本資訊區
     ui.horizontal(|ui| {
         ui.label("名稱：");
@@ -151,14 +206,24 @@ pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut Leve
 
     // 敵人單位配置區
     ui.heading("敵人單位配置");
-    render_unit_placement_list(ui, &mut level.enemy_units, available_units);
+    render_unit_placement_list(
+        ui,
+        &mut level.enemy_units,
+        &ui_state.available_units,
+        &mut ui_state.unit_search_query,
+    );
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
 
     // 物件配置區
     ui.heading("物件配置");
-    render_object_placement_list(ui, &mut level.object_placements, available_objects);
+    render_object_placement_list(
+        ui,
+        &mut level.object_placements,
+        &ui_state.available_objects,
+        &mut ui_state.object_search_query,
+    );
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
@@ -210,7 +275,8 @@ fn render_placement_positions_list(ui: &mut egui::Ui, positions: &mut Vec<Positi
 fn render_unit_placement_list(
     ui: &mut egui::Ui,
     placements: &mut Vec<UnitPlacement>,
-    available_units: &[String],
+    available_units: &[TypeName],
+    unit_search_query: &mut TypeName,
 ) {
     if ui.button("新增單位").clicked() {
         placements.push(UnitPlacement::default());
@@ -252,14 +318,21 @@ fn render_unit_placement_list(
                         } else {
                             &placement.unit_type_name
                         })
+                        .height(COMBOBOX_MIN_HEIGHT)
                         .show_ui(ui, |ui| {
-                            for unit_name in available_units {
-                                ui.selectable_value(
-                                    &mut placement.unit_type_name,
-                                    unit_name.clone(),
-                                    unit_name,
-                                );
-                            }
+                            ui.set_min_width(COMBOBOX_MIN_WIDTH);
+
+                            let response = render_search_input(ui, unit_search_query);
+                            ui.memory_mut(|mem| mem.request_focus(response.id));
+                            ui.separator();
+                            let visible_units =
+                                filter_by_search(available_units, unit_search_query);
+                            render_filtered_options(
+                                ui,
+                                &visible_units,
+                                &mut placement.unit_type_name,
+                                unit_search_query,
+                            );
                         });
                 }
             });
@@ -276,7 +349,8 @@ fn render_unit_placement_list(
 fn render_object_placement_list(
     ui: &mut egui::Ui,
     placements: &mut Vec<ObjectPlacement>,
-    available_objects: &[String],
+    available_objects: &[TypeName],
+    object_search_query: &mut TypeName,
 ) {
     if ui.button("新增物件").clicked() {
         placements.push(ObjectPlacement::default());
@@ -318,14 +392,21 @@ fn render_object_placement_list(
                         } else {
                             &placement.object_type_name
                         })
+                        .height(COMBOBOX_MIN_HEIGHT)
                         .show_ui(ui, |ui| {
-                            for object_name in available_objects {
-                                ui.selectable_value(
-                                    &mut placement.object_type_name,
-                                    object_name.clone(),
-                                    object_name,
-                                );
-                            }
+                            ui.set_min_width(COMBOBOX_MIN_WIDTH);
+
+                            let response = render_search_input(ui, object_search_query);
+                            ui.memory_mut(|mem| mem.request_focus(response.id));
+                            ui.separator();
+                            let visible_objects =
+                                filter_by_search(available_objects, object_search_query);
+                            render_filtered_options(
+                                ui,
+                                &visible_objects,
+                                &mut placement.object_type_name,
+                                object_search_query,
+                            );
                         });
                 }
             });
@@ -464,11 +545,8 @@ fn screen_to_board_pos(
     let x = (rel_x / (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING)) as Coord;
     let y = (rel_y / (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING)) as Coord;
 
-    if x >= level.board_width || y >= level.board_height {
-        return None;
-    }
-
-    Some(Position { x, y })
+    let pos = Position { x, y };
+    is_position_in_bounds(level, pos).then_some(pos)
 }
 
 /// 繪製棋盤格子，支持拖曳
@@ -502,10 +580,10 @@ fn render_grid(
             let (cell_text, bg_color) = if player_positions.contains(&pos) {
                 ("".to_string(), BATTLEFIELD_COLOR_PLAYER)
             } else if let Some(unit) = enemy_units_map.get(&pos) {
-                let abbrev = unit.unit_type_name.chars().take(2).collect::<String>();
+                let abbrev = unit.unit_type_name.chars().take(2).collect::<TypeName>();
                 (abbrev, BATTLEFIELD_COLOR_ENEMY)
             } else if let Some(obj) = objects_map.get(&pos) {
-                let abbrev = obj.object_type_name.chars().take(2).collect::<String>();
+                let abbrev = obj.object_type_name.chars().take(2).collect::<TypeName>();
                 (abbrev, BATTLEFIELD_COLOR_OBJECT)
             } else {
                 ("".to_string(), BATTLEFIELD_COLOR_EMPTY)
@@ -556,15 +634,15 @@ fn render_hover_tooltip(
         let hover_x = (rel_x / (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING)) as Coord;
         let hover_y = (rel_y / (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING)) as Coord;
 
-        // 邊界檢查
-        if hover_x >= level.board_width && hover_y >= level.board_height {
-            return;
-        }
-
         let hovered_pos = Position {
             x: hover_x,
             y: hover_y,
         };
+
+        // 邊界檢查
+        if !is_position_in_bounds(level, hovered_pos) {
+            return;
+        }
 
         // 根據該格子內容顯示懸停文本
         let hover_text = if player_positions.contains(&hovered_pos) {

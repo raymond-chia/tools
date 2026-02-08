@@ -42,6 +42,10 @@ pub const AOE_SHAPE_CROSS: &str = "Cross";
 pub const AOE_SHAPE_LINE: &str = "Line";
 pub const AOE_SHAPE_RECTANGLE: &str = "Rectangle";
 
+// 關卡編輯器 - ComboBox 尺寸
+pub const COMBOBOX_MIN_WIDTH: f32 = 250.0;
+pub const COMBOBOX_MIN_HEIGHT: f32 = 10000.0;
+
 // 關卡編輯器 - 戰場預覽
 pub const BATTLEFIELD_CELL_SIZE: f32 = 36.0;
 pub const BATTLEFIELD_GRID_SPACING: f32 = 2.0;
