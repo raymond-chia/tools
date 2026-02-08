@@ -31,6 +31,10 @@ pub enum Attribute {
     OpportunityAttacks,
 }
 
+// ============================================================================
+// 基礎列舉 (Base Enums)
+// ============================================================================
+
 /// 屬性來源（用於 ValueFormula）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AttributeSource {
@@ -39,10 +43,6 @@ pub enum AttributeSource {
     /// 目標的屬性
     Target,
 }
-
-// ============================================================================
-// 基礎列舉 (Base Enums)
-// ============================================================================
 
 /// 傷害類型
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -217,13 +217,6 @@ pub struct UnitType {
     pub skills: Vec<SkillName>,
 }
 
-/// 單位配置（關卡中的單位放置）
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct UnitPlacement {
-    pub position: Position,
-    pub unit_type_name: TypeName,
-}
-
 // ============================================================================
 // 物件系統 (Object System)
 // ============================================================================
@@ -235,7 +228,18 @@ pub struct ObjectType {
     pub movement_cost: MovementCost,
     pub blocks_sight: bool,
     pub blocks_sound: bool,
-    pub contact_health: i32, // 負數：傷害，正數：補血
+    pub hp_modify: i32, // 負數：傷害，正數：補血
+}
+
+// ============================================================================
+// 關卡系統 (Level System)
+// ============================================================================
+
+/// 單位配置（關卡中的單位放置）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UnitPlacement {
+    pub position: Position,
+    pub unit_type_name: TypeName,
 }
 
 /// 物件配置（關卡中的物件放置）
@@ -244,10 +248,6 @@ pub struct ObjectPlacement {
     pub position: Position,
     pub object_type_name: TypeName,
 }
-
-// ============================================================================
-// 關卡系統 (Level System)
-// ============================================================================
 
 /// 關卡類型定義
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

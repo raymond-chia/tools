@@ -9,4 +9,4 @@ pub const BASIC_MOVEMENT_COST: MovementCost = 10;
 pub const IMPASSABLE_MOVEMENT_COST: MovementCost = BASIC_MOVEMENT_COST * 1000;
 
 /// 即死傷害（負數表示傷害）
-pub const CONTACT_HEALTH_DAMAGE: i32 = -10000;
+pub const HP_MODIFY_DAMAGE: i32 = -10000;

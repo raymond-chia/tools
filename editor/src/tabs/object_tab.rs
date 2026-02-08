@@ -2,7 +2,7 @@
 
 use crate::constants::DRAG_VALUE_SPEED;
 use crate::editor_item::EditorItem;
-use board::constants::{CONTACT_HEALTH_DAMAGE, IMPASSABLE_MOVEMENT_COST};
+use board::constants::{HP_MODIFY_DAMAGE, IMPASSABLE_MOVEMENT_COST};
 use board::loader_schema::ObjectType;
 
 // ==================== EditorItem 實作 ====================
@@ -61,9 +61,9 @@ pub fn render_form(ui: &mut egui::Ui, obj: &mut ObjectType, _ui_state: &mut ()) 
     ui.horizontal(|ui| {
         ui.label("立即 HP 效果：");
         ui.add(
-            egui::DragValue::new(&mut obj.contact_health)
+            egui::DragValue::new(&mut obj.hp_modify)
                 .speed(DRAG_VALUE_SPEED)
-                .range(-CONTACT_HEALTH_DAMAGE..=CONTACT_HEALTH_DAMAGE),
+                .range(-HP_MODIFY_DAMAGE..=HP_MODIFY_DAMAGE),
         );
     });
 }
