@@ -5,8 +5,9 @@ use crate::editor_item::{EditorItem, validate_name};
 use board::alias::Coord;
 use board::loader_schema::{
     AoeShape, AttackStyle, Attribute, AttributeSource, Mechanic, SaveType, SkillEffect, SkillType,
-    TargetFilter, TargetMode, ValueFormula,
+    TargetFilter, TargetMode, TriggerEvent, ValueFormula,
 };
+use std::fmt::Debug;
 use strum::IntoEnumIterator;
 
 // ==================== EditorItem 實作 ====================
@@ -29,10 +30,35 @@ impl EditorItem for SkillType {
     fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String> {
         validate_name(self, all_items, editing_index)?;
 
+        // 檢查施放距離：min_range 必須小於等於 max_range
+        if self.min_range > self.max_range {
+            return Err(format!(
+                "最小施放距離({}) 必須小於等於最大施放距離({})",
+                self.min_range, self.max_range
+            ));
+        }
+
         // 檢查 MP 消耗
         if self.mp_change > 0 {
             return Err("MP 消耗不能為正數".to_string());
         }
+
+        // Passive 和 TurnEnd 不能有施放距離
+        match self.trigger {
+            TriggerEvent::Passive | TriggerEvent::TurnEnd => {
+                if self.min_range != 0 || self.max_range != 0 {
+                    return Err("被動和回合結束技能不能有施放距離".to_string());
+                }
+                // Passive 和 TurnEnd 也不能有 MP 消耗
+                if self.mp_change != 0 {
+                    return Err("被動和回合結束技能不能消耗 MP".to_string());
+                }
+            }
+            TriggerEvent::Active
+            | TriggerEvent::OnBeingAttacked { .. }
+            | TriggerEvent::OnAdjacentUnitMove { .. } => {}
+        }
+
         Ok(())
     }
 }
@@ -46,6 +72,19 @@ pub fn file_name() -> &'static str {
 
 /// 渲染技能編輯表單
 pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ()) {
+    render_basic_info(ui, skill);
+    ui.add_space(SPACING_SMALL);
+    render_tags_section(ui, skill);
+    ui.add_space(SPACING_MEDIUM);
+
+    ui.heading("技能效果");
+    render_effect_add_buttons(ui, skill);
+    ui.add_space(SPACING_SMALL);
+    render_effect_list(ui, skill);
+}
+
+/// 渲染基本資訊區塊（名稱、MP、施放距離、移動後使用）
+fn render_basic_info(ui: &mut egui::Ui, skill: &mut SkillType) {
     ui.horizontal(|ui| {
         ui.label("名稱：");
         ui.text_edit_singleline(&mut skill.name);
@@ -61,16 +100,12 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
     });
 
     ui.horizontal(|ui| {
-        ui.label("最小施放距離：");
+        ui.label("施放距離：");
         ui.add(
             egui::DragValue::new(&mut skill.min_range)
                 .speed(DRAG_VALUE_SPEED)
                 .range(0..=Coord::MAX),
         );
-    });
-
-    ui.horizontal(|ui| {
-        ui.label("最大施放距離：");
         ui.add(
             egui::DragValue::new(&mut skill.max_range)
                 .speed(DRAG_VALUE_SPEED)
@@ -78,11 +113,81 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
         );
     });
 
+    render_trigger_section(ui, skill);
+
     ui.horizontal(|ui| {
         ui.label("使用後可移動：");
         ui.checkbox(&mut skill.allows_movement_after, "");
     });
+}
 
+/// 渲染觸發條件區塊
+fn render_trigger_section(ui: &mut egui::Ui, skill: &mut SkillType) {
+    let salt = "skill_trigger";
+
+    ui.horizontal(|ui| {
+        ui.label("觸發類型：");
+        egui::ComboBox::from_id_salt(salt)
+            .selected_text(ui_string(&skill.trigger))
+            .show_ui(ui, |ui| {
+                for trigger_option in TriggerEvent::iter() {
+                    let option = match trigger_option {
+                        TriggerEvent::Active => TriggerEvent::Active,
+                        TriggerEvent::Passive => TriggerEvent::Passive,
+                        TriggerEvent::TurnEnd => TriggerEvent::TurnEnd,
+                        TriggerEvent::OnBeingAttacked { .. } => TriggerEvent::OnBeingAttacked {
+                            attacker_filter: Default::default(),
+                        },
+                        TriggerEvent::OnAdjacentUnitMove { .. } => {
+                            TriggerEvent::OnAdjacentUnitMove {
+                                unit_filter: Default::default(),
+                            }
+                        }
+                    };
+                    ui.selectable_value(&mut skill.trigger, option.clone(), ui_string(&option));
+                }
+            });
+    });
+
+    // 根據類型顯示對應的參數
+    match &mut skill.trigger {
+        TriggerEvent::Active | TriggerEvent::Passive | TriggerEvent::TurnEnd => {
+        }
+        TriggerEvent::OnBeingAttacked { attacker_filter } => {
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("攻擊者過濾：");
+                egui::ComboBox::from_id_salt(format!("{}_attacker_filter", salt))
+                    .selected_text(ui_string(&attacker_filter))
+                    .show_ui(ui, |ui| {
+                        for option in TargetFilter::iter() {
+                            ui.selectable_value(
+                                attacker_filter,
+                                option.clone(),
+                                ui_string(&option),
+                            );
+                        }
+                    });
+            });
+        }
+        TriggerEvent::OnAdjacentUnitMove { unit_filter } => {
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("單位過濾：");
+                egui::ComboBox::from_id_salt(format!("{}_unit_filter", salt))
+                    .selected_text(ui_string(&unit_filter))
+                    .show_ui(ui, |ui| {
+                        for option in TargetFilter::iter() {
+                            ui.selectable_value(unit_filter, option.clone(), ui_string(&option));
+                        }
+                    });
+            });
+        }
+    }
+}
+
+/// 渲染標籤區塊
+fn render_tags_section(ui: &mut egui::Ui, skill: &mut SkillType) {
     ui.label("標籤（以逗號分隔）：");
     let mut tags_text = skill.tags.join(", ");
     ui.text_edit_singleline(&mut tags_text);
@@ -91,11 +196,10 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
+}
 
-    ui.separator();
-    ui.heading("技能效果");
-
-    // 新增效果按鈕
+/// 渲染新增效果按鈕
+fn render_effect_add_buttons(ui: &mut egui::Ui, skill: &mut SkillType) {
     ui.horizontal(|ui| {
         if ui.button("新增 HP 修正").clicked() {
             skill.effects.push(SkillEffect::HpModify {
@@ -134,10 +238,10 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
             });
         }
     });
+}
 
-    ui.add_space(5.0);
-
-    // 渲染每個效果
+/// 渲染效果列表
+fn render_effect_list(ui: &mut egui::Ui, skill: &mut SkillType) {
     let mut to_remove = None;
     for (index, effect) in skill.effects.iter_mut().enumerate() {
         ui.group(|ui| {
@@ -150,7 +254,7 @@ pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ())
             ui.separator();
             render_effect_form(ui, effect, index);
         });
-        ui.add_space(5.0);
+        ui.add_space(SPACING_SMALL);
     }
 
     // 刪除標記的效果
@@ -208,10 +312,10 @@ fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index:
                     "effect_{}_attr_modify_attribute",
                     effect_index
                 ))
-                .selected_text(format!("{:?}", attribute))
+                .selected_text(ui_string(attribute))
                 .show_ui(ui, |ui| {
                     for attr_option in Attribute::iter() {
-                        ui.selectable_value(attribute, attr_option, format!("{:?}", attr_option));
+                        ui.selectable_value(attribute, attr_option, ui_string(&attr_option));
                     }
                 });
             });
@@ -269,46 +373,24 @@ fn render_effect_form(ui: &mut egui::Ui, effect: &mut SkillEffect, effect_index:
 
 /// 渲染判定機制編輯表單
 fn render_mechanic_form(ui: &mut egui::Ui, mechanic: &mut Mechanic, salt: &str) {
-    let current_type = match mechanic {
-        Mechanic::HitBased { .. } => MECHANIC_TYPE_HITBASED,
-        Mechanic::DcBased { .. } => MECHANIC_TYPE_DCBASED,
-        Mechanic::Guaranteed => MECHANIC_TYPE_GUARANTEED,
-    };
-
     ui.horizontal(|ui| {
         ui.label("判定機制：");
         egui::ComboBox::from_id_salt(salt)
-            .selected_text(current_type)
+            .selected_text(ui_string(mechanic))
             .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(
-                        current_type == MECHANIC_TYPE_HITBASED,
-                        MECHANIC_TYPE_HITBASED,
-                    )
-                    .clicked()
-                {
-                    *mechanic = Mechanic::HitBased {
-                        hit_bonus: 0,
-                        crit_rate: 5,
+                for mechanic_option in Mechanic::iter() {
+                    let option = match mechanic_option {
+                        Mechanic::HitBased { .. } => Mechanic::HitBased {
+                            hit_bonus: 80,
+                            crit_rate: 5,
+                        },
+                        Mechanic::DcBased { .. } => Mechanic::DcBased {
+                            dc: 0,
+                            save_type: SaveType::Fortitude,
+                        },
+                        Mechanic::Guaranteed => Mechanic::Guaranteed,
                     };
-                }
-                if ui
-                    .selectable_label(current_type == MECHANIC_TYPE_DCBASED, MECHANIC_TYPE_DCBASED)
-                    .clicked()
-                {
-                    *mechanic = Mechanic::DcBased {
-                        dc: 0,
-                        save_type: SaveType::Fortitude,
-                    };
-                }
-                if ui
-                    .selectable_label(
-                        current_type == MECHANIC_TYPE_GUARANTEED,
-                        MECHANIC_TYPE_GUARANTEED,
-                    )
-                    .clicked()
-                {
-                    *mechanic = Mechanic::Guaranteed;
+                    ui.selectable_value(mechanic, option.clone(), ui_string(&option));
                 }
             });
     });
@@ -343,66 +425,43 @@ fn render_mechanic_form(ui: &mut egui::Ui, mechanic: &mut Mechanic, salt: &str) 
             ui.horizontal(|ui| {
                 ui.label("檢定類型：");
                 egui::ComboBox::from_id_salt(&format!("{}_save_type", salt))
-                    .selected_text(format!("{:?}", save_type))
+                    .selected_text(ui_string(save_type))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(save_type, SaveType::Fortitude, "Fortitude");
-                        ui.selectable_value(save_type, SaveType::Reflex, "Reflex");
-                        ui.selectable_value(save_type, SaveType::Will, "Will");
+                        for option in SaveType::iter() {
+                            ui.selectable_value(save_type, option.clone(), ui_string(&option));
+                        }
                     });
             });
         }
         Mechanic::Guaranteed => {
-            ui.label("（無額外參數）");
         }
     }
 }
 
 /// 渲染目標模式編輯表單
 fn render_target_mode_form(ui: &mut egui::Ui, target_mode: &mut TargetMode, salt: &str) {
-    let current_type = match target_mode {
-        TargetMode::SingleTarget { .. } => TARGET_MODE_SINGLETARGET,
-        TargetMode::MultiTarget { .. } => TARGET_MODE_MULTITARGET,
-        TargetMode::Area { .. } => TARGET_MODE_AREA,
-    };
-
     ui.horizontal(|ui| {
         ui.label("目標模式：");
         egui::ComboBox::from_id_salt(salt)
-            .selected_text(current_type)
+            .selected_text(ui_string(target_mode))
             .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(
-                        current_type == TARGET_MODE_SINGLETARGET,
-                        TARGET_MODE_SINGLETARGET,
-                    )
-                    .clicked()
-                {
-                    *target_mode = TargetMode::SingleTarget {
-                        filter: TargetFilter::All,
+                for target_mode_option in TargetMode::iter() {
+                    let option = match target_mode_option {
+                        TargetMode::SingleTarget { .. } => TargetMode::SingleTarget {
+                            filter: Default::default(),
+                        },
+                        TargetMode::MultiTarget { .. } => TargetMode::MultiTarget {
+                            count: 2,
+                            allow_duplicate: true,
+                            filter: Default::default(),
+                        },
+                        TargetMode::Area { .. } => TargetMode::Area {
+                            aoe_shape: Default::default(),
+                            targets_unit: false,
+                            filter: Default::default(),
+                        },
                     };
-                }
-                if ui
-                    .selectable_label(
-                        current_type == TARGET_MODE_MULTITARGET,
-                        TARGET_MODE_MULTITARGET,
-                    )
-                    .clicked()
-                {
-                    *target_mode = TargetMode::MultiTarget {
-                        count: 2,
-                        allow_duplicate: true,
-                        filter: TargetFilter::All,
-                    };
-                }
-                if ui
-                    .selectable_label(current_type == TARGET_MODE_AREA, TARGET_MODE_AREA)
-                    .clicked()
-                {
-                    *target_mode = TargetMode::Area {
-                        aoe_shape: AoeShape::Diamond { radius: 2 },
-                        targets_unit: false,
-                        filter: TargetFilter::All,
-                    };
+                    ui.selectable_value(target_mode, option.clone(), ui_string(&option));
                 }
             });
     });
@@ -450,31 +509,21 @@ fn render_target_mode_form(ui: &mut egui::Ui, target_mode: &mut TargetMode, salt
 
 /// 渲染數值計算公式編輯表單
 fn render_formula_form(ui: &mut egui::Ui, formula: &mut ValueFormula, salt: &str) {
-    let current_type = match formula {
-        ValueFormula::Fixed { .. } => "Fixed",
-        ValueFormula::Attribute { .. } => "Attribute",
-    };
-
     ui.horizontal(|ui| {
         ui.label("計算方式：");
         egui::ComboBox::from_id_salt(salt)
-            .selected_text(current_type)
+            .selected_text(ui_string(formula))
             .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(current_type == "Fixed", "Fixed")
-                    .clicked()
-                {
-                    *formula = ValueFormula::Fixed { value: 0 };
-                }
-                if ui
-                    .selectable_label(current_type == "Attribute", "Attribute")
-                    .clicked()
-                {
-                    *formula = ValueFormula::Attribute {
-                        source: AttributeSource::Caster,
-                        attribute: Attribute::PhysicalAttack,
-                        multiplier: 1.0,
+                for formula_option in ValueFormula::iter() {
+                    let option = match formula_option {
+                        ValueFormula::Fixed { .. } => ValueFormula::Fixed { value: 0 },
+                        ValueFormula::Attribute { .. } => ValueFormula::Attribute {
+                            source: AttributeSource::Caster,
+                            attribute: Attribute::PhysicalAttack,
+                            multiplier: 1.0,
+                        },
                     };
+                    ui.selectable_value(formula, option.clone(), ui_string(&option));
                 }
             });
     });
@@ -494,24 +543,21 @@ fn render_formula_form(ui: &mut egui::Ui, formula: &mut ValueFormula, salt: &str
             ui.horizontal(|ui| {
                 ui.label("來源：");
                 egui::ComboBox::from_id_salt(format!("{}_source", salt))
-                    .selected_text(format!("{:?}", source))
+                    .selected_text(ui_string(source))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(source, AttributeSource::Caster, "Caster");
-                        ui.selectable_value(source, AttributeSource::Target, "Target");
+                        for option in AttributeSource::iter() {
+                            ui.selectable_value(source, option.clone(), ui_string(&option));
+                        }
                     });
             });
 
             ui.horizontal(|ui| {
                 ui.label("屬性：");
                 egui::ComboBox::from_id_salt(format!("{}_attr", salt))
-                    .selected_text(format!("{:?}", attribute))
+                    .selected_text(ui_string(attribute))
                     .show_ui(ui, |ui| {
                         for attr_option in Attribute::iter() {
-                            ui.selectable_value(
-                                attribute,
-                                attr_option,
-                                format!("{:?}", attr_option),
-                            );
+                            ui.selectable_value(attribute, attr_option, ui_string(&attr_option));
                         }
                     });
             });
@@ -529,10 +575,11 @@ fn render_style_form(ui: &mut egui::Ui, style: &mut AttackStyle, salt: &str) {
     ui.horizontal(|ui| {
         ui.label("傷害類型：");
         egui::ComboBox::from_id_salt(salt)
-            .selected_text(format!("{:?}", style))
+            .selected_text(ui_string(style))
             .show_ui(ui, |ui| {
-                ui.selectable_value(style, AttackStyle::Physical, "Physical");
-                ui.selectable_value(style, AttackStyle::Magical, "Magical");
+                for option in AttackStyle::iter() {
+                    ui.selectable_value(style, option.clone(), ui_string(&option));
+                }
             });
     });
 }
@@ -542,57 +589,33 @@ fn render_target_filter_form(ui: &mut egui::Ui, filter: &mut TargetFilter, salt:
     ui.horizontal(|ui| {
         ui.label("目標過濾：");
         egui::ComboBox::from_id_salt(format!("{}_filter", salt))
-            .selected_text(format!("{:?}", filter))
+            .selected_text(ui_string(filter))
             .show_ui(ui, |ui| {
-                ui.selectable_value(filter, TargetFilter::All, "所有單位");
-                ui.selectable_value(filter, TargetFilter::Enemy, "敵人");
-                ui.selectable_value(filter, TargetFilter::Ally, "友軍含施放者");
-                ui.selectable_value(filter, TargetFilter::AllyExcludingCaster, "友軍不含施放者");
-                ui.selectable_value(filter, TargetFilter::Caster, "施放者");
+                for option in TargetFilter::iter() {
+                    ui.selectable_value(filter, option.clone(), ui_string(&option));
+                }
             });
     });
 }
 
 /// 渲染 AOE 形狀編輯表單
 fn render_aoe_shape_form(ui: &mut egui::Ui, shape: &mut AoeShape, salt: &str) {
-    let current_type = match shape {
-        AoeShape::Diamond { .. } => AOE_SHAPE_DIAMOND,
-        AoeShape::Cross { .. } => AOE_SHAPE_CROSS,
-        AoeShape::Line { .. } => AOE_SHAPE_LINE,
-        AoeShape::Rectangle { .. } => AOE_SHAPE_RECTANGLE,
-    };
-
     ui.horizontal(|ui| {
         ui.label("形狀類型：");
         egui::ComboBox::from_id_salt(format!("{}_aoe_shape_type", salt))
-            .selected_text(current_type)
+            .selected_text(ui_string(shape))
             .show_ui(ui, |ui| {
-                if ui
-                    .selectable_label(current_type == AOE_SHAPE_DIAMOND, AOE_SHAPE_DIAMOND)
-                    .clicked()
-                {
-                    *shape = AoeShape::Diamond { radius: 2 };
-                }
-                if ui
-                    .selectable_label(current_type == AOE_SHAPE_CROSS, AOE_SHAPE_CROSS)
-                    .clicked()
-                {
-                    *shape = AoeShape::Cross { length: 2 };
-                }
-                if ui
-                    .selectable_label(current_type == AOE_SHAPE_LINE, AOE_SHAPE_LINE)
-                    .clicked()
-                {
-                    *shape = AoeShape::Line { length: 2 };
-                }
-                if ui
-                    .selectable_label(current_type == AOE_SHAPE_RECTANGLE, AOE_SHAPE_RECTANGLE)
-                    .clicked()
-                {
-                    *shape = AoeShape::Rectangle {
-                        width: 2,
-                        height: 1,
+                for aoe_shape_option in AoeShape::iter() {
+                    let option = match aoe_shape_option {
+                        AoeShape::Diamond { .. } => AoeShape::Diamond { radius: 2 },
+                        AoeShape::Cross { .. } => AoeShape::Cross { length: 2 },
+                        AoeShape::Line { .. } => AoeShape::Line { length: 2 },
+                        AoeShape::Rectangle { .. } => AoeShape::Rectangle {
+                            width: 2,
+                            height: 1,
+                        },
                     };
+                    ui.selectable_value(shape, option.clone(), ui_string(&option));
                 }
             });
     });
@@ -648,4 +671,12 @@ fn render_aoe_shape_form(ui: &mut egui::Ui, shape: &mut AoeShape, salt: &str) {
             });
         }
     }
+}
+
+fn ui_string<T: Debug>(value: &T) -> String {
+    format!("{:?}", value)
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_string()
 }

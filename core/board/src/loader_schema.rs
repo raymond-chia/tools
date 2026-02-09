@@ -12,8 +12,9 @@ use strum_macros::EnumIter;
 // ============================================================================
 
 /// 角色屬性類型（根據 README-設計機制.md:72）
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, EnumIter)]
 pub enum Attribute {
+    #[default]
     Hp,
     Mp,
     Initiative,
@@ -36,27 +37,30 @@ pub enum Attribute {
 // ============================================================================
 
 /// 屬性來源（用於 ValueFormula）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, EnumIter)]
 pub enum AttributeSource {
     /// 施放者的屬性
+    #[default]
     Caster,
     /// 目標的屬性
     Target,
 }
 
 /// 傷害類型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, EnumIter)]
 pub enum AttackStyle {
     /// 物理傷害
+    #[default]
     Physical,
     /// 魔法傷害
     Magical,
 }
 
 /// 檢定類型
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, EnumIter)]
 pub enum SaveType {
     /// 強韌
+    #[default]
     Fortitude,
     /// 反射
     Reflex,
@@ -69,7 +73,7 @@ pub enum SaveType {
 // ============================================================================
 
 /// 數值計算公式（用於傷害、屬性修正等）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 #[serde(tag = "type")]
 pub enum ValueFormula {
     /// 固定數值
@@ -83,7 +87,7 @@ pub enum ValueFormula {
 }
 
 /// 判定機制（如何判定成功）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 #[serde(tag = "type")]
 pub enum Mechanic {
     /// 命中機制（命中 + 1d100 vs 閃避 + 格擋 + 1d100）
@@ -95,9 +99,10 @@ pub enum Mechanic {
 }
 
 /// 目標過濾條件
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, EnumIter)]
 pub enum TargetFilter {
     /// 所有單位
+    #[default]
     All,
     /// 所有單位（不含施放者）
     AllExcludingCaster,
@@ -112,7 +117,7 @@ pub enum TargetFilter {
 }
 
 /// AOE 形狀
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 #[serde(tag = "type")]
 pub enum AoeShape {
     /// 菱形（曼哈頓距離）
@@ -126,7 +131,7 @@ pub enum AoeShape {
 }
 
 /// 目標模式（影響誰）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
 #[serde(tag = "type")]
 pub enum TargetMode {
     /// 單一目標
@@ -146,7 +151,7 @@ pub enum TargetMode {
 }
 
 /// 觸發事件類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, EnumIter)]
 #[serde(tag = "type")]
 pub enum TriggerEvent {
     /// 主動技能（需要手動施放）
@@ -200,10 +205,10 @@ pub struct SkillType {
     pub mp_change: i32, // MP 消耗（0 表示無消耗，負數表示消耗）
     pub min_range: Coord,
     pub max_range: Coord,
+    pub trigger: TriggerEvent,
     pub tags: Vec<String>,
     pub allows_movement_after: bool,
     pub effects: Vec<SkillEffect>,
-    pub trigger: TriggerEvent,
 }
 
 // ============================================================================
@@ -259,4 +264,37 @@ pub struct LevelType {
     pub player_placement_positions: Vec<Position>,
     pub enemy_units: Vec<UnitPlacement>,
     pub object_placements: Vec<ObjectPlacement>,
+}
+
+// ============================================================================
+// Default 實現
+// ============================================================================
+
+impl Default for ValueFormula {
+    fn default() -> Self {
+        ValueFormula::Fixed { value: 0 }
+    }
+}
+
+impl Default for Mechanic {
+    fn default() -> Self {
+        Mechanic::HitBased {
+            hit_bonus: 80,
+            crit_rate: 5,
+        }
+    }
+}
+
+impl Default for AoeShape {
+    fn default() -> Self {
+        AoeShape::Diamond { radius: 2 }
+    }
+}
+
+impl Default for TargetMode {
+    fn default() -> Self {
+        TargetMode::SingleTarget {
+            filter: Default::default(),
+        }
+    }
 }

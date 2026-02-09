@@ -26,22 +26,6 @@ pub const FILE_EXTENSION_TOML: &str = ".toml";
 // 編輯器相關
 pub const COPY_SUFFIX: &str = "-copy";
 
-// 技能編輯器 - 機制類型
-pub const MECHANIC_TYPE_HITBASED: &str = "HitBased";
-pub const MECHANIC_TYPE_DCBASED: &str = "DcBased";
-pub const MECHANIC_TYPE_GUARANTEED: &str = "Guaranteed";
-
-// 技能編輯器 - 目標模式
-pub const TARGET_MODE_SINGLETARGET: &str = "SingleTarget";
-pub const TARGET_MODE_MULTITARGET: &str = "MultiTarget";
-pub const TARGET_MODE_AREA: &str = "Area";
-
-// 技能編輯器 - AOE 形狀
-pub const AOE_SHAPE_DIAMOND: &str = "Diamond";
-pub const AOE_SHAPE_CROSS: &str = "Cross";
-pub const AOE_SHAPE_LINE: &str = "Line";
-pub const AOE_SHAPE_RECTANGLE: &str = "Rectangle";
-
 // 關卡編輯器 - ComboBox 尺寸
 pub const COMBOBOX_MIN_WIDTH: f32 = 250.0;
 pub const COMBOBOX_MIN_HEIGHT: f32 = 10000.0;
