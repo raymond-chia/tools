@@ -72,15 +72,79 @@ pub fn file_name() -> &'static str {
 
 /// 渲染技能編輯表單
 pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ()) {
+    render_race_template_buttons(ui, skill);
+    ui.add_space(SPACING_MEDIUM);
+
     render_basic_info(ui, skill);
     ui.add_space(SPACING_SMALL);
     render_tags_section(ui, skill);
     ui.add_space(SPACING_MEDIUM);
 
     ui.heading("技能效果");
-    render_effect_add_buttons(ui, skill);
+
+    // 簡單被動技能使用簡化 UI，其他技能使用完整表單
+    if is_simple_passive_skill(skill) {
+        render_passive_attributes_form(ui, skill);
+    } else {
+        render_effect_add_buttons(ui, skill);
+        ui.add_space(SPACING_SMALL);
+        render_effect_list(ui, skill);
+    }
+}
+
+/// 渲染種族模板快速創建按鈕
+fn render_race_template_buttons(ui: &mut egui::Ui, skill: &mut SkillType) {
+    ui.label("種族模板：");
+    ui.horizontal(|ui| {
+        if ui.button("種族被動").clicked() {
+            *skill = create_race_skill();
+        }
+    });
+}
+
+/// 渲染被動技能屬性編輯面板（簡化版）
+fn render_passive_attributes_form(ui: &mut egui::Ui, skill: &mut SkillType) {
+    // 從 effects 提取數值（按固定順序）
+    let mut values: Vec<i32> = skill
+        .effects
+        .iter()
+        .map(|effect| {
+            if let SkillEffect::AttributeModify {
+                formula: ValueFormula::Fixed { value },
+                ..
+            } = effect
+            {
+                *value
+            } else {
+                0
+            }
+        })
+        .collect();
+
+    // 渲染屬性編輯表格
+    egui::Grid::new("passive_attributes_grid")
+        .num_columns(2)
+        .spacing([10.0, 5.0])
+        .striped(true)
+        .show(ui, |ui| {
+            for (attribute, value) in Attribute::iter().zip(values.iter_mut()) {
+                ui.label(format!("{:?}", attribute));
+                ui.add(
+                    egui::DragValue::new(value)
+                        .speed(DRAG_VALUE_SPEED)
+                        .range(i32::MIN..=i32::MAX),
+                );
+                ui.end_row();
+            }
+        });
+
     ui.add_space(SPACING_SMALL);
-    render_effect_list(ui, skill);
+
+    // 同步回 skill.effects（保持原順序）
+    skill.effects = Attribute::iter()
+        .zip(values.into_iter())
+        .map(|(attribute, value)| create_caster_attribute_modify(attribute, value))
+        .collect();
 }
 
 /// 渲染基本資訊區塊（名稱、MP、施放距離、移動後使用）
@@ -151,8 +215,7 @@ fn render_trigger_section(ui: &mut egui::Ui, skill: &mut SkillType) {
 
     // 根據類型顯示對應的參數
     match &mut skill.trigger {
-        TriggerEvent::Active | TriggerEvent::Passive | TriggerEvent::TurnEnd => {
-        }
+        TriggerEvent::Active | TriggerEvent::Passive | TriggerEvent::TurnEnd => {}
         TriggerEvent::OnBeingAttacked { attacker_filter } => {
             ui.separator();
             ui.horizontal(|ui| {
@@ -433,8 +496,7 @@ fn render_mechanic_form(ui: &mut egui::Ui, mechanic: &mut Mechanic, salt: &str) 
                     });
             });
         }
-        Mechanic::Guaranteed => {
-        }
+        Mechanic::Guaranteed => {}
     }
 }
 
@@ -679,4 +741,85 @@ fn ui_string<T: Debug>(value: &T) -> String {
         .next()
         .unwrap_or("")
         .to_string()
+}
+
+/// 創建種族被動技能模板
+pub fn create_race_skill() -> SkillType {
+    SkillType {
+        name: "".to_string(),
+        mp_change: 0,
+        min_range: 0,
+        max_range: 0,
+        trigger: TriggerEvent::Passive,
+        tags: vec![],
+        allows_movement_after: false,
+        effects: [
+            (Attribute::Hp, 80),
+            (Attribute::Mp, 10),
+            (Attribute::Initiative, 0),
+            (Attribute::Hit, 0),
+            (Attribute::Evasion, 0),
+            (Attribute::Block, 0),
+            (Attribute::BlockProtection, 0),
+            (Attribute::PhysicalAttack, 0),
+            (Attribute::MagicalAttack, 0),
+            (Attribute::MagicalDc, 0),
+            (Attribute::Fortitude, 0),
+            (Attribute::Reflex, 0),
+            (Attribute::Will, 0),
+            (Attribute::Movement, 50),
+            (Attribute::OpportunityAttacks, 0),
+        ]
+        .into_iter()
+        .map(|(attribute, value)| create_caster_attribute_modify(attribute, value))
+        .collect(),
+    }
+}
+
+/// 判斷技能是否為簡單被動技能（被動且 effects 按屬性順序排列，且使用標準配置）
+fn is_simple_passive_skill(skill: &SkillType) -> bool {
+    if !matches!(skill.trigger, TriggerEvent::Passive) {
+        return false;
+    }
+
+    // 檢查 effects 數量
+    let expected_attrs: Vec<Attribute> = Attribute::iter().collect();
+    if skill.effects.len() != expected_attrs.len() {
+        return false;
+    }
+
+    // 檢查每個 effect 是否符合標準配置
+    skill
+        .effects
+        .iter()
+        .zip(expected_attrs.iter())
+        .all(|(effect, expected_attr)| {
+            matches!(
+                effect,
+                // 跟 create_caster_attribute_modify 同步
+                SkillEffect::AttributeModify {
+                    mechanic: Mechanic::Guaranteed,
+                    target_mode: TargetMode::SingleTarget {
+                        filter: TargetFilter::Caster
+                    },
+                    formula: ValueFormula::Fixed { .. },
+                    attribute,
+                    duration: None,
+                    // guard clause
+                } if *attribute == *expected_attr
+            )
+        })
+}
+
+// 跟 is_simple_passive_skill 同步
+fn create_caster_attribute_modify(attribute: Attribute, value: i32) -> SkillEffect {
+    SkillEffect::AttributeModify {
+        mechanic: Mechanic::Guaranteed,
+        target_mode: TargetMode::SingleTarget {
+            filter: TargetFilter::Caster,
+        },
+        formula: ValueFormula::Fixed { value },
+        attribute,
+        duration: None,
+    }
 }
