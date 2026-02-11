@@ -8,6 +8,13 @@ use board::component::Position;
 use board::loader_schema::{LevelType, ObjectPlacement, UnitPlacement};
 use std::collections::{HashMap, HashSet};
 
+/// 棋盤可見範圍（用於視口裁剪）
+#[derive(Clone, Copy, Debug)]
+pub struct VisibleGridRange {
+    pub min: Position,
+    pub max: Position,
+}
+
 /// 拖曳物體的類型和索引
 #[derive(Clone, Copy, Debug)]
 pub enum DraggedObject {
@@ -32,6 +39,7 @@ pub struct LevelTabUIState {
     pub object_search_query: TypeName,
 
     pub drag_state: Option<DragState>,
+    pub scroll_offset: egui::Vec2,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -427,71 +435,85 @@ fn render_battlefield_preview(
 ) {
     ui.heading("戰場預覽");
 
-    let (total_width, total_height) = calculate_grid_dimensions(level);
+    let scroll_output = egui::ScrollArea::both()
+        .auto_shrink([false; 2])
+        .max_width(ui.available_width() - SPACING_MEDIUM)
+        .min_scrolled_height(400.0)
+        .show(ui, |ui: &mut egui::Ui| {
+            let (total_width, total_height) = calculate_grid_dimensions(level);
 
-    let (rect, response) = ui.allocate_exact_size(
-        egui::vec2(total_width, total_height),
-        egui::Sense::click_and_drag(),
-    );
+            let (rect, response) = ui.allocate_exact_size(
+                egui::vec2(total_width, total_height),
+                egui::Sense::click_and_drag(),
+            );
 
-    let mut drag_state = ui_state.drag_state;
+            let mut drag_state = ui_state.drag_state;
 
-    // 檢測拖曳開始
-    if response.drag_started() {
-        if let Some(pos) = response
-            .hover_pos()
-            .and_then(|p| screen_to_board_pos(p, rect, level))
-        {
-            if let Some(dragged) = identify_dragged_object(level, &pos) {
-                drag_state = Some(DragState { object: dragged });
+            // 檢測拖曳開始
+            if response.drag_started() {
+                if let Some(pos) = response
+                    .hover_pos()
+                    .and_then(|p| screen_to_board_pos(p, rect, level))
+                {
+                    if let Some(dragged) = identify_dragged_object(level, &pos) {
+                        drag_state = Some(DragState { object: dragged });
+                    }
+                }
             }
-        }
-    }
 
-    // 計算拖曳預覽位置
-    let hovered_in_bounds = if drag_state.is_some() {
-        response
-            .hover_pos()
-            .and_then(|p| screen_to_board_pos(p, rect, level))
-    } else {
-        None
-    };
+            // 計算拖曳預覽位置
+            let hovered_in_bounds = if drag_state.is_some() {
+                response
+                    .hover_pos()
+                    .and_then(|p| screen_to_board_pos(p, rect, level))
+            } else {
+                None
+            };
 
-    // 檢測拖曳結束（當拖曳停止且有拖曳狀態時）
-    if !response.dragged() && drag_state.is_some() {
-        if let Some(state) = drag_state {
-            if let Some(new_pos) = hovered_in_bounds {
-                apply_drag_update(level, state, new_pos);
+            // 檢測拖曳結束（當拖曳停止且有拖曳狀態時）
+            if !response.dragged() && drag_state.is_some() {
+                if let Some(state) = drag_state {
+                    if let Some(new_pos) = hovered_in_bounds {
+                        apply_drag_update(level, state, new_pos);
+                    }
+                }
+                drag_state = None;
             }
-        }
-        drag_state = None;
-    }
 
-    // 保存拖曳狀態
-    ui_state.drag_state = drag_state;
+            // 保存拖曳狀態
+            ui_state.drag_state = drag_state;
 
-    // 在更新後重新建立 lookup maps
-    let (player_positions, enemy_units_map, objects_map) = prepare_lookup_maps(level);
+            // 計算可見範圍（視口裁剪優化）
+            let viewport_size = ui.clip_rect().size();
+            let visible_range =
+                calculate_visible_range(ui_state.scroll_offset, viewport_size, level);
 
-    render_grid(
-        ui,
-        level,
-        rect,
-        &player_positions,
-        &enemy_units_map,
-        &objects_map,
-        drag_state,
-        hovered_in_bounds,
-    );
-    render_hover_tooltip(
-        ui,
-        level,
-        rect,
-        &response,
-        &player_positions,
-        &enemy_units_map,
-        &objects_map,
-    );
+            // 在更新後重新建立 lookup maps
+            let (player_positions, enemy_units_map, objects_map) = prepare_lookup_maps(level);
+
+            render_grid(
+                ui,
+                rect,
+                &player_positions,
+                &enemy_units_map,
+                &objects_map,
+                drag_state,
+                hovered_in_bounds,
+                visible_range,
+            );
+            render_hover_tooltip(
+                ui,
+                level,
+                rect,
+                &response,
+                &player_positions,
+                &enemy_units_map,
+                &objects_map,
+            );
+        });
+
+    // 儲存滾動位置供下一幀使用
+    ui_state.scroll_offset = scroll_output.state.offset;
 
     ui.add_space(SPACING_SMALL);
     render_battlefield_legend(ui);
@@ -529,6 +551,30 @@ fn calculate_grid_dimensions(level: &LevelType) -> (f32, f32) {
     (total_width, total_height)
 }
 
+/// 計算可見範圍內的格子索引（用於視口裁剪）
+fn calculate_visible_range(
+    scroll_offset: egui::Vec2,
+    viewport_size: egui::Vec2,
+    level: &LevelType,
+) -> VisibleGridRange {
+    let cell_size = BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING;
+
+    let min_x = (scroll_offset.x / cell_size).floor().max(0.0) as Coord;
+    let max_x = ((scroll_offset.x + viewport_size.x) / cell_size)
+        .ceil()
+        .min(level.board_width as f32) as Coord;
+
+    let min_y = (scroll_offset.y / cell_size).floor().max(0.0) as Coord;
+    let max_y = ((scroll_offset.y + viewport_size.y) / cell_size)
+        .ceil()
+        .min(level.board_height as f32) as Coord;
+
+    VisibleGridRange {
+        min: Position { x: min_x, y: min_y },
+        max: Position { x: max_x, y: max_y },
+    }
+}
+
 /// 將螢幕座標轉換為棋盤座標
 fn screen_to_board_pos(
     screen_pos: egui::Pos2,
@@ -552,17 +598,17 @@ fn screen_to_board_pos(
 /// 繪製棋盤格子，支持拖曳
 fn render_grid(
     ui: &mut egui::Ui,
-    level: &LevelType,
     rect: egui::Rect,
     player_positions: &HashSet<Position>,
     enemy_units_map: &HashMap<Position, &UnitPlacement>,
     objects_map: &HashMap<Position, &ObjectPlacement>,
     drag_state: Option<DragState>,
     hovered_in_bounds: Option<Position>,
+    visible_range: VisibleGridRange,
 ) {
     let painter = ui.painter();
-    for y in 0..level.board_height {
-        for x in 0..level.board_width {
+    for y in visible_range.min.y..visible_range.max.y {
+        for x in visible_range.min.x..visible_range.max.x {
             let pos = Position { x, y };
 
             // 計算每個格子的左上角座標

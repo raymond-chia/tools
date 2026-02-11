@@ -58,6 +58,7 @@ pub fn render_form(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTa
         ui.add_space(SPACING_SMALL);
 
         egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
             .max_height(300.0)
             .show(ui, |ui| {
                 let visible_skills =

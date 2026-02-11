@@ -2,19 +2,20 @@
 
 - [ ] **語言**: 繁體中文（註解），禁止簡體中文
   - ⚠️ **所有回應禁止簡體中文**
+- [ ] **先討論後實作**：不要直接實作，而是先跟用戶討論方案，取得確認後才開始實作
+  - **禁止盲目附和**
 - [ ] **Single-responsibility principle**：每個函數和型別只負責一項職責
-- [ ] **禁止盲目附和**
+- [ ] 使用 **Functional Programming**。請勿使用 OOP
 - [ ] **變數命名**：使用有辨識度的名稱，避免相似的縮寫（例如同一作用域內不要同時使用 `attr` 和 `attribute`）
 - [ ] **錯誤訊息包含豐富上下文**：包含操作、預期值、實際值等
+- [ ] **Fail fast**：在函數開頭進行所有驗證和檢查，不在執行中間檢查
+- [ ] **只補現在用到的內容**：不預先 derive、不添加暫時不用的方法或錯誤類型
+- [ ] **優先 derive，不手動實現**：除非 trait 無法被 derive，否則使用 derive（Default、Clone、Debug、Copy 等）
 - [ ] **禁止 `unwrap()`**：使用 `expect()` 並提供清晰的錯誤訊息
 - [ ] **禁止 magic numbers/strings**：使用常數替代
 - [ ] **使用 match 而不要 let else**
 - [ ] **match arm 有編譯器 exhaustiveness 保護**：避免遺漏 arm，依賴編譯器檢查
-- [ ] **Fail fast**：在函數開頭進行所有驗證和檢查，不在執行中間檢查
-- [ ] **只補現在用到的內容**：不預先 derive、不添加暫時不用的方法或錯誤類型
-- [ ] **優先 derive，不手動實現**：除非 trait 無法被 derive，否則使用 derive（Default、Clone、Debug、Copy 等）
 - [ ] `use` 語句放在檔案頂部，不要放在 function 裡面
-- [ ] 使用 **functional programming**。請勿使用 oop
 - [ ] 每當 Claude Code 提出設計建議時，先明確引用 CLAUDE.md 的 **代辦檢查清單** 來論證為什麼這個設計符合規則
 
 ## **技術判斷原則**
@@ -34,7 +35,6 @@
 
 ## 檢查指令
 
-- [ ] **檢查指令：只用 `cargo check`**
-  - ⚠️ 禁止用 `cargo run` 或 `cargo build`
-  - ⚠️ 禁止用 `cd` 改變目錄後再執行
-  - ✅ 正確：`cargo check` 或 `cargo check -p <crate_name>`
+```sh
+cd "D:\Mega\prog\rust\tools" && cargo check -p editor 2>&1 | head -50
+```
