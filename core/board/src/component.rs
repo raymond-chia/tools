@@ -52,7 +52,7 @@ macro_rules! define_attribute_components {
     ($($name:ident),* $(,)?) => {
         $(
             #[doc = concat!("角色屬性 component: ", stringify!($name))]
-            #[derive(Debug,  Component)]
+            #[derive(Debug, Component)]
             pub struct $name(pub i32);
         )*
     };

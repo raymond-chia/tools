@@ -29,6 +29,22 @@ pub struct DragState {
     pub object: DraggedObject,
 }
 
+/// 關卡編輯器的模式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LevelTabMode {
+    /// 編輯模式
+    #[default]
+    Edit,
+    /// 模擬戰鬥模式
+    Simulate,
+}
+
+/// 模擬戰鬥的狀態
+#[derive(Debug, Clone, Default)]
+pub struct SimulationState {
+    // 預留給未來使用
+}
+
 /// 關卡編輯器的 UI 狀態
 #[derive(Debug, Clone, Default)]
 pub struct LevelTabUIState {
@@ -40,6 +56,11 @@ pub struct LevelTabUIState {
 
     pub drag_state: Option<DragState>,
     pub scroll_offset: egui::Vec2,
+
+    /// 當前標籤頁的模式
+    pub mode: LevelTabMode,
+    /// 模擬戰鬥的狀態
+    pub simulation_state: SimulationState,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -171,6 +192,29 @@ fn render_filtered_options(
 
 /// 渲染關卡編輯表單
 pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState) {
+    match ui_state.mode {
+        LevelTabMode::Edit => render_edit_form(ui, level, ui_state),
+        LevelTabMode::Simulate => {
+            // 繪製半透明遮罩，完全遮蔽背景
+            let viewport = ui.ctx().viewport_rect();
+            ui.painter()
+                .rect_filled(viewport, 0.0, egui::Color32::from_black_alpha(200));
+
+            // 全螢幕模擬戰鬥窗口
+            egui::Window::new("⚔️ 模擬戰鬥")
+                .fixed_pos(viewport.min)
+                .fixed_size(viewport.size())
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| {
+                    render_simulate_form(ui, level, ui_state);
+                });
+        }
+    }
+}
+
+/// 渲染編輯模式的表單
+fn render_edit_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState) {
     // 基本資訊區
     ui.horizontal(|ui| {
         ui.label("名稱：");
@@ -238,6 +282,37 @@ pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut Leve
 
     // 戰場預覽區
     render_battlefield_preview(ui, level, ui_state);
+
+    // 進入模擬戰鬥按鈕
+    if ui.button("🎮 開始模擬戰鬥").clicked() {
+        ui_state.mode = LevelTabMode::Simulate;
+        ui_state.simulation_state = SimulationState::default();
+    }
+}
+
+/// 渲染模擬戰鬥模式的表單
+fn render_simulate_form(ui: &mut egui::Ui, level: &LevelType, ui_state: &mut LevelTabUIState) {
+    // 返回編輯按鈕
+    if ui.button("← 返回編輯").clicked() {
+        ui_state.mode = LevelTabMode::Edit;
+    }
+
+    ui.heading("⚔️ 模擬戰鬥");
+    ui.add_space(SPACING_MEDIUM);
+
+    // 關卡資訊顯示
+    ui.label(format!("關卡：{}", level.name));
+    ui.label(format!(
+        "棋盤尺寸：{}×{}",
+        level.board_width, level.board_height
+    ));
+    ui.label(format!("敵人數量：{}", level.enemy_units.len()));
+    ui.label(format!("玩家人數上限：{}", level.max_player_units));
+
+    ui.add_space(SPACING_MEDIUM);
+    ui.separator();
+
+    ui.label("〖 此處將實作玩家部署和戰場預覽 〗");
 }
 
 /// 渲染玩家放置點列表
