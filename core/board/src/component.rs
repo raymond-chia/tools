@@ -42,3 +42,51 @@ pub struct Unit;
 /// 陣營（用於區分友軍/敵軍）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
 pub struct Faction(pub ID);
+
+// ============================================================================
+// 屬性 Components（Attribute Components）
+// ============================================================================
+
+/// 生成屬性 components 的 macro
+macro_rules! define_attribute_components {
+    ($($name:ident),* $(,)?) => {
+        $(
+            #[doc = concat!("角色屬性 component: ", stringify!($name))]
+            #[derive(Debug,  Component)]
+            pub struct $name(pub i32);
+        )*
+    };
+}
+
+/// 最大 HP
+#[derive(Debug, Component)]
+pub struct MaxHp(pub i32);
+
+/// 當前 HP
+#[derive(Debug, Component)]
+pub struct CurrentHp(pub i32);
+
+/// 最大 MP
+#[derive(Debug, Component)]
+pub struct MaxMp(pub i32);
+
+/// 當前 MP
+#[derive(Debug, Component)]
+pub struct CurrentMp(pub i32);
+
+// 使用 macro 定義其他 13 個屬性
+define_attribute_components!(
+    Initiative,
+    Hit,
+    Evasion,
+    Block,
+    BlockProtection,
+    PhysicalAttack,
+    MagicalAttack,
+    MagicalDc,
+    Fortitude,
+    Reflex,
+    Will,
+    Movement,
+    OpportunityAttacks
+);

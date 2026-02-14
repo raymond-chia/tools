@@ -38,7 +38,8 @@ core/board/
 │   ├── logic/            - 核心業務邏輯（非 ECS System）
 │   │   ├── mod.rs        - logic 模組定義
 │   │   ├── board.rs      - 棋盤驗證
-│   │   └── movement.rs   - 移動邏輯
+│   │   ├── movement.rs   - 移動邏輯
+│   │   └── unit_attributes.rs - 單位屬性計算邏輯
 │   └── system/           - ECS System（目前未實作）
 │       └── mod.rs        - system 模組定義
 └── tests/                - 整合測試
@@ -46,6 +47,8 @@ core/board/
     │   ├── mod.rs        - board 測試模組定義
     │   ├── test_board.rs
     │   └── test_movement.rs
+    ├── unit_attributes/
+    │   └── mod.rs        - 單位屬性計算測試
     ├── test.rs
     └── test_error.rs
 ```
@@ -112,3 +115,7 @@ core/board/
 ### loader.rs
 
 - `pub fn load_from_ascii(ascii: &str) -> Result<(Board, Vec<Position>, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤
+
+### logic/unit_attributes.rs
+
+- `pub fn calculate_attributes(skill_names: &[SkillName], buffs: &[BuffEffect], skill_map: &HashMap<SkillName, SkillType>) -> Result<CalculatedAttributes>` - 計算單位屬性（基於被動技能和臨時效果，Fixed 值累加，倍率修正為替換）

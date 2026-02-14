@@ -2,3 +2,4 @@
 
 pub mod board;
 pub mod movement;
+pub mod unit_attributes;

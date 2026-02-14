@@ -6,7 +6,7 @@
 //! - AI 時代開發速度無差異
 //! - 維護成本低
 
-use crate::alias::Coord;
+use crate::alias::{Coord, SkillName};
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -25,6 +25,8 @@ pub enum ErrorKind {
     Board(#[from] BoardError),
     #[error(transparent)]
     Load(#[from] LoadError),
+    #[error(transparent)]
+    Unit(#[from] UnitError),
 }
 
 /// 棋盤錯誤
@@ -48,6 +50,13 @@ pub enum LoadError {
     DeserializeError { format: String, reason: String },
     #[error("{format} 序列化失敗: {reason}")]
     SerializeError { format: String, reason: String },
+}
+
+/// 單位相關錯誤
+#[derive(Debug, ThisError)]
+pub enum UnitError {
+    #[error("技能未找到: {skill_name}")]
+    SkillNotFound { skill_name: SkillName },
 }
 
 impl Error {

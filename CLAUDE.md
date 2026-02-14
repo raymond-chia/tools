@@ -32,6 +32,7 @@
 - [ ] **禁止向後相容**
 - [ ] **優先使用 alias**：使用 `core/board/src/alias.rs` 中的類型別名（`Coord`、`MovementCost`、`ID`、`TypeName`、`SkillName`）提升語義清晰度
 - [ ] **檢查設計機制**：寫完後檢查是否有違反 D:\Mega\prog\rust\tools\README-設計機制.md。如果只是尚未實作完畢，只要提示尚未實作就好。如果違反請警告使用者
+- [ ] 實作完畢後，更新 `rules/*-index.md`
 
 ## 檢查指令
 

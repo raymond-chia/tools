@@ -30,6 +30,11 @@ impl EditorItem for SkillType {
     fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String> {
         validate_name(self, all_items, editing_index)?;
 
+        // 檢查 MP 消耗
+        if self.mp_change > 0 {
+            return Err("MP 消耗不能為正數".to_string());
+        }
+
         // 檢查施放距離：min_range 必須小於等於 max_range
         if self.min_range > self.max_range {
             return Err(format!(
@@ -38,20 +43,17 @@ impl EditorItem for SkillType {
             ));
         }
 
-        // 檢查 MP 消耗
-        if self.mp_change > 0 {
-            return Err("MP 消耗不能為正數".to_string());
-        }
-
-        // Passive 和 TurnEnd 不能有施放距離
         match self.trigger {
+            // 持續生效的被動 + 每回合觸發的被動
             TriggerEvent::Passive | TriggerEvent::TurnEnd => {
+                if self.mp_change != 0 {
+                    return Err("被動和回合結束技能不能消耗 MP".to_string());
+                }
                 if self.min_range != 0 || self.max_range != 0 {
                     return Err("被動和回合結束技能不能有施放距離".to_string());
                 }
-                // Passive 和 TurnEnd 也不能有 MP 消耗
-                if self.mp_change != 0 {
-                    return Err("被動和回合結束技能不能消耗 MP".to_string());
+                if self.allows_movement_after {
+                    return Err("被動和回合結束技能不能設定使用後可移動".to_string());
                 }
             }
             TriggerEvent::Active
@@ -59,13 +61,76 @@ impl EditorItem for SkillType {
             | TriggerEvent::OnAdjacentUnitMove { .. } => {}
         }
 
-        Ok(())
+        validate_skill_effects(&self.effects)
     }
 }
 
 /// 取得技能的檔案名稱
 pub fn file_name() -> &'static str {
     "skills"
+}
+
+fn validate_skill_effects(effects: &[SkillEffect]) -> Result<(), String> {
+    for (effect_index, effect) in effects.iter().enumerate() {
+        match effect {
+            SkillEffect::HpModify {
+                formula: ValueFormula::Fixed { value },
+                ..
+            }
+            | SkillEffect::AttributeModify {
+                formula: ValueFormula::Fixed { value },
+                ..
+            } => {
+                if *value == 0 {
+                    return Err(format!(
+                        "效果 #{} 的 HP 修正數值不能為 0，請刪除該效果或設定非零數值",
+                        effect_index + 1
+                    ));
+                }
+            }
+            _ => {}
+        }
+        if let SkillEffect::AttributeModify {
+            formula:
+                ValueFormula::Attribute {
+                    attribute: base_attr,
+                    ..
+                },
+            attribute: target_attr,
+            ..
+        } = effect
+        {
+            if base_attr != target_attr {
+                return Err(format!(
+                    "效果 #{} 的屬性修正倍率：目標屬性 ({:?}) 必須與公式屬性 ({:?}) 相同",
+                    effect_index + 1,
+                    target_attr,
+                    base_attr
+                ));
+            }
+        }
+        if let SkillEffect::AttributeModify {
+            duration: Some(duration),
+            ..
+        } = effect
+        {
+            if *duration <= 0 {
+                return Err(format!(
+                    "效果 #{} 的屬性修正時效必須大於 0，請刪除該效果或設定有效的時效",
+                    effect_index + 1
+                ));
+            }
+        }
+        if let SkillEffect::Push { distance, .. } = effect {
+            if *distance == 0 {
+                return Err(format!(
+                    "效果 #{} 的推離距離不能為 0，請刪除該效果或設定非零距離",
+                    effect_index + 1
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 // ==================== 表單渲染 ====================
@@ -582,7 +647,7 @@ fn render_formula_form(ui: &mut egui::Ui, formula: &mut ValueFormula, salt: &str
                         ValueFormula::Attribute { .. } => ValueFormula::Attribute {
                             source: AttributeSource::Caster,
                             attribute: Attribute::PhysicalAttack,
-                            multiplier: 1.0,
+                            multiplier: 100,
                         },
                     };
                     ui.selectable_value(formula, option.clone(), ui_string(&option));
@@ -626,7 +691,11 @@ fn render_formula_form(ui: &mut egui::Ui, formula: &mut ValueFormula, salt: &str
 
             ui.horizontal(|ui| {
                 ui.label("倍率：");
-                ui.add(egui::DragValue::new(multiplier).speed(0.1));
+                ui.add(
+                    egui::DragValue::new(multiplier)
+                        .speed(DRAG_VALUE_SPEED)
+                        .range(0..=i32::MAX),
+                );
             });
         }
     }
