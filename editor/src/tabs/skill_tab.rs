@@ -813,7 +813,7 @@ fn ui_string<T: Debug>(value: &T) -> String {
 }
 
 /// 創建種族被動技能模板
-pub fn create_race_skill() -> SkillType {
+fn create_race_skill() -> SkillType {
     SkillType {
         name: "".to_string(),
         mp_change: 0,

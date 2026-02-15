@@ -1,5 +1,7 @@
 //! 關卡編輯器 tab
 
+mod deployment;
+
 use crate::constants::*;
 use crate::editor_item::{EditorItem, validate_name};
 use crate::utils::search::{filter_by_search, render_search_input};
@@ -42,7 +44,11 @@ pub enum LevelTabMode {
 /// 模擬戰鬥的狀態
 #[derive(Debug, Clone, Default)]
 pub struct SimulationState {
-    // 預留給未來使用
+    /// 已部署的玩家單位：Map<部署點索引, 單位類型名稱>
+    pub deployed_units: HashMap<usize, TypeName>,
+
+    /// 當前選中的部署點索引（用於顯示 ComboBox）
+    pub selected_deployment_point: Option<usize>,
 }
 
 /// 關卡編輯器的 UI 狀態
@@ -207,7 +213,7 @@ pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut Leve
                 .resizable(false)
                 .collapsible(false)
                 .show(ui.ctx(), |ui| {
-                    render_simulate_form(ui, level, ui_state);
+                    deployment::render_simulate_form(ui, level, ui_state);
                 });
         }
     }
@@ -282,37 +288,6 @@ fn render_edit_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut Lev
 
     // 戰場預覽區
     render_battlefield_preview(ui, level, ui_state);
-
-    // 進入模擬戰鬥按鈕
-    if ui.button("🎮 開始模擬戰鬥").clicked() {
-        ui_state.mode = LevelTabMode::Simulate;
-        ui_state.simulation_state = SimulationState::default();
-    }
-}
-
-/// 渲染模擬戰鬥模式的表單
-fn render_simulate_form(ui: &mut egui::Ui, level: &LevelType, ui_state: &mut LevelTabUIState) {
-    // 返回編輯按鈕
-    if ui.button("← 返回編輯").clicked() {
-        ui_state.mode = LevelTabMode::Edit;
-    }
-
-    ui.heading("⚔️ 模擬戰鬥");
-    ui.add_space(SPACING_MEDIUM);
-
-    // 關卡資訊顯示
-    ui.label(format!("關卡：{}", level.name));
-    ui.label(format!(
-        "棋盤尺寸：{}×{}",
-        level.board_width, level.board_height
-    ));
-    ui.label(format!("敵人數量：{}", level.enemy_units.len()));
-    ui.label(format!("玩家人數上限：{}", level.max_player_units));
-
-    ui.add_space(SPACING_MEDIUM);
-    ui.separator();
-
-    ui.label("〖 此處將實作玩家部署和戰場預覽 〗");
 }
 
 /// 渲染玩家放置點列表
@@ -508,12 +483,20 @@ fn render_battlefield_preview(
     level: &mut LevelType,
     ui_state: &mut LevelTabUIState,
 ) {
-    ui.heading("戰場預覽");
+    ui.horizontal(|ui| {
+        ui.heading("戰場預覽");
+
+        // 進入模擬戰鬥按鈕
+        if ui.button("🎮 開始模擬戰鬥").clicked() {
+            ui_state.mode = LevelTabMode::Simulate;
+            ui_state.simulation_state = SimulationState::default();
+        }
+    });
 
     let scroll_output = egui::ScrollArea::both()
         .auto_shrink([false; 2])
         .max_width(ui.available_width() - SPACING_MEDIUM)
-        .min_scrolled_height(400.0)
+        .min_scrolled_height(LIST_PANEL_MIN_HEIGHT)
         .show(ui, |ui: &mut egui::Ui| {
             let (total_width, total_height) = calculate_grid_dimensions(level);
 
@@ -727,10 +710,7 @@ fn render_grid(
                 painter.rect_stroke(
                     cell_rect,
                     0.0,
-                    egui::Stroke::new(
-                        BATTLEFIELD_DRAG_STROKE_WIDTH,
-                        BATTLEFIELD_COLOR_DRAG_HIGHLIGHT,
-                    ),
+                    egui::Stroke::new(BATTLEFIELD_STROKE_WIDTH, BATTLEFIELD_COLOR_DRAG_HIGHLIGHT),
                     egui::epaint::StrokeKind::Outside,
                 );
             }

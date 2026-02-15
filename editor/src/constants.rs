@@ -15,6 +15,7 @@ pub const SPACING_MEDIUM: f32 = 10.0;
 
 // UI 尺寸
 pub const LIST_PANEL_WIDTH: f32 = 300.0;
+pub const LIST_PANEL_MIN_HEIGHT: f32 = 400.0;
 
 // UI 數值
 pub const DRAG_VALUE_SPEED: f64 = 1.0;
@@ -41,4 +42,7 @@ pub const BATTLEFIELD_COLOR_ENEMY: egui::Color32 = egui::Color32::LIGHT_RED;
 pub const BATTLEFIELD_COLOR_OBJECT: egui::Color32 = egui::Color32::GRAY;
 pub const BATTLEFIELD_COLOR_EMPTY: egui::Color32 = egui::Color32::DARK_GREEN;
 pub const BATTLEFIELD_COLOR_DRAG_HIGHLIGHT: egui::Color32 = egui::Color32::YELLOW;
-pub const BATTLEFIELD_DRAG_STROKE_WIDTH: f32 = 3.0;
+pub const BATTLEFIELD_STROKE_WIDTH: f32 = 3.0;
+
+// 關卡編輯器 - 模擬戰鬥
+pub const BATTLEFIELD_COLOR_PLAYER_SELECTED: egui::Color32 = egui::Color32::GREEN; // 綠色高亮
