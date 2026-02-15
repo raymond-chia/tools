@@ -15,7 +15,7 @@ pub const SPACING_MEDIUM: f32 = 10.0;
 
 // UI 尺寸
 pub const LIST_PANEL_WIDTH: f32 = 300.0;
-pub const LIST_PANEL_MIN_HEIGHT: f32 = 400.0;
+pub const LIST_PANEL_MIN_HEIGHT: f32 = 300.0;
 
 // UI 數值
 pub const DRAG_VALUE_SPEED: f64 = 1.0;

@@ -12,12 +12,29 @@ use board::component::Position;
 use board::loader_schema::{LevelType, ObjectPlacement, UnitPlacement};
 use std::collections::{HashMap, HashSet};
 
-/// 渲染模擬戰鬥模式的表單
-pub fn render_simulate_form(ui: &mut egui::Ui, level: &LevelType, ui_state: &mut LevelTabUIState) {
-    // 頂部：返回按鈕
-    if ui.button("← 返回編輯").clicked() {
-        ui_state.mode = LevelTabMode::Edit;
-    }
+/// 渲染單位部署模式的表單
+pub fn render_deployment_form(
+    ui: &mut egui::Ui,
+    level: &LevelType,
+    ui_state: &mut LevelTabUIState,
+) {
+    // 頂部：按鈕區
+    ui.horizontal(|ui| {
+        if ui.button("← 返回編輯").clicked() {
+            ui_state.mode = LevelTabMode::Edit;
+        }
+
+        ui.separator();
+
+        // 檢查是否至少部署了 1 個單位
+        let can_battle = !ui_state.simulation_state.deployed_units.is_empty();
+        if ui
+            .add_enabled(can_battle, egui::Button::new("開始戰鬥"))
+            .clicked()
+        {
+            ui_state.mode = LevelTabMode::Battle;
+        }
+    });
 
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
@@ -305,7 +322,7 @@ fn handle_deployment_point_click(
 }
 
 /// 渲染模擬戰鬥的棋盤網格（與編輯模式不同的視覺反饋）
-fn render_simulation_grid(
+pub fn render_simulation_grid(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     level: &LevelType,

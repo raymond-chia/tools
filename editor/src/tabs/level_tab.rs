@@ -1,5 +1,6 @@
 //! 關卡編輯器 tab
 
+mod battle;
 mod deployment;
 
 use crate::constants::*;
@@ -37,8 +38,10 @@ pub enum LevelTabMode {
     /// 編輯模式
     #[default]
     Edit,
-    /// 模擬戰鬥模式
-    Simulate,
+    /// 部署模式
+    Deploy,
+    /// 戰鬥模式
+    Battle,
 }
 
 /// 模擬戰鬥的狀態
@@ -200,21 +203,36 @@ fn render_filtered_options(
 pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState) {
     match ui_state.mode {
         LevelTabMode::Edit => render_edit_form(ui, level, ui_state),
-        LevelTabMode::Simulate => {
+        LevelTabMode::Deploy | LevelTabMode::Battle => {
             // 繪製半透明遮罩，完全遮蔽背景
             let viewport = ui.ctx().viewport_rect();
             ui.painter()
                 .rect_filled(viewport, 0.0, egui::Color32::from_black_alpha(200));
 
-            // 全螢幕模擬戰鬥窗口
-            egui::Window::new("⚔️ 模擬戰鬥")
-                .fixed_pos(viewport.min)
-                .fixed_size(viewport.size())
-                .resizable(false)
-                .collapsible(false)
-                .show(ui.ctx(), |ui| {
-                    deployment::render_simulate_form(ui, level, ui_state);
-                });
+            // 根據模式決定窗口標題和渲染函數
+            match ui_state.mode {
+                LevelTabMode::Deploy => {
+                    egui::Window::new("🎮 單位部署")
+                        .fixed_pos(viewport.min)
+                        .fixed_size(viewport.size())
+                        .resizable(false)
+                        .collapsible(false)
+                        .show(ui.ctx(), |ui| {
+                            deployment::render_deployment_form(ui, level, ui_state);
+                        });
+                }
+                LevelTabMode::Battle => {
+                    egui::Window::new("⚔️ 模擬戰鬥")
+                        .fixed_pos(viewport.min)
+                        .fixed_size(viewport.size())
+                        .resizable(false)
+                        .collapsible(false)
+                        .show(ui.ctx(), |ui| {
+                            battle::render_battle_form(ui, level, ui_state);
+                        });
+                }
+                _ => unreachable!(),
+            }
         }
     }
 }
@@ -486,9 +504,8 @@ fn render_battlefield_preview(
     ui.horizontal(|ui| {
         ui.heading("戰場預覽");
 
-        // 進入模擬戰鬥按鈕
-        if ui.button("🎮 開始模擬戰鬥").clicked() {
-            ui_state.mode = LevelTabMode::Simulate;
+        if ui.button("🎮 開始部署").clicked() {
+            ui_state.mode = LevelTabMode::Deploy;
             ui_state.simulation_state = SimulationState::default();
         }
     });
