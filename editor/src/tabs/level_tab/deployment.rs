@@ -1,16 +1,14 @@
 //! 關卡編輯器的模擬戰鬥模式邏輯
 
 use super::{
-    LevelTabMode, LevelTabUIState, SimulationState, VisibleGridRange, calculate_grid_dimensions,
-    calculate_visible_range, prepare_lookup_maps, render_battlefield_legend, render_hover_tooltip,
-    screen_to_board_pos,
+    LevelTabMode, LevelTabUIState, calculate_grid_dimensions, calculate_visible_range, grid,
+    prepare_lookup_maps, render_battlefield_legend, render_hover_tooltip, screen_to_board_pos,
+    unit_details::{handle_unit_right_click, render_unit_details_side_panel},
 };
 use crate::constants::*;
 use crate::utils::search::{filter_by_search, render_search_input};
-use board::alias::TypeName;
 use board::component::Position;
-use board::loader_schema::{LevelType, ObjectPlacement, UnitPlacement};
-use std::collections::{HashMap, HashSet};
+use board::loader_schema::LevelType;
 
 /// 渲染單位部署模式的表單
 pub fn render_deployment_form(
@@ -38,6 +36,7 @@ pub fn render_deployment_form(
 
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
+        .id_salt("all")
         .show(ui, |ui| {
             // 關卡資訊顯示
             render_level_info(ui, level, ui_state);
@@ -45,10 +44,13 @@ pub fn render_deployment_form(
             ui.add_space(SPACING_MEDIUM);
             ui.separator();
 
+            let height = ui.available_height();
+
             // 主要內容區：分左右兩欄
             ui.horizontal(|ui| {
                 // 左欄：玩家部署面板
                 ui.vertical(|ui| {
+                    ui.set_height(height);
                     ui.set_width(LIST_PANEL_WIDTH);
                     render_player_deployment_panel(ui, level, ui_state);
                 });
@@ -107,7 +109,6 @@ fn render_player_deployment_panel(
     // 渲染部署點列表
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
-        .min_scrolled_height(LIST_PANEL_MIN_HEIGHT)
         .id_salt("deployment_list")
         .show(ui, |ui| {
             for (index, pos) in level.player_placement_positions.iter().enumerate() {
@@ -239,60 +240,96 @@ fn render_battlefield_simulation_preview(
 ) {
     ui.heading("戰場預覽");
 
-    let scroll_output = egui::ScrollArea::both()
-        .auto_shrink([false; 2])
-        .max_width(ui.available_width() - SPACING_MEDIUM)
-        .min_scrolled_height(LIST_PANEL_MIN_HEIGHT)
-        .id_salt("simulation_battlefield")
-        .show(ui, |ui| {
-            let (total_width, total_height) = calculate_grid_dimensions(level);
+    // 預先計算面板寬度（如果面板存在）
+    let panel_width = if ui_state.temp_unit_name.is_some() {
+        LIST_PANEL_WIDTH + SPACING_SMALL // 面板寬度 + 分隔符
+    } else {
+        0.0
+    };
+    let height = ui.available_height();
 
-            let (rect, response) =
-                ui.allocate_exact_size(egui::vec2(total_width, total_height), egui::Sense::click());
+    // 水平分割佈局：戰場 + 單位詳情面板
+    ui.horizontal(|ui| {
+        // 左側：戰場（使用剩餘空間）
+        ui.vertical(|ui| {
+            ui.set_height(height);
+            ui.set_max_width(ui.available_width() - panel_width);
 
-            // 處理點擊事件
-            if response.clicked() {
-                if let Some(clicked_pos) = response
-                    .interact_pointer_pos()
-                    .and_then(|p| screen_to_board_pos(p, rect, level))
-                {
-                    handle_deployment_point_click(clicked_pos, level, ui_state);
-                }
-            }
+            let scroll_output = egui::ScrollArea::both()
+                .auto_shrink([false; 2])
+                .id_salt("simulation_battlefield")
+                .show(ui, |ui| {
+                    let (total_width, total_height) = calculate_grid_dimensions(level);
 
-            // 計算可見範圍
-            let viewport_size = ui.clip_rect().size();
-            let visible_range =
-                calculate_visible_range(ui_state.scroll_offset, viewport_size, level);
+                    let (rect, response) = ui.allocate_exact_size(
+                        egui::vec2(total_width, total_height),
+                        egui::Sense::click(),
+                    );
 
-            // 建立查詢表
-            let (player_positions, enemy_units_map, objects_map) = prepare_lookup_maps(level);
+                    // 處理點擊事件（選擇部署點）
+                    if response.clicked() {
+                        if let Some(clicked_pos) = response
+                            .interact_pointer_pos()
+                            .and_then(|p| screen_to_board_pos(p, rect, level))
+                        {
+                            handle_deployment_point_click(clicked_pos, level, ui_state);
+                        }
+                    }
 
-            // 渲染網格（模擬模式專用）
-            render_simulation_grid(
-                ui,
-                rect,
-                level,
-                &player_positions,
-                &enemy_units_map,
-                &objects_map,
-                &ui_state.simulation_state,
-                visible_range,
-            );
+                    // 計算可見範圍
+                    let viewport_size = ui.clip_rect().size();
+                    let visible_range =
+                        calculate_visible_range(ui_state.scroll_offset, viewport_size, level);
 
-            render_hover_tooltip(
-                ui,
-                level,
-                rect,
-                &response,
-                &player_positions,
-                &enemy_units_map,
-                &objects_map,
-            );
+                    // 建立查詢表
+                    let (player_positions, enemy_units_map, objects_map) =
+                        prepare_lookup_maps(level);
+
+                    // 渲染網格（模擬模式專用）
+                    grid::render_simulation_grid(
+                        ui,
+                        rect,
+                        level,
+                        &player_positions,
+                        &enemy_units_map,
+                        &objects_map,
+                        &ui_state.simulation_state,
+                        visible_range,
+                        &ui_state.skills_map,
+                        &ui_state.units_map,
+                    );
+
+                    render_hover_tooltip(
+                        ui,
+                        level,
+                        rect,
+                        &response,
+                        &player_positions,
+                        &enemy_units_map,
+                        &objects_map,
+                    );
+
+                    // 處理右鍵點擊選擇單位
+                    handle_unit_right_click(
+                        &response,
+                        rect,
+                        level,
+                        &player_positions,
+                        &enemy_units_map,
+                        ui_state,
+                    );
+                });
+
+            // 儲存滾動位置
+            ui_state.scroll_offset = scroll_output.state.offset;
         });
 
-    // 儲存滾動位置
-    ui_state.scroll_offset = scroll_output.state.offset;
+        // 右側：單位詳情面板（條件顯示）
+        if let Some(unit_name) = &ui_state.temp_unit_name.clone() {
+            ui.separator();
+            render_unit_details_side_panel(ui, unit_name, ui_state);
+        }
+    });
 
     ui.add_space(SPACING_SMALL);
     render_battlefield_legend(ui);
@@ -317,92 +354,6 @@ fn handle_deployment_point_click(
         None => {
             // 點擊非部署點，取消選擇
             ui_state.simulation_state.selected_deployment_point = None;
-        }
-    }
-}
-
-/// 渲染模擬戰鬥的棋盤網格（與編輯模式不同的視覺反饋）
-pub fn render_simulation_grid(
-    ui: &mut egui::Ui,
-    rect: egui::Rect,
-    level: &LevelType,
-    player_positions: &HashSet<Position>,
-    enemy_units_map: &HashMap<Position, &UnitPlacement>,
-    objects_map: &HashMap<Position, &ObjectPlacement>,
-    simulation_state: &SimulationState,
-    visible_range: VisibleGridRange,
-) {
-    let painter = ui.painter();
-    for y in visible_range.min.y..visible_range.max.y {
-        for x in visible_range.min.x..visible_range.max.x {
-            let pos = Position { x, y };
-
-            // 計算格子位置
-            let cell_x = rect.min.x + x as f32 * (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING);
-            let cell_y = rect.min.y + y as f32 * (BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING);
-            let cell_rect = egui::Rect::from_min_size(
-                egui::pos2(cell_x, cell_y),
-                egui::vec2(BATTLEFIELD_CELL_SIZE, BATTLEFIELD_CELL_SIZE),
-            );
-
-            // 判斷是否為玩家部署點
-            let deployment_index = player_positions
-                .contains(&pos)
-                .then(|| {
-                    level
-                        .player_placement_positions
-                        .iter()
-                        .position(|p| *p == pos)
-                })
-                .flatten();
-
-            // 決定格子內容與背景顏色
-            let (cell_text, bg_color) = match deployment_index {
-                Some(index) => {
-                    // 玩家部署點：根據部署狀態顯示
-                    match simulation_state.deployed_units.get(&index) {
-                        Some(unit_name) => {
-                            let abbrev = unit_name.chars().take(2).collect::<TypeName>();
-                            (abbrev, BATTLEFIELD_COLOR_PLAYER)
-                        }
-                        None => ("".to_string(), BATTLEFIELD_COLOR_PLAYER),
-                    }
-                }
-                None => {
-                    // 非部署點：顯示敵人或物件
-                    if let Some(unit) = enemy_units_map.get(&pos) {
-                        let abbrev = unit.unit_type_name.chars().take(2).collect::<TypeName>();
-                        (abbrev, BATTLEFIELD_COLOR_ENEMY)
-                    } else if let Some(obj) = objects_map.get(&pos) {
-                        let abbrev = obj.object_type_name.chars().take(2).collect::<TypeName>();
-                        (abbrev, BATTLEFIELD_COLOR_OBJECT)
-                    } else {
-                        ("".to_string(), BATTLEFIELD_COLOR_EMPTY)
-                    }
-                }
-            };
-
-            // 繪製格子背景
-            painter.rect_filled(cell_rect, 0.0, bg_color);
-
-            // 繪製文本
-            painter.text(
-                cell_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                cell_text,
-                egui::FontId::proportional(BATTLEFIELD_TEXT_SIZE),
-                egui::Color32::BLACK,
-            );
-
-            // 選中高亮：綠色外邊框
-            if simulation_state.selected_deployment_point == deployment_index {
-                painter.rect_stroke(
-                    cell_rect,
-                    0.0,
-                    egui::Stroke::new(BATTLEFIELD_STROKE_WIDTH, BATTLEFIELD_COLOR_PLAYER_SELECTED),
-                    egui::epaint::StrokeKind::Outside,
-                );
-            }
         }
     }
 }

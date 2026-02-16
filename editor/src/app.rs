@@ -81,6 +81,13 @@ impl eframe::App for EditorApp {
                 )
             }
             EditorTab::Level => {
+                self.level_editor.ui_state.available_objects = self
+                    .object_editor
+                    .items
+                    .iter()
+                    .map(|obj| obj.name.clone())
+                    .collect();
+
                 self.level_editor.ui_state.available_units = self
                     .unit_editor
                     .items
@@ -88,11 +95,18 @@ impl eframe::App for EditorApp {
                     .map(|unit| unit.name.clone())
                     .collect();
 
-                self.level_editor.ui_state.available_objects = self
-                    .object_editor
+                self.level_editor.ui_state.units_map = self
+                    .unit_editor
                     .items
                     .iter()
-                    .map(|obj| obj.name.clone())
+                    .map(|unit| (unit.name.clone(), unit.clone()))
+                    .collect();
+
+                self.level_editor.ui_state.skills_map = self
+                    .skill_editor
+                    .items
+                    .iter()
+                    .map(|skill| (skill.name.clone(), skill.clone()))
                     .collect();
 
                 render_editor_ui(

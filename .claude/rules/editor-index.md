@@ -46,7 +46,12 @@ editor/
 │       ├── object_tab.rs    - 物件編輯器（ObjectType）
 │       ├── skill_tab.rs     - 技能編輯器
 │       ├── unit_tab.rs      - 單位編輯器（UnitType）
-│       └── level_tab.rs     - 關卡編輯器
+│       ├── level_tab.rs     - 關卡編輯器（部署/戰鬥模式主模塊）
+│       └── level_tab/
+│           ├── battle.rs    - 戰鬥模式UI
+│           ├── deployment.rs - 部署模式UI
+│           ├── grid.rs      - 棋盤網格渲染邏輯（編輯和模擬模式）
+│           └── unit_details.rs - 單位詳情展示相關函數
 ```
 
 ## Function 集
@@ -107,3 +112,24 @@ editor/
 - `pub fn file_name() -> &'static str` - 取得檔案名稱
 - `pub fn render_form(ui: &mut egui::Ui, item: &mut T)` - 渲染編輯表單
 - `impl EditorItem for T` - 實現 EditorItem trait
+
+### editor/tabs/level_tab/grid.rs
+
+- `pub struct DragState` - 拖曳狀態
+- `pub enum DraggedObject` - 拖曳物體的類型和索引
+- `pub fn prepare_lookup_maps(level: &LevelType) -> (HashSet<Position>, HashMap<Position, &UnitPlacement>, HashMap<Position, &ObjectPlacement>)` - 建立查詢表以加速格子內容查詢
+- `pub fn calculate_grid_dimensions(level: &LevelType) -> (f32, f32)` - 計算棋盤預覽的總尺寸
+- `pub fn calculate_visible_range(scroll_offset: egui::Vec2, viewport_size: egui::Vec2, level: &LevelType) -> VisibleGridRange` - 計算可見範圍內的格子索引
+- `pub fn screen_to_board_pos(screen_pos: egui::Pos2, rect: egui::Rect, level: &LevelType) -> Option<Position>` - 將螢幕座標轉換為棋盤座標
+- `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, player_positions: &HashSet<Position>, enemy_units_map: &HashMap<Position, &UnitPlacement>, objects_map: &HashMap<Position, &ObjectPlacement>, drag_state: Option<DragState>, hovered_in_bounds: Option<Position>, visible_range: VisibleGridRange)` - 繪製棋盤格子（編輯模式）
+- `pub fn render_simulation_grid(ui: &mut egui::Ui, rect: egui::Rect, level: &LevelType, player_positions: &HashSet<Position>, enemy_units_map: &HashMap<Position, &UnitPlacement>, objects_map: &HashMap<Position, &ObjectPlacement>, simulation_state: &SimulationState, visible_range: VisibleGridRange, _skills_map: &HashMap<SkillName, SkillType>, _units_map: &HashMap<TypeName, UnitType>)` - 渲染模擬戰鬥的棋盤網格
+- `pub fn identify_dragged_object(level: &LevelType, pos: &Position) -> Option<DraggedObject>` - 識別被拖曳的物體及其索引
+- `pub fn apply_drag_update(level: &mut LevelType, state: DragState, new_pos: Position)` - 應用拖曳更新
+- `pub fn render_hover_tooltip(ui: &mut egui::Ui, level: &LevelType, rect: egui::Rect, response: &egui::Response, player_positions: &HashSet<Position>, enemy_units_map: &HashMap<Position, &UnitPlacement>, objects_map: &HashMap<Position, &ObjectPlacement>)` - 渲染懸停提示
+- `pub fn render_battlefield_legend(ui: &mut egui::Ui)` - 渲染戰場圖例
+
+### editor/tabs/level_tab/unit_details.rs
+
+- `pub fn handle_unit_right_click(response: &egui::Response, rect: egui::Rect, level: &LevelType, player_positions: &HashSet<Position>, enemy_units_map: &HashMap<Position, &UnitPlacement>, ui_state: &mut LevelTabUIState)` - 處理右鍵點擊選擇單位
+- `pub fn handle_panel_close_on_click(response: &egui::Response, rect: egui::Rect, level: &LevelType, player_positions: &HashSet<Position>, enemy_units_map: &HashMap<Position, &UnitPlacement>, ui_state: &mut LevelTabUIState)` - 處理點擊戰場空白處關閉面板
+- `pub fn render_unit_details_panel(ui: &mut egui::Ui, unit_type_name: &TypeName, skills_map: &HashMap<SkillName, SkillType>, units_map: &HashMap<TypeName, UnitType>)` - 渲染單位詳情面板的內容（不含面板容器）
