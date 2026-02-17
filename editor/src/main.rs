@@ -11,7 +11,7 @@ mod utils;
 use app::EditorApp;
 use constants::{
     APP_TITLE, FONT_FILE_PATH, FONT_NAME, FONT_SIZE_BODY, FONT_SIZE_BUTTON, FONT_SIZE_HEADING,
-    FONT_SIZE_MONOSPACE, FONT_SIZE_SMALL,
+    FONT_SIZE_MONOSPACE, FONT_SIZE_SMALL, STROKE_WIDTH,
 };
 use std::sync::Arc;
 
@@ -25,6 +25,7 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(|cc| {
             setup_fonts(&cc.egui_ctx);
+            setup_visuals(&cc.egui_ctx);
             Ok(Box::new(EditorApp::new()))
         }),
     )
@@ -76,4 +77,15 @@ fn setup_fonts(ctx: &egui::Context) {
     );
 
     ctx.set_style(style);
+}
+
+fn setup_visuals(ctx: &egui::Context) {
+    let mut visuals = ctx.style().visuals.clone();
+
+    // Checkbox 背景色
+    // 會影響 Checkbox 以外的 UI
+    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(0, 0, 0); // 未勾選
+    visuals.widgets.inactive.fg_stroke.width = STROKE_WIDTH; // 勾勾
+
+    ctx.set_visuals(visuals);
 }

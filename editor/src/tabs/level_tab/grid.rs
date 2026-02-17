@@ -172,7 +172,7 @@ pub fn render_grid(
                 painter.rect_stroke(
                     cell_rect,
                     0.0,
-                    egui::Stroke::new(BATTLEFIELD_STROKE_WIDTH, BATTLEFIELD_COLOR_DRAG_HIGHLIGHT),
+                    egui::Stroke::new(STROKE_WIDTH, BATTLEFIELD_COLOR_DRAG_HIGHLIGHT),
                     egui::epaint::StrokeKind::Outside,
                 );
             }
@@ -260,7 +260,7 @@ pub fn render_simulation_grid(
                 painter.rect_stroke(
                     cell_rect,
                     0.0,
-                    egui::Stroke::new(BATTLEFIELD_STROKE_WIDTH, BATTLEFIELD_COLOR_PLAYER_SELECTED),
+                    egui::Stroke::new(STROKE_WIDTH, BATTLEFIELD_COLOR_PLAYER_SELECTED),
                     egui::epaint::StrokeKind::Outside,
                 );
             }
