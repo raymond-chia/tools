@@ -12,7 +12,7 @@ use strum_macros::EnumIter;
 // ============================================================================
 
 /// 角色屬性類型（根據 README-設計機制.md:72）
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, EnumIter)]
 pub enum Attribute {
     #[default]
     Hp,
@@ -212,7 +212,7 @@ pub struct SkillType {
 }
 
 /// 臨時屬性修正（Buff/Debuff）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BuffEffect {
     pub attribute: Attribute,
     pub formula: ValueFormula,

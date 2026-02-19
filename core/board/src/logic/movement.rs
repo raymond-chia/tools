@@ -8,7 +8,7 @@ use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 
 /// 移動方向（四方向）
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub enum Direction {
     Up,
     Down,
@@ -57,7 +57,7 @@ pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> O
 }
 
 /// 移動者（位置 + 陣營）
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct Mover {
     pub pos: Position,
     pub faction: Faction,

@@ -3,26 +3,30 @@
 本檔案包含 `core/board` crate 的專案結構和 function 集。
 此檔案不設定 paths 限制，讓其他 crate（如 editor）也能參考。
 
-## 維護原則
+## 編輯規則
 
-**專案結構**
+### 專案結構
 
-- 紀錄檔案存在與主要職責，不列舉具體的 enum variants 或 struct fields
-- 如果有新增/移除檔案才更新
+禁止列舉 enum variants 或 struct，只記錄檔案與職責。
+職責描述必須是一句話，不帶任何實作細節（不提型別名、欄位名、演算法名）。
 
-**Function 集和 Trait**
+例子：
 
-- 保留 **簽名**：pub fn、trait 方法（API 相對穩定，幫助理解「怎麼用」）
-- 移除 **實現細節**（如算法說明、檢查邏輯），這些容易變
-- 移除會頻繁變動的具體值（如常數值、enum variants）
+- ❌ 錯誤：component.rs - Position(x, y), Unit { name: String, hp: i32 }
+- ❌ 錯誤：core_types.rs - occupant 與位置之間的雙向索引型別
+- ✓ 正確：component.rs - ECS Component 定義
+- ✓ 正確：core_types.rs - 遊戲核心資料型別定義
+
+### Function 集簽名
+
+保留完整簽名（pub fn、trait 方法），移除實現細節, 常數值, enum, struct
+
+例子：
+
+- ❌ 錯誤：`pub fn reachable_positions(...) -> Result<HashMap<Position, ReachableInfo>>` - 使用 BFS 演算法，檢查地形花費，預算為 10
+- ✓ 正確：`pub fn reachable_positions(...) -> Result<HashMap<Position, ReachableInfo>>` - 計算預算內可到達的所有位置
 
 ## 專案結構
-
-⚠️ **編輯前檢查清單**（見上方「維護原則」）
-
-- [ ] 只記錄檔案存在與主要職責？
-- [ ] 沒有列舉 enum variants 或 struct fields？
-- [ ] 新增/移除檔案時才編輯？
 
 ```
 core/board/
@@ -31,17 +35,19 @@ core/board/
 │   ├── alias.rs          - 類型別名（Coord, ID, MovementCost）
 │   ├── component.rs      - ECS Component 定義
 │   ├── constants.rs      - 遊戲常數
+│   ├── core_types.rs      - 基本資料類型定義（未來使用）
 │   ├── error.rs          - 錯誤型別定義
 │   ├── loader.rs         - 棋盤載入（ASCII 解析）
 │   ├── loader_schema.rs  - Loader 相關資料結構定義
-│   ├── primitive.rs      - 基本資料類型定義（未來使用）
+│   ├── schema.rs         - 遊戲資料結構定義（Occupant 等）
 │   ├── logic/            - 核心業務邏輯（非 ECS System）
 │   │   ├── mod.rs        - logic 模組定義
 │   │   ├── board.rs      - 棋盤驗證
 │   │   ├── movement.rs   - 移動邏輯
 │   │   └── unit_attributes.rs - 單位屬性計算邏輯
 │   └── system/           - ECS System（目前未實作）
-│       └── mod.rs        - system 模組定義
+│       ├── mod.rs        - system 模組定義
+│       └── position_query.rs - 位置到實體的索引維護
 └── tests/                - 整合測試
     ├── board/
     │   ├── mod.rs        - board 測試模組定義
@@ -67,6 +73,10 @@ core/board/
 
 - 集中存放遊戲常數定義
 
+### core_types.rs
+
+- 遊戲核心資料型別定義
+
 ### error.rs
 
 - 集中定義所有錯誤類型
@@ -80,14 +90,15 @@ core/board/
 
 - 載入相關的資料結構定義（遊戲內容、屬性、技能效果系統）
 
-### primitive.rs
+### schema.rs
 
-- 保留給基本資料類型定義（未來使用）
+- 遊戲資料結構定義（enum、struct）
+- 與 ECS 無關，支援各層使用
 
 ### logic/
 
 - 存放核心業務邏輯函數（純邏輯運算，不依賴 ECS Query）
-- 可以依賴 component.rs 和 primitive.rs 的類型
+- 可以依賴 component.rs 和 core_types.rs 的類型
 - 函數參數類型放在同一個檔案中（與函數一起）
 
 ### system/
@@ -96,12 +107,6 @@ core/board/
 - 目前未實作，邏輯優先放在 logic/ 中
 
 ## Function 集
-
-⚠️ **編輯前檢查清單**（見上方「維護原則」）
-
-- [ ] 保留了完整的函數簽名？
-- [ ] 移除了實現細節（算法說明、檢查邏輯）？
-- [ ] 沒有列舉 enum variants 或常數值？
 
 ### logic/board.rs
 
@@ -118,4 +123,13 @@ core/board/
 
 ### logic/unit_attributes.rs
 
-- `pub fn calculate_attributes(skill_names: &[SkillName], buffs: &[BuffEffect], skill_map: &HashMap<SkillName, SkillType>) -> Result<CalculatedAttributes>` - 計算單位屬性（基於被動技能和臨時效果，Fixed 值累加，倍率修正為替換）
+- `pub fn calculate_attributes(skill_names: &[SkillName], buffs: &[BuffEffect], skill_map: &HashMap<SkillName, SkillType>) -> Result<CalculatedAttributes>` - 計算單位屬性
+
+### core_types.rs
+
+OccupantMap 的方法：
+
+- `pub fn get_occupants_at(&self, pos: Position) -> &[Occupant]` - 查詢指定位置的所有佔據者
+- `pub fn get_position_of(&self, occupant: Occupant) -> Option<Position>` - 查詢指定佔據者的位置
+- `pub fn insert(&mut self, pos: Position, occupant: Occupant) -> Result<()>` - 插入佔據者到指定位置
+- `pub fn remove(&mut self, occupant: Occupant)` - 移除指定的佔據者

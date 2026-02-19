@@ -31,16 +31,15 @@ pub struct Position {
     pub y: Coord,
 }
 
-/// 標記為物件的 Component
-#[derive(Debug, Component)]
-pub struct Object;
-
-/// 標記為單位的 Component
-#[derive(Debug, Component)]
-pub struct Unit;
+/// 位置上的佔據者（單位或物件）
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Component)]
+pub enum Occupant {
+    Unit(ID),
+    Object(ID),
+}
 
 /// 陣營（用於區分友軍/敵軍）
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
+#[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Faction(pub ID);
 
 // ============================================================================

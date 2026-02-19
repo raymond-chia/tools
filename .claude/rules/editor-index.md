@@ -5,27 +5,27 @@ paths:
 
 # Editor 專案索引
 
-本檔案包含 `editor` crate 的專案結構和 function 集。
+## 編輯規則
 
-## 維護原則
+### 專案結構
 
-**專案結構**
+禁止列舉具體的常數值，只記錄檔案與職責
 
-- 紀錄檔案存在與主要職責，不列舉具體的常數值
-- 如果有新增/移除檔案才更新
+例子：
 
-**Function 集和 Trait**
+- ❌ 錯誤：constants.rs - BUTTON_WIDTH = 100, PANEL_HEIGHT = 300
+- ✓ 正確：constants.rs - UI 與編輯器常數定義
 
-- 保留 **簽名**：pub fn、trait 方法（API 相對穩定，幫助理解「怎麼用」）
-- 移除 **實現細節**（如「檢查索引有效性」、「建立目錄如需要」），這些容易變
-- 移除會頻繁變動的具體值（如常數值、enum variants）
+### Function 集簽名
+
+保留完整簽名（pub fn、trait 方法），移除實現細節, 常數值, enum, struct
+
+例子：
+
+- ❌ 錯誤：`pub fn render_search_input(ui: &mut egui::Ui, query: &mut String) -> egui::Response` - 檢查輸入是否為空、建立搜尋框寬度為 200px、清除按鈕顏色
+- ✓ 正確：`pub fn render_search_input(ui: &mut egui::Ui, query: &mut String) -> egui::Response` - 渲染搜尋輸入框
 
 ## 專案結構
-
-⚠️ **編輯前檢查清單**（見上方「維護原則」）
-- [ ] 只記錄檔案存在與主要職責？
-- [ ] 沒有列舉具體的常數值？
-- [ ] 新增/移除檔案時才編輯？
 
 ```
 editor/
@@ -55,11 +55,6 @@ editor/
 ```
 
 ## Function 集
-
-⚠️ **編輯前檢查清單**（見上方「維護原則」）
-- [ ] 保留了完整的函數簽名？
-- [ ] 移除了實現細節（如「檢查索引有效性」、「建立目錄」）？
-- [ ] 沒有列舉具體的常數值或 enum variants？
 
 ### editor/editor_item.rs
 

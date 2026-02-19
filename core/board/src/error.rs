@@ -39,6 +39,12 @@ pub enum BoardError {
         width: Coord,
         height: Coord,
     },
+    #[error("佔據者已存在於位置 ({x}, {y})，無法重複插入: {occupant}")]
+    OccupantAlreadyExists {
+        occupant: String,
+        x: Coord,
+        y: Coord,
+    },
 }
 
 /// 格式載入錯誤

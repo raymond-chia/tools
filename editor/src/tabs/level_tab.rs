@@ -36,7 +36,7 @@ pub enum LevelTabMode {
 }
 
 /// 模擬戰鬥的狀態
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct SimulationState {
     /// 已部署的玩家單位：Map<部署點索引, 單位類型名稱>
     pub deployed_units: HashMap<usize, TypeName>,
@@ -46,7 +46,7 @@ pub struct SimulationState {
 }
 
 /// 關卡編輯器的 UI 狀態
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct LevelTabUIState {
     pub available_units: Vec<TypeName>,
     pub available_objects: Vec<TypeName>,

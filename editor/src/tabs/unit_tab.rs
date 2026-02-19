@@ -7,7 +7,7 @@ use board::alias::SkillName;
 use board::loader_schema::UnitType;
 
 /// 單位編輯器的 UI 狀態
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct UnitTabUIState {
     pub available_skills: Vec<SkillName>,
 
