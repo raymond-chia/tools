@@ -1,9 +1,6 @@
-pub mod alias;
-pub mod component;
-pub mod constants;
-pub mod core_types;
+pub mod domain;
+pub mod ecs_logic;
+pub mod ecs_types;
 pub mod error;
-pub mod loader;
 pub mod loader_schema;
 pub mod logic;
-pub mod system;

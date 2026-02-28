@@ -2,7 +2,8 @@
 
 use crate::constants::DRAG_VALUE_SPEED;
 use crate::editor_item::EditorItem;
-use board::constants::{HP_MODIFY_DAMAGE, IMPASSABLE_MOVEMENT_COST};
+use crate::generic_editor::MessageState;
+use board::domain::constants::{HP_MODIFY_DAMAGE, IMPASSABLE_MOVEMENT_COST};
 use board::loader_schema::ObjectType;
 
 // ==================== EditorItem 實作 ====================
@@ -31,7 +32,12 @@ pub fn file_name() -> &'static str {
 // ==================== 表單渲染 ====================
 
 /// 渲染物件編輯表單
-pub fn render_form(ui: &mut egui::Ui, obj: &mut ObjectType, _ui_state: &mut ()) {
+pub fn render_form(
+    ui: &mut egui::Ui,
+    obj: &mut ObjectType,
+    _ui_state: &mut (),
+    _message_state: &mut MessageState,
+) {
     ui.horizontal(|ui| {
         ui.label("名稱：");
         ui.text_edit_singleline(&mut obj.name);

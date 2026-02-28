@@ -1,39 +1,13 @@
 //! Loader 相關的資料結構定義
 
-/// TODO
-// 有狀態變化才要重新計算血量最大值
-use crate::alias::{Coord, MovementCost, SkillName, TypeName};
-use crate::component::Position;
+use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
+use crate::domain::core_types::Attribute;
+use crate::ecs_types::components::Position;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 // ============================================================================
-// 屬性系統 (Attribute System)
-// ============================================================================
-
-/// 角色屬性類型（根據 README-設計機制.md:72）
-#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, EnumIter)]
-pub enum Attribute {
-    #[default]
-    Hp,
-    Mp,
-    Initiative,
-    Hit,
-    Evasion,
-    Block,
-    BlockProtection,
-    PhysicalAttack,
-    MagicalAttack,
-    MagicalDc,
-    Fortitude,
-    Reflex,
-    Will,
-    Movement,
-    OpportunityAttacks,
-}
-
-// ============================================================================
-// 基礎列舉 (Base Enums)
+// 技能系統 (Skill System)
 // ============================================================================
 
 /// 屬性來源（用於 ValueFormula）
@@ -67,10 +41,6 @@ pub enum SaveType {
     /// 意志
     Will,
 }
-
-// ============================================================================
-// 技能系統 (Skill System)
-// ============================================================================
 
 /// 數值計算公式（用於傷害、屬性修正等）
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
@@ -248,18 +218,29 @@ pub struct ObjectType {
 // 關卡系統 (Level System)
 // ============================================================================
 
+/// 陣營定義（關卡中的陣營設定）
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Faction {
+    pub id: ID,
+    pub name: String,
+    pub alliance: ID,
+    /// 陣營顏色（RGB）
+    pub color: [u8; 3],
+}
+
 /// 單位配置（關卡中的單位放置）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UnitPlacement {
-    pub position: Position,
     pub unit_type_name: TypeName,
+    pub faction_id: ID,
+    pub position: Position,
 }
 
 /// 物件配置（關卡中的物件放置）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ObjectPlacement {
-    pub position: Position,
     pub object_type_name: TypeName,
+    pub position: Position,
 }
 
 /// 關卡類型定義
@@ -268,10 +249,33 @@ pub struct LevelType {
     pub name: String,
     pub board_width: Coord,
     pub board_height: Coord,
-    pub max_player_units: u32,
-    pub player_placement_positions: Vec<Position>,
-    pub enemy_units: Vec<UnitPlacement>,
+    pub factions: Vec<Faction>,
+    pub max_player_units: usize,
+    pub deployment_positions: Vec<Position>,
+    pub unit_placements: Vec<UnitPlacement>,
     pub object_placements: Vec<ObjectPlacement>,
+}
+
+// ============================================================================
+// 頂層 TOML 反序列化結構
+// ============================================================================
+
+/// 技能 TOML 頂層結構
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SkillsToml {
+    pub skills: Vec<SkillType>,
+}
+
+/// 單位 TOML 頂層結構
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UnitsToml {
+    pub units: Vec<UnitType>,
+}
+
+/// 物件 TOML 頂層結構
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ObjectsToml {
+    pub objects: Vec<ObjectType>,
 }
 
 // ============================================================================

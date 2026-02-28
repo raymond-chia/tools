@@ -3,7 +3,7 @@ use crate::constants::{
 };
 use crate::define_editors;
 use crate::editor_item::EditorItem;
-use crate::generic_editor::{EditMode, GenericEditorState};
+use crate::generic_editor::{EditMode, GenericEditorState, MessageState};
 use crate::generic_io::{load_file, save_file};
 use crate::tabs;
 use crate::utils::render_dnd_handle;
@@ -81,33 +81,9 @@ impl eframe::App for EditorApp {
                 )
             }
             EditorTab::Level => {
-                self.level_editor.ui_state.available_objects = self
-                    .object_editor
-                    .items
-                    .iter()
-                    .map(|obj| obj.name.clone())
-                    .collect();
-
-                self.level_editor.ui_state.available_units = self
-                    .unit_editor
-                    .items
-                    .iter()
-                    .map(|unit| unit.name.clone())
-                    .collect();
-
-                self.level_editor.ui_state.units_map = self
-                    .unit_editor
-                    .items
-                    .iter()
-                    .map(|unit| (unit.name.clone(), unit.clone()))
-                    .collect();
-
-                self.level_editor.ui_state.skills_map = self
-                    .skill_editor
-                    .items
-                    .iter()
-                    .map(|skill| (skill.name.clone(), skill.clone()))
-                    .collect();
+                self.level_editor.ui_state.available_objects = self.object_editor.items.clone();
+                self.level_editor.ui_state.available_units = self.unit_editor.items.clone();
+                self.level_editor.ui_state.available_skills = self.skill_editor.items.clone();
 
                 render_editor_ui(
                     ui,
@@ -125,7 +101,7 @@ fn render_editor_ui<T: EditorItem>(
     ui: &mut egui::Ui,
     state: &mut GenericEditorState<T>,
     data_key: &str,
-    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState),
+    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState, &mut MessageState),
 ) {
     ui.heading(format!("{}編輯器", T::type_name()));
     ui.add_space(SPACING_MEDIUM);
@@ -165,19 +141,19 @@ fn render_file_operations_bar<T: EditorItem>(
         ui.add_space(SPACING_MEDIUM);
 
         // 訊息區域
-        if state.message_visible {
+        if state.message_state.message_visible {
             if ui.button("隱藏").clicked() {
-                state.message_visible = false;
+                state.message_state.message_visible = false;
             }
-            let color = if state.is_error {
+            let color = if state.message_state.is_error {
                 egui::Color32::RED
             } else {
                 egui::Color32::GREEN
             };
-            ui.colored_label(color, &state.message);
+            ui.colored_label(color, &state.message_state.message);
         } else {
             if ui.button("顯示訊息").clicked() {
-                state.message_visible = true;
+                state.message_state.message_visible = true;
             }
         }
     });
@@ -303,12 +279,9 @@ fn render_list_item<T: EditorItem>(
 fn render_edit_area<T: EditorItem>(
     ui: &mut egui::Ui,
     state: &mut GenericEditorState<T>,
-    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState),
+    render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState, &mut MessageState),
 ) {
     ui.vertical(|ui| {
-        ui.heading("編輯區域");
-        ui.add_space(SPACING_SMALL);
-
         let is_editable = state.is_editing();
 
         if is_editable {
@@ -333,7 +306,12 @@ fn render_edit_area<T: EditorItem>(
                         .auto_shrink([false; 2])
                         .show(ui, |ui| {
                             ui.add_enabled_ui(true, |ui| {
-                                render_form(ui, item, &mut state.ui_state);
+                                render_form(
+                                    ui,
+                                    item,
+                                    &mut state.ui_state,
+                                    &mut state.message_state,
+                                );
                             });
                         });
                 }
@@ -352,7 +330,7 @@ fn render_edit_area<T: EditorItem>(
                     .auto_shrink([false; 2])
                     .show(ui, |ui| {
                         ui.add_enabled_ui(false, |ui| {
-                            render_form(ui, item, &mut state.ui_state);
+                            render_form(ui, item, &mut state.ui_state, &mut state.message_state);
                         });
                     });
             } else {

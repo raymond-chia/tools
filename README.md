@@ -11,6 +11,12 @@
 3. 在「系統變數」找 Path，點「編輯」
 4. 點「新增」，輸入 binary 的實際路徑
 
+# Claude Code
+
+- Skills
+  - 取代 Commands
+  - https://code.claude.com/docs/en/skills
+
 # Character
 
 - pixel art 要點: https://www.youtube.com/watch?v=Z8earctNBxg

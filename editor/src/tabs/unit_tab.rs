@@ -2,8 +2,9 @@
 
 use crate::constants::SPACING_SMALL;
 use crate::editor_item::EditorItem;
+use crate::generic_editor::MessageState;
 use crate::utils::search::{filter_by_search, render_search_input};
-use board::alias::SkillName;
+use board::domain::alias::SkillName;
 use board::loader_schema::UnitType;
 
 /// 單位編輯器的 UI 狀態
@@ -40,7 +41,12 @@ pub fn file_name() -> &'static str {
 // ==================== 表單渲染 ====================
 
 /// 渲染單位編輯表單
-pub fn render_form(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTabUIState) {
+pub fn render_form(
+    ui: &mut egui::Ui,
+    unit: &mut UnitType,
+    ui_state: &mut UnitTabUIState,
+    _message_state: &mut MessageState,
+) {
     ui.horizontal(|ui| {
         ui.label("名稱：");
         ui.text_edit_singleline(&mut unit.name);

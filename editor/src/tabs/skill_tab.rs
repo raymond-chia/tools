@@ -2,9 +2,11 @@
 
 use crate::constants::*;
 use crate::editor_item::{EditorItem, validate_name};
-use board::alias::Coord;
+use crate::generic_editor::MessageState;
+use board::domain::alias::Coord;
+use board::domain::core_types::Attribute;
 use board::loader_schema::{
-    AoeShape, AttackStyle, Attribute, AttributeSource, Mechanic, SaveType, SkillEffect, SkillType,
+    AoeShape, AttackStyle, AttributeSource, Mechanic, SaveType, SkillEffect, SkillType,
     TargetFilter, TargetMode, TriggerEvent, ValueFormula,
 };
 use std::fmt::Debug;
@@ -71,13 +73,12 @@ pub fn file_name() -> &'static str {
 }
 
 fn validate_skill_effects(effects: &[SkillEffect]) -> Result<(), String> {
+    if effects.is_empty() {
+        return Err("技能必須至少有一個效果".to_string());
+    }
     for (effect_index, effect) in effects.iter().enumerate() {
         match effect {
             SkillEffect::HpModify {
-                formula: ValueFormula::Fixed { value },
-                ..
-            }
-            | SkillEffect::AttributeModify {
                 formula: ValueFormula::Fixed { value },
                 ..
             } => {
@@ -136,7 +137,12 @@ fn validate_skill_effects(effects: &[SkillEffect]) -> Result<(), String> {
 // ==================== 表單渲染 ====================
 
 /// 渲染技能編輯表單
-pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, _ui_state: &mut ()) {
+pub fn render_form(
+    ui: &mut egui::Ui,
+    skill: &mut SkillType,
+    _ui_state: &mut (),
+    _message_state: &mut MessageState,
+) {
     render_race_template_buttons(ui, skill);
     ui.add_space(SPACING_MEDIUM);
 
@@ -837,7 +843,7 @@ fn create_race_skill() -> SkillType {
             (Attribute::Reflex, 0),
             (Attribute::Will, 0),
             (Attribute::Movement, 50),
-            (Attribute::OpportunityAttacks, 0),
+            (Attribute::Reaction, 0),
         ]
         .into_iter()
         .map(|(attribute, value)| create_caster_attribute_modify(attribute, value))

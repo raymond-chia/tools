@@ -19,6 +19,12 @@ ECS 架構
 
 - 使用 bevy_ecs 管理所有遊戲狀態，達到 single responsibility
 
+World 操作集中原則（ecs_logic）
+
+- 在操作 `World` 的函數中，所有 `world` 的讀取（`get_resource`、`query`）應集中在最前面，所有寫入（`spawn`、`despawn`、`insert_resource`）應集中在最後面
+- 中間只做純邏輯運算與 fail fast 驗證，不穿插任何 `world` 操作
+- 此規則優先於 fail fast：即使某個驗證可以更早短路，也不能打斷 `world` 讀取的連續性
+
 自訂錯誤型別
 
 - `core/` crate 為了容易解析錯誤，使用自訂 enum，不用 String、anyhow 等通用錯誤型別

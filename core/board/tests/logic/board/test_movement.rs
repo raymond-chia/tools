@@ -1,9 +1,9 @@
 //! 可移動範圍測試
 
-use board::alias::MovementCost;
-use board::component::{Faction, Position};
-use board::constants::{BASIC_MOVEMENT_COST, IMPASSABLE_MOVEMENT_COST};
-use board::loader::load_from_ascii;
+use super::super::super::test_helpers::level_builder::load_from_ascii;
+use board::domain::alias::MovementCost;
+use board::domain::constants::{BASIC_MOVEMENT_COST, IMPASSABLE_MOVEMENT_COST};
+use board::ecs_types::components::{Faction, Position};
 use board::logic::movement::{
     Direction, Mover, ReachableInfo, reachable_positions, step_in_direction,
 };
@@ -64,7 +64,7 @@ S
     ];
 
     for (idx, (ascii, direction)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let pos = markers["S"][0];
         let expected = markers["E"][0];
         let result = step_in_direction(board, pos, *direction);
@@ -135,7 +135,7 @@ S
     ];
 
     for (idx, (ascii, directions)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let pos = markers["S"][0];
         for d in directions {
             let result = step_in_direction(board, pos, *d);
@@ -150,7 +150,7 @@ fn test_reachable_positions_out_of_bound() {
 . . 
 . . 
             "#;
-    let (board, _, _) = load_from_ascii(ascii).unwrap();
+    let (board, _) = load_from_ascii(ascii).unwrap();
     for from in [
         Position { x: 0, y: 2 },
         Position { x: 2, y: 0 },
@@ -260,7 +260,7 @@ S . . . .
     ];
 
     for (idx, (ascii, budget, expected)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"][0];
         let mover = Mover {
             pos: from,
@@ -364,7 +364,7 @@ S X . . .
     ];
 
     for (idx, (ascii, budget, expected)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"][0];
         let enemy_pos = markers["X"][0];
 
@@ -472,7 +472,7 @@ S X . . .
     ];
 
     for (idx, (ascii, budget, expected)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"][0];
         let ally_positions = &markers["X"];
 
@@ -566,7 +566,7 @@ S # . . .
     ];
 
     for (idx, (ascii, budget, expected)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"][0];
         let wall_positions = &markers["#"];
 
@@ -761,7 +761,7 @@ S w w . .
     ];
 
     for (idx, (ascii, budget, expected)) in test_data.iter().enumerate() {
-        let (board, _, markers) = load_from_ascii(ascii).unwrap();
+        let (board, markers) = load_from_ascii(ascii).unwrap();
         let from = markers["S"][0];
         let water_positions = &markers["w"];
 

@@ -1,14 +1,17 @@
 //! 移動邏輯
 
-use crate::alias::MovementCost;
-use crate::component::{Board, Faction, Position};
+use crate::domain::alias::MovementCost;
+use crate::ecs_types::components::{Faction, Position};
+use crate::ecs_types::resources::Board;
 use crate::error::{BoardError, Result};
 use crate::logic::board::is_valid_position;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 /// 移動方向（四方向）
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, EnumIter)]
 pub enum Direction {
     Up,
     Down,
@@ -129,20 +132,14 @@ where
         }
 
         // 探索相鄰位置
-        const DIRECTIONS: [Direction; 4] = [
-            Direction::Up,
-            Direction::Down,
-            Direction::Left,
-            Direction::Right,
-        ];
-        for direction in DIRECTIONS {
+        for direction in Direction::iter() {
             if let Some(next_pos) = step_in_direction(board, pos, direction) {
                 let terrain_cost = get_terrain_cost(next_pos);
                 if terrain_cost == MovementCost::MAX {
                     continue;
                 }
 
-                let new_cost = dist[&pos] + terrain_cost;
+                let new_cost = cost + terrain_cost;
                 if new_cost > budget {
                     continue;
                 }

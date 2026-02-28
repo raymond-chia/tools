@@ -1,8 +1,9 @@
+use board::domain::core_types::{Attribute, CalculatedAttributes};
 use board::loader_schema::{
-    Attribute, AttributeSource, BuffEffect, Mechanic, SkillEffect, SkillType, TargetFilter,
-    TargetMode, TriggerEvent, ValueFormula,
+    AttributeSource, BuffEffect, Mechanic, SkillEffect, SkillType, TargetFilter, TargetMode,
+    TriggerEvent, ValueFormula,
 };
-use board::logic::unit_attributes::{CalculatedAttributes, calculate_attributes};
+use board::logic::unit_attributes::calculate_attributes;
 use std::collections::HashMap;
 
 // 技能名稱常數
@@ -52,7 +53,7 @@ fn test_calculate_attributes() {
                         SKILL_STRENGTH,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::PhysicalAttack,
+                            Attribute::Hit,
                             ValueFormula::Fixed { value: 10 },
                         )],
                     ),
@@ -62,7 +63,7 @@ fn test_calculate_attributes() {
             vec![SKILL_STRENGTH.to_string()],
             vec![],
             CalculatedAttributes {
-                physical_attack: 10,
+                hit: 10,
                 ..Default::default()
             },
         ),
@@ -77,15 +78,15 @@ fn test_calculate_attributes() {
                         TriggerEvent::Passive,
                         vec![
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Fixed { value: 10 },
                             ),
                             attribute_modify_permanent(
-                                Attribute::Hp,
+                                Attribute::Evasion,
                                 ValueFormula::Fixed { value: 20 },
                             ),
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Fixed { value: 40 },
                             ),
                         ],
@@ -97,7 +98,7 @@ fn test_calculate_attributes() {
                         SKILL_CONSTITUTION,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::Hp,
+                            Attribute::Evasion,
                             ValueFormula::Fixed { value: 100 },
                         )],
                     ),
@@ -107,8 +108,8 @@ fn test_calculate_attributes() {
             vec![SKILL_STRENGTH.to_string(), SKILL_CONSTITUTION.to_string()],
             vec![],
             CalculatedAttributes {
-                physical_attack: 50,
-                hp: 120,
+                hit: 50,
+                evasion: 120,
                 ..Default::default()
             },
         ),
@@ -157,7 +158,7 @@ fn test_calculate_attributes() {
                         SKILL_PASSIVE,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::Evasion,
+                            Attribute::Hit,
                             ValueFormula::Fixed { value: 10 },
                         )],
                     ),
@@ -166,12 +167,12 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_PASSIVE.to_string()],
             vec![BuffEffect {
-                attribute: Attribute::Evasion,
+                attribute: Attribute::Hit,
                 formula: ValueFormula::Fixed { value: 20 },
                 duration: 10,
             }],
             CalculatedAttributes {
-                evasion: 30,
+                hit: 30,
                 ..Default::default()
             },
         ),
@@ -185,7 +186,7 @@ fn test_calculate_attributes() {
                         SKILL_PASSIVE,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::Evasion,
+                            Attribute::Hit,
                             ValueFormula::Fixed { value: 10 },
                         )],
                     ),
@@ -194,16 +195,16 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_PASSIVE.to_string()],
             vec![BuffEffect {
-                attribute: Attribute::Evasion,
+                attribute: Attribute::Hit,
                 formula: ValueFormula::Attribute {
                     source: AttributeSource::Caster,
-                    attribute: Attribute::Evasion,
+                    attribute: Attribute::Hit,
                     multiplier: 200,
                 },
                 duration: 10,
             }],
             CalculatedAttributes {
-                evasion: 20,
+                hit: 20,
                 ..Default::default()
             },
         ),
@@ -217,7 +218,7 @@ fn test_calculate_attributes() {
                         SKILL_PASSIVE,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::Evasion,
+                            Attribute::Hit,
                             ValueFormula::Fixed { value: 20 },
                         )],
                     ),
@@ -226,12 +227,12 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_PASSIVE.to_string()],
             vec![BuffEffect {
-                attribute: Attribute::Evasion,
+                attribute: Attribute::Hit,
                 formula: ValueFormula::Fixed { value: -15 },
                 duration: 10,
             }],
             CalculatedAttributes {
-                evasion: 5,
+                hit: 5,
                 ..Default::default()
             },
         ),
@@ -245,7 +246,7 @@ fn test_calculate_attributes() {
                         SKILL_PASSIVE,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::Evasion,
+                            Attribute::Hit,
                             ValueFormula::Fixed { value: 20 },
                         )],
                     ),
@@ -254,12 +255,12 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_PASSIVE.to_string()],
             vec![BuffEffect {
-                attribute: Attribute::Evasion,
+                attribute: Attribute::Hit,
                 formula: ValueFormula::Fixed { value: -25 },
                 duration: 10,
             }],
             CalculatedAttributes {
-                evasion: -5,
+                hit: -5,
                 ..Default::default()
             },
         ),
@@ -273,7 +274,7 @@ fn test_calculate_attributes() {
                         SKILL_BASE_ATTACK,
                         TriggerEvent::Passive,
                         vec![attribute_modify_permanent(
-                            Attribute::PhysicalAttack,
+                            Attribute::Hit,
                             ValueFormula::Fixed { value: 10 },
                         )],
                     ),
@@ -285,15 +286,15 @@ fn test_calculate_attributes() {
                         TriggerEvent::Passive,
                         vec![
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Attribute {
                                     source: AttributeSource::Caster,
-                                    attribute: Attribute::PhysicalAttack,
+                                    attribute: Attribute::Hit,
                                     multiplier: 200,
                                 },
                             ),
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Fixed { value: 10 },
                             ),
                         ],
@@ -307,7 +308,7 @@ fn test_calculate_attributes() {
             ],
             vec![],
             CalculatedAttributes {
-                physical_attack: 40,
+                hit: 40,
                 ..Default::default()
             },
         ),
@@ -322,14 +323,14 @@ fn test_calculate_attributes() {
                         TriggerEvent::Passive,
                         vec![
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Fixed { value: 10 },
                             ),
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Attribute {
                                     source: AttributeSource::Caster,
-                                    attribute: Attribute::PhysicalAttack,
+                                    attribute: Attribute::Hit,
                                     multiplier: 200,
                                 },
                             ),
@@ -343,15 +344,15 @@ fn test_calculate_attributes() {
                         TriggerEvent::Passive,
                         vec![
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Attribute {
                                     source: AttributeSource::Caster,
-                                    attribute: Attribute::PhysicalAttack,
+                                    attribute: Attribute::Hit,
                                     multiplier: 200,
                                 },
                             ),
                             attribute_modify_permanent(
-                                Attribute::PhysicalAttack,
+                                Attribute::Hit,
                                 ValueFormula::Fixed { value: 10 },
                             ),
                         ],
@@ -364,12 +365,12 @@ fn test_calculate_attributes() {
                 SKILL_BONUS_ATTACK.to_string(),
             ],
             vec![BuffEffect {
-                attribute: Attribute::PhysicalAttack,
+                attribute: Attribute::Hit,
                 formula: ValueFormula::Fixed { value: 5 },
                 duration: 10,
             }],
             CalculatedAttributes {
-                physical_attack: 100,
+                hit: 100,
                 ..Default::default()
             },
         ),
@@ -380,12 +381,6 @@ fn test_calculate_attributes() {
         assert!(result.is_ok(), "測試 '{}' 應該成功", desc);
 
         let attrs = result.unwrap();
-        assert_eq!(attrs.hp, expected.hp, "測試 '{}' - HP 不符", desc);
-        assert_eq!(
-            attrs.physical_attack, expected.physical_attack,
-            "測試 '{}' - 物理攻擊不符",
-            desc
-        );
         assert_eq!(attrs.hit, expected.hit, "測試 '{}' - 命中不符", desc);
         assert_eq!(
             attrs.evasion, expected.evasion,

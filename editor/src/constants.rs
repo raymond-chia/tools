@@ -38,11 +38,8 @@ pub const BATTLEFIELD_GRID_SPACING: f32 = 2.0;
 pub const BATTLEFIELD_TEXT_SIZE: f32 = 14.0;
 
 // 關卡編輯器 - 戰場預覽 - 顏色
-pub const BATTLEFIELD_COLOR_PLAYER: egui::Color32 = egui::Color32::LIGHT_BLUE;
-pub const BATTLEFIELD_COLOR_ENEMY: egui::Color32 = egui::Color32::LIGHT_RED;
+pub const BATTLEFIELD_COLOR_DEPLOYMENT: egui::Color32 = egui::Color32::LIGHT_GREEN;
+pub const BATTLEFIELD_COLOR_UNIT: egui::Color32 = egui::Color32::DARK_GRAY;
 pub const BATTLEFIELD_COLOR_OBJECT: egui::Color32 = egui::Color32::GRAY;
 pub const BATTLEFIELD_COLOR_EMPTY: egui::Color32 = egui::Color32::DARK_GREEN;
-pub const BATTLEFIELD_COLOR_DRAG_HIGHLIGHT: egui::Color32 = egui::Color32::YELLOW;
-
-// 關卡編輯器 - 模擬戰鬥
-pub const BATTLEFIELD_COLOR_PLAYER_SELECTED: egui::Color32 = egui::Color32::GREEN; // 綠色高亮
+pub const BATTLEFIELD_COLOR_HIGHLIGHT: egui::Color32 = egui::Color32::YELLOW;

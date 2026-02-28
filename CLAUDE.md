@@ -12,6 +12,7 @@
 4. 禁止使用 magic numbers 或 magic strings。所有數值和字串常數應定義為具名常數。
 5. 禁止在 Component 結構上實現 impl 區塊。所有行為應透過 derive 或外部函數實現。
 6. 禁止在同一作用域內使用相似的變數名。例如不應同時存在 attr 和 attribute。
+7. 禁止進入內建 plan mode
 
 ## 語言和溝通原則
 

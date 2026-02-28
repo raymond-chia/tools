@@ -1,5 +1,5 @@
-use board::component::Position;
-use board::loader::load_from_ascii;
+use super::super::super::test_helpers::level_builder::load_from_ascii;
+use board::ecs_types::components::Position;
 use board::logic::board::is_valid_position;
 
 #[test]
@@ -11,15 +11,17 @@ fn test_ascii_to_board_3x3() {
 . . .
     "#;
 
-    let (board, positions, _markers) = load_from_ascii(ascii).unwrap();
+    let (board, _markers) = load_from_ascii(ascii).unwrap();
 
     assert_eq!(board.width, 3);
     assert_eq!(board.height, 3);
-    assert_eq!(positions.len(), 9);
 
     // 驗證所有位置都在棋盤內且有效
-    for &pos in &positions {
-        assert!(is_valid_position(board, pos));
+    for x in 0..board.width {
+        for y in 0..board.height {
+            let pos = Position { x, y };
+            assert!(is_valid_position(board, pos));
+        }
     }
 
     // 邊界內有效
@@ -47,15 +49,17 @@ fn test_ascii_to_board_8x8() {
 . . . . . . . .
     "#;
 
-    let (board, positions, _markers) = load_from_ascii(ascii).unwrap();
+    let (board, _markers) = load_from_ascii(ascii).unwrap();
 
     assert_eq!(board.width, 8);
     assert_eq!(board.height, 8);
-    assert_eq!(positions.len(), 64);
 
     // 驗證所有位置都在棋盤內且有效
-    for pos in positions {
-        assert!(is_valid_position(board, pos));
+    for x in 0..board.width {
+        for y in 0..board.height {
+            let pos = Position { x, y };
+            assert!(is_valid_position(board, pos));
+        }
     }
 
     // 驗證四個角都有效

@@ -6,5 +6,18 @@
       "Bash(cargo check:*)"
     ],
     "deny": ["Bash(cargo run:*)"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "EnterPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'BLOCKED: EnterPlanMode is disabled. Use /plan skill instead.' && exit 2"
+          }
+        ]
+      }
+    ]
   }
 }

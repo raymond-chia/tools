@@ -1,8 +1,55 @@
 //! 基本資料類型定義
 
-use crate::component::{Occupant, Position};
+use crate::ecs_types::components::{Occupant, Position};
 use crate::error::{BoardError, Result};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use strum_macros::EnumIter;
+
+// ============================================================================
+// 屬性系統
+// ============================================================================
+
+/// 定義屬性列表的 macro（單一來源）
+///
+/// 格式：(欄位名, Attribute enum variant)
+/// 同時產生：
+/// - `Attribute` enum
+/// - `CalculatedAttributes` struct
+macro_rules! define_attributes {
+    ($(($field:ident, $variant:ident)),* $(,)?) => {
+        /// 角色屬性類型
+        #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, EnumIter)]
+        pub enum Attribute {
+            #[default]
+            $($variant,)*
+        }
+
+        /// 計算出的單位屬性
+        #[derive(Debug, Default, Clone)]
+        pub struct CalculatedAttributes {
+            $(pub $field: i32,)*
+        }
+    };
+}
+
+define_attributes!(
+    (hp, Hp),
+    (mp, Mp),
+    (initiative, Initiative),
+    (hit, Hit),
+    (evasion, Evasion),
+    (block, Block),
+    (block_protection, BlockProtection),
+    (physical_attack, PhysicalAttack),
+    (magical_attack, MagicalAttack),
+    (magical_dc, MagicalDc),
+    (fortitude, Fortitude),
+    (reflex, Reflex),
+    (will, Will),
+    (movement, Movement),
+    (reaction, Reaction),
+);
 
 /// 雙向 occupant 位置索引
 ///

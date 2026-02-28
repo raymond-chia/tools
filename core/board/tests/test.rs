@@ -1,3 +1,4 @@
-mod board;
+mod ecs_logic;
+mod logic;
 mod test_error;
-mod unit_attributes;
+mod test_helpers;

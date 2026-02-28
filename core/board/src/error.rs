@@ -6,7 +6,7 @@
 //! - AI 時代開發速度無差異
 //! - 維護成本低
 
-use crate::alias::{Coord, SkillName};
+use crate::domain::alias::{Coord, SkillName, TypeName};
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -22,11 +22,41 @@ pub struct Error {
 #[derive(Debug, ThisError)]
 pub enum ErrorKind {
     #[error(transparent)]
-    Board(#[from] BoardError),
-    #[error(transparent)]
     Load(#[from] LoadError),
     #[error(transparent)]
+    Data(#[from] DataError),
+    #[error(transparent)]
+    Board(#[from] BoardError),
+    #[error(transparent)]
+    Deployment(#[from] DeploymentError),
+    #[error(transparent)]
     Unit(#[from] UnitError),
+}
+
+/// 格式載入錯誤
+#[derive(Debug, ThisError)]
+pub enum LoadError {
+    #[error("解析失敗: {0}")]
+    ParseError(String),
+    #[error("{format} 反序列化失敗: {reason}")]
+    DeserializeError { format: String, reason: String },
+    #[error("{format} 序列化失敗: {reason}")]
+    SerializeError { format: String, reason: String },
+}
+
+/// 遊戲資料存取錯誤
+#[derive(Debug, ThisError)]
+pub enum DataError {
+    #[error("Entity 缺少必要的 component: {component_name}")]
+    MissingComponent { component_name: String },
+    #[error("找不到 GameData resource，請先呼叫 parse_and_insert_game_data")]
+    GameDataNotFound,
+    #[error("找不到單位類型: {type_name}")]
+    UnitTypeNotFound { type_name: TypeName },
+    #[error("找不到物件類型: {type_name}")]
+    ObjectTypeNotFound { type_name: TypeName },
+    #[error("找不到 {config_name} resource，請先呼叫 spawn_level")]
+    BoardConfigNotFound { config_name: String },
 }
 
 /// 棋盤錯誤
@@ -47,15 +77,15 @@ pub enum BoardError {
     },
 }
 
-/// 格式載入錯誤
+/// 部署相關錯誤
 #[derive(Debug, ThisError)]
-pub enum LoadError {
-    #[error("解析失敗: {0}")]
-    ParseError(String),
-    #[error("{format} 反序列化失敗: {reason}")]
-    DeserializeError { format: String, reason: String },
-    #[error("{format} 序列化失敗: {reason}")]
-    SerializeError { format: String, reason: String },
+pub enum DeploymentError {
+    #[error("位置 ({x}, {y}) 不在合法部署區域內")]
+    PositionNotDeployable { x: Coord, y: Coord },
+    #[error("已達玩家單位上限: {max}")]
+    MaxPlayerUnitsReached { max: usize },
+    #[error("位置 ({x}, {y}) 沒有已部署的玩家單位可以取消")]
+    NothingToUndeploy { x: Coord, y: Coord },
 }
 
 /// 單位相關錯誤

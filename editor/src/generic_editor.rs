@@ -15,15 +15,38 @@ pub enum EditMode<T> {
     Editing(usize, T),
 }
 
-/// 泛型編輯器狀態
+/// 訊息狀態（成功或錯誤訊息）
 #[derive(Debug, Default)]
-pub struct GenericEditorState<T: EditorItem> {
+pub struct MessageState {
     /// 最後的操作訊息（成功或錯誤）
     pub message: String,
     /// 訊息是否為錯誤
     pub is_error: bool,
     /// 訊息是否可見
     pub message_visible: bool,
+}
+
+impl MessageState {
+    /// 設置成功訊息
+    pub fn set_success(&mut self, msg: impl Into<String>) {
+        self.message = msg.into();
+        self.is_error = false;
+        self.message_visible = true;
+    }
+
+    /// 設置錯誤訊息
+    pub fn set_error(&mut self, msg: impl Into<String>) {
+        self.message = msg.into();
+        self.is_error = true;
+        self.message_visible = true;
+    }
+}
+
+/// 泛型編輯器狀態
+#[derive(Debug, Default)]
+pub struct GenericEditorState<T: EditorItem> {
+    /// 訊息狀態
+    pub message_state: MessageState,
 
     /// 項目列表
     pub items: Vec<T>,
@@ -40,20 +63,6 @@ pub struct GenericEditorState<T: EditorItem> {
 }
 
 impl<T: EditorItem> GenericEditorState<T> {
-    /// 設置成功訊息
-    pub fn set_success(&mut self, msg: impl Into<String>) {
-        self.message = msg.into();
-        self.is_error = false;
-        self.message_visible = true;
-    }
-
-    /// 設置錯誤訊息
-    pub fn set_error(&mut self, msg: impl Into<String>) {
-        self.message = msg.into();
-        self.is_error = true;
-        self.message_visible = true;
-    }
-
     /// 開始新增項目
     pub fn start_creating(&mut self) {
         self.edit_mode = EditMode::Creating(T::default());
@@ -63,7 +72,8 @@ impl<T: EditorItem> GenericEditorState<T> {
     pub fn start_editing(&mut self, index: usize) {
         // Fail Fast: 驗證索引
         if index >= self.items.len() {
-            self.set_error(format!("無效的索引：{}", index));
+            self.message_state
+                .set_error(format!("無效的索引：{}", index));
             return;
         }
 
@@ -74,7 +84,8 @@ impl<T: EditorItem> GenericEditorState<T> {
     pub fn start_copying(&mut self, index: usize) {
         // Fail Fast: 驗證索引
         if index >= self.items.len() {
-            self.set_error(format!("無效的索引：{}", index));
+            self.message_state
+                .set_error(format!("無效的索引：{}", index));
             return;
         }
 
@@ -89,7 +100,7 @@ impl<T: EditorItem> GenericEditorState<T> {
         let edit_mode = std::mem::take(&mut self.edit_mode);
         let (editing_index, item) = match edit_mode {
             EditMode::None => {
-                self.set_error("目前不在編輯模式");
+                self.message_state.set_error("目前不在編輯模式");
                 return;
             }
             EditMode::Creating(item) => (None, item),
@@ -98,7 +109,7 @@ impl<T: EditorItem> GenericEditorState<T> {
 
         // 驗證項目
         if let Err(e) = item.validate(&self.items, editing_index) {
-            self.set_error(e);
+            self.message_state.set_error(e);
             // 復原 edit_mode（validate 失敗時保留編輯狀態）
             self.edit_mode = match editing_index {
                 None => EditMode::Creating(item),
@@ -117,20 +128,23 @@ impl<T: EditorItem> GenericEditorState<T> {
                 // Creating
                 let name = confirmed_item.name().to_string();
                 self.items.push(confirmed_item);
-                self.set_success(format!("成功新增{}：{}", T::type_name(), name));
+                self.message_state
+                    .set_success(format!("成功新增{}：{}", T::type_name(), name));
                 self.selected_index = Some(self.items.len() - 1);
             }
             Some(index) => {
                 // Editing
                 // Fail Fast: 驗證索引
                 if index >= self.items.len() {
-                    self.set_error(format!("無效的索引：{}", index));
+                    self.message_state
+                        .set_error(format!("無效的索引：{}", index));
                     return;
                 }
 
                 let name = confirmed_item.name().to_string();
                 self.items[index] = confirmed_item;
-                self.set_success(format!("成功編輯{}：{}", T::type_name(), name));
+                self.message_state
+                    .set_success(format!("成功編輯{}：{}", T::type_name(), name));
                 self.selected_index = Some(index);
             }
         }
@@ -145,13 +159,15 @@ impl<T: EditorItem> GenericEditorState<T> {
     pub fn delete_item(&mut self, index: usize) {
         // Fail Fast: 驗證索引
         if index >= self.items.len() {
-            self.set_error(format!("無效的索引：{}", index));
+            self.message_state
+                .set_error(format!("無效的索引：{}", index));
             return;
         }
 
         let name = self.items[index].name().to_string();
         self.items.remove(index);
-        self.set_success(format!("成功刪除{}：{}", T::type_name(), name));
+        self.message_state
+            .set_success(format!("成功刪除{}：{}", T::type_name(), name));
 
         // 調整選中索引
         self.selected_index = None;

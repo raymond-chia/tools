@@ -36,7 +36,7 @@ pub fn load_file<T: EditorItem>(
 ) {
     // Fail Fast: 檢查是否正在編輯
     if state.is_editing() {
-        state.set_error("請先完成或取消當前的編輯");
+        state.message_state.set_error("請先完成或取消當前的編輯");
         return;
     }
 
@@ -44,7 +44,9 @@ pub fn load_file<T: EditorItem>(
     let content = match fs::read_to_string(path) {
         Ok(content) => content,
         Err(e) => {
-            state.set_error(format!("載入檔案失敗：{} - {}", path.display(), e));
+            state
+                .message_state
+                .set_error(format!("載入檔案失敗：{} - {}", path.display(), e));
             return;
         }
     };
@@ -53,7 +55,9 @@ pub fn load_file<T: EditorItem>(
     let data: ItemsData<T> = match toml::from_str(&content) {
         Ok(data) => data,
         Err(e) => {
-            state.set_error(format!("解析 TOML 失敗：{}", e));
+            state
+                .message_state
+                .set_error(format!("解析 TOML 失敗：{}", e));
             return;
         }
     };
@@ -63,7 +67,7 @@ pub fn load_file<T: EditorItem>(
         Some(items) => {
             state.items = items.clone();
             state.selected_index = None;
-            state.set_success(format!(
+            state.message_state.set_success(format!(
                 "成功載入檔案：{}（共 {} 個{}）",
                 path.display(),
                 state.items.len(),
@@ -71,7 +75,9 @@ pub fn load_file<T: EditorItem>(
             ));
         }
         None => {
-            state.set_error(format!("TOML 檔案中找不到 key：{}", data_key));
+            state
+                .message_state
+                .set_error(format!("TOML 檔案中找不到 key：{}", data_key));
         }
     }
 }
@@ -80,7 +86,7 @@ pub fn load_file<T: EditorItem>(
 pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, data_key: &str) {
     // Fail Fast: 檢查是否正在編輯
     if state.is_editing() {
-        state.set_error("請先完成或取消當前的編輯");
+        state.message_state.set_error("請先完成或取消當前的編輯");
         return;
     }
 
@@ -91,7 +97,9 @@ pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, 
     let content = match toml::to_string_pretty(&data) {
         Ok(content) => content,
         Err(e) => {
-            state.set_error(format!("序列化 TOML 失敗：{}", e));
+            state
+                .message_state
+                .set_error(format!("序列化 TOML 失敗：{}", e));
             return;
         }
     };
@@ -99,7 +107,9 @@ pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, 
     // 確保目錄存在
     if let Some(parent) = path.parent() {
         if let Err(e) = fs::create_dir_all(parent) {
-            state.set_error(format!("建立目錄失敗：{} - {}", parent.display(), e));
+            state
+                .message_state
+                .set_error(format!("建立目錄失敗：{} - {}", parent.display(), e));
             return;
         }
     }
@@ -107,7 +117,7 @@ pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, 
     // 寫入檔案
     match fs::write(path, content) {
         Ok(_) => {
-            state.set_success(format!(
+            state.message_state.set_success(format!(
                 "成功儲存檔案：{}（共 {} 個{}）",
                 path.display(),
                 state.items.len(),
@@ -115,7 +125,9 @@ pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, 
             ));
         }
         Err(e) => {
-            state.set_error(format!("儲存檔案失敗：{} - {}", path.display(), e));
+            state
+                .message_state
+                .set_error(format!("儲存檔案失敗：{} - {}", path.display(), e));
         }
     }
 }
