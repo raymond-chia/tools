@@ -32,6 +32,9 @@ pub const COPY_SUFFIX: &str = "-copy";
 pub const COMBOBOX_MIN_WIDTH: f32 = 250.0;
 pub const COMBOBOX_MIN_HEIGHT: f32 = 10000.0;
 
+// 關卡編輯器 - 清除選項
+pub const CLEAR_LABEL: &str = "── 清除 ──";
+
 // 關卡編輯器 - 戰場預覽
 pub const BATTLEFIELD_CELL_SIZE: f32 = 36.0;
 pub const BATTLEFIELD_GRID_SPACING: f32 = 2.0;

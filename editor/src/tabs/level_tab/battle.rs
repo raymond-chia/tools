@@ -80,7 +80,9 @@ fn render_level_info(ui: &mut egui::Ui, snapshot: &Snapshot) {
         .spacing([SPACING_MEDIUM, SPACING_MEDIUM])
         .show(ui, |ui| {
             ui.label(format!("關卡名稱：{}", snapshot.level_config.name));
-            ui.separator();
+
+            ui.end_row();
+
             ui.label(format!(
                 "尺寸：{}×{}",
                 snapshot.board.width, snapshot.board.height

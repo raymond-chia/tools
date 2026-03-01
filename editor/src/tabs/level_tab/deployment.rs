@@ -146,16 +146,56 @@ fn render_player_deployment_panel(
         return Ok(());
     }
 
-    // 渲染部署點列表
+    // 渲染部署資訊
     let mut errors = vec![];
     egui::ScrollArea::vertical()
         .auto_shrink([false; 2])
         .id_salt("deployment_list")
         .show(ui, |ui| {
-            for (index, pos) in snapshot.deployment_positions.iter().enumerate() {
-                if let Err(e) = render_deployment_slot(ui, index, *pos, snapshot, ui_state) {
-                    errors.push(format!("部署槽 #{} 錯誤：{}", index + 1, e));
+            // ComboBox 區塊：選中部署點時才顯示
+            let selected_deploy_pos = ui_state
+                .selected_left_pos
+                .filter(|pos| snapshot.deployment_set.contains(pos));
+
+            if let Some(pos) = selected_deploy_pos {
+                let deployed_name = snapshot
+                    .unit_map
+                    .get(&pos)
+                    .map(|bundle| bundle.occupant_type_name.0.clone());
+
+                ui.group(|ui| {
+                    ui.label(format!("部署點 ({}, {})", pos.x, pos.y));
+                    if let Err(e) = render_unit_combobox(ui, pos, &deployed_name, ui_state) {
+                        errors.push(format!("部署點 ({}, {}) 錯誤：{}", pos.x, pos.y, e));
+                    }
+                });
+
+                ui.add_space(SPACING_MEDIUM);
+                ui.separator();
+            } else {
+                ui.label("請在地圖上點擊部署點");
+                ui.add_space(SPACING_MEDIUM);
+                ui.separator();
+            }
+
+            ui.add_space(SPACING_SMALL);
+
+            // 已部署單位列表（一直顯示）
+            ui.label("已部署單位：");
+            let mut has_deployed = false;
+            for pos in &snapshot.deployment_positions {
+                if let Some(bundle) = snapshot.unit_map.get(pos) {
+                    has_deployed = true;
+                    ui.horizontal(|ui| {
+                        ui.label(format!(
+                            "({}, {}) — {}",
+                            pos.x, pos.y, bundle.occupant_type_name.0
+                        ));
+                    });
                 }
+            }
+            if !has_deployed {
+                ui.label("尚未部署任何單位");
             }
         });
 
@@ -166,73 +206,11 @@ fn render_player_deployment_panel(
     }
 }
 
-/// 渲染單個部署槽（部署點）
-fn render_deployment_slot(
-    ui: &mut egui::Ui,
-    index: usize,
-    pos: Position,
-    snapshot: &Snapshot,
-    ui_state: &mut LevelTabUIState,
-) -> CResult<()> {
-    let deployed_unit_name = snapshot
-        .unit_map
-        .get(&pos)
-        .map(|bundle| bundle.occupant_type_name.0.clone());
-    let is_selected = ui_state.selected_left_pos == Some(pos);
-
-    let mut clear_clicked = false;
-    let mut select_clicked = false;
-    let mut combobox_error: Option<board::error::Error> = None;
-
-    ui.group(|ui| {
-        ui.horizontal(|ui| {
-            ui.label(format!("#{} ({}, {})", index + 1, pos.x, pos.y));
-
-            // 已部署：顯示單位名稱 + 清除按鈕
-            match &deployed_unit_name {
-                Some(unit_name) => {
-                    ui.label(format!("✓ {}", unit_name));
-                    if ui.button("清除").clicked() {
-                        clear_clicked = true;
-                    }
-                }
-                None => {
-                    // 未部署：顯示選擇按鈕
-                    if ui.button("選擇單位").clicked() {
-                        select_clicked = true;
-                    }
-                }
-            }
-        });
-
-        // 如果選中這個部署點，顯示 ComboBox
-        if is_selected {
-            if let Err(e) = render_unit_combobox(ui, index, pos, ui_state) {
-                combobox_error = Some(e);
-            }
-        }
-    });
-
-    // 在閉包外處理狀態更新
-    if let Some(e) = combobox_error {
-        return Err(e);
-    }
-    if clear_clicked {
-        board::ecs_logic::deployment::undeploy_unit(&mut ui_state.world, pos)?;
-    }
-    if select_clicked {
-        ui_state.selected_left_pos = Some(pos);
-    }
-
-    ui.add_space(SPACING_SMALL);
-    Ok(())
-}
-
 /// 渲染單位選擇 ComboBox（集成搜尋），選擇後直接部署
 fn render_unit_combobox(
     ui: &mut egui::Ui,
-    index: usize,
     pos: Position,
+    deployed_name: &Option<String>,
     ui_state: &mut LevelTabUIState,
 ) -> CResult<()> {
     let mut selected_value = String::new();
@@ -243,8 +221,13 @@ fn render_unit_combobox(
         .map(|u| u.name.clone())
         .collect();
 
-    egui::ComboBox::from_id_salt(format!("player_unit_selector_{}", index))
-        .selected_text("選擇單位")
+    let display_text = match deployed_name {
+        Some(name) => name.as_str(),
+        None => "選擇單位",
+    };
+
+    egui::ComboBox::from_id_salt(format!("player_unit_selector_{}_{}", pos.x, pos.y))
+        .selected_text(display_text)
         .height(COMBOBOX_MIN_HEIGHT)
         .show_ui(ui, |ui| {
             ui.set_min_width(COMBOBOX_MIN_WIDTH);
@@ -254,6 +237,12 @@ fn render_unit_combobox(
             ui.memory_mut(|mem| mem.request_focus(response.id));
             ui.separator();
 
+            // 已部署時，加「清除」選項
+            if deployed_name.is_some() {
+                ui.selectable_value(&mut selected_value, CLEAR_LABEL.to_string(), CLEAR_LABEL);
+                ui.separator();
+            }
+
             // 過濾選項
             let visible_units = filter_by_search(&unit_names, &ui_state.unit_search_query);
             for unit_name in visible_units {
@@ -261,7 +250,9 @@ fn render_unit_combobox(
             }
         });
 
-    if !selected_value.is_empty() {
+    if selected_value == CLEAR_LABEL {
+        board::ecs_logic::deployment::undeploy_unit(&mut ui_state.world, pos)?;
+    } else if !selected_value.is_empty() {
         board::ecs_logic::deployment::deploy_unit(&mut ui_state.world, &selected_value, pos)?;
     }
     Ok(())
