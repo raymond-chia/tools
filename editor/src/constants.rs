@@ -28,10 +28,6 @@ pub const FILE_EXTENSION_TOML: &str = ".toml";
 // 編輯器相關
 pub const COPY_SUFFIX: &str = "-copy";
 
-// 關卡編輯器 - ComboBox 尺寸
-pub const COMBOBOX_MIN_WIDTH: f32 = 250.0;
-pub const COMBOBOX_MIN_HEIGHT: f32 = 10000.0;
-
 // 關卡編輯器 - 清除選項
 pub const CLEAR_LABEL: &str = "── 清除 ──";
 

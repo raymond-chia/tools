@@ -183,7 +183,8 @@ ECS 框架相關的型別定義
 - `pub fn get_deployment_config(world: &World) -> Result<DeploymentConfig>` - 取得部署設定
 - `pub fn get_level_config(world: &World) -> Result<LevelConfig>` - 取得關卡設定
 - `pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>` - 查詢所有單位
-- `pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectBundle>>` - 查詢所有物件
+- `pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQueryResult>>` - 查詢所有物件
+- `pub struct ObjectQueryResult` - 物件查詢結果（包含 Bundle 資料 + 可選 tag）
 
 ### domain/core_types.rs
 

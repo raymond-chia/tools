@@ -3,7 +3,9 @@
 use super::battlefield::{self, Snapshot};
 use super::{LevelTabMode, LevelTabUIState, MessageState};
 use crate::constants::*;
-use crate::utils::search::{filter_by_search, render_search_input};
+use crate::utils::search::{
+    combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
+};
 use board::ecs_types::components::Position;
 use board::error::Result as CResult;
 
@@ -226,29 +228,34 @@ fn render_unit_combobox(
         None => "選擇單位",
     };
 
-    egui::ComboBox::from_id_salt(format!("player_unit_selector_{}_{}", pos.x, pos.y))
-        .selected_text(display_text)
-        .height(COMBOBOX_MIN_HEIGHT)
-        .show_ui(ui, |ui| {
-            ui.set_min_width(COMBOBOX_MIN_WIDTH);
+    combobox_with_dynamic_height(
+        &format!("player_unit_selector_{}_{}", pos.x, pos.y),
+        display_text,
+        unit_names.len(),
+    )
+    .show_ui(ui, |ui| {
+        // 搜尋輸入框（使用全域搜尋字串）
+        let response = render_search_input(ui, &mut ui_state.unit_search_query);
+        ui.memory_mut(|mem| mem.request_focus(response.id));
+        ui.separator();
 
-            // 搜尋輸入框（使用全域搜尋字串）
-            let response = render_search_input(ui, &mut ui_state.unit_search_query);
-            ui.memory_mut(|mem| mem.request_focus(response.id));
+        // 已部署時，加「清除」選項
+        if deployed_name.is_some() {
+            ui.selectable_value(&mut selected_value, CLEAR_LABEL.to_string(), CLEAR_LABEL);
             ui.separator();
+        }
 
-            // 已部署時，加「清除」選項
-            if deployed_name.is_some() {
-                ui.selectable_value(&mut selected_value, CLEAR_LABEL.to_string(), CLEAR_LABEL);
-                ui.separator();
-            }
-
-            // 過濾選項
-            let visible_units = filter_by_search(&unit_names, &ui_state.unit_search_query);
-            for unit_name in visible_units {
-                ui.selectable_value(&mut selected_value, unit_name.clone(), unit_name);
-            }
-        });
+        // 過濾選項
+        let visible_units = filter_by_search(&unit_names, &ui_state.unit_search_query);
+        render_filtered_options(
+            ui,
+            &visible_units,
+            // 預留清除的高度
+            unit_names.len() + 1 - visible_units.len(),
+            &mut selected_value,
+            &ui_state.unit_search_query,
+        );
+    });
 
     if selected_value == CLEAR_LABEL {
         board::ecs_logic::deployment::undeploy_unit(&mut ui_state.world, pos)?;

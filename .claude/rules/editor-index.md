@@ -106,6 +106,8 @@ GenericEditorState 的方法：
 - `pub fn render_search_input(ui: &mut egui::Ui, query: &mut String) -> egui::Response` - 渲染搜尋輸入框
 - `pub fn match_search_query(item: &str, query_lower: &str) -> bool` - 判斷項目是否匹配搜尋查詢
 - `pub fn filter_by_search<'a, T: AsRef<str>>(items: &'a [T], query: &str) -> Vec<&'a T>` - 根據搜尋查詢過濾列表
+- `pub fn combobox_with_dynamic_height(id_salt: &str, selected_text: &str, option_count: usize) -> egui::ComboBox` - 建立 ComboBox，將選項數量編入 id 以繞過快取問題
+- `pub fn render_filtered_options(ui: &mut egui::Ui, visible_items: &[&TypeName], hidden_count: usize, selected_value: &mut String, query: &str)` - 在 ComboBox 中渲染過濾後的選項
 
 ### editor/tabs/object_tab.rs、skill_tab.rs、unit_tab.rs
 

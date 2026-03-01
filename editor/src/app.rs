@@ -6,7 +6,7 @@ use crate::editor_item::EditorItem;
 use crate::generic_editor::{EditMode, GenericEditorState, MessageState};
 use crate::generic_io::{load_file, save_file};
 use crate::tabs;
-use crate::utils::render_dnd_handle;
+use crate::utils::dnd::render_dnd_handle;
 use crate::utils::search::{match_search_query, render_search_input};
 use board::loader_schema::{LevelType, ObjectType, SkillType, UnitType};
 use std::path::{Path, PathBuf};

@@ -1,7 +1,9 @@
 use super::{DragState, DraggedObject, LevelTabMode, LevelTabUIState, battlefield};
 use crate::constants::*;
 use crate::generic_editor::MessageState;
-use crate::utils::search::{filter_by_search, render_search_input};
+use crate::utils::search::{
+    combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
+};
 use bevy_ecs::world::World;
 use board::domain::alias::{Coord, ID, TypeName};
 use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
@@ -271,17 +273,16 @@ fn render_unit_placement_list(
                     .find(|f| f.id == placement.faction_id)
                     .map(|f| f.name.as_str())
                     .unwrap_or("（未選擇）");
-                egui::ComboBox::from_id_salt(format!("unit_faction_{}", index))
-                    .selected_text(selected_name)
-                    .show_ui(ui, |ui| {
-                        for faction in factions {
-                            ui.selectable_value(
-                                &mut placement.faction_id,
-                                faction.id,
-                                &faction.name,
-                            );
-                        }
-                    });
+                combobox_with_dynamic_height(
+                    &format!("unit_faction_{}", index),
+                    selected_name,
+                    factions.len(),
+                )
+                .show_ui(ui, |ui| {
+                    for faction in factions {
+                        ui.selectable_value(&mut placement.faction_id, faction.id, &faction.name);
+                    }
+                });
 
                 ui.separator();
 
@@ -289,28 +290,30 @@ fn render_unit_placement_list(
                 if available_units.is_empty() {
                     ui.label("（尚未定義任何單位）");
                 } else {
-                    egui::ComboBox::from_id_salt(format!("unit_placement_{}", index))
-                        .selected_text(if placement.unit_type_name.is_empty() {
-                            "選擇單位"
-                        } else {
-                            &placement.unit_type_name
-                        })
-                        .height(COMBOBOX_MIN_HEIGHT)
-                        .show_ui(ui, |ui| {
-                            ui.set_min_width(COMBOBOX_MIN_WIDTH);
-
-                            let response = render_search_input(ui, unit_search_query);
-                            ui.memory_mut(|mem| mem.request_focus(response.id));
-                            ui.separator();
-                            let visible_units =
-                                filter_by_search(available_units, unit_search_query);
-                            render_filtered_options(
-                                ui,
-                                &visible_units,
-                                &mut placement.unit_type_name,
-                                unit_search_query,
-                            );
-                        });
+                    let display = if placement.unit_type_name.is_empty() {
+                        "選擇單位"
+                    } else {
+                        &placement.unit_type_name
+                    };
+                    combobox_with_dynamic_height(
+                        &format!("unit_placement_{}", index),
+                        display,
+                        available_units.len(),
+                    )
+                    .show_ui(ui, |ui| {
+                        let response = render_search_input(ui, unit_search_query);
+                        ui.memory_mut(|mem| mem.request_focus(response.id));
+                        ui.separator();
+                        let visible_units = filter_by_search(available_units, unit_search_query);
+                        let hidden_count = available_units.len() - visible_units.len();
+                        render_filtered_options(
+                            ui,
+                            &visible_units,
+                            hidden_count,
+                            &mut placement.unit_type_name,
+                            unit_search_query,
+                        );
+                    });
                 }
             });
         });
@@ -363,28 +366,31 @@ fn render_object_placement_list(
                 if available_objects.is_empty() {
                     ui.label("（尚未定義任何物件）");
                 } else {
-                    egui::ComboBox::from_id_salt(format!("object_placement_{}", index))
-                        .selected_text(if placement.object_type_name.is_empty() {
-                            "選擇物件"
-                        } else {
-                            &placement.object_type_name
-                        })
-                        .height(COMBOBOX_MIN_HEIGHT)
-                        .show_ui(ui, |ui| {
-                            ui.set_min_width(COMBOBOX_MIN_WIDTH);
-
-                            let response = render_search_input(ui, object_search_query);
-                            ui.memory_mut(|mem| mem.request_focus(response.id));
-                            ui.separator();
-                            let visible_objects =
-                                filter_by_search(available_objects, object_search_query);
-                            render_filtered_options(
-                                ui,
-                                &visible_objects,
-                                &mut placement.object_type_name,
-                                object_search_query,
-                            );
-                        });
+                    let display = if placement.object_type_name.is_empty() {
+                        "選擇物件"
+                    } else {
+                        &placement.object_type_name
+                    };
+                    combobox_with_dynamic_height(
+                        &format!("object_placement_{}", index),
+                        display,
+                        available_objects.len(),
+                    )
+                    .show_ui(ui, |ui| {
+                        let response = render_search_input(ui, object_search_query);
+                        ui.memory_mut(|mem| mem.request_focus(response.id));
+                        ui.separator();
+                        let visible_objects =
+                            filter_by_search(available_objects, object_search_query);
+                        let hidden_count = available_objects.len() - visible_objects.len();
+                        render_filtered_options(
+                            ui,
+                            &visible_objects,
+                            hidden_count,
+                            &mut placement.object_type_name,
+                            object_search_query,
+                        );
+                    });
                 }
             });
         });
@@ -444,22 +450,6 @@ fn render_battlefield(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut L
 
     ui.add_space(SPACING_SMALL);
     battlefield::render_battlefield_legend(ui);
-}
-
-/// 在 ComboBox 中渲染過濾後的選項
-fn render_filtered_options(
-    ui: &mut egui::Ui,
-    visible_items: &[&TypeName],
-    selected_value: &mut String,
-    query: &str,
-) {
-    if !query.is_empty() && visible_items.is_empty() {
-        ui.label("找不到符合的項目");
-    } else {
-        for item_name in visible_items {
-            ui.selectable_value(selected_value, item_name.to_string(), item_name.as_str());
-        }
-    }
 }
 
 // ==================== 輔助函數 ====================
