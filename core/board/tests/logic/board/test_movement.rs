@@ -1,6 +1,6 @@
 //! 可移動範圍測試
 
-use super::super::super::test_helpers::level_builder::load_from_ascii;
+use super::super::super::helpers::level_builder::load_from_ascii;
 use board::domain::alias::MovementCost;
 use board::domain::constants::{BASIC_MOVEMENT_COST, IMPASSABLE_MOVEMENT_COST};
 use board::ecs_types::components::{Faction, Position};

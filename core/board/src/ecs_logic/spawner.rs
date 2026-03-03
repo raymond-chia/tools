@@ -8,6 +8,7 @@ use crate::ecs_types::components::{
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::{BuffEffect, LevelType};
+use crate::logic::debug::short_type_name;
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
 use bevy_ecs::prelude::World;
@@ -24,7 +25,10 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
     let (unit_bundles, object_spawn_data) = {
         let game_data = world
             .get_resource::<GameData>()
-            .ok_or(DataError::GameDataNotFound)?;
+            .ok_or(DataError::MissingResource {
+                name: short_type_name::<GameData>(),
+                note: "請先呼叫 parse_and_insert_game_data".to_string(),
+            })?;
 
         let mut used_ids: HashSet<ID> = HashSet::new();
 

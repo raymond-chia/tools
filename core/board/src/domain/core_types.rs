@@ -51,6 +51,17 @@ define_attributes!(
     (reaction, Reaction),
 );
 
+/// 單位在回合表中的資訊
+#[derive(Debug, Clone)]
+pub struct TurnEntry {
+    pub occupant: Occupant,
+    pub initiative: i32, // 原始 INI
+    pub roll: i32,
+    pub total: i32,      // INI + roll（主排序，顯示用）
+    pub tiebreaker: f64, // INI*10 + 1 if player + 0.xxx（次排序，隱藏）
+    pub has_acted: bool,
+}
+
 /// 雙向 occupant 位置索引
 ///
 /// 同時維護兩個方向的 mapping，確保兩者永遠同步：

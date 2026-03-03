@@ -1,8 +1,9 @@
 mod constants;
-mod deployment;
-mod loader;
-mod query;
-mod spawner;
+mod test_deployment;
+mod test_loader;
+mod test_query;
+mod test_spawner;
+mod test_turn;
 
 use bevy_ecs::prelude::World;
 use board::ecs_logic::loader::parse_and_insert_game_data;

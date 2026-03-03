@@ -12,7 +12,7 @@ use crate::logic::debug::short_type_name;
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
 use bevy_ecs::entity::Entity;
-use bevy_ecs::prelude::World;
+use bevy_ecs::prelude::{With, World};
 use std::collections::HashSet;
 
 /// 將玩家單位部署到指定位置
@@ -35,29 +35,33 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
 
         // 找出同格的玩家單位（準備替換）
         let entity_to_remove = world
-            .query::<(bevy_ecs::entity::Entity, &Position, &Faction, &Unit)>()
+            .query_filtered::<(bevy_ecs::entity::Entity, &Position, &Faction), With<Unit>>()
             .iter(world)
-            .find(|(_, pos, faction, _)| **pos == position && faction.0 == PLAYER_FACTION_ID)
-            .map(|(entity, _, _, _)| entity);
+            .find(|(_, pos, faction)| **pos == position && faction.0 == PLAYER_FACTION_ID)
+            .map(|(entity, _, _)| entity);
 
         let deployment_config = world
             .get_resource::<DeploymentConfig>()
-            .ok_or(DataError::BoardConfigNotFound {
-                config_name: short_type_name::<DeploymentConfig>(),
+            .ok_or(DataError::MissingResource {
+                name: short_type_name::<DeploymentConfig>(),
+                note: "請先呼叫 spawn_level".to_string(),
             })?
             .clone();
 
         // resource 借用已結束，可再次查詢 world
         // 計算站在部署點上的玩家單位數（即已部署的單位，不含關卡預設單位）
         let current_player_unit_count = world
-            .query::<(&Unit, &Position)>()
+            .query_filtered::<&Position, With<Unit>>()
             .iter(world)
-            .filter(|(_, pos)| deployment_config.deployment_positions.contains(pos))
+            .filter(|pos| deployment_config.deployment_positions.contains(pos))
             .count();
 
         let game_data = world
             .get_resource::<GameData>()
-            .ok_or(DataError::GameDataNotFound)?;
+            .ok_or(DataError::MissingResource {
+                name: short_type_name::<GameData>(),
+                note: "請先呼叫 parse_and_insert_game_data".to_string(),
+            })?;
         (
             entity_to_remove,
             current_player_unit_count,
@@ -147,16 +151,17 @@ pub fn undeploy_unit(world: &mut World, position: Position) -> Result<()> {
     let (deployment_positions, entity_to_remove) = {
         let deployment_config = world
             .get_resource::<DeploymentConfig>()
-            .ok_or(DataError::BoardConfigNotFound {
-                config_name: short_type_name::<DeploymentConfig>(),
+            .ok_or(DataError::MissingResource {
+                name: short_type_name::<DeploymentConfig>(),
+                note: "請先呼叫 spawn_level".to_string(),
             })?
             .clone();
 
         let entity_to_remove: Option<Entity> = world
-            .query::<(Entity, &Position, &Unit)>()
+            .query_filtered::<(Entity, &Position), With<Unit>>()
             .iter(world)
-            .find(|(_, pos, _)| **pos == position)
-            .map(|(entity, _, _)| entity);
+            .find(|(_, pos)| **pos == position)
+            .map(|(entity, _)| entity);
 
         (deployment_config.deployment_positions, entity_to_remove)
     };

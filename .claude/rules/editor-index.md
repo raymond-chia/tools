@@ -150,7 +150,19 @@ GenericEditorState 的方法：
 
 - `pub fn render_form(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染戰鬥模式表單
 
+### editor/tabs/level_tab.rs
+
+- `pub fn file_name() -> &'static str` - 取得關卡的檔案名稱
+- `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 根據模式渲染關卡編輯表單
+
+型別和結構：
+
+- `pub enum DraggedObject` - 拖曳物體的類型（部署點、單位、物件）
+- `pub struct DragState` - 拖曳狀態
+- `pub enum LevelTabMode` - 關卡編輯器模式（編輯、部署、戰鬥）
+- `pub struct LevelTabUIState` - 關卡編輯器 UI 狀態
+- `impl EditorItem for LevelType` - 實現 EditorItem trait
+
 ### editor/tabs/level_tab/edit.rs
 
 - `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染編輯模式的表單
-- `pub fn file_name() -> &'static str` - 取得檔案名稱

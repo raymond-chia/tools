@@ -1,4 +1,4 @@
-use super::super::test_helpers::level_builder::LevelBuilder;
+use super::super::helpers::level_builder::LevelBuilder;
 use super::constants::{OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
 use bevy_ecs::prelude::{Without, World};
 use board::ecs_logic::loader::parse_and_insert_game_data;
@@ -206,7 +206,10 @@ fn test_spawn_level_without_game_data_returns_error() {
 
     let error = result.expect_err("應有錯誤");
     assert!(
-        matches!(error.kind(), ErrorKind::Data(DataError::GameDataNotFound)),
+        matches!(
+            error.kind(),
+            ErrorKind::Data(DataError::MissingResource { .. })
+        ),
         "應為 DataError，實際為 {:?}",
         error.kind()
     );

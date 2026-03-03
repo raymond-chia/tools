@@ -1,6 +1,7 @@
 //! ECS World Resource 定義
 
 use crate::domain::alias::{Coord, SkillName, TypeName};
+use crate::domain::core_types::TurnEntry;
 use crate::ecs_types::components::Position;
 use crate::loader_schema::{Faction, ObjectType, SkillType, UnitType};
 use bevy_ecs::prelude::Resource;
@@ -33,4 +34,12 @@ pub struct LevelConfig {
 pub struct DeploymentConfig {
     pub max_player_units: usize,
     pub deployment_positions: Vec<Position>,
+}
+
+/// 回合順序 Resource
+#[derive(Debug, Resource, Default)]
+pub struct TurnOrder {
+    pub round: u32,
+    pub entries: Vec<TurnEntry>,
+    pub current_index: usize,
 }

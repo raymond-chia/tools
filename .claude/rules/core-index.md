@@ -45,33 +45,39 @@ core/board/
 │   │   ├── loader.rs     - 遊戲資料載入函數
 │   │   ├── spawner.rs    - 關卡生成函數
 │   │   ├── deployment.rs - 單位部署函數
-│   │   └── query.rs      - World 查詢函數
+│   │   ├── query.rs      - World 查詢函數
+│   │   └── turn.rs       - 回合順序 ECS 操作函數
 │   └── logic/            - 核心業務邏輯
 │       ├── mod.rs        - 邏輯模組定義
 │       ├── board.rs      - 棋盤驗證邏輯
 │       ├── id_generator.rs - ID 產生邏輯
 │       ├── movement.rs   - 移動邏輯
+│       ├── turn_order.rs - 回合順序計算邏輯
 │       ├── unit_attributes.rs - 單位屬性計算邏輯
 │       └── debug.rs      - 調試工具函數
 └── tests/
     ├── test.rs           - 集成測試入口
     ├── test_error.rs     - 錯誤型別測試
-    ├── test_helpers/     - 測試輔助工具
+    ├── helpers/          - 測試輔助工具
     │   ├── mod.rs        - 測試輔助模組
     │   └── level_builder.rs - 測試用 ASCII 關卡建構工具
     ├── ecs_logic/        - 關卡生成與部署測試
     │   ├── mod.rs        - 模組宣告
-    │   ├── constants.rs  - ECS 常數測試
-    │   ├── loader.rs     - 資料載入測試
-    │   ├── spawner.rs    - 關卡生成測試
-    │   ├── deployment.rs - 單位部署測試
-    │   └── query.rs      - World 查詢測試
+    │   ├── constants.rs  - 測試常數定義
+    │   ├── test_loader.rs - 資料載入測試
+    │   ├── test_spawner.rs - 關卡生成測試
+    │   ├── test_deployment.rs - 單位部署測試
+    │   ├── test_query.rs - World 查詢測試
+    │   └── test_turn.rs  - 回合順序測試
     └── logic/            - 業務邏輯測試
         ├── mod.rs        - 模組宣告
         ├── board/        - 棋盤與移動測試
         │   ├── mod.rs    - 模組宣告
         │   ├── test_board.rs - 棋盤驗證測試
         │   └── test_movement.rs - 移動邏輯測試
+        ├── turn/         - 回合順序測試
+        │   ├── mod.rs    - 模組宣告
+        │   └── test_turn_order.rs - 回合順序計算與管理測試
         └── unit/         - 單位屬性與 ID 測試
             ├── mod.rs    - 模組宣告
             ├── test_attribute.rs - 屬性計算測試
@@ -150,13 +156,20 @@ ECS 框架相關的型別定義
 
 - `pub fn calculate_attributes(skill_names: &[SkillName], buffs: &[BuffEffect], skill_map: &HashMap<SkillName, SkillType>) -> Result<CalculatedAttributes>` - 計算單位屬性
 
+### logic/turn_order.rs
+
+- `pub fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序（按 INI+骰降序排列，同分則按 tiebreaker 降序）
+- `pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
+- `pub fn next_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
+- `pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
+
 ### logic/debug.rs
 
 - `pub fn short_type_name<T: ?Sized>() -> String` - 取得泛型型別的短名稱
 
-### tests/test_helpers/level_builder.rs
+### tests/helpers/level_builder.rs
 
-- `pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤（僅供測試使用）
+- `pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤
 - `LevelBuilder::from_ascii(ascii: &str) -> Self` - 以 ASCII art 初始化關卡建構器
 - `.unit(marker: &str, type_name: &str, faction_id: u32) -> Self` - 設定標記對應的單位類型與陣營
 - `.deploy(marker: &str) -> Self` - 設定標記為部署點
@@ -185,6 +198,15 @@ ECS 框架相關的型別定義
 - `pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>` - 查詢所有單位
 - `pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQueryResult>>` - 查詢所有物件
 - `pub struct ObjectQueryResult` - 物件查詢結果（包含 Bundle 資料 + 可選 tag）
+
+### ecs_logic/turn.rs
+
+- `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪（擲骰、排序、存入 TurnOrder Resource）並回傳
+- `pub fn end_current_turn(world: &mut World) -> Result<()>` - 結束當前單位的回合，推進到下一個；若全部結束則自動開始下一輪
+- `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<()>` - 延後當前單位到指定位置
+- `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<()>` - 移除死亡單位
+- `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
+- `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
 
 ### domain/core_types.rs
 

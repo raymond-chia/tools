@@ -7,6 +7,7 @@
 //! - 維護成本低
 
 use crate::domain::alias::{Coord, SkillName, TypeName};
+use crate::ecs_types::components::Occupant;
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -47,23 +48,23 @@ pub enum LoadError {
 /// 遊戲資料存取錯誤
 #[derive(Debug, ThisError)]
 pub enum DataError {
+    #[error("找不到 {name} resource\nNOTE: {note}")]
+    MissingResource { name: String, note: String },
+    #[error("{name} resource 已存在\nNOTE: {note}")]
+    ResourceAlreadyExists { name: String, note: String },
     #[error("Entity 缺少必要的 component: {component_name}")]
     MissingComponent { component_name: String },
-    #[error("找不到 GameData resource，請先呼叫 parse_and_insert_game_data")]
-    GameDataNotFound,
     #[error("找不到單位類型: {type_name}")]
     UnitTypeNotFound { type_name: TypeName },
     #[error("找不到物件類型: {type_name}")]
     ObjectTypeNotFound { type_name: TypeName },
-    #[error("找不到 {config_name} resource，請先呼叫 spawn_level")]
-    BoardConfigNotFound { config_name: String },
 }
 
 /// 棋盤錯誤
 #[derive(Debug, ThisError)]
 pub enum BoardError {
     #[error("位置超出棋盤邊界: ({x}, {y}) 邊界 ({width}, {height})")]
-    OutOfBounds {
+    OutOfBoard {
         x: Coord,
         y: Coord,
         width: Coord,
@@ -75,6 +76,13 @@ pub enum BoardError {
         x: Coord,
         y: Coord,
     },
+    // turn
+    #[error("沒有未行動的單位")]
+    NoActiveUnit,
+    #[error("無效的延後目標：當前位置 {current}，不能延後到 {target}")]
+    InvalidDelayTarget { current: usize, target: usize },
+    #[error("佔據者不存在於回合表中: {occupant:?}")]
+    OccupantNotFound { occupant: Occupant },
 }
 
 /// 部署相關錯誤

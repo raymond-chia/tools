@@ -1,4 +1,4 @@
-use super::super::super::test_helpers::level_builder::load_from_ascii;
+use super::super::super::helpers::level_builder::load_from_ascii;
 use board::ecs_types::components::Position;
 use board::logic::board::is_valid_position;
 

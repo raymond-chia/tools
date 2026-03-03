@@ -2,6 +2,7 @@ pub mod deployment;
 pub mod loader;
 pub mod query;
 pub mod spawner;
+pub mod turn;
 
 /// 從 EntityRef 取得 component，若缺少則回傳 DataError::MissingComponent
 macro_rules! get_component {

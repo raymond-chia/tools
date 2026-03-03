@@ -1,4 +1,4 @@
 mod ecs_logic;
+mod helpers;
 mod logic;
 mod test_error;
-mod test_helpers;

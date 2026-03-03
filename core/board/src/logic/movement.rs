@@ -108,7 +108,7 @@ where
 
     // Fail fast：驗證起點在棋盤內
     if !is_valid_position(board, from) {
-        return Err(BoardError::OutOfBounds {
+        return Err(BoardError::OutOfBoard {
             x: from.x,
             y: from.y,
             width: board.width,

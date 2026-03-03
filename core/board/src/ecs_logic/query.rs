@@ -7,14 +7,16 @@ use crate::ecs_types::components::{
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, LevelConfig};
 use crate::error::{DataError, Result};
+use crate::logic::debug::short_type_name;
 use bevy_ecs::prelude::{Entity, With, World};
 use std::collections::HashMap;
 
 /// 取得棋盤尺寸
 pub fn get_board(world: &World) -> Result<Board> {
     world.get_resource::<Board>().copied().ok_or_else(|| {
-        DataError::BoardConfigNotFound {
-            config_name: "Board".to_string(),
+        DataError::MissingResource {
+            name: short_type_name::<Board>(),
+            note: "請先呼叫 spawn_level".to_string(),
         }
         .into()
     })
@@ -26,8 +28,9 @@ pub fn get_deployment_config(world: &World) -> Result<DeploymentConfig> {
         .get_resource::<DeploymentConfig>()
         .cloned()
         .ok_or_else(|| {
-            DataError::BoardConfigNotFound {
-                config_name: "DeploymentConfig".to_string(),
+            DataError::MissingResource {
+                name: short_type_name::<DeploymentConfig>(),
+                note: "請先呼叫 spawn_level".to_string(),
             }
             .into()
         })
@@ -36,8 +39,9 @@ pub fn get_deployment_config(world: &World) -> Result<DeploymentConfig> {
 /// 取得關卡設定
 pub fn get_level_config(world: &World) -> Result<LevelConfig> {
     world.get_resource::<LevelConfig>().cloned().ok_or_else(|| {
-        DataError::BoardConfigNotFound {
-            config_name: "LevelConfig".to_string(),
+        DataError::MissingResource {
+            name: short_type_name::<LevelConfig>(),
+            note: "請先呼叫 spawn_level".to_string(),
         }
         .into()
     })

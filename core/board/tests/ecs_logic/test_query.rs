@@ -1,4 +1,4 @@
-use super::super::test_helpers::level_builder::LevelBuilder;
+use super::super::helpers::level_builder::LevelBuilder;
 use super::constants::{OBJECT_TYPE_PIT, OBJECT_TYPE_WALL, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use board::domain::alias::ID;

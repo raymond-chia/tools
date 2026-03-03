@@ -37,7 +37,9 @@ pub enum LevelTabMode {
     Battle,
 }
 
-/// 關卡編輯器的 UI 狀態
+// ==================== 重要 ====================
+/// 禁止存放 UI 與 world 以外的資料，確保邏輯都在 board crate 中實現
+// ==================== 重要 ====================
 #[derive(Debug, Default)]
 pub struct LevelTabUIState {
     /// 可選的單位類型（完整資料，供部署時序列化用）
