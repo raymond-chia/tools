@@ -8,15 +8,16 @@
 
 use crate::domain::alias::{Coord, SkillName, TypeName};
 use crate::ecs_types::components::Occupant;
+use std::backtrace::Backtrace;
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// 頂層錯誤，包含原始錯誤和 context 鏈
+/// 頂層錯誤，包含原始錯誤和 backtrace
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,
-    contexts: Vec<String>,
+    backtrace: Backtrace,
 }
 
 /// 錯誤種類
@@ -107,24 +108,11 @@ impl Error {
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
     }
-
-    /// 添加錯誤上下文，自動記錄呼叫位置
-    #[track_caller]
-    pub fn context<C: Into<String>>(mut self, context: C) -> Self {
-        let loc = std::panic::Location::caller();
-        let msg = format!("{} [{}:{}]", context.into(), loc.file(), loc.line());
-        self.contexts.push(msg);
-        self
-    }
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.kind)?;
-        for ctx in &self.contexts {
-            write!(f, "\n  {}", ctx)?;
-        }
-        Ok(())
+        write!(f, "{}\n{}", self.kind, self.backtrace)
     }
 }
 
@@ -132,18 +120,7 @@ impl<E: Into<ErrorKind>> From<E> for Error {
     fn from(error: E) -> Self {
         Self {
             kind: error.into(),
-            contexts: Vec::new(),
+            backtrace: Backtrace::force_capture(),
         }
-    }
-}
-
-/// Result 擴展 trait，用於添加錯誤上下文
-pub trait Context<T> {
-    fn context<C: Into<String>>(self, context: C) -> Result<T>;
-}
-
-impl<T> Context<T> for Result<T> {
-    fn context<C: Into<String>>(self, context: C) -> Result<T> {
-        self.map_err(|e| e.context(context))
     }
 }
