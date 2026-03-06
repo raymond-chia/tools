@@ -25,7 +25,10 @@ pub fn render_form(
     let deployed_count = deployed_positions(&snapshot).count();
 
     // 頂部：按鈕區
-    render_top_bar(ui, deployed_count, ui_state);
+    if let Err(e) = render_top_bar(ui, deployed_count, ui_state) {
+        message_state.set_error(format!("渲染頂部按鈕區失敗：{}", e));
+        return;
+    }
     match ui_state.mode {
         LevelTabMode::Deploy => {}
         _ => return, // 模式已切換，提前返回
@@ -86,7 +89,12 @@ pub fn render_form(
     }
 }
 
-fn render_top_bar(ui: &mut egui::Ui, deployed_count: usize, ui_state: &mut LevelTabUIState) {
+fn render_top_bar(
+    ui: &mut egui::Ui,
+    deployed_count: usize,
+    ui_state: &mut LevelTabUIState,
+) -> Result<(), String> {
+    let mut error = Ok(());
     ui.horizontal(|ui| {
         if ui.button("← 返回編輯").clicked() {
             ui_state.mode = LevelTabMode::Edit;
@@ -100,10 +108,19 @@ fn render_top_bar(ui: &mut egui::Ui, deployed_count: usize, ui_state: &mut Level
             .add_enabled(has_deployed, egui::Button::new("開始戰鬥"))
             .clicked()
         {
-            ui_state.mode = LevelTabMode::Battle;
+            // TODO: 未來改為玩家單位進入敵人 10 格範圍內才觸發
+            match board::ecs_logic::turn::start_new_round(&mut ui_state.world) {
+                Ok(_) => {
+                    ui_state.mode = LevelTabMode::Battle;
+                }
+                Err(e) => {
+                    error = Err(format!("開始戰鬥失敗：{}", e));
+                }
+            }
             return;
         }
     });
+    error
 }
 
 /// 渲染關卡資訊顯示

@@ -77,8 +77,6 @@ MessageState 的方法：
 
 GenericEditorState 的方法：
 
-- `pub fn set_success(&mut self, msg: impl Into<String>)` - 設置成功訊息
-- `pub fn set_error(&mut self, msg: impl Into<String>)` - 設置錯誤訊息
 - `pub fn start_creating(&mut self)` - 開始新增項目
 - `pub fn start_editing(&mut self, index: usize)` - 開始編輯項目
 - `pub fn start_copying(&mut self, index: usize)` - 複製項目

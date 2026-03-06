@@ -116,6 +116,7 @@ pub fn render_form(
                 ui_state.world = world;
                 ui_state.selected_left_pos = None;
                 ui_state.selected_right_pos = None;
+                ui_state.is_delaying = false;
                 ui_state.mode = LevelTabMode::Deploy;
                 return;
             }

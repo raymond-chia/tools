@@ -35,7 +35,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
 
         // 找出同格的玩家單位（準備替換）
         let entity_to_remove = world
-            .query_filtered::<(bevy_ecs::entity::Entity, &Position, &Faction), With<Unit>>()
+            .query_filtered::<(Entity, &Position, &Faction), With<Unit>>()
             .iter(world)
             .find(|(_, pos, faction)| **pos == position && faction.0 == PLAYER_FACTION_ID)
             .map(|(entity, _, _)| entity);

@@ -9,6 +9,7 @@
 use crate::domain::alias::{Coord, SkillName, TypeName};
 use crate::ecs_types::components::Occupant;
 use std::backtrace::Backtrace;
+use std::fmt::{Display, Formatter};
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -110,8 +111,8 @@ impl Error {
     }
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}\n{}", self.kind, self.backtrace)
     }
 }

@@ -1,166 +1,79 @@
-# 實作回合順序計算與顯示
+# 在 battle.rs 使用 start_new_round
 
 ## 目標與範圍
 
-實作「每輪開始時，所有單位依 INI + 隨機骰決定行動順序」的機制，並在戰鬥模式以左側浮動面板顯示順序。
-支援結束回合、延後行動。
-所有單位結束後自動進入下一輪。
+在戰鬥模式中整合回合系統：進入戰鬥時初始化回合順序，顯示回合順序面板，提供結束回合/延遲按鈕，離開時回到編輯模式。
 
-**做的事：**
-
-- 回合順序計算邏輯（`core/board/src/logic/turn_order.rs`）
-- TurnEntry 型別定義（`core/board/src/domain/core_types.rs`）
-- TurnOrder ECS Resource（`core/board/src/ecs_types/resources.rs`）
-- 回合操作 ECS 函數（`core/board/src/ecs_logic/turn.rs`）
-- 在 `battle.rs` 以浮動面板顯示順序
-- 結束回合、延後行動功能
-
-**不做的事：**
-
-- 回合效果（buff/debuff TTL 扣除）— 尚無效果系統
-- 實際行動執行（移動、技能）
-- 單位死亡移除（尚無戰鬥傷害系統，但預留介面）
+**不做**：移動功能。
 
 ## 設計決策
 
-| 決策     | 選擇                                                               | 原因                                 |
-| -------- | ------------------------------------------------------------------ | ------------------------------------ |
-| 骰子範圍 | 1d6                                                                | 策略性與隨機性平衡，常數定義方便調整 |
-| 排序方式 | 主排序：INI+1d6（降序）；次排序：INI\*10+1 if player+0.xxx（降序） | 兩欄位排序，幾乎不會同分             |
-| 死亡處理 | 直接從順序表移除                                                   | 清單乾淨                             |
-| 延後規則 | 只能往後延，點擊清單選擇插入位置                                   | 輪到自己才能延後，自然只能往後       |
-| 觸發時機 | 進入戰鬥模式自動擲骰產生第一輪                                     | 自動開始                             |
-| 狀態存放 | 全部放 ECS World Resource                                          | `LevelTabUIState` 不存戰鬥狀態       |
-| UI 形式  | 浮動面板疊在戰場左側                                               | 不佔用固定佈局空間                   |
-| 單位識別 | 用 Occupant（含唯一 ID）                                           | 不依賴位置，單位移動後仍可識別       |
-| 參數風格 | calculate_turn_order 用專用輸入結構，不直接傳 UnitBundle           | 明確顯示函數依賴                     |
-| 顯示內容 | 只顯示「INI + 骰子 = 總分」，隱藏 tiebreaker                       | 對玩家清晰                           |
+1. **觸發時機**：進入戰鬥模式時立即呼叫 `start_new_round`（加 TODO：未來改為玩家單位進入敵人 10 格範圍內才觸發）
+2. **回合順序面板**：漂浮在戰場左側，無背景（底下露出戰場）；只顯示尚未行動的單位，越下面越早行動，當前行動單位在最底部
+3. **互動功能**：點擊條目選中對應單位（棋盤高亮 + 調整 scroll_offset 置中）
+4. **操作按鈕**：戰場下方放「結束回合」和「延遲」按鈕（類似 bottom panel）
+5. **返回**：「返回」直接回到 `Edit` 模式，清空 world（`world = World::default()`）
+6. **延遲互動**：點「延遲」按鈕進入延遲模式，面板條目之間出現可點擊的插入點，點擊插入點後執行延遲
+7. **結束回合**：最底部條目移除，下一個成為當前行動單位
 
 ## 實作步驟
 
-### 步驟 1：在 `core/board/src/domain/core_types.rs` 定義 TurnEntry
+### 1. LevelTabUIState 新增欄位
 
-```rust
-/// 單位在回合表中的資訊
-#[derive(Debug, Clone)]
-pub struct TurnEntry {
-    pub occupant: Occupant,
-    pub initiative: i32,        // 原始 INI
-    pub roll: i32,              // 1d6 結果
-    pub total: i32,             // INI + roll（主排序，顯示用）
-    pub tiebreaker: f64,        // INI*10 + 1 if player + 0.xxx（次排序，隱藏）
-    pub has_acted: bool,
-}
-```
+在 `level_tab.rs` 的 `LevelTabUIState` 新增：
 
-### 步驟 2：在 `core/board/src/ecs_types/resources.rs` 定義 TurnOrder Resource
+- `is_delaying: bool`：是否處於延遲選擇模式
 
-```rust
-/// 回合順序 Resource
-#[derive(Debug, Resource, Default)]
-pub struct TurnOrder {
-    pub round: u32,
-    pub entries: Vec<TurnEntry>,
-    pub current_index: usize,
-}
-```
+### 2. deployment.rs：開始戰鬥時呼叫 start_new_round
 
-### 步驟 3：在 `core/board/src/logic/turn_order.rs` 新增純邏輯
+在「開始戰鬥」按鈕 click handler 中：
 
-```rust
-const TURN_ORDER_DICE_SIDES: i32 = 6;
-const TURN_ORDER_DICE_MIN: i32 = 1;
+- 呼叫 `board::ecs_logic::turn::start_new_round(&mut ui_state.world)`
+- 失敗則顯示錯誤且不切換模式
+- 加 TODO 註解：未來改為玩家單位進入敵人 10 格範圍內才觸發
 
-/// 計算順序的輸入資料
-pub struct TurnOrderInput {
-    pub occupant: Occupant,
-    pub initiative: i32,
-    pub is_player: bool,
-}
+### 3. battle.rs：返回編輯模式
 
-/// 計算一輪的行動順序（純邏輯，不操作 World）
-/// rng_int: 產生 1~6 整數
-/// rng_float: 產生 0.001~0.999 小數
-pub fn calculate_turn_order(
-    inputs: &[TurnOrderInput],
-    rng_int: &mut impl FnMut() -> i32,
-    rng_float: &mut impl FnMut() -> f64,
-) -> Vec<TurnEntry>
+將「返回部署」改為「返回」，click handler 中：
 
-/// 將當前單位延後到 target_index 位置（只能往後）
-pub fn delay_unit(
-    entries: &mut Vec<TurnEntry>,
-    current_index: usize,
-    target_index: usize,
-) -> Result<()>
+- `ui_state.world = World::default()`
+- `ui_state.mode = LevelTabMode::Edit`
 
-/// 取得下一個未行動的單位索引（從 from 開始搜尋）
-pub fn next_active_index(entries: &[TurnEntry], from: usize) -> Option<usize>
+### 4. battle.rs：渲染回合順序面板（漂浮左側）
 
-/// 檢查本輪是否所有單位都已行動
-pub fn is_round_complete(entries: &[TurnEntry]) -> bool
+用 `egui::Area`（無 frame/背景）在戰場左側疊加回合面板：
 
-/// 移除指定 Occupant 的單位
-pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Option<TurnEntry>
-```
+- 從 World 查詢 `TurnOrder`（透過 `board::ecs_logic::turn::get_turn_order`）
+- 顯示當前輪數 `round`
+- 過濾出 `has_acted == false` 的 entries，反轉排列（最後行動的在上，當前行動的在底部）
+- 每個條目顯示單位名稱（從 `Snapshot.unit_map` 用 occupant 反查）+ 陣營顏色
+- 點擊條目：設定 `ui_state.selected_left_pos` 為該單位位置，並調整 `scroll_offset` 使其置中
 
-### 步驟 4：在 `core/board/src/ecs_logic/turn.rs` 新增 World 操作
+### 5. battle.rs：延遲模式
 
-```rust
-/// 開始新的一輪（擲骰、排序、存入 TurnOrder Resource）
-pub fn start_new_round(world: &mut World) -> Result<()>
+- 點「延遲」按鈕 → 設定 `ui_state.is_delaying = true`
+- 面板進入延遲模式：在每對相鄰條目之間渲染一個可點擊的插入點（如水平線或按鈕）
+- 插入點只出現在當前單位（最底部）之上的位置
+- 點擊插入點 → 計算對應的 `target_index`，呼叫 `delay_current_unit(world, target_index)`，然後 `is_delaying = false`
 
-/// 結束當前單位的回合，推進到下一個單位；若全部結束則自動開始下一輪
-pub fn end_current_turn(world: &mut World) -> Result<()>
+### 6. battle.rs：棋盤高亮選中單位
 
-/// 延後當前單位到指定位置
-pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<()>
+將 `battlefield::is_highlight(None)` 改為 `battlefield::is_highlight(ui_state.selected_left_pos)`。
 
-/// 移除死亡單位（從順序表中移除）
-pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<()>
+### 7. battle.rs：底部操作面板
 
-/// 查詢當前回合狀態
-pub fn get_turn_order(world: &World) -> Result<&TurnOrder>
-```
+在戰場下方渲染：
 
-### 步驟 5：更新 mod.rs
+- 「結束回合」按鈕 → 呼叫 `board::ecs_logic::turn::end_current_turn`，結果更新 snapshot
+- 「延遲」按鈕 → 設定 `is_delaying = true`
 
-- `core/board/src/logic/mod.rs` 加入 `pub mod turn_order;`
-- `core/board/src/ecs_logic/mod.rs` 加入 `pub mod turn;`
+### 8. 加 TODO 註解
 
-### 步驟 6：撰寫測試
-
-在 `core/board/tests/logic/` 新增 `turn/` 目錄：
-
-- 基本排序（INI 不同，確認 INI + 骰子高者先行動。有 INI 高但是 1d6 低所以順序在 INI 低的後面；INI 高且 1d6 不低所以順序在前面）
-- 同分排序（INI + 骰子相同時，tiebreaker 決定順序）
-- 結束回合後推進到下一個
-- 所有單位結束後 `is_round_complete` 回傳 true
-- 延後行動：移動到指定位置
-- 延後驗證：不能往前延
-- 移除單位後索引正確調整
-
-### 步驟 7：修改 `battle.rs` — 浮動面板
-
-進入戰鬥模式時自動呼叫 `start_new_round`。
-
-用 `egui::Window` 在戰場上疊一個半透明浮動面板：
-
-- 標題：「第 N 輪」
-- 順序清單：每個條目顯示「名稱 (INI+骰=總分)」
-- 當前行動單位高亮
-- 已行動單位灰色
-- 底部按鈕：「結束回合」、「延後」
-- 延後模式：點「延後」後，清單中尚未行動的位置變成可點擊的插入點
-
-### 步驟 8：更新索引文件
-
-更新 `core-index.md` 和 `editor-index.md`。
+在 start_new_round 呼叫處加 TODO：未來改為玩家單位進入敵人 10 格範圍內才觸發。
 
 ## 注意事項
 
-- 隨機骰透過注入 rng 函數，測試時傳固定值
-- 所有戰鬥狀態（TurnOrder）存在 ECS World Resource，`LevelTabUIState` 不新增任何欄位
-- 延後後 current_index 不變（指向延後後的下一個單位）
-- 下一輪開始時重新擲骰，重新排序
-- TurnEntry 是領域資料型別，放在 core_types.rs，不是 ECS Component
+- `start_new_round` 在 TurnOrder 已存在時回傳錯誤，返回 Edit 時清空 world 可避免此問題
+- 回合面板需要從 Snapshot 的 `unit_map`（`HashMap<Position, UnitBundle>`）反查 occupant 對應的位置和名稱
+- 面板漂浮無背景需注意文字可讀性（可加半透明底或文字描邊）
+- 延遲的 `target_index` 需要從面板的視覺位置（反轉後）轉換回 `TurnOrder.entries` 的實際 index

@@ -18,6 +18,9 @@ pub const LIST_PANEL_WIDTH: f32 = 300.0;
 pub const LIST_PANEL_MIN_HEIGHT: f32 = 300.0;
 pub const STROKE_WIDTH: f32 = 3.0;
 
+pub const TURN_PANEL_WIDTH: f32 = 200.0;
+pub const BOTTOM_PANEL_HEIGHT: f32 = 70.0;
+
 // UI 數值
 pub const DRAG_VALUE_SPEED: f64 = 1.0;
 

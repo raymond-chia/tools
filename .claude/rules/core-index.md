@@ -158,7 +158,7 @@ ECS 框架相關的型別定義
 
 ### logic/turn_order.rs
 
-- `pub fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序（按 INI+骰降序排列，同分則按 tiebreaker 降序）
+- `pub fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
 - `pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
 - `pub fn next_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
 - `pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
@@ -201,10 +201,10 @@ ECS 框架相關的型別定義
 
 ### ecs_logic/turn.rs
 
-- `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪（擲骰、排序、存入 TurnOrder Resource）並回傳
-- `pub fn end_current_turn(world: &mut World) -> Result<()>` - 結束當前單位的回合，推進到下一個；若全部結束則自動開始下一輪
-- `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<()>` - 延後當前單位到指定位置
-- `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<()>` - 移除死亡單位
+- `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪並回傳
+- `pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder>` - 結束當前單位的回合，推進到下一個
+- `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&TurnOrder>` - 延後當前單位到指定位置並回傳
+- `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOrder>` - 移除死亡單位並回傳
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
 - `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
 
@@ -222,4 +222,3 @@ OccupantMap 的方法：
 Error 的方法：
 
 - `pub fn kind(&self) -> &ErrorKind` - 取得錯誤種類
-- `pub fn context<C: Into<String>>(mut self, context: C) -> Self` - 新增錯誤上下文資訊

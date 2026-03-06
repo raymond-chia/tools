@@ -55,12 +55,17 @@ pub struct LevelTabUIState {
     pub drag_state: Option<DragState>,
     pub scroll_offset: egui::Vec2,
 
+    /// 模擬戰鬥專用：統一在 tabs\level_tab\edit.rs 初始化
     /// ECS World，模擬模式時存放所有 entity
     pub world: World,
     /// 左鍵選中
     pub selected_left_pos: Option<Position>,
     /// 右鍵選中
     pub selected_right_pos: Option<Position>,
+    /// 是否處於延遲選擇模式
+    pub is_delaying: bool,
+    /// 延遲置中：下一幀 render_battlefield 時消費
+    pub pending_center_pos: Option<Position>,
 
     /// 當前標籤頁的模式
     pub mode: LevelTabMode,

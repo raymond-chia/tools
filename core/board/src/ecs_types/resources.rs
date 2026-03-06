@@ -37,7 +37,7 @@ pub struct DeploymentConfig {
 }
 
 /// 回合順序 Resource
-#[derive(Debug, Resource, Default)]
+#[derive(Debug, Clone, Resource)]
 pub struct TurnOrder {
     pub round: u32,
     pub entries: Vec<TurnEntry>,

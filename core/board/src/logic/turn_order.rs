@@ -3,6 +3,7 @@
 use crate::domain::core_types::TurnEntry;
 use crate::ecs_types::components::Occupant;
 use crate::error::{BoardError, Result};
+use std::cmp::Ordering;
 
 /// 計算順序的輸入資料
 pub struct TurnOrderInput {
@@ -50,10 +51,10 @@ pub fn calculate_turn_order(
 
     // 按 total 降序排序，若相同則按 tiebreaker 降序
     entries.sort_by(|a, b| match b.total.cmp(&a.total) {
-        std::cmp::Ordering::Equal => b
+        Ordering::Equal => b
             .tiebreaker
             .partial_cmp(&a.tiebreaker)
-            .unwrap_or(std::cmp::Ordering::Equal),
+            .unwrap_or(Ordering::Equal),
         other => other,
     });
 
