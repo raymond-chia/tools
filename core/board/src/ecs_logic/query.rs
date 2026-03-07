@@ -1,9 +1,9 @@
 use super::get_component;
 use crate::ecs_types::components::{
     AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, CurrentHp, CurrentMp,
-    Evasion, Faction, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
-    Movement, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack, Position, Reaction,
-    Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, Will,
+    Evasion, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
+    Movement, MovementUsed, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
+    Position, Reaction, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction, Will,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, LevelConfig};
 use crate::error::{DataError, Result};
@@ -63,7 +63,7 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
             position,
             occupant: get_component!(entity_ref, Occupant),
             occupant_type_name: get_component!(entity_ref, OccupantTypeName),
-            faction: get_component!(entity_ref, Faction),
+            unit_faction: get_component!(entity_ref, UnitFaction),
             skills: get_component!(entity_ref, Skills),
             attributes: AttributeBundle {
                 max_hp: get_component!(entity_ref, MaxHp),
@@ -84,6 +84,7 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
                 movement: get_component!(entity_ref, Movement),
                 reaction: get_component!(entity_ref, Reaction),
             },
+            movement_used: get_component!(entity_ref, MovementUsed),
         };
         result.insert(position, bundle);
     }

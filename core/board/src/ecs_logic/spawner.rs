@@ -1,9 +1,9 @@
 use crate::domain::alias::ID;
 use crate::ecs_types::components::{
     AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, CurrentHp, CurrentMp,
-    Evasion, Faction, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
-    Movement, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack, Position, Reaction,
-    Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, Will,
+    Evasion, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
+    Movement, MovementUsed, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
+    Position, Reaction, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction, Will,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
@@ -56,7 +56,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 },
                 occupant: Occupant::Unit(generate_unique_id(&mut used_ids)),
                 occupant_type_name: OccupantTypeName(unit_type.name.clone()),
-                faction: Faction(placement.faction_id),
+                unit_faction: UnitFaction(placement.faction_id),
                 skills: Skills(unit_type.skills.clone()),
                 attributes: AttributeBundle {
                     max_hp: MaxHp(attributes.hp),
@@ -77,6 +77,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                     movement: Movement(attributes.movement),
                     reaction: Reaction(attributes.reaction),
                 },
+                movement_used: MovementUsed(0),
             });
         }
 

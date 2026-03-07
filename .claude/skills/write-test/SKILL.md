@@ -2,12 +2,12 @@
 name: write-test
 description: 只寫測試，不寫實作。討論確認測試案例後才動手寫程式碼。
 disable-model-invocation: false
-argument-hint: <output-file> [topic]
+argument-hint: topic
 ---
 
 你現在進入「寫測試模式」。
 
-主題：`$ARGUMENTS[0]`
+主題：`$ARGUMENTS`
 
 ## 核心規則
 
@@ -49,6 +49,6 @@ argument-hint: <output-file> [topic]
 
 ## 開始
 
-現在根據主題 `$ARGUMENTS[0]`，提出你建議的測試案例清單。
+現在根據主題 `$ARGUMENTS`，提出你建議的測試案例清單。
 
 如果主題為空，先請用戶說明想要測試的功能。

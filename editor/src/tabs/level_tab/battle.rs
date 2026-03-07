@@ -312,8 +312,10 @@ fn find_unit_info_by_occupant(
 ) -> Result<UnitInfo, String> {
     for (pos, bundle) in &snapshot.unit_map {
         if bundle.occupant == *occupant {
-            let faction_color =
-                battlefield::get_faction_color(&snapshot.level_config.factions, bundle.faction.0);
+            let faction_color = battlefield::get_faction_color(
+                &snapshot.level_config.factions,
+                bundle.unit_faction.0,
+            );
             return Ok(UnitInfo {
                 name: bundle.occupant_type_name.0.clone(),
                 faction_color,

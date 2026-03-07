@@ -1,6 +1,7 @@
 mod constants;
 mod test_deployment;
 mod test_loader;
+mod test_movement;
 mod test_query;
 mod test_spawner;
 mod test_turn;

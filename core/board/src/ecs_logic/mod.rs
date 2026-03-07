@@ -1,5 +1,6 @@
 pub mod deployment;
 pub mod loader;
+pub mod movement;
 pub mod query;
 pub mod spawner;
 pub mod turn;
@@ -10,7 +11,7 @@ macro_rules! get_component {
         $entity_ref
             .get::<$component>()
             .ok_or_else(|| crate::error::DataError::MissingComponent {
-                component_name: stringify!($component).to_string(),
+                name: stringify!($component).to_string(),
             })?
             .clone()
     };

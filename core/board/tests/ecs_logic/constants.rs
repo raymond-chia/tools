@@ -4,6 +4,7 @@ pub const UNIT_TYPE_WARRIOR: &str = "warrior";
 pub const UNIT_TYPE_MAGE: &str = "mage";
 pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_PIT: &str = "pit";
+pub const OBJECT_TYPE_SWAMP: &str = "swamp";
 
 /// 最小技能 TOML：包含一個被動技能（給 warrior 用）和一個主動技能
 pub const SKILLS_TOML: &str = r#"
@@ -144,4 +145,11 @@ movement_cost = 0
 blocks_sight = false
 blocks_sound = false
 hp_modify = -10000
+
+[[objects]]
+name = "swamp"
+movement_cost = 10
+blocks_sight = false
+blocks_sound = false
+hp_modify = 0
 "#;

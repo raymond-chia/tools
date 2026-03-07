@@ -127,7 +127,7 @@ pub fn get_cell_info(
         if snapshot.deployment_set.contains(&pos) {
             if let Some(bundle) = snapshot.unit_map.get(&pos) {
                 let faction_color =
-                    get_faction_color(&snapshot.level_config.factions, bundle.faction.0);
+                    get_faction_color(&snapshot.level_config.factions, bundle.unit_faction.0);
                 let abbrev = get_unit_abbr(&bundle.occupant_type_name.0);
                 (abbrev, faction_color, BATTLEFIELD_COLOR_DEPLOYMENT)
             } else {
@@ -139,7 +139,7 @@ pub fn get_cell_info(
             }
         } else if let Some(bundle) = snapshot.unit_map.get(&pos) {
             let faction_color =
-                get_faction_color(&snapshot.level_config.factions, bundle.faction.0);
+                get_faction_color(&snapshot.level_config.factions, bundle.unit_faction.0);
             let abbrev = get_unit_abbr(&bundle.occupant_type_name.0);
             (abbrev, faction_color, BATTLEFIELD_COLOR_UNIT)
         } else if let Some(obj) = snapshot.object_map.get(&pos) {
@@ -304,7 +304,7 @@ fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &[Facti
 
     let faction_name = factions
         .iter()
-        .find(|f| f.id == bundle.faction.0)
+        .find(|f| f.id == bundle.unit_faction.0)
         .map(|f| f.name.as_str())
         .unwrap_or("未知");
     ui.label(format!("陣營：{}", faction_name));
@@ -406,7 +406,7 @@ pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle> {
     snapshot
         .unit_map
         .values()
-        .filter(move |bundle| enemy_faction_ids.contains(&bundle.faction.0))
+        .filter(move |bundle| enemy_faction_ids.contains(&bundle.unit_faction.0))
 }
 
 pub fn get_faction_color(factions: &[Faction], unit_faction_id: ID) -> egui::Color32 {

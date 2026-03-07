@@ -69,9 +69,9 @@ pub enum Occupant {
 #[derive(Debug, Clone, Component)]
 pub struct Skills(pub Vec<SkillName>);
 
-/// 陣營（用於區分友軍/敵軍）
+/// 單位所屬的陣營 ID（用於區分友軍/敵軍）
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Faction(pub ID);
+pub struct UnitFaction(pub ID);
 
 /// 生成屬性 components 和 AttributeBundle 的 macro
 macro_rules! define_attribute_components {
@@ -110,6 +110,10 @@ define_attribute_components!(
     (reaction, Reaction),
 );
 
+/// 單位已使用的移動力
+#[derive(Debug, Clone, Component)]
+pub struct MovementUsed(pub MovementCost);
+
 // ============================================================================
 // 物件專用 Components
 // ============================================================================
@@ -135,9 +139,10 @@ pub struct UnitBundle {
     pub position: Position,
     pub occupant: Occupant,
     pub occupant_type_name: OccupantTypeName,
-    pub faction: Faction,
+    pub unit_faction: UnitFaction,
     pub skills: Skills,
     pub attributes: AttributeBundle,
+    pub movement_used: MovementUsed,
 }
 
 /// 物件 Entity 的完整 Bundle

@@ -46,6 +46,7 @@ core/board/
 │   │   ├── spawner.rs    - 關卡生成函數
 │   │   ├── deployment.rs - 單位部署函數
 │   │   ├── query.rs      - World 查詢函數
+│   │   ├── movement.rs   - 單位移動 ECS 操作函數
 │   │   └── turn.rs       - 回合順序 ECS 操作函數
 │   └── logic/            - 核心業務邏輯
 │       ├── mod.rs        - 邏輯模組定義
@@ -61,12 +62,13 @@ core/board/
     ├── helpers/          - 測試輔助工具
     │   ├── mod.rs        - 測試輔助模組
     │   └── level_builder.rs - 測試用 ASCII 關卡建構工具
-    ├── ecs_logic/        - 關卡生成與部署測試
+    ├── ecs_logic/        - ECS 操作與測試
     │   ├── mod.rs        - 模組宣告
     │   ├── constants.rs  - 測試常數定義
     │   ├── test_loader.rs - 資料載入測試
     │   ├── test_spawner.rs - 關卡生成測試
     │   ├── test_deployment.rs - 單位部署測試
+    │   ├── test_movement.rs - 單位移動測試
     │   ├── test_query.rs - World 查詢測試
     │   └── test_turn.rs  - 回合順序測試
     └── logic/            - 業務邏輯測試
@@ -150,7 +152,8 @@ ECS 框架相關的型別定義
 ### logic/movement.rs
 
 - `pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算移動一格後的位置
-- `pub fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_faction: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 計算預算內可到達的所有位置
+- `pub fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_alliance: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 計算預算內可到達的所有位置
+- `pub fn reconstruct_path(reachable: &HashMap<Position, ReachableInfo>, start: Position, target: Position) -> Vec<Position>` - 回溯路徑從起點到目標
 
 ### logic/unit_attributes.rs
 
@@ -199,6 +202,11 @@ ECS 框架相關的型別定義
 - `pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQueryResult>>` - 查詢所有物件
 - `pub struct ObjectQueryResult` - 物件查詢結果（包含 Bundle 資料 + 可選 tag）
 
+### ecs_logic/movement.rs
+
+- `pub fn get_reachable_positions(world: &mut World, occupant: Occupant) -> Result<HashMap<Position, ReachableInfo>>` - 計算單位可到達的所有位置
+- `pub fn execute_move(world: &mut World, occupant: Occupant, target: Position) -> Result<MoveResult>` - 執行單位移動到指定位置
+
 ### ecs_logic/turn.rs
 
 - `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪並回傳
@@ -207,15 +215,6 @@ ECS 框架相關的型別定義
 - `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOrder>` - 移除死亡單位並回傳
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
 - `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
-
-### domain/core_types.rs
-
-OccupantMap 的方法：
-
-- `pub fn get_occupants_at(&self, pos: Position) -> &[Occupant]` - 查詢指定位置的所有佔據者
-- `pub fn get_position_of(&self, occupant: Occupant) -> Option<Position>` - 查詢指定佔據者的位置
-- `pub fn insert(&mut self, pos: Position, occupant: Occupant) -> Result<()>` - 插入佔據者到指定位置
-- `pub fn remove(&mut self, occupant: Occupant)` - 移除指定的佔據者
 
 ### error.rs
 

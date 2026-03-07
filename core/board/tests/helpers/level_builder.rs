@@ -2,6 +2,7 @@
 //!
 //! 提供用 ASCII art 視覺化定義關卡的工具，取代手寫 TOML 字串。
 
+use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
 use board::error::{LoadError, Result};
@@ -125,13 +126,19 @@ impl LevelBuilder {
             max_player_units: None,
             factions: vec![
                 Faction {
-                    id: 0,
+                    id: PLAYER_FACTION_ID,
                     name: "player".to_string(),
-                    alliance: 0,
+                    alliance: PLAYER_ALLIANCE_ID,
                     color: [0, 0, 255],
                 },
                 Faction {
                     id: 1,
+                    name: "ally".to_string(),
+                    alliance: PLAYER_ALLIANCE_ID,
+                    color: [0, 0, 200],
+                },
+                Faction {
+                    id: 2,
                     name: "enemy".to_string(),
                     alliance: 1,
                     color: [255, 0, 0],

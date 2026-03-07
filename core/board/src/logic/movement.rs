@@ -1,7 +1,7 @@
 //! 移動邏輯
 
-use crate::domain::alias::MovementCost;
-use crate::ecs_types::components::{Faction, Position};
+use crate::domain::alias::{ID, MovementCost};
+use crate::ecs_types::components::Position;
 use crate::ecs_types::resources::Board;
 use crate::error::{BoardError, Result};
 use crate::logic::board::is_valid_position;
@@ -63,14 +63,15 @@ pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> O
 #[derive(Debug)]
 pub struct Mover {
     pub pos: Position,
-    pub faction: Faction,
+    pub faction_alliance: ID,
 }
 
 /// 可到達位置的資訊（含成本與前驅節點）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ReachableInfo {
     pub cost: MovementCost,
-    pub prev: Position, // 上一個位置（可能是起點）
+    pub prev: Position,         // 上一個位置（可能是起點）
+    pub passthrough_only: bool, // true = 友軍佔據，僅可穿越不可停留
 }
 
 /// 計算給定移動力預算內可到達的所有位置
@@ -80,31 +81,31 @@ pub struct ReachableInfo {
 /// 2. 檢查每一步是否可通行（碰撞檢測）
 /// 3. 只包含消耗成本 <= 預算的位置
 /// 4. 返回所有可到達位置及其成本與前驅節點（不包含起點）
+/// 5. 友軍佔據的位置標記為 `passthrough_only`，僅可穿越不可停留
 ///
 /// # Fail fast 驗證：
 /// - 起點必須在棋盤內
 ///
 /// # 碰撞規則：
-/// - 友軍（相同 Faction）可穿越
-/// - 敵軍（不同 Faction）不可穿越
+/// - 友軍（相同 Alliance）可穿越
+/// - 敵軍（不同 Alliance）不可穿越
 /// - 無單位的位置可通行
 ///
 /// # 地形消耗：
 /// - `get_terrain_cost` 返回該位置的移動成本
-/// - `usize::MAX` 表示不可通行（例如牆壁）
 pub fn reachable_positions<F, G>(
     board: Board,
     mover: Mover,
     budget: MovementCost,
-    get_occupant_faction: F,
+    get_occupant_alliance: F,
     get_terrain_cost: G,
 ) -> Result<HashMap<Position, ReachableInfo>>
 where
-    F: Fn(Position) -> Option<Faction> + Copy,
+    F: Fn(Position) -> Option<ID> + Copy,
     G: Fn(Position) -> MovementCost + Copy,
 {
     let from = mover.pos;
-    let mover_faction = mover.faction;
+    let mover_alliance = mover.faction_alliance;
 
     // Fail fast：驗證起點在棋盤內
     if !is_valid_position(board, from) {
@@ -135,17 +136,13 @@ where
         for direction in Direction::iter() {
             if let Some(next_pos) = step_in_direction(board, pos, direction) {
                 let terrain_cost = get_terrain_cost(next_pos);
-                if terrain_cost == MovementCost::MAX {
-                    continue;
-                }
-
                 let new_cost = cost + terrain_cost;
                 if new_cost > budget {
                     continue;
                 }
 
-                let occupant_faction = get_occupant_faction(next_pos);
-                if !is_passable(mover_faction, occupant_faction) {
+                let occupant_alliance = get_occupant_alliance(next_pos);
+                if !is_passable(mover_alliance, occupant_alliance) {
                     continue;
                 }
 
@@ -164,7 +161,7 @@ where
     let reachable = dist
         .into_iter()
         .filter_map(|(pos, cost)| {
-            if pos == from || get_occupant_faction(pos).is_some() {
+            if pos == from {
                 return None;
             }
             Some((
@@ -172,6 +169,7 @@ where
                 ReachableInfo {
                     cost,
                     prev: prev[&pos],
+                    passthrough_only: get_occupant_alliance(pos).is_some(),
                 },
             ))
         })
@@ -180,15 +178,39 @@ where
     Ok(reachable)
 }
 
+/// 從 reachable_positions 的結果中，回溯從起點到目標的路徑
+///
+/// 返回不含起點、含目標的位置序列
+pub fn reconstruct_path(
+    reachable: &HashMap<Position, ReachableInfo>,
+    start: Position,
+    target: Position,
+) -> Vec<Position> {
+    let mut path = Vec::new();
+    let mut current = target;
+
+    while current != start {
+        let previous = match reachable.get(&current) {
+            Some(info) => info.prev,
+            None => return Vec::new(),
+        };
+        path.push(current);
+        current = previous;
+    }
+
+    path.reverse();
+    path
+}
+
 /// 碰撞檢測：檢查位置是否可通行
 ///
 /// 規則：
-/// - 友軍（相同 Faction）可穿越
-/// - 敵軍（不同 Faction）不可穿越
+/// - 友軍（相同 Alliance）可穿越
+/// - 敵軍（不同 Alliance）不可穿越
 /// - 無單位的位置可通行
-fn is_passable(mover_faction: Faction, occupant: Option<Faction>) -> bool {
+fn is_passable(mover_alliance: ID, occupant: Option<ID>) -> bool {
     match occupant {
         None => true,
-        Some(faction) => faction == mover_faction,
+        Some(alliance) => alliance == mover_alliance,
     }
 }

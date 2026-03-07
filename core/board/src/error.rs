@@ -54,8 +54,10 @@ pub enum DataError {
     MissingResource { name: String, note: String },
     #[error("{name} resource 已存在\nNOTE: {note}")]
     ResourceAlreadyExists { name: String, note: String },
-    #[error("Entity 缺少必要的 component: {component_name}")]
-    MissingComponent { component_name: String },
+    #[error("Entity 缺少必要的 component: {name}")]
+    MissingComponent { name: String },
+    #[error("Entity component 值無效: {name}\nNOTE: {note}")]
+    InvalidComponent { name: String, note: String },
     #[error("找不到單位類型: {type_name}")]
     UnitTypeNotFound { type_name: TypeName },
     #[error("找不到物件類型: {type_name}")]
@@ -72,12 +74,8 @@ pub enum BoardError {
         width: Coord,
         height: Coord,
     },
-    #[error("佔據者已存在於位置 ({x}, {y})，無法重複插入: {occupant}")]
-    OccupantAlreadyExists {
-        occupant: String,
-        x: Coord,
-        y: Coord,
-    },
+    #[error("位置 ({x}, {y}) 不可到達")]
+    Unreachable { x: Coord, y: Coord },
     // turn
     #[error("沒有未行動的單位")]
     NoActiveUnit,

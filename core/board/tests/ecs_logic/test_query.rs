@@ -41,7 +41,7 @@ fn test_get_all_units_returns_correct_data() {
             "occupant 應為 Unit"
         );
         assert_eq!(info.occupant_type_name.0, typ, "類型名稱應為 {typ}");
-        assert_eq!(info.faction.0, faction, "陣營應為 {faction}");
+        assert_eq!(info.unit_faction.0, faction, "陣營應為 {faction}");
         assert_eq!(info.attributes.max_hp.0, max_hp, "max_hp 應為 {max_hp}");
     };
 

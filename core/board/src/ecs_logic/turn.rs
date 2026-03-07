@@ -1,7 +1,7 @@
 //! 回合順序 ECS 操作函數
 
 use crate::domain::constants::PLAYER_FACTION_ID;
-use crate::ecs_types::components::{Faction, Initiative, Occupant, Unit};
+use crate::ecs_types::components::{Initiative, Occupant, Unit, UnitFaction};
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
@@ -12,12 +12,12 @@ use rand::RngExt;
 /// 查詢單位、擲骰、計算順序、插入 TurnOrder
 fn insert_turn_order(world: &mut World, round: u32) {
     let inputs: Vec<TurnOrderInput> = world
-        .query_filtered::<(&Occupant, &Initiative, &Faction), With<Unit>>()
+        .query_filtered::<(&Occupant, &Initiative, &UnitFaction), With<Unit>>()
         .iter(world)
-        .map(|(occupant, initiative, faction)| TurnOrderInput {
+        .map(|(occupant, initiative, unit_faction)| TurnOrderInput {
             occupant: *occupant,
             initiative: initiative.0,
-            is_player: faction.0 == PLAYER_FACTION_ID,
+            is_player: unit_faction.0 == PLAYER_FACTION_ID,
         })
         .collect();
 

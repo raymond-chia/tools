@@ -1,9 +1,10 @@
 use crate::domain::alias::{ID, TypeName};
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_types::components::{
-    AttributeBundle, Block, BlockProtection, CurrentHp, CurrentMp, Evasion, Faction, Fortitude,
-    Hit, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp, Movement, Occupant, OccupantTypeName,
-    PhysicalAttack, Position, Reaction, Reflex, Skills, Unit, UnitBundle, Will,
+    AttributeBundle, Block, BlockProtection, CurrentHp, CurrentMp, Evasion, Fortitude, Hit,
+    Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp, Movement, MovementUsed, Occupant,
+    OccupantTypeName, PhysicalAttack, Position, Reaction, Reflex, Skills, Unit, UnitBundle,
+    UnitFaction, Will,
 };
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
@@ -35,9 +36,9 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
 
         // 找出同格的玩家單位（準備替換）
         let entity_to_remove = world
-            .query_filtered::<(Entity, &Position, &Faction), With<Unit>>()
+            .query_filtered::<(Entity, &Position, &UnitFaction), With<Unit>>()
             .iter(world)
-            .find(|(_, pos, faction)| **pos == position && faction.0 == PLAYER_FACTION_ID)
+            .find(|(_, pos, unit_faction)| **pos == position && unit_faction.0 == PLAYER_FACTION_ID)
             .map(|(entity, _, _)| entity);
 
         let deployment_config = world
@@ -96,7 +97,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
         position,
         occupant: Occupant::Unit(new_id),
         occupant_type_name: OccupantTypeName(unit_type.name.clone()),
-        faction: Faction(PLAYER_FACTION_ID),
+        unit_faction: UnitFaction(PLAYER_FACTION_ID),
         skills: Skills(unit_type.skills.clone()),
         attributes: AttributeBundle {
             max_hp: MaxHp(attributes.hp),
@@ -117,6 +118,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
             movement: Movement(attributes.movement),
             reaction: Reaction(attributes.reaction),
         },
+        movement_used: MovementUsed(0),
     };
 
     // 第二階段：resource 借用已結束，可以可變借用 world

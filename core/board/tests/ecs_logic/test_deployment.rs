@@ -3,7 +3,7 @@ use super::constants::{UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::deployment::{deploy_unit, undeploy_unit};
-use board::ecs_types::components::{Faction, Occupant, OccupantTypeName, Position, Unit};
+use board::ecs_types::components::{Occupant, OccupantTypeName, Position, Unit, UnitFaction};
 use board::error::{DeploymentError, ErrorKind};
 
 // ============================================================================
@@ -33,13 +33,16 @@ fn test_deploy_unit_success() {
     );
     assert!(result.is_ok(), "deploy_unit 應成功：{:?}", result);
 
-    let (_, type_name, faction, position) = world
-        .query::<(&Unit, &OccupantTypeName, &Faction, &Position)>()
+    let (_, type_name, unit_faction, position) = world
+        .query::<(&Unit, &OccupantTypeName, &UnitFaction, &Position)>()
         .iter(&world)
         .next()
         .expect("應找到玩家部署的單位");
     assert_eq!(type_name.0, UNIT_TYPE_WARRIOR, "部署的單位類型應為 warrior");
-    assert_eq!(faction.0, PLAYER_FACTION_ID, "部署的單位應屬於玩家陣營");
+    assert_eq!(
+        unit_faction.0, PLAYER_FACTION_ID,
+        "部署的單位應屬於玩家陣營"
+    );
     assert_eq!(
         position,
         &Position { x: 0, y: 0 },
@@ -148,7 +151,7 @@ fn test_deploy_unit_replaces_existing_unit_at_same_position() {
     let count = world.query::<&Unit>().iter(&world).count();
     assert_eq!(count, 2, "部署後應有 2 個單位（含敵軍）");
     let (_, _, typ) = world
-        .query::<(&Unit, &Faction, &OccupantTypeName)>()
+        .query::<(&Unit, &UnitFaction, &OccupantTypeName)>()
         .iter(&world)
         .filter(|(_, faction, _)| faction.0 == 0)
         .next()
@@ -165,7 +168,7 @@ fn test_deploy_unit_replaces_existing_unit_at_same_position() {
     let count = world.query::<&Unit>().iter(&world).count();
     assert_eq!(count, 2, "替換後單位總數不變（含敵軍）");
     let (_, _, typ) = world
-        .query::<(&Unit, &Faction, &OccupantTypeName)>()
+        .query::<(&Unit, &UnitFaction, &OccupantTypeName)>()
         .iter(&world)
         .filter(|(_, faction, _)| faction.0 == 0)
         .next()
@@ -250,7 +253,7 @@ fn test_undeploy_unit_success() {
     undeploy_unit(&mut world, Position { x: 0, y: 0 }).expect("undeploy_unit 應成功");
 
     let remaining: Vec<_> = world
-        .query::<(&Faction, &OccupantTypeName)>()
+        .query::<(&UnitFaction, &OccupantTypeName)>()
         .iter(&world)
         .collect();
     assert_eq!(remaining.len(), 1, "取消後應只剩 1 個單位（敵軍）");

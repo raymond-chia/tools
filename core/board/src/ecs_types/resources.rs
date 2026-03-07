@@ -3,7 +3,7 @@
 use crate::domain::alias::{Coord, SkillName, TypeName};
 use crate::domain::core_types::TurnEntry;
 use crate::ecs_types::components::Position;
-use crate::loader_schema::{Faction, ObjectType, SkillType, UnitType};
+use crate::loader_schema::{self, ObjectType, SkillType, UnitType};
 use bevy_ecs::prelude::Resource;
 use std::collections::HashMap;
 
@@ -26,7 +26,7 @@ pub struct Board {
 #[derive(Debug, Clone, Resource)]
 pub struct LevelConfig {
     pub name: String,
-    pub factions: Vec<Faction>,
+    pub factions: Vec<loader_schema::Faction>,
 }
 
 /// 部署設定（關卡初始化後存入 World，供部署階段查詢）
