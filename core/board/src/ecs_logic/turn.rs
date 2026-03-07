@@ -1,7 +1,7 @@
 //! 回合順序 ECS 操作函數
 
 use crate::domain::constants::PLAYER_FACTION_ID;
-use crate::ecs_types::components::{Initiative, Occupant, Unit, UnitFaction};
+use crate::ecs_types::components::{Initiative, MovementUsed, Occupant, Unit, UnitFaction};
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
@@ -66,7 +66,7 @@ pub fn start_new_round(world: &mut World) -> Result<&TurnOrder> {
 
 /// 結束當前單位的回合，推進到下一個；若全部結束則自動開始下一輪
 pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
-    // 讀寫：標記當前單位已行動，檢查是否還有未行動的單位
+    // 讀寫：標記當前單位已行動，取得其 Occupant，檢查是否還有未行動的單位
     let turn_order =
         world
             .get_resource_mut::<TurnOrder>()
@@ -76,6 +76,7 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
             })?;
     let inner = turn_order.into_inner();
     inner.entries[inner.current_index].has_acted = true;
+    let current_occupant = inner.entries[inner.current_index].occupant;
     let next_idx = inner.entries.iter().position(|e| !e.has_acted);
 
     match next_idx {
@@ -89,6 +90,16 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
             insert_turn_order(world, prev_round + 1);
         }
     }
+
+    // 重置當前單位的 MovementUsed
+    let (_, mut movement_used) = world
+        .query::<(&Occupant, &mut MovementUsed)>()
+        .iter_mut(world)
+        .find(|(occ, _)| **occ == current_occupant)
+        .ok_or_else(|| BoardError::OccupantNotFound {
+            occupant: current_occupant,
+        })?;
+    movement_used.0 = 0;
 
     require_turn_order(world)
 }

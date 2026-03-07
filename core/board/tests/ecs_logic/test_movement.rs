@@ -6,6 +6,7 @@ use super::setup_world_with_level;
 use bevy_ecs::world::World;
 use board::domain::constants::{BASIC_MOVEMENT_COST, PLAYER_FACTION_ID};
 use board::ecs_logic::movement::execute_move;
+use board::ecs_logic::turn::{end_current_turn, start_new_round};
 use board::ecs_types::components::{Occupant, Position};
 
 const ALLY_FACTION_ID: u32 = 1;
@@ -202,6 +203,7 @@ P p p p T
 #[test]
 fn test_execute_move_accumulates_movement_used() {
     let (mut world, occupant, targets) = build_world("P . T1 . T2 . . . . . . .");
+    start_new_round(&mut world).expect("開始新回合應成功");
 
     for (i, target) in [targets[0], targets[1], targets[0], targets[1], targets[0]]
         .iter()
@@ -230,6 +232,11 @@ fn test_execute_move_accumulates_movement_used() {
 
     let result = execute_move(&mut world, occupant, targets[1]);
     assert!(result.is_err(), "總共超出 2 倍移動力，移動應失敗");
+
+    end_current_turn(&mut world).expect("結束回合應成功");
+
+    let result = execute_move(&mut world, occupant, targets[1]);
+    assert!(result.is_ok(), "移動力重置後，可以再次移動");
 }
 
 // ============================================================================
