@@ -37,6 +37,10 @@ pub struct DeploymentConfig {
 }
 
 /// 回合順序 Resource
+//      目前的 Occupant 作為穩定身份標識是正確的設計——它讓領域邏輯和回合計算完全不依賴 ECS。
+//      如果查詢效率是問題，
+//      可以在 ecs_logic 層維護一個 HashMap<Occupant, Entity> 的快取 resource，
+//      而不是把 Entity 塞進 TurnEntry。
 #[derive(Debug, Clone, Resource)]
 pub struct TurnOrder {
     pub round: u32,
