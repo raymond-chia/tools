@@ -104,8 +104,35 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
     require_turn_order(world)
 }
 
+/// 查詢當前單位是否可延遲（未移動才可延遲）
+pub fn can_delay_current_unit(world: &mut World) -> Result<bool> {
+    let turn_order = require_turn_order(world)?;
+    let current_occupant = turn_order.entries[turn_order.current_index].occupant;
+
+    let (_, movement_used) = world
+        .query::<(&Occupant, &MovementUsed)>()
+        .iter(world)
+        .find(|(occ, _)| **occ == current_occupant)
+        .ok_or_else(|| BoardError::OccupantNotFound {
+            occupant: current_occupant,
+        })?;
+
+    Ok(movement_used.0 == 0)
+}
+
 /// 延後當前單位到指定位置
 pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&TurnOrder> {
+    // 檢查當前單位是否已行動（移動過就不能延遲）
+    if !can_delay_current_unit(world)? {
+        let turn_order = require_turn_order(world)?;
+        let current_occupant = turn_order.entries[turn_order.current_index].occupant;
+        return Err(BoardError::InvalidDelay {
+            occupant: current_occupant,
+            reason: "已移動的單位無法延遲".to_string(),
+        }
+        .into());
+    }
+
     // 讀寫：延後單位並更新 current_index
     let inner = world
         .get_resource_mut::<TurnOrder>()

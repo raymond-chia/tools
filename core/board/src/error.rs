@@ -79,10 +79,10 @@ pub enum BoardError {
     // turn
     #[error("沒有未行動的單位")]
     NoActiveUnit,
-    #[error("無效的延後目標：當前位置 {current}，不能延後到 {target}")]
-    InvalidDelayTarget { current: usize, target: usize },
     #[error("佔據者不存在於回合表中: {occupant:?}")]
     OccupantNotFound { occupant: Occupant },
+    #[error("單位 {occupant:?} 無法延後: {reason}")]
+    InvalidDelay { occupant: Occupant, reason: String },
 }
 
 /// 部署相關錯誤

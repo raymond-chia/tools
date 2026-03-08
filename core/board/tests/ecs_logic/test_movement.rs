@@ -3,11 +3,12 @@
 use super::super::helpers::level_builder::{LevelBuilder, load_from_ascii};
 use super::constants::{OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
+use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use board::domain::constants::{BASIC_MOVEMENT_COST, PLAYER_FACTION_ID};
 use board::ecs_logic::movement::execute_move;
 use board::ecs_logic::turn::{end_current_turn, start_new_round};
-use board::ecs_types::components::{Occupant, Position};
+use board::ecs_types::components::{Initiative, Occupant, Position};
 
 const ALLY_FACTION_ID: u32 = 1;
 const ENEMY_FACTION_ID: u32 = 2;
@@ -43,14 +44,18 @@ fn build_world(ascii: &str) -> (World, Occupant, Vec<Position>) {
     let level_toml = builder.to_toml().expect("LevelBuilder::to_toml 應成功");
     let mut world = setup_world_with_level(&level_toml);
 
-    // 取得玩家單位的 Occupant
+    // 取得玩家單位的 Occupant 並設置高 Initiative
     let player_pos = markers[MARKER_PLAYER][0];
-    let mut query = world.query::<(&Occupant, &Position)>();
-    let occupant = query
-        .iter(&world)
-        .find(|(_, p)| **p == player_pos)
-        .map(|(occ, _)| *occ)
-        .expect("應找到玩家單位的 Occupant");
+    let (player_entity, occupant) = {
+        let mut query = world.query::<(Entity, &Occupant, &Position)>();
+        query
+            .iter(&world)
+            .find(|(_, _, p)| **p == player_pos)
+            .map(|(entity, occ, _)| (entity, *occ))
+            .expect("應找到玩家單位的 Occupant")
+    };
+    // 設置玩家 Initiative 最高，確保其為 active unit
+    world.entity_mut(player_entity).insert(Initiative(100));
 
     // 收集目的地：T → T1 → T2
     const MARKER_TARGET: &str = "T";
@@ -178,7 +183,9 @@ P p p p T
         let (mut world, occupant, targets) = build_world(ascii);
         let target = targets[0];
 
-        let result = execute_move(&mut world, occupant, target);
+        start_new_round(&mut world).expect("start_new_round 應成功");
+
+        let result = execute_move(&mut world, target);
         assert!(result.is_ok(), "Case '{}' 應成功：{:?}", desc, result);
 
         let move_result = result.expect("應成功");
@@ -210,7 +217,7 @@ fn test_execute_move_accumulates_movement_used() {
         .enumerate()
     {
         // 第 1 次移動
-        let result = execute_move(&mut world, occupant, *target);
+        let result = execute_move(&mut world, *target);
         assert!(result.is_ok(), "第 {} 次移動應成功：{:?}", i + 1, result);
 
         let move_result = result.expect("應成功");
@@ -230,12 +237,12 @@ fn test_execute_move_accumulates_movement_used() {
         );
     }
 
-    let result = execute_move(&mut world, occupant, targets[1]);
+    let result = execute_move(&mut world, targets[1]);
     assert!(result.is_err(), "總共超出 2 倍移動力，移動應失敗");
 
     end_current_turn(&mut world).expect("結束回合應成功");
 
-    let result = execute_move(&mut world, occupant, targets[1]);
+    let result = execute_move(&mut world, targets[1]);
     assert!(result.is_ok(), "移動力重置後，可以再次移動");
 }
 
@@ -283,10 +290,10 @@ w . . . T
 
     for (desc, ascii, target_marker) in test_data {
         let (_, markers) = load_from_ascii(ascii).expect("load_from_ascii 應成功");
-        let (mut world, occupant, _) = build_world(ascii);
+        let (mut world, _, _) = build_world(ascii);
         let target = markers[target_marker][0];
 
-        let result = execute_move(&mut world, occupant, target);
+        let result = execute_move(&mut world, target);
         assert!(result.is_err(), "Case '{}' 應回傳錯誤", desc);
     }
 }

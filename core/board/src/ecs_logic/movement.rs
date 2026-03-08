@@ -4,9 +4,11 @@ use crate::domain::alias::{ID, MovementCost};
 use crate::domain::constants::BASIC_MOVEMENT_COST;
 use crate::ecs_logic::query::{get_all_objects, get_all_units, get_board, get_level_config};
 use crate::ecs_types::components::{Movement, MovementUsed, Occupant, Position, UnitFaction};
+use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
+use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::HashMap;
 
@@ -112,8 +114,18 @@ pub fn get_reachable_positions(
 /// - 目標位置不能被佔據（友軍或敵軍）
 /// - 目標位置必須在可到達集合內
 /// - 移動消耗不能超過可用預算
-pub fn execute_move(world: &mut World, occupant: Occupant, target: Position) -> Result<MoveResult> {
-    // Fail fast：驗證佔據者存在並取得起點位置與 Entity
+pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
+    // 從 TurnOrder 取得當前行動單位
+    let turn_order =
+        world
+            .get_resource::<TurnOrder>()
+            .ok_or_else(|| DataError::MissingResource {
+                name: short_type_name::<TurnOrder>(),
+                note: "請先呼叫 start_new_round".to_string(),
+            })?;
+    let occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+
+    // 驗證佔據者存在並取得起點位置與 Entity
     let (entity, start_pos) = world
         .query::<(Entity, &Occupant, &Position)>()
         .iter(world)

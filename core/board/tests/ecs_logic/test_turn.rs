@@ -3,11 +3,13 @@
 use super::constants::{UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use crate::helpers::level_builder::LevelBuilder;
+use board::domain::constants::PLAYER_FACTION_ID;
+use board::ecs_logic::movement::execute_move;
 use board::ecs_logic::turn::{
-    delay_current_unit, end_battle, end_current_turn, get_turn_order, remove_dead_unit,
-    start_new_round,
+    can_delay_current_unit, delay_current_unit, end_battle, end_current_turn, get_turn_order,
+    remove_dead_unit, start_new_round,
 };
-use board::ecs_types::components::Occupant;
+use board::ecs_types::components::{Occupant, Position};
 
 // ============================================================================
 // start_new_round 測試
@@ -268,6 +270,50 @@ fn test_delay_current_unit_fails() {
     end_current_turn(&mut world).expect("結束回合應成功");
     let result = delay_current_unit(&mut world, 0);
     assert!(result.is_err(), "target_index 在已行動單位前面時應回傳錯誤");
+}
+
+// ============================================================================
+// can_delay_current_unit 測試
+// ============================================================================
+
+/// 驗證 can_delay_current_unit 根據移動狀態回傳正確結果
+#[test]
+fn test_can_delay_current_unit_based_on_movement() {
+    let level_toml = LevelBuilder::from_ascii(
+        "
+        . . . . .
+        . U1 . . .
+        . . U2 . .
+        . . . . .
+        . . . . .
+    ",
+    )
+    .unit("U1", UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID)
+    .unit("U2", UNIT_TYPE_WARRIOR, 2)
+    .to_toml()
+    .expect("LevelBuilder::to_toml 應成功");
+    let mut world = setup_world_with_level(&level_toml);
+
+    // 無 TurnOrder 時應回傳錯誤
+    let result = can_delay_current_unit(&mut world);
+    assert!(result.is_err(), "無 TurnOrder 時應回傳錯誤");
+
+    // 初始化 TurnOrder
+    start_new_round(&mut world).expect("start_new_round 應成功");
+
+    // 未移動時應可延遲
+    let can_delay = can_delay_current_unit(&mut world).expect("查詢應成功");
+    assert!(can_delay, "未移動時應可延遲");
+    delay_current_unit(&mut world, 1).expect("延遲應成功");
+    delay_current_unit(&mut world, 1).expect("延遲應成功");
+
+    // 移動後不可延遲
+    let target = Position { x: 1, y: 0 };
+    execute_move(&mut world, target).expect("移動應成功");
+    let can_delay = can_delay_current_unit(&mut world).expect("查詢應成功");
+    assert!(!can_delay, "移動後不可延遲");
+    let result = delay_current_unit(&mut world, 1);
+    assert!(result.is_err(), "移動後延遲應回傳錯誤");
 }
 
 // ============================================================================

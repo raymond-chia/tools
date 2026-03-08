@@ -212,12 +212,20 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
 
         ui.separator();
 
+        let can_delay = match board::ecs_logic::turn::can_delay_current_unit(&mut ui_state.world) {
+            Ok(v) => v,
+            Err(e) => {
+                error = Err(format!("查詢可否延遲失敗：{}", e));
+                return;
+            }
+        };
         let delay_label = if ui_state.is_delaying {
             "取消延遲"
         } else {
             "延遲"
         };
-        if ui.button(delay_label).clicked() {
+        let button = egui::Button::new(delay_label);
+        if ui.add_enabled(can_delay, button).clicked() {
             ui_state.is_delaying = !ui_state.is_delaying;
             return;
         }
@@ -237,7 +245,7 @@ fn render_battlefield(
     // 取得當前行動單位的可移動範圍
     let current_occupant = board::logic::turn_order::get_active_unit(&turn_order.entries);
     let (reachable_positions, remaining_1mov, current_pos) = match current_occupant {
-        Some(occupant) => {
+        Some(occupant) if !ui_state.is_delaying => {
             let reachable =
                 board::ecs_logic::movement::get_reachable_positions(&mut ui_state.world, occupant)?;
             let unit_bundle = snapshot
@@ -248,7 +256,7 @@ fn render_battlefield(
             let remaining = unit_bundle.attributes.movement.0 - unit_bundle.movement_used.0 as i32;
             (reachable, remaining, Some(unit_bundle.position))
         }
-        None => (HashMap::new(), 0, None),
+        _ => (HashMap::new(), 0, None),
     };
 
     let mut error = Ok(());
@@ -288,7 +296,6 @@ fn render_battlefield(
                     hovered_pos,
                     snapshot,
                     ui_state,
-                    current_occupant,
                     &reachable_positions,
                 );
                 let get_tooltip_info_fn =
@@ -375,19 +382,14 @@ fn handle_mouse_click(
     clicked_pos: Position,
     snapshot: &Snapshot,
     ui_state: &mut LevelTabUIState,
-    current_occupant: Option<Occupant>,
     reachable_positions: &HashMap<Position, board::logic::movement::ReachableInfo>,
 ) -> CResult<()> {
-    if response.clicked() {
-        // 左鍵：執行移動
-        match (current_occupant, reachable_positions.get(&clicked_pos)) {
-            (Some(occupant), Some(info)) => {
+    if response.clicked() && !ui_state.is_delaying {
+        // 左鍵：執行移動（延遲模式下跳過）
+        match reachable_positions.get(&clicked_pos) {
+            Some(info) => {
                 if !info.passthrough_only {
-                    board::ecs_logic::movement::execute_move(
-                        &mut ui_state.world,
-                        occupant,
-                        clicked_pos,
-                    )?;
+                    board::ecs_logic::movement::execute_move(&mut ui_state.world, clicked_pos)?;
                     ui_state.selected_left_pos = Some(clicked_pos);
                 }
             }

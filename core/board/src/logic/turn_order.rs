@@ -74,17 +74,24 @@ pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<(
     let current_index = get_active_index(entries).ok_or(BoardError::NoActiveUnit)?;
 
     if target_index <= current_index {
-        return Err(BoardError::InvalidDelayTarget {
-            current: current_index,
-            target: target_index,
+        return Err(BoardError::InvalidDelay {
+            occupant: entries[current_index].occupant,
+            reason: format!(
+                "無法向後延遲到位置 {}: 當前位置 {}",
+                target_index, current_index
+            ),
         }
         .into());
     }
 
     if target_index >= entries.len() {
-        return Err(BoardError::InvalidDelayTarget {
-            current: current_index,
-            target: target_index,
+        return Err(BoardError::InvalidDelay {
+            occupant: entries[current_index].occupant,
+            reason: format!(
+                "目標位置 {} 超出回合表範圍（{}）",
+                target_index,
+                entries.len()
+            ),
         }
         .into());
     }
