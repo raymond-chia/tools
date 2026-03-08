@@ -111,6 +111,7 @@ fn render_top_bar(
             // TODO: 未來改為玩家單位進入敵人 10 格範圍內才觸發
             match board::ecs_logic::turn::start_new_round(&mut ui_state.world) {
                 Ok(_) => {
+                    board::ecs_logic::deployment::remove_deployment_positions(&mut ui_state.world);
                     ui_state.mode = LevelTabMode::Battle;
                 }
                 Err(e) => {

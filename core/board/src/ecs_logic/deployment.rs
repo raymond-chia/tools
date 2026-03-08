@@ -190,3 +190,11 @@ pub fn undeploy_unit(world: &mut World, position: Position) -> Result<()> {
         .into()),
     }
 }
+
+/// 清除部署設定（進入戰鬥階段後不再需要）
+pub fn remove_deployment_positions(world: &mut World) {
+    world
+        .resource_mut::<DeploymentConfig>()
+        .deployment_positions
+        .clear();
+}
