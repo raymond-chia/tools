@@ -71,7 +71,7 @@ pub fn calculate_turn_order(
 /// - 若沒有未行動的單位則回傳錯誤
 /// - 若 target_index 小於等於當前單位索引則回傳錯誤
 pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()> {
-    let current_index = next_active_index(entries).ok_or(BoardError::NoActiveUnit)?;
+    let current_index = get_active_index(entries).ok_or(BoardError::NoActiveUnit)?;
 
     if target_index <= current_index {
         return Err(BoardError::InvalidDelayTarget {
@@ -95,8 +95,8 @@ pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<(
 }
 
 /// 取得下一個未行動的單位
-pub fn next_active_unit(entries: &[TurnEntry]) -> Option<Occupant> {
-    next_active_index(entries).and_then(|idx| entries.get(idx).map(|e| e.occupant))
+pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant> {
+    get_active_index(entries).and_then(|idx| entries.get(idx).map(|e| e.occupant))
 }
 
 /// 移除指定 Occupant 的單位
@@ -109,6 +109,6 @@ pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<T
 }
 
 /// 取得下一個未行動的單位索引
-fn next_active_index(entries: &[TurnEntry]) -> Option<usize> {
+fn get_active_index(entries: &[TurnEntry]) -> Option<usize> {
     entries.iter().position(|entry| !entry.has_acted)
 }

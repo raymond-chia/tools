@@ -155,7 +155,7 @@ pub fn get_cell_info(
     }
 }
 
-pub fn is_highlight(highlight_pos: Option<Position>) -> impl Fn(Position) -> bool {
+pub fn is_border_highlight(highlight_pos: Option<Position>) -> impl Fn(Position) -> bool {
     move |pos: Position| highlight_pos == Some(pos)
 }
 
@@ -188,14 +188,15 @@ pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String {
 
 // ==================== 渲染層 ====================
 
-/// 繪製編輯模式棋盤格子，支持拖曳預覽
+/// 繪製編輯模式棋盤格子，支持拖曳預覽與背景高亮
 pub fn render_grid(
     ui: &mut egui::Ui,
     rect: egui::Rect,
     board: Board,
     scroll_offset: egui::Vec2,
     get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32),
-    is_highlight: impl Fn(Position) -> bool,
+    is_border_highlight: impl Fn(Position) -> bool,
+    get_bg_highlight: impl Fn(Position) -> Option<egui::Color32>,
 ) {
     let cell_stride = BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING;
 
@@ -219,7 +220,16 @@ pub fn render_grid(
             // 決定格子內容與背景顏色
             let (cell_text, font_color, bg_color) = get_cell_info(pos);
 
+            // 背景高亮覆蓋層
+            let bg_color = if let Some(highlight_color) = get_bg_highlight(pos) {
+                highlight_color
+            } else {
+                bg_color
+            };
+            // 格子背景
             painter.rect_filled(cell_rect, 0.0, bg_color);
+
+            // 文字
             painter.text(
                 cell_rect.center(),
                 egui::Align2::CENTER_CENTER,
@@ -228,8 +238,7 @@ pub fn render_grid(
                 font_color,
             );
 
-            // 拖曳預覽：外框高亮目標位置
-            if is_highlight(pos) {
+            if is_border_highlight(pos) {
                 painter.rect_stroke(
                     cell_rect,
                     0.0,

@@ -432,14 +432,15 @@ fn render_battlefield(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut L
             // 渲染網格
             let get_cell_info_fn =
                 get_cell_info(&level.factions, &deployment_set, &unit_map, &object_map);
-            let is_highlight_fn = is_cell_highlight(drag_state, dragged_pos);
+            let is_border_highlight_fn = is_cell_highlight(drag_state, dragged_pos);
             battlefield::render_grid(
                 ui,
                 rect,
                 board,
                 ui_state.scroll_offset,
                 get_cell_info_fn,
-                is_highlight_fn,
+                is_border_highlight_fn,
+                |_| None,
             );
             if let Some(hovered_pos) = hovered_pos {
                 let get_tooltip_info_fn = get_tooltip_info(&deployment_set, &unit_map, &object_map);

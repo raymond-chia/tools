@@ -6,6 +6,8 @@ use crate::constants::*;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
+use board::logic::movement::ReachableInfo;
+use std::collections::{HashMap, HashSet};
 
 /// 渲染戰鬥模式表單
 pub fn render_form(
@@ -69,7 +71,7 @@ pub fn render_form(
         ui.vertical(|ui| {
             ui.set_height(height);
             ui.set_width(center_panel_width);
-            if let Err(e) = render_battlefield(ui, &snapshot, ui_state) {
+            if let Err(e) = render_battlefield(ui, &snapshot, &turn_order, ui_state) {
                 errors.push(format!("渲染戰場失敗：{}", e));
             }
         });
@@ -227,9 +229,29 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
 fn render_battlefield(
     ui: &mut egui::Ui,
     snapshot: &Snapshot,
+    turn_order: &TurnOrder,
     ui_state: &mut LevelTabUIState,
 ) -> CResult<()> {
     let board = snapshot.board;
+
+    // 取得當前行動單位的可移動範圍
+    let current_occupant = board::logic::turn_order::get_active_unit(&turn_order.entries);
+    let (reachable_positions, remaining_1mov, current_pos) = match current_occupant {
+        Some(occupant) => {
+            let reachable =
+                board::ecs_logic::movement::get_reachable_positions(&mut ui_state.world, occupant)?;
+            let unit_bundle = snapshot
+                .unit_map
+                .values()
+                .find(|b| b.occupant == occupant)
+                .ok_or_else(|| board::error::BoardError::OccupantNotFound { occupant })?;
+            let remaining = unit_bundle.attributes.movement.0 - unit_bundle.movement_used.0 as i32;
+            (reachable, remaining, Some(unit_bundle.position))
+        }
+        None => (HashMap::new(), 0, None),
+    };
+
+    let mut error = Ok(());
     let scroll_output = egui::ScrollArea::both()
         .auto_shrink([false; 2])
         .id_salt("battle_battlefield")
@@ -241,20 +263,36 @@ fn render_battlefield(
 
             let hovered_pos = battlefield::compute_hover_pos(&response, rect, board);
 
-            // 渲染網格（高亮選中的單位）
+            // 計算路徑預覽（懸停時）
+            let preview_path = preview_path(current_pos, hovered_pos, &reachable_positions);
+
+            // 渲染網格（加上可移動範圍高亮）
             let get_cell_info_fn = battlefield::get_cell_info(snapshot);
-            let is_highlight_fn = battlefield::is_highlight(ui_state.selected_left_pos);
+            let is_border_highlight_fn =
+                battlefield::is_border_highlight(ui_state.selected_left_pos);
+            let get_bg_highlight_fn =
+                get_bg_highlight(preview_path, &reachable_positions, remaining_1mov);
+
             battlefield::render_grid(
                 ui,
                 rect,
                 board,
                 ui_state.scroll_offset,
                 get_cell_info_fn,
-                is_highlight_fn,
+                is_border_highlight_fn,
+                get_bg_highlight_fn,
             );
             if let Some(hovered_pos) = hovered_pos {
-                handle_mouse_click(&response, hovered_pos, snapshot, ui_state);
-                let get_tooltip_info_fn = battlefield::get_tooltip_info(snapshot);
+                error = handle_mouse_click(
+                    &response,
+                    hovered_pos,
+                    snapshot,
+                    ui_state,
+                    current_occupant,
+                    &reachable_positions,
+                );
+                let get_tooltip_info_fn =
+                    get_tooltip_info_with_movement(&reachable_positions, snapshot, remaining_1mov);
                 battlefield::render_hover_tooltip(ui, rect, hovered_pos, get_tooltip_info_fn);
             }
 
@@ -275,20 +313,89 @@ fn render_battlefield(
         ui_state.scroll_offset = scroll_output.state.offset;
     }
 
-    Ok(())
+    error
 }
 
 // ==================== 輔助函數 ====================
 
+fn preview_path(
+    src: Option<Position>,
+    dst: Option<Position>,
+    reachable_positions: &HashMap<Position, ReachableInfo>,
+) -> HashSet<Position> {
+    let (src, dst) = match (src, dst) {
+        (Some(src), Some(dst)) => (src, dst),
+        _ => return HashSet::new(),
+    };
+    match reachable_positions.get(&dst) {
+        Some(info) => {
+            // 目的地不能停留
+            if info.passthrough_only {
+                return HashSet::new();
+            }
+        }
+        // 目的地不在可達範圍內
+        None => {
+            return HashSet::new();
+        }
+    };
+    board::logic::movement::reconstruct_path(&reachable_positions, src, dst)
+        .into_iter()
+        .collect()
+}
+
+fn get_bg_highlight(
+    preview_path: HashSet<Position>,
+    reachable_positions: &HashMap<Position, ReachableInfo>,
+    remaining_1mov: i32,
+) -> impl Fn(Position) -> Option<egui::Color32> {
+    move |pos: Position| -> Option<egui::Color32> {
+        if preview_path.contains(&pos) {
+            return Some(BATTLEFIELD_COLOR_MOVE_PATH);
+        }
+        if let Some(info) = reachable_positions.get(&pos) {
+            if !info.passthrough_only {
+                let cost = info.cost as i32;
+                if cost <= remaining_1mov {
+                    return Some(BATTLEFIELD_COLOR_MOVE_1MOV);
+                } else {
+                    return Some(BATTLEFIELD_COLOR_MOVE_2MOV);
+                }
+            }
+        }
+        None
+    }
+}
+
 /// 處理棋盤點擊事件（戰鬥模式）
+/// 左鍵：移動當前行動單位到可到達的位置
 /// 右鍵：選擇有單位或物件的位置顯示詳情
 fn handle_mouse_click(
     response: &egui::Response,
     clicked_pos: Position,
     snapshot: &Snapshot,
     ui_state: &mut LevelTabUIState,
-) {
+    current_occupant: Option<Occupant>,
+    reachable_positions: &HashMap<Position, board::logic::movement::ReachableInfo>,
+) -> CResult<()> {
+    if response.clicked() {
+        // 左鍵：執行移動
+        match (current_occupant, reachable_positions.get(&clicked_pos)) {
+            (Some(occupant), Some(info)) => {
+                if !info.passthrough_only {
+                    board::ecs_logic::movement::execute_move(
+                        &mut ui_state.world,
+                        occupant,
+                        clicked_pos,
+                    )?;
+                    ui_state.selected_left_pos = Some(clicked_pos);
+                }
+            }
+            _ => {}
+        }
+    }
     if response.secondary_clicked() {
+        // 右鍵：選擇詳情
         if snapshot.unit_map.contains_key(&clicked_pos)
             || snapshot.object_map.contains_key(&clicked_pos)
         {
@@ -297,6 +404,7 @@ fn handle_mouse_click(
             ui_state.selected_right_pos = None;
         }
     }
+    Ok(())
 }
 
 /// 從 snapshot 中反查 occupant 對應的單位資訊
@@ -324,4 +432,29 @@ fn find_unit_info_by_occupant(
         }
     }
     Err(format!("在 snapshot 中找不到佔據者: {:?}", occupant))
+}
+
+/// 取得懸停提示，並加上移動花費資訊
+fn get_tooltip_info_with_movement<'a>(
+    reachable: &'a HashMap<Position, board::logic::movement::ReachableInfo>,
+    snapshot: &'a Snapshot,
+    remaining_1mov: i32,
+) -> impl Fn(Position) -> String + 'a {
+    let base_tooltip = battlefield::get_tooltip_info(snapshot);
+    move |pos| -> String {
+        let base_info = base_tooltip(pos);
+
+        if let Some(info) = reachable.get(&pos) {
+            if !info.passthrough_only {
+                let mov_type = if (info.cost as i32) <= remaining_1mov {
+                    "1 MOV"
+                } else {
+                    "2 MOV"
+                };
+                return format!("{}\n移動花費：{} ({})", base_info, info.cost, mov_type);
+            }
+        }
+
+        base_info
+    }
 }

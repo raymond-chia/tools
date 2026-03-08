@@ -1,177 +1,88 @@
-# 戰棋單位移動功能
+# 在 Editor 戰鬥模式中整合移動功能
 
 ## 目標與範圍
 
-### 目標
+在 editor 的戰鬥模式（battle.rs）中，讓當前行動單位自動顯示可移動範圍，玩家左鍵點選目標格子後執行移動。
 
-實作單位移動的核心功能：計算可達範圍（雙色顯示）、路徑回溯、執行移動。
+**做什麼：**
 
-### 範圍內
+- 進入戰鬥模式後，自動顯示當前行動單位的可移動範圍（2 MOV）
+- 用不同顏色區分 1 MOV 和 2 MOV 範圍的格子
+- 滑鼠懸停在可移動格子上時，顯示移動路徑預覽（路徑顏色高亮 + 顯示移動力消耗）
+- 左鍵點選可移動格子後執行移動
+- 移動後重新計算可移動範圍（剩餘移動力可繼續移動）
 
-- 計算可達範圍，區分 1×MOV 和 2×MOV 兩種顏色
-- 路徑回溯函數（從 `ReachableInfo` 重建完整路徑，供 hover 顯示路徑與預估消耗）
-- 執行移動（驗證合法性 + 更新 Entity 的 Position component）
-- 將 `HpModify` 重新命名為 `TerrainEffect`
-- 停留驗證：不可停在其他單位格子上
+**不做什麼：**
 
-### 範圍外（預留空間但不實作）
-
-- 藉機攻擊（敵方主動移動離開相鄰格時觸發）
-- 沿途地形效果觸發（經過 TerrainEffect 時，在 ecs_logic 內處理）
+- 不實作技能系統
+- 不實作攻擊
 
 ## 設計決策
 
-### 行動模式與移動力
+### 可移動範圍的計算
 
-根據 GDD，每回合的移動預算為 `2 × MOV`。單位可以多次移動，系統追蹤本回合已消耗的移動力。
+每幀重新計算，不做快取。等效能有問題再加快取。
 
-- 移動後若已消耗 `<= MOV`，仍可使用技能
-- 移動後若已消耗 `> MOV`，不可使用技能（只能繼續移動）
+直接使用 `board::ecs_logic::movement::get_reachable_positions(&mut world, occupant)`。該函數內部已實作 `budget = movement * 2 - movement_used` 的邏輯，天然支援 2 MOV 範圍。
 
-UI 同時顯示兩個範圍：
+區分 1 MOV 和 2 MOV 範圍：從 snapshot 的 unit_map 取得當前單位的 `movement` 和 `movement_used`，計算 `remaining_1mov = movement - movement_used`。`ReachableInfo.cost <= remaining_1mov` 為 1 MOV 範圍（移動後還能用技能），`cost > remaining_1mov` 為 2 MOV 範圍（移動+移動，不能用技能）。
 
-- 從當前位置出發，消耗後總計 `<= MOV` 的範圍：顏色 A（移動後仍可用技能）
-- 消耗後總計 `> MOV` 的範圍：顏色 B（移動後不可用技能）
+`passthrough_only` 的格子不顯示高亮。
 
-`execute_move` 從 World 查詢單位的 `Movement` 屬性和 `MovementUsed`，計算剩餘預算 `2 × MOV - 已消耗`，作為 `reachable_positions` 的 budget。
+### 移動路徑預覽
 
-### 移動力追蹤
+滑鼠懸停在可到達格子（非 passthrough_only）上時，使用 `board::logic::movement::reconstruct_path` 計算路徑，將路徑上的格子用路徑預覽顏色高亮，並在 tooltip 中顯示移動力消耗。
 
-新增 Component `MovementUsed(MovementCost)`，追蹤單位本回合已消耗的移動力。
+### 移動執行
 
-- `execute_move` 成功後更新 `MovementUsed`
-- 回合結束時（`end_current_turn`）重置為 0
+左鍵點選可到達格子（非 passthrough_only）時，呼叫 `board::ecs_logic::movement::execute_move(&mut world, occupant, target)`。
 
-### 位置查詢
+### 顏色常數
 
-不引入 `OccupantMap` 作為持久化 World Resource。改用查詢時建構的方式：提供函數從 ECS Query 建構臨時 HashMap，供 `reachable_positions` 的回呼使用。
+在 `editor/src/constants.rs` 新增：
 
-理由：
+- `BATTLEFIELD_COLOR_MOVE_1MOV` - 1 MOV 範圍內的格子顏色
+- `BATTLEFIELD_COLOR_MOVE_2MOV` - 2 MOV 範圍內的格子顏色（移動+移動才能到達）
+- `BATTLEFIELD_COLOR_MOVE_PATH` - 移動路徑預覽顏色
 
-- 單位數量約數十到上百，建構 HashMap 成本為微秒等級
-- 回合制中每回合最多呼叫一兩次，建構頻率極低
-- 不需要維護同步，不可能忘記更新
+### 渲染層整合
 
-### 碰撞與停留規則
+`render_grid` 參數調整：
 
-- 可穿越友軍，不可穿越敵軍或阻止通過的物件
-- **不可停留在其他單位的格子上**（穿越 ≠ 停留）
-- 現有 `reachable_positions` 已正確處理：結果過濾掉有 occupant 的格子
+- `is_highlight` 重命名為 `is_border_highlight: impl Fn(Position) -> bool`（維持原行為，黃色外框）
+- 新增 `get_bg_highlight: impl Fn(Position) -> Option<Color32>`（有值時填充該顏色作為格子背景覆蓋層）
+- 繪製順序：先畫格子背景 → 再畫 bg_highlight → 再畫文字 → 最後畫外框
 
-### 重新命名
+### 不修改 UI 狀態
 
-- `HpModify` → `TerrainEffect`（未來可擴展為不只修改 HP 的地形效果）
+因為每幀重新計算，不需要在 `LevelTabUIState` 中新增快取欄位。所有移動相關的資料（reachable_positions、movement、movement_used）都在 `render_form` 中即時計算。
 
-### execute_move 內部驗證
+### 操作流程
 
-`execute_move` 內部呼叫 `reachable_positions` 驗證目標位置合法性，不信任呼叫端，fail fast。
-
-### MoveResult
-
-```rust
-pub struct MoveResult {
-    pub path: Vec<Position>,   // 移動路徑（不含起點）
-    pub cost: MovementCost,    // 實際消耗的移動力
-}
-```
-
-未來擴展時可加入 `terrain_effects`、`opportunity_attacks` 等欄位。
+1. `render_form` 中取得當前行動單位的 occupant，呼叫 `get_reachable_positions` 計算可到達位置
+2. 從 snapshot 取得當前單位的 movement 和 movement_used，計算 1 MOV / 2 MOV 分界
+3. `render_grid` 時，透過 `get_bg_highlight` closure 回傳格子的背景高亮顏色（1 MOV / 2 MOV / 路徑預覽）
+4. 滑鼠懸停可到達格子時，用 `reconstruct_path` 計算路徑，路徑格子用路徑顏色，tooltip 顯示消耗
+5. 左鍵點選可到達格子時，呼叫 `execute_move`
 
 ## 實作步驟
 
-### 1. 重新命名 HpModify → TerrainEffect
+1. **constants.rs**：新增 3 個移動相關顏色常數
 
-- 修改 `components.rs` 中的 struct 名稱
-- 更新所有引用處（spawner、query、ObjectBundle、loader_schema）
+2. **battlefield.rs**：`render_grid` 的 `is_highlight` 重命名為 `is_border_highlight`，新增 `get_bg_highlight: impl Fn(Position) -> Option<Color32>` 參數。同時將 `battlefield::is_highlight` 輔助函數重命名為 `is_border_highlight`
 
-### 2. logic/movement.rs — 新增 reconstruct_path
+3. **deployment.rs / edit.rs**：更新 `render_grid` 呼叫，參數名改為 `is_border_highlight`，`get_bg_highlight` 傳入回傳 `None` 的 closure
 
-```rust
-pub fn reconstruct_path(
-    target: Position,
-    reachable: &HashMap<Position, ReachableInfo>,
-    start: Position,
-) -> Vec<Position>
-```
-
-- 從 target 沿 `prev` 回溯到 start，反轉後回傳
-- 不含起點，包含終點
-- 測試：驗證路徑正確性、邊界情況（target == start 旁邊一格）
-
-### 3. ecs_logic/movement.rs — 新增 get_reachable_positions
-
-```rust
-pub fn get_reachable_positions(
-    world: &mut World,
-    occupant: Occupant,
-) -> Result<ReachableResult>
-```
-
-```rust
-pub struct ReachableResult {
-    pub reachable: HashMap<Position, ReachableInfo>,
-    pub mov: MovementCost,            // 單位的 MOV 屬性
-    pub movement_used: MovementCost,  // 本回合已消耗的移動力
-}
-```
-
-UI 分色邏輯：對每個位置，`info.cost + movement_used <= mov` 為顏色 A，否則為顏色 B。
-
-流程（遵守 World 操作集中原則）：
-
-1. **讀取階段**：從 World 查詢 Board、單位的 Position/Faction/Movement/MovementUsed、所有單位位置與陣營、所有物件的 terrain_cost
-2. **邏輯階段**：計算 `budget = 2 × MOV - movement_used`，呼叫 `reachable_positions`
-3. **回傳**：組裝 `ReachableResult`
-
-### 4. ecs_logic/movement.rs — 新增 execute_move
-
-```rust
-pub fn execute_move(
-    world: &mut World,
-    occupant: Occupant,
-    target: Position,
-) -> Result<MoveResult>
-```
-
-流程（遵守 World 操作集中原則）：
-
-1. **讀取階段**：從 World 查詢 Board、移動單位的 Position/Faction/Movement/MovementUsed、所有單位位置與陣營、所有物件的 terrain_cost
-2. **邏輯階段**：
-   - 計算 `budget = 2 × MOV - movement_used`
-   - 呼叫 `reachable_positions` 驗證 target 可達
-   - 呼叫 `reconstruct_path` 取得路徑
-   - 組裝 MoveResult
-3. **寫入階段**：更新該 Entity 的 Position component，更新 MovementUsed
-
-### 5. ecs_logic/query.rs — 新增位置查詢輔助函數
-
-提供建構 occupant 位置 HashMap 的函數，供 `execute_move`、`get_reachable_positions` 和 editor 使用。
-
-### 6. 測試
-
-詳見下方測試計畫。
-
-## 測試計畫
-
-### A. `reconstruct_path` 單元測試（logic 層，加在 `tests/logic/board/test_movement.rs`）
-
-1. **相鄰一格** — target 在 start 旁邊，回傳 `[target]`
-2. **直線路徑** — 多格直線，驗證完整路徑順序
-3. **L 型路徑** — 需要轉彎，驗證回溯正確
-4. **繞過牆壁的路徑** — 有障礙時路徑正確繞行
-
-### B. `execute_move` 整合測試（新建 `tests/ecs_logic/test_movement.rs`）
-
-5. **合法移動** — Position 更新，MoveResult 的 path/cost 正確，MovementUsed 更新
-6. **目標超出預算** — 回傳錯誤
-7. **目標是友軍格子** — 被拒絕（不可停留）
-8. **目標是敵軍格子** — 被拒絕
-9. **穿過友軍到達目標** — 成功
-10. **必須穿過敵人才能到達** — 被拒絕
-11. **穿過高消耗物件阻擋** — 被拒絕（IMPASSABLE）
-12. **穿過低消耗物件** — 成功但消耗較高
+4. **battle.rs**：
+   - 在 `render_form` 或 `render_battlefield` 中，取得當前行動單位 occupant，呼叫 `get_reachable_positions`
+   - 從 snapshot 取得當前單位的 movement 和 movement_used
+   - 建構 `get_bg_highlight` closure：路徑預覽格子回傳路徑顏色，否則根據 cost 回傳 1 MOV / 2 MOV 顏色，passthrough_only 回傳 None
+   - 滑鼠懸停時用 `reconstruct_path` 計算路徑，tooltip 顯示消耗
+   - 更新 `handle_mouse_click` 處理左鍵點擊移動
 
 ## 注意事項
 
-- 沿途效果觸發的 hook 點在 `execute_move` 內部的路徑迭代中，未來在此處加入邏輯
-- 藉機攻擊的 hook 點也在路徑迭代中（檢查離開的格子是否有相鄰敵人）
+- editor 規則：禁止直接使用 world API，只能透過 board crate 的函數傳入 world
+- `render_grid` 被 deployment.rs 和 battle.rs 共用，修改簽名需同步更新所有呼叫處
+- 需要 import `board::logic::movement::ReachableInfo` 和 `board::ecs_logic::movement` 到 editor
+- `reconstruct_path` 是純邏輯函數（在 `board::logic::movement` 中），不需要 world

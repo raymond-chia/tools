@@ -163,7 +163,7 @@ ECS 框架相關的型別定義
 
 - `pub fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
 - `pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
-- `pub fn next_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
+- `pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
 - `pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
 
 ### logic/debug.rs

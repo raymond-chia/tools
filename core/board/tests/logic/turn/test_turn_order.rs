@@ -3,7 +3,7 @@
 use board::domain::core_types::TurnEntry;
 use board::ecs_types::components::Occupant;
 use board::logic::turn_order::{
-    TurnOrderInput, calculate_turn_order, delay_unit, next_active_unit, remove_unit,
+    TurnOrderInput, calculate_turn_order, delay_unit, get_active_unit, remove_unit,
 };
 
 fn input(id: u32, initiative: i32, is_player: bool) -> TurnOrderInput {
@@ -184,20 +184,20 @@ fn test_normal_round_flow() {
     assert_eq!(occupant_ids(&entries), vec![1, 2, 3]);
 
     // 第一個行動者（連續呼叫應回傳相同結果）
-    assert_eq!(next_active_unit(&entries), Some(unit(1)));
-    assert_eq!(next_active_unit(&entries), Some(unit(1)));
+    assert_eq!(get_active_unit(&entries), Some(unit(1)));
+    assert_eq!(get_active_unit(&entries), Some(unit(1)));
     entries[0].has_acted = true;
 
     // 第二個行動者
-    assert_eq!(next_active_unit(&entries), Some(unit(2)));
+    assert_eq!(get_active_unit(&entries), Some(unit(2)));
     entries[1].has_acted = true;
 
     // 第三個行動者
-    assert_eq!(next_active_unit(&entries), Some(unit(3)));
+    assert_eq!(get_active_unit(&entries), Some(unit(3)));
     entries[2].has_acted = true;
 
     // 回合結束
-    assert_eq!(next_active_unit(&entries), None);
+    assert_eq!(get_active_unit(&entries), None);
 }
 
 /// 模擬延後行動：當前單位延後，下一個人先行動
@@ -210,30 +210,30 @@ fn test_delay_then_continue() {
     let idx = 0;
 
     // 順序：[1, 2, 3]
-    assert_eq!(next_active_unit(&entries), Some(unit(1)));
+    assert_eq!(get_active_unit(&entries), Some(unit(1)));
     delay_unit(&mut entries, 1).expect("delay 應該成功");
     assert_eq!(occupant_ids(&entries), vec![2, 1, 3]);
 
-    assert_eq!(next_active_unit(&entries), Some(unit(2)));
+    assert_eq!(get_active_unit(&entries), Some(unit(2)));
     delay_unit(&mut entries, 2).expect("delay 應該成功");
     assert_eq!(occupant_ids(&entries), vec![1, 3, 2]);
 
-    assert_eq!(next_active_unit(&entries), Some(unit(1)));
+    assert_eq!(get_active_unit(&entries), Some(unit(1)));
     entries[idx].has_acted = true;
     let idx = idx + 1;
 
-    assert_eq!(next_active_unit(&entries), Some(unit(3)));
+    assert_eq!(get_active_unit(&entries), Some(unit(3)));
     delay_unit(&mut entries, 2).expect("delay 應該成功");
     assert_eq!(occupant_ids(&entries), vec![1, 2, 3]);
 
-    assert_eq!(next_active_unit(&entries), Some(unit(2)));
+    assert_eq!(get_active_unit(&entries), Some(unit(2)));
     entries[idx].has_acted = true;
     let idx = idx + 1;
 
-    assert_eq!(next_active_unit(&entries), Some(unit(3)));
+    assert_eq!(get_active_unit(&entries), Some(unit(3)));
     entries[idx].has_acted = true;
 
-    assert_eq!(next_active_unit(&entries), None);
+    assert_eq!(get_active_unit(&entries), None);
 }
 
 /// 模擬中途移除單位後繼續回合
@@ -247,7 +247,7 @@ fn test_remove_unit_then_continue() {
 
     assert_eq!(occupant_ids(&entries), vec![1, 2, 3]);
 
-    assert_eq!(next_active_unit(&entries), Some(unit(1)));
+    assert_eq!(get_active_unit(&entries), Some(unit(1)));
     entries[idx].has_acted = true;
     let idx = idx + 1;
 
@@ -255,16 +255,16 @@ fn test_remove_unit_then_continue() {
     assert_eq!(removed.occupant, Occupant::Unit(2));
     assert_eq!(occupant_ids(&entries), vec![1, 3]);
 
-    assert_eq!(next_active_unit(&entries), Some(unit(3)));
+    assert_eq!(get_active_unit(&entries), Some(unit(3)));
     entries[idx].has_acted = true;
 
-    assert_eq!(next_active_unit(&entries), None);
+    assert_eq!(get_active_unit(&entries), None);
 
     let removed = remove_unit(&mut entries, Occupant::Unit(3)).expect("應移除成功");
     assert_eq!(removed.occupant, Occupant::Unit(3));
     assert_eq!(occupant_ids(&entries), vec![1]);
 
-    assert_eq!(next_active_unit(&entries), None);
+    assert_eq!(get_active_unit(&entries), None);
 }
 
 // ========================================================================
