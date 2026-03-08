@@ -192,6 +192,7 @@ ECS 框架相關的型別定義
 
 - `pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Position) -> Result<()>` - 部署玩家單位到指定位置
 - `pub fn undeploy_unit(world: &mut World, position: Position) -> Result<()>` - 取消指定部署點上的玩家單位部署
+- `pub fn remove_deployment_positions(world: &mut World)` - 清除所有部署位置
 
 ### ecs_logic/query.rs
 
@@ -205,12 +206,13 @@ ECS 框架相關的型別定義
 ### ecs_logic/movement.rs
 
 - `pub fn get_reachable_positions(world: &mut World, occupant: Occupant) -> Result<HashMap<Position, ReachableInfo>>` - 計算單位可到達的所有位置
-- `pub fn execute_move(world: &mut World, occupant: Occupant, target: Position) -> Result<MoveResult>` - 執行單位移動到指定位置
+- `pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult>` - 執行當前單位移動到指定位置
 
 ### ecs_logic/turn.rs
 
 - `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪並回傳
 - `pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder>` - 結束當前單位的回合，推進到下一個
+- `pub fn can_delay_current_unit(world: &mut World) -> Result<bool>` - 檢查當前單位是否可被延遲
 - `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&TurnOrder>` - 延後當前單位到指定位置並回傳
 - `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOrder>` - 移除死亡單位並回傳
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態

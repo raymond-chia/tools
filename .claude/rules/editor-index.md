@@ -133,7 +133,7 @@ GenericEditorState 的方法：
 - `pub struct Snapshot` - 戰場模式所需的關卡查詢結果
 - `pub fn query_snapshot(world: &mut World) -> CResult<Snapshot>` - 一次查詢所有關卡資料
 - `pub fn get_cell_info(snapshot: &Snapshot) -> impl Fn(Position) -> (String, Color32, Color32)` - 取得格子顯示資訊
-- `pub fn is_highlight(selected_pos: Option<Position>) -> impl Fn(Position) -> bool` - 判斷是否高亮
+- `pub fn is_border_highlight(highlight_pos: Option<Position>) -> impl Fn(Position) -> bool` - 判斷是否高亮
 - `pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String` - 取得懸停提示資訊
 - `pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapshot)` - 渲染詳情面板
 - `pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle>` - 取得敵方單位
