@@ -77,7 +77,7 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
     let inner = turn_order.into_inner();
     inner.entries[inner.current_index].has_acted = true;
     let current_occupant = inner.entries[inner.current_index].occupant;
-    let next_idx = inner.entries.iter().position(|e| !e.has_acted);
+    let next_idx = turn_order::get_active_index(&inner.entries);
 
     match next_idx {
         Some(idx) => {
@@ -142,10 +142,7 @@ pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&Tur
         })?
         .into_inner();
     turn_order::delay_unit(&mut inner.entries, target_index)?;
-    inner.current_index = inner
-        .entries
-        .iter()
-        .position(|e| !e.has_acted)
+    inner.current_index = turn_order::get_active_index(&inner.entries)
         .unwrap_or_else(|| unreachable!("delay 後必定存在未行動的單位"));
 
     require_turn_order(world)
@@ -170,7 +167,7 @@ pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOr
         })?
         .into_inner();
     turn_order::remove_unit(&mut inner.entries, occupant)?;
-    let next_idx = inner.entries.iter().position(|e| !e.has_acted);
+    let next_idx = turn_order::get_active_index(&inner.entries);
     let prev_round = inner.round;
 
     match next_idx {
@@ -190,7 +187,6 @@ pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOr
 }
 
 /// 查詢當前回合狀態
-// TODO: 未來檢查是否真的被 editor 用到，若沒有則刪除
 pub fn get_turn_order(world: &World) -> Result<&TurnOrder> {
     require_turn_order(world)
 }

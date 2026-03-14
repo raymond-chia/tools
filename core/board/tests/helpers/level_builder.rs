@@ -2,11 +2,13 @@
 //!
 //! 提供用 ASCII art 視覺化定義關卡的工具，取代手寫 TOML 字串。
 
+use board::domain::alias::ID;
 use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
-use board::ecs_types::components::Position;
+use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::error::{LoadError, Result};
 use board::loader_schema::{Faction, LevelType, ObjectPlacement, UnitPlacement};
+use board::logic::skill::UnitInfo;
 use std::collections::HashMap;
 
 // ============================================================================
@@ -75,6 +77,12 @@ pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Positi
 // ============================================================================
 // LevelBuilder 輔助型別
 // ============================================================================
+
+/// to_unit_map 回傳的單位資料
+pub struct MarkerEntry {
+    pub position: Position,
+    pub unit_info: UnitInfo,
+}
 
 struct UnitMarkerDef {
     marker: String,
@@ -179,6 +187,52 @@ impl LevelBuilder {
             type_name: type_name.to_string(),
         });
         self
+    }
+
+    /// 從 ASCII 棋盤和單位標記建立 Board + 以 marker 為 key 的 UnitInfo map
+    ///
+    /// 每個單位標記的位置會自動分配遞增的 Occupant::Unit ID。
+    /// alliance_id 從 factions 中查找。
+    pub fn to_unit_map(self) -> Result<(Board, HashMap<String, Vec<MarkerEntry>>)> {
+        let (board, markers) = load_from_ascii(&self.ascii)?;
+
+        let mut unit_map: HashMap<String, Vec<MarkerEntry>> = HashMap::new();
+        let mut next_id: ID = 1;
+
+        for unit_def in &self.unit_markers {
+            let positions = match markers.get(&unit_def.marker) {
+                Some(positions) => positions,
+                None => continue,
+            };
+
+            let faction_id = unit_def.faction_id;
+            let alliance_id = self
+                .factions
+                .iter()
+                .find(|f| f.id == faction_id)
+                .map(|f| f.alliance)
+                .expect(&format!("找不到 faction_id={} 的陣營定義", faction_id));
+
+            let entries = positions
+                .iter()
+                .map(|pos| {
+                    let entry = MarkerEntry {
+                        position: *pos,
+                        unit_info: UnitInfo {
+                            occupant: Occupant::Unit(next_id),
+                            faction_id,
+                            alliance_id,
+                        },
+                    };
+                    next_id += 1;
+                    entry
+                })
+                .collect();
+
+            unit_map.insert(unit_def.marker.clone(), entries);
+        }
+
+        Ok((board, unit_map))
     }
 
     /// 組裝完整 TOML 字串

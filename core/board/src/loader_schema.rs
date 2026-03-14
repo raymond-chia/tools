@@ -96,8 +96,6 @@ pub enum AoeShape {
     Cross { length: Coord },
     /// 直線
     Line { length: Coord },
-    /// 長方形
-    Rectangle { width: Coord, height: Coord },
 }
 
 /// 目標模式（影響誰）

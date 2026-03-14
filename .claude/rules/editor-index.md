@@ -48,10 +48,11 @@ editor/
 │       ├── unit_tab.rs      - 單位編輯器
 │       ├── level_tab.rs     - 關卡編輯器主邏輯
 │       └── level_tab/
-│           ├── battle.rs      - 戰鬥模式 UI
-│           ├── battlefield.rs - 戰場共用邏輯（網格、快照、詳情面板）
-│           ├── deployment.rs  - 部署模式 UI
-│           └── edit.rs        - 編輯模式 UI
+│           ├── mod.rs        - 關卡編輯模組定義（隱含）
+│           ├── edit.rs       - 編輯模式 UI
+│           ├── deployment.rs - 部署模式 UI
+│           ├── battle.rs     - 戰鬥模式 UI
+│           └── battlefield.rs - 戰場共用邏輯（網格、快照、詳情面板）
 ```
 
 ## Function 集

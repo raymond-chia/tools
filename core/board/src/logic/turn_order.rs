@@ -116,6 +116,6 @@ pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<T
 }
 
 /// 取得下一個未行動的單位索引
-fn get_active_index(entries: &[TurnEntry]) -> Option<usize> {
+pub fn get_active_index(entries: &[TurnEntry]) -> Option<usize> {
     entries.iter().position(|entry| !entry.has_acted)
 }

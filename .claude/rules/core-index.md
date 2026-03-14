@@ -55,6 +55,7 @@ core/board/
 │       ├── movement.rs   - 移動邏輯
 │       ├── turn_order.rs - 回合順序計算邏輯
 │       ├── unit_attributes.rs - 單位屬性計算邏輯
+│       ├── skill.rs      - 技能效果計算邏輯
 │       └── debug.rs      - 調試工具函數
 └── tests/
     ├── test.rs           - 集成測試入口
@@ -70,13 +71,16 @@ core/board/
     │   ├── test_deployment.rs - 單位部署測試
     │   ├── test_movement.rs - 單位移動測試
     │   ├── test_query.rs - World 查詢測試
-    │   └── test_turn.rs  - 回合順序測試
+    │   ├── test_turn.rs  - 回合順序測試
+    │   └── test_skill.rs - 技能系統 ECS 操作測試
     └── logic/            - 業務邏輯測試
         ├── mod.rs        - 模組宣告
         ├── board/        - 棋盤與移動測試
         │   ├── mod.rs    - 模組宣告
         │   ├── test_board.rs - 棋盤驗證測試
-        │   └── test_movement.rs - 移動邏輯測試
+        │   ├── test_movement.rs - 移動邏輯測試
+        │   ├── test_compute_affected_positions.rs - AOE 計算測試
+        │   └── test_select_skill_targets.rs - 技能目標選擇測試
         ├── turn/         - 回合順序測試
         │   ├── mod.rs    - 模組宣告
         │   └── test_turn_order.rs - 回合順序計算與管理測試
@@ -144,6 +148,7 @@ ECS 框架相關的型別定義
 ### logic/board.rs
 
 - `pub fn is_valid_position(board: Board, pos: Position) -> bool` - 驗證位置在棋盤邊界內
+- `pub fn try_position(board: Board, x: i32, y: i32) -> Option<Position>` - 嘗試將整數座標轉換為有效位置
 
 ### logic/id_generator.rs
 
@@ -165,6 +170,12 @@ ECS 框架相關的型別定義
 - `pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
 - `pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
 - `pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
+- `pub fn get_active_index(entries: &[TurnEntry]) -> Option<usize>` - 取得下一個未行動的單位索引
+
+### logic/skill.rs
+
+- `pub fn select_skill_targets(caster: &CasterInfo, skill: &SkillType, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
+- `pub fn compute_affected_positions(input: AoeInput, board: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
 
 ### logic/debug.rs
 

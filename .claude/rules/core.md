@@ -35,9 +35,8 @@ World 操作集中原則（ecs_logic）
 
 測試規則
 
-- 使用 ASCII art 視覺化棋盤狀態（用 load_from_ascii 解析）
-- 讓測試資料一目瞭然，便於理解測試意圖
-- 多個測試案例使用 `let test_data = [...]` + 迴圈遍歷，不要寫單一案例
+- 禁止在測試中手寫單位擺放位置的座標，必須透過 `load_from_ascii` 或 `LevelBuilder` 從 ASCII art 取得位置
+- 多個測試案例必須使用 `let test_data = [...]` + 迴圈遍歷，禁止只寫單一案例
 - 測試集中在 core/board/tests/ 的子資料夾
 
 不需要測試

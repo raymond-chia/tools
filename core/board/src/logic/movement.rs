@@ -4,7 +4,7 @@ use crate::domain::alias::{ID, MovementCost};
 use crate::ecs_types::components::Position;
 use crate::ecs_types::resources::Board;
 use crate::error::{BoardError, Result};
-use crate::logic::board::is_valid_position;
+use crate::logic::board::{is_valid_position, try_position};
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 use strum::IntoEnumIterator;
@@ -23,39 +23,12 @@ pub enum Direction {
 ///
 /// 返回 `None` 當新位置超出棋盤邊界
 pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position> {
-    let new_pos = match direction {
-        Direction::Up => {
-            if pos.y == 0 {
-                return None;
-            }
-            Position {
-                x: pos.x,
-                y: pos.y - 1,
-            }
-        }
-        Direction::Down => Position {
-            x: pos.x,
-            y: pos.y + 1,
-        },
-        Direction::Left => {
-            if pos.x == 0 {
-                return None;
-            }
-            Position {
-                x: pos.x - 1,
-                y: pos.y,
-            }
-        }
-        Direction::Right => Position {
-            x: pos.x + 1,
-            y: pos.y,
-        },
-    };
-
-    if is_valid_position(board, new_pos) {
-        Some(new_pos)
-    } else {
-        None
+    let (x, y) = (pos.x as i32, pos.y as i32);
+    match direction {
+        Direction::Up => try_position(board, x, y - 1),
+        Direction::Down => try_position(board, x, y + 1),
+        Direction::Left => try_position(board, x - 1, y),
+        Direction::Right => try_position(board, x + 1, y),
     }
 }
 

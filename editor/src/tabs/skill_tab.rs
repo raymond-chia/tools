@@ -747,10 +747,6 @@ fn render_aoe_shape_form(ui: &mut egui::Ui, shape: &mut AoeShape, salt: &str) {
                         AoeShape::Diamond { .. } => AoeShape::Diamond { radius: 2 },
                         AoeShape::Cross { .. } => AoeShape::Cross { length: 2 },
                         AoeShape::Line { .. } => AoeShape::Line { length: 2 },
-                        AoeShape::Rectangle { .. } => AoeShape::Rectangle {
-                            width: 2,
-                            height: 1,
-                        },
                     };
                     ui.selectable_value(shape, option.clone(), ui_string(&option));
                 }
@@ -786,24 +782,6 @@ fn render_aoe_shape_form(ui: &mut egui::Ui, shape: &mut AoeShape, salt: &str) {
                     egui::DragValue::new(length)
                         .speed(DRAG_VALUE_SPEED)
                         .range(2..=Coord::MAX),
-                );
-            });
-        }
-        AoeShape::Rectangle { width, height } => {
-            ui.horizontal(|ui| {
-                ui.label("寬度：");
-                ui.add(
-                    egui::DragValue::new(width)
-                        .speed(DRAG_VALUE_SPEED)
-                        .range(1..=Coord::MAX),
-                );
-            });
-            ui.horizontal(|ui| {
-                ui.label("高度：");
-                ui.add(
-                    egui::DragValue::new(height)
-                        .speed(DRAG_VALUE_SPEED)
-                        .range(1..=Coord::MAX),
                 );
             });
         }

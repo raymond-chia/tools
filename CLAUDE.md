@@ -61,3 +61,9 @@ use 語句應放在檔案頂部。不應在函數內部宣告 use。
 ```sh
 cd "D:\Mega\prog\rust\tools" && cargo check -p editor 2>&1 | head -50
 ```
+
+## 測試指令
+
+```sh
+cd "D:\Mega\prog\rust\tools" && cargo test -p board 2>&1 | tail -100
+```

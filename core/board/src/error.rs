@@ -83,6 +83,31 @@ pub enum BoardError {
     OccupantNotFound { occupant: Occupant },
     #[error("單位 {occupant:?} 無法延後: {reason}")]
     InvalidDelay { occupant: Occupant, reason: String },
+    // skill
+    #[error(
+        "非法的技能施放位置:\n\t範圍 {shape}\n\t施放者 ({caster_x}, {caster_y})\n\t目標 ({target_x}, {target_y})"
+    )]
+    InvalidSkillTarget {
+        shape: String,
+        caster_x: Coord,
+        caster_y: Coord,
+        target_x: Coord,
+        target_y: Coord,
+    },
+    #[error("目標數量錯誤: 預期 {expected} 個，實際 {actual} 個")]
+    WrongTargetCount { expected: usize, actual: usize },
+    #[error("目標超出射程: 距離 {distance}，射程 {min_range}-{max_range}")]
+    OutOfRange {
+        distance: usize,
+        min_range: Coord,
+        max_range: Coord,
+    },
+    #[error("目標位置 ({x}, {y}) 不符合篩選條件: {filter}")]
+    TargetFilterMismatch { x: Coord, y: Coord, filter: String },
+    #[error("目標位置 ({x}, {y}) 無單位")]
+    NoUnitAtTarget { x: Coord, y: Coord },
+    #[error("不允許重複選擇目標位置，所有目標：{targets:?}")]
+    DuplicateTarget { targets: Vec<(Coord, Coord)> },
 }
 
 /// 部署相關錯誤
@@ -101,6 +126,8 @@ pub enum DeploymentError {
 pub enum UnitError {
     #[error("技能未找到: {skill_name}")]
     SkillNotFound { skill_name: SkillName },
+    #[error("技能 '{skill_name}' 必須至少有一個 effect")]
+    EmptySkillEffects { skill_name: SkillName },
 }
 
 impl Error {
