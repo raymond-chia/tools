@@ -1,102 +1,421 @@
 //! compute_affected_positions 測試
 
+use crate::helpers::level_builder::load_from_ascii;
 use board::ecs_types::components::Position;
-use board::ecs_types::resources::Board;
 use board::loader_schema::AoeShape;
 use board::logic::skill::compute_affected_positions;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+/// 從 markers 收集所有被影響的格子（C + T + A）
+fn collect_affected(markers: &HashMap<String, Vec<Position>>) -> HashSet<Position> {
+    ["C", "T", "A"]
+        .iter()
+        .flat_map(|key| markers.get(*key).into_iter().flatten().copied())
+        .collect()
+}
 
 #[test]
 fn test_compute_affected_positions() {
-    let board = Board {
-        width: 6,
-        height: 6,
-    };
-
-    // (description, AoeInput, expected_positions)
     let test_data = [
         // Diamond 測試
         (
-            "Diamond radius=0",
-            (AoeShape::Diamond { radius: 0 }, (3, 3), (3, 3)),
-            vec![(3, 3)],
+            AoeShape::Diamond { radius: 0 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . C . .
+            . . . . . .
+            . . . . . .
+            ",
         ),
         (
-            "Diamond radius=1",
-            (AoeShape::Diamond { radius: 1 }, (3, 3), (3, 3)),
-            vec![(3, 3), (3, 2), (3, 4), (2, 3), (4, 3)],
+            AoeShape::Diamond { radius: 0 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . C . . .
+            . . . . . .
+            ",
         ),
         (
-            "Diamond radius=1 邊界裁切",
-            (AoeShape::Diamond { radius: 1 }, (0, 0), (0, 0)),
-            vec![(0, 0), (0, 1), (1, 0)],
+            AoeShape::Diamond { radius: 1 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . A . .
+            . . A C A .
+            . . . A . .
+            . . . . . .
+            ",
         ),
         (
-            "Diamond radius=2 邊界裁切",
-            (AoeShape::Diamond { radius: 2 }, (5, 5), (5, 5)),
-            vec![(5, 5), (5, 4), (5, 3), (4, 5), (3, 5), (4, 4)],
+            AoeShape::Diamond { radius: 1 },
+            "
+            C A . . . .
+            A . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Diamond { radius: 1 },
+            "
+            . . . . . .
+            . . . . . A
+            . . . . A C
+            . . . . . A
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Diamond { radius: 2 },
+            "
+            . . A . . .
+            . A A A . .
+            A A C A A .
+            . A A A . .
+            . . A . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Diamond { radius: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . A
+            . . . . A A
+            . . . A A C
+            ",
+        ),
+        (
+            AoeShape::Diamond { radius: 2 },
+            "
+            . A A A . .
+            A A C A A .
+            . A A A . .
+            . . A . . .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Diamond { radius: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . A .
+            . . . A A A
+            . . A A C A
+            . . . A A A
+            ",
+        ),
+        (
+            AoeShape::Diamond { radius: 3 },
+            "
+            . . . A . .
+            . . A A A .
+            . A A A A A
+            A A A C A A
+            . A A A A A
+            . . A A A .
+            ",
         ),
         // Cross 測試
         (
-            "Cross length=0",
-            (AoeShape::Cross { length: 0 }, (5, 3), (5, 3)),
-            vec![(5, 3)],
+            AoeShape::Cross { length: 0 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . C
+            . . . . . .
+            . . . . . .
+            ",
         ),
         (
-            "Cross length=1",
-            (AoeShape::Cross { length: 1 }, (2, 4), (2, 4)),
-            vec![(2, 4), (2, 3), (2, 5), (1, 4), (3, 4)],
+            AoeShape::Cross { length: 0 },
+            "
+            . . . . . .
+            . . . . . .
+            . . C . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            ",
         ),
         (
-            "Cross length=1 邊界裁切",
-            (AoeShape::Cross { length: 1 }, (0, 3), (0, 3)),
-            vec![(0, 3), (0, 2), (0, 4), (1, 3)],
+            AoeShape::Cross { length: 1 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . A . . .
+            . A C A . .
+            . . A . . .
+            ",
         ),
         (
-            "Cross length=2 邊界裁切",
-            (AoeShape::Cross { length: 2 }, (5, 5), (5, 5)),
-            vec![(5, 5), (5, 4), (5, 3), (4, 5), (3, 5)],
-        ),
-        // Line 測試
-        (
-            "Line 向上 length=2",
-            (AoeShape::Line { length: 2 }, (3, 3), (3, 1)),
-            vec![(3, 3), (3, 2), (3, 1)],
-        ),
-        (
-            "Line 向下 length=1",
-            (AoeShape::Line { length: 1 }, (3, 4), (3, 5)),
-            vec![(3, 4), (3, 5)],
+            AoeShape::Cross { length: 1 },
+            "
+            C A . . . .
+            A . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            ",
         ),
         (
-            "Line 向左 length=2",
-            (AoeShape::Line { length: 2 }, (1, 3), (0, 3)),
-            vec![(1, 3), (0, 3)],
+            AoeShape::Cross { length: 1 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . A
+            . . . . A C
+            ",
         ),
         (
-            "Line 向右 length=3",
-            (AoeShape::Line { length: 3 }, (2, 4), (5, 4)),
-            vec![(2, 4), (3, 4), (4, 4), (5, 4)],
+            AoeShape::Cross { length: 2 },
+            "
+            . . . . . .
+            A . . . . .
+            A . . . . .
+            C A A . . .
+            A . . . . .
+            A . . . . .
+            ",
+        ),
+        (
+            AoeShape::Cross { length: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . A
+            . . . . . A
+            . . . A A C
+            ",
+        ),
+        (
+            AoeShape::Cross { length: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . A
+            . . . . . A
+            . . . A A C
+            . . . . . A
+            ",
+        ),
+        (
+            AoeShape::Cross { length: 3 },
+            "
+            . A . . . .
+            A C A A A .
+            . A . . . .
+            . A . . . .
+            . A . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Cross { length: 3 },
+            "
+            . . . . . .
+            . . . . . A
+            . . . . . A
+            . . . . . A
+            . . A A A C
+            . . . . . A
+            ",
+        ),
+        // Line 測試：C=caster, T=target 決定方向
+        (
+            AoeShape::Line { length: 1 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . T . .
+            . . . C . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 1 },
+            "
+            . . . . . .
+            . C . . . .
+            . T . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 1 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . T C . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 1 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . C T
+            ",
+        ),
+        (
+            AoeShape::Line { length: 2 },
+            "
+            . . . . . .
+            . . . T . .
+            . . . A . .
+            . . . C . .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . C .
+            . . . . T .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            T C . . . .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . C A T .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 2 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . C T A .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 3 },
+            "
+            . . . . . .
+            . . . . T .
+            . . . . A .
+            . . . . A .
+            . . . . C .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 3 },
+            "
+            . . . . . .
+            . . C . . .
+            . . A . . .
+            . . A . . .
+            . . T . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 3 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            T C . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 3 },
+            "
+            . . . . . .
+            . . . . . .
+            . C A A T .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 3 },
+            "
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            . . C A T A
+            . . . . . .
+            ",
+        ),
+        (
+            AoeShape::Line { length: 3 },
+            "
+            . . . . . .
+            . . . . . .
+            . C T A A .
+            . . . . . .
+            . . . . . .
+            . . . . . .
+            ",
         ),
     ];
 
-    for (description, input, expected) in test_data {
-        let aoe = input.0;
-        let caster_pos = Position {
-            x: input.1.0,
-            y: input.1.1,
-        };
-        let target_pos = Position {
-            x: input.2.0,
-            y: input.2.1,
-        };
-        let result = compute_affected_positions(&aoe, caster_pos, target_pos, board)
-            .expect(&format!("計算失敗：{}", description));
+    for (shape, ascii) in test_data {
+        let (board, markers) = load_from_ascii(ascii).expect(&format!("載入棋盤失敗：{ascii}"));
+        let caster = markers["C"][0];
+        let target = markers.get("T").map(|v| v[0]).unwrap_or(caster);
+        let expected_set = collect_affected(&markers);
+
+        let result = compute_affected_positions(&shape, caster, target, board)
+            .expect(&format!("計算失敗：{ascii}"));
         let result_set: HashSet<_> = result.into_iter().collect();
-        let expected_set: HashSet<_> = expected
-            .into_iter()
-            .map(|(x, y)| Position { x, y })
-            .collect();
-        assert_eq!(result_set, expected_set, "測試失敗：{description}");
+        assert_eq!(result_set, expected_set, "測試失敗：{ascii}");
     }
 }
