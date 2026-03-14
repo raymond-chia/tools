@@ -16,3 +16,8 @@ pub const IMPASSABLE_MOVEMENT_COST: MovementCost = BASIC_MOVEMENT_COST * 1000;
 
 /// 即死傷害（負數表示傷害）
 pub const HP_MODIFY_DAMAGE: i32 = -10000;
+
+/// 強制失敗上界（骰 1~5 強制失敗）
+pub const FORCED_FAILURE_UPPER: i32 = 5;
+/// 強制成功下界（骰 96~100 強制成功）
+pub const FORCED_SUCCESS_LOWER: i32 = 96;
