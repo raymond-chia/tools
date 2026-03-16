@@ -1,4 +1,5 @@
-use board::domain::core_types::{Attribute, CalculatedAttributes};
+use board::domain::core_types::Attribute;
+use board::ecs_types::components::*;
 use board::loader_schema::{
     AttributeSource, BuffEffect, Mechanic, SkillEffect, SkillType, TargetFilter, TargetMode,
     TriggerEvent, ValueFormula,
@@ -62,8 +63,8 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_STRENGTH.to_string()],
             vec![],
-            CalculatedAttributes {
-                hit: 10,
+            AttributeBundle {
+                hit: Hit(10),
                 ..Default::default()
             },
         ),
@@ -107,9 +108,9 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_STRENGTH.to_string(), SKILL_CONSTITUTION.to_string()],
             vec![],
-            CalculatedAttributes {
-                hit: 50,
-                evasion: 120,
+            AttributeBundle {
+                hit: Hit(50),
+                evasion: Evasion(120),
                 ..Default::default()
             },
         ),
@@ -143,8 +144,8 @@ fn test_calculate_attributes() {
             },
             vec![SKILL_PASSIVE.to_string(), SKILL_ACTIVE.to_string()],
             vec![],
-            CalculatedAttributes {
-                hit: 10,
+            AttributeBundle {
+                hit: Hit(10),
                 ..Default::default()
             },
         ),
@@ -171,8 +172,8 @@ fn test_calculate_attributes() {
                 formula: ValueFormula::Fixed { value: 20 },
                 duration: 10,
             }],
-            CalculatedAttributes {
-                hit: 30,
+            AttributeBundle {
+                hit: Hit(30),
                 ..Default::default()
             },
         ),
@@ -203,8 +204,8 @@ fn test_calculate_attributes() {
                 },
                 duration: 10,
             }],
-            CalculatedAttributes {
-                hit: 20,
+            AttributeBundle {
+                hit: Hit(20),
                 ..Default::default()
             },
         ),
@@ -231,8 +232,8 @@ fn test_calculate_attributes() {
                 formula: ValueFormula::Fixed { value: -15 },
                 duration: 10,
             }],
-            CalculatedAttributes {
-                hit: 5,
+            AttributeBundle {
+                hit: Hit(5),
                 ..Default::default()
             },
         ),
@@ -259,8 +260,8 @@ fn test_calculate_attributes() {
                 formula: ValueFormula::Fixed { value: -25 },
                 duration: 10,
             }],
-            CalculatedAttributes {
-                hit: -5,
+            AttributeBundle {
+                hit: Hit(-5),
                 ..Default::default()
             },
         ),
@@ -307,8 +308,8 @@ fn test_calculate_attributes() {
                 SKILL_BONUS_ATTACK.to_string(),
             ],
             vec![],
-            CalculatedAttributes {
-                hit: 40,
+            AttributeBundle {
+                hit: Hit(40),
                 ..Default::default()
             },
         ),
@@ -369,8 +370,8 @@ fn test_calculate_attributes() {
                 formula: ValueFormula::Fixed { value: 5 },
                 duration: 10,
             }],
-            CalculatedAttributes {
-                hit: 100,
+            AttributeBundle {
+                hit: Hit(100),
                 ..Default::default()
             },
         ),
@@ -381,9 +382,9 @@ fn test_calculate_attributes() {
         assert!(result.is_ok(), "測試 '{}' 應該成功", desc);
 
         let attrs = result.unwrap();
-        assert_eq!(attrs.hit, expected.hit, "測試 '{}' - 命中不符", desc);
+        assert_eq!(attrs.hit.0, expected.hit.0, "測試 '{}' - 命中不符", desc);
         assert_eq!(
-            attrs.evasion, expected.evasion,
+            attrs.evasion.0, expected.evasion.0,
             "測試 '{}' - 迴避不符",
             desc
         );

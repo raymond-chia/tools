@@ -78,12 +78,12 @@ macro_rules! define_attribute_components {
     ($(($field:ident, $Type:ident)),* $(,)?) => {
         $(
             #[doc = concat!("角色屬性 component: ", stringify!($Type))]
-            #[derive(Debug, Clone, Component)]
+            #[derive(Debug, Clone, Default, Component)]
             pub struct $Type(pub i32);
         )*
 
         /// 所有屬性 Component 的 Bundle
-        #[derive(Debug, Bundle, Clone)]
+        #[derive(Debug, Clone, Default, Bundle)]
         pub struct AttributeBundle {
             $(pub $field: $Type,)*
         }

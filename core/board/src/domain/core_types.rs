@@ -11,9 +11,7 @@ use strum_macros::EnumIter;
 /// 定義屬性列表的 macro（單一來源）
 ///
 /// 格式：(欄位名, Attribute enum variant)
-/// 同時產生：
 /// - `Attribute` enum
-/// - `CalculatedAttributes` struct
 macro_rules! define_attributes {
     ($(($field:ident, $variant:ident)),* $(,)?) => {
         /// 角色屬性類型
@@ -21,12 +19,6 @@ macro_rules! define_attributes {
         pub enum Attribute {
             #[default]
             $($variant,)*
-        }
-
-        /// 計算出的單位屬性
-        #[derive(Debug, Default, Clone)]
-        pub struct CalculatedAttributes {
-            $(pub $field: i32,)*
         }
     };
 }

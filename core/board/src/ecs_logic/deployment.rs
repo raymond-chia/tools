@@ -1,10 +1,7 @@
 use crate::domain::alias::{ID, TypeName};
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_types::components::{
-    AttributeBundle, Block, BlockProtection, CurrentHp, CurrentMp, Evasion, Fortitude, Hit,
-    Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp, Movement, MovementUsed, Occupant,
-    OccupantTypeName, PhysicalAttack, Position, Reaction, Reflex, Skills, Unit, UnitBundle,
-    UnitFaction, Will,
+    MovementUsed, Occupant, OccupantTypeName, Position, Skills, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
@@ -34,13 +31,6 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
             })
             .collect();
 
-        // 找出同格的玩家單位（準備替換）
-        let entity_to_remove = world
-            .query_filtered::<(Entity, &Position, &UnitFaction), With<Unit>>()
-            .iter(world)
-            .find(|(_, pos, unit_faction)| **pos == position && unit_faction.0 == PLAYER_FACTION_ID)
-            .map(|(entity, _, _)| entity);
-
         let deployment_config = world
             .get_resource::<DeploymentConfig>()
             .ok_or(DataError::MissingResource {
@@ -51,11 +41,17 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
 
         // resource 借用已結束，可再次查詢 world
         // 計算站在部署點上的玩家單位數（即已部署的單位，不含關卡預設單位）
-        let current_player_unit_count = world
-            .query_filtered::<&Position, With<Unit>>()
+        let deployed: Vec<_> = world
+            .query_filtered::<(Entity, &Position, &UnitFaction), With<Unit>>()
             .iter(world)
-            .filter(|pos| deployment_config.deployment_positions.contains(pos))
-            .count();
+            .filter(|(_, pos, _)| deployment_config.deployment_positions.contains(pos))
+            .collect();
+        let current_player_unit_count = deployed.len();
+        // 找出同格的玩家單位（準備替換）
+        let entity_to_remove = deployed
+            .iter()
+            .find(|(_, pos, unit_faction)| **pos == position && unit_faction.0 == PLAYER_FACTION_ID)
+            .map(|(entity, _, _)| *entity);
 
         let game_data = world
             .get_resource::<GameData>()
@@ -99,25 +95,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
         occupant_type_name: OccupantTypeName(unit_type.name.clone()),
         unit_faction: UnitFaction(PLAYER_FACTION_ID),
         skills: Skills(unit_type.skills.clone()),
-        attributes: AttributeBundle {
-            max_hp: MaxHp(attributes.hp),
-            current_hp: CurrentHp(attributes.hp),
-            max_mp: MaxMp(attributes.mp),
-            current_mp: CurrentMp(attributes.mp),
-            initiative: Initiative(attributes.initiative),
-            hit: Hit(attributes.hit),
-            evasion: Evasion(attributes.evasion),
-            block: Block(attributes.block),
-            block_protection: BlockProtection(attributes.block_protection),
-            physical_attack: PhysicalAttack(attributes.physical_attack),
-            magical_attack: MagicalAttack(attributes.magical_attack),
-            magical_dc: MagicalDc(attributes.magical_dc),
-            fortitude: Fortitude(attributes.fortitude),
-            reflex: Reflex(attributes.reflex),
-            will: Will(attributes.will),
-            movement: Movement(attributes.movement),
-            reaction: Reaction(attributes.reaction),
-        },
+        attributes,
         movement_used: MovementUsed(0),
     };
 

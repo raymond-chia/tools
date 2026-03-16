@@ -1,9 +1,7 @@
 use crate::domain::alias::ID;
 use crate::ecs_types::components::{
-    AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, CurrentHp, CurrentMp,
-    Evasion, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
-    Movement, MovementUsed, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
-    Position, Reaction, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction, Will,
+    BlocksSight, BlocksSound, HpModify, MovementUsed, Object, ObjectBundle, Occupant,
+    OccupantTypeName, Position, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
@@ -58,25 +56,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 occupant_type_name: OccupantTypeName(unit_type.name.clone()),
                 unit_faction: UnitFaction(placement.faction_id),
                 skills: Skills(unit_type.skills.clone()),
-                attributes: AttributeBundle {
-                    max_hp: MaxHp(attributes.hp),
-                    current_hp: CurrentHp(attributes.hp),
-                    max_mp: MaxMp(attributes.mp),
-                    current_mp: CurrentMp(attributes.mp),
-                    initiative: Initiative(attributes.initiative),
-                    hit: Hit(attributes.hit),
-                    evasion: Evasion(attributes.evasion),
-                    block: Block(attributes.block),
-                    block_protection: BlockProtection(attributes.block_protection),
-                    physical_attack: PhysicalAttack(attributes.physical_attack),
-                    magical_attack: MagicalAttack(attributes.magical_attack),
-                    magical_dc: MagicalDc(attributes.magical_dc),
-                    fortitude: Fortitude(attributes.fortitude),
-                    reflex: Reflex(attributes.reflex),
-                    will: Will(attributes.will),
-                    movement: Movement(attributes.movement),
-                    reaction: Reaction(attributes.reaction),
-                },
+                attributes,
                 movement_used: MovementUsed(0),
             });
         }

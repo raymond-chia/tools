@@ -1,7 +1,8 @@
 //! 單位屬性計算邏輯
 
 use crate::domain::alias::SkillName;
-use crate::domain::core_types::{Attribute, CalculatedAttributes};
+use crate::domain::core_types::Attribute;
+use crate::ecs_types::components::*;
 use crate::error::{Result, UnitError};
 use crate::loader_schema::{
     AttributeSource, BuffEffect, Mechanic, SkillEffect, SkillType, TargetFilter, TargetMode,
@@ -14,7 +15,7 @@ pub fn calculate_attributes(
     skill_names: &[SkillName],
     buffs: &[BuffEffect],
     skill_map: &HashMap<SkillName, SkillType>,
-) -> Result<CalculatedAttributes> {
+) -> Result<AttributeBundle> {
     let mut attributes = CalculatedAttributes::default();
 
     // 收集所有被動技能效果
@@ -77,7 +78,7 @@ pub fn calculate_attributes(
         set_attribute_value(&mut attributes, attribute, new_value);
     }
 
-    Ok(attributes)
+    Ok(attributes.into())
 }
 
 fn collect_formula_effect(
@@ -105,6 +106,12 @@ fn collect_formula_effect(
 /// 產生 get/set/add_attribute_value 函數的 macro
 macro_rules! define_attribute_accessors {
     ($(($field:ident, $variant:ident)),* $(,)?) => {
+        /// 計算出的單位屬性
+        #[derive(Debug, Default, Clone)]
+        struct CalculatedAttributes {
+            $(pub $field: i32,)*
+        }
+
         fn get_attribute_value(attributes: &CalculatedAttributes, attribute: Attribute) -> i32 {
             match attribute {
                 $(Attribute::$variant => attributes.$field,)*
@@ -142,3 +149,27 @@ define_attribute_accessors!(
     (movement, Movement),
     (reaction, Reaction),
 );
+
+impl From<CalculatedAttributes> for AttributeBundle {
+    fn from(attributes: CalculatedAttributes) -> Self {
+        AttributeBundle {
+            max_hp: MaxHp(attributes.hp),
+            current_hp: CurrentHp(attributes.hp),
+            max_mp: MaxMp(attributes.mp),
+            current_mp: CurrentMp(attributes.mp),
+            initiative: Initiative(attributes.initiative),
+            hit: Hit(attributes.hit),
+            evasion: Evasion(attributes.evasion),
+            block: Block(attributes.block),
+            block_protection: BlockProtection(attributes.block_protection),
+            physical_attack: PhysicalAttack(attributes.physical_attack),
+            magical_attack: MagicalAttack(attributes.magical_attack),
+            magical_dc: MagicalDc(attributes.magical_dc),
+            fortitude: Fortitude(attributes.fortitude),
+            reflex: Reflex(attributes.reflex),
+            will: Will(attributes.will),
+            movement: Movement(attributes.movement),
+            reaction: Reaction(attributes.reaction),
+        }
+    }
+}
