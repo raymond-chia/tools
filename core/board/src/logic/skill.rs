@@ -224,7 +224,7 @@ fn validate_range(
 }
 
 /// 曼哈頓距離
-fn manhattan_distance(a: Position, b: Position) -> Coord {
+pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord {
     let dx = (a.x as i32 - b.x as i32).unsigned_abs() as Coord;
     let dy = (a.y as i32 - b.y as i32).unsigned_abs() as Coord;
     dx + dy

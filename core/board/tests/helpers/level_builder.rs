@@ -193,7 +193,13 @@ impl LevelBuilder {
     ///
     /// 每個單位標記的位置會自動分配遞增的 Occupant::Unit ID。
     /// alliance_id 從 factions 中查找。
-    pub fn to_unit_map(self) -> Result<(Board, HashMap<String, Vec<MarkerEntry>>)> {
+    pub fn to_unit_map(
+        self,
+    ) -> Result<(
+        Board,
+        HashMap<String, Vec<Position>>,
+        HashMap<String, Vec<MarkerEntry>>,
+    )> {
         let (board, markers) = load_from_ascii(&self.ascii)?;
 
         let mut unit_map: HashMap<String, Vec<MarkerEntry>> = HashMap::new();
@@ -232,7 +238,7 @@ impl LevelBuilder {
             unit_map.insert(unit_def.marker.clone(), entries);
         }
 
-        Ok((board, unit_map))
+        Ok((board, markers, unit_map))
     }
 
     /// 組裝完整 TOML 字串

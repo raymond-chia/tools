@@ -1,8 +1,10 @@
 //! select_skill_targets 測試
 
-use crate::helpers::level_builder::{LevelBuilder, MarkerEntry, load_from_ascii};
+use crate::helpers::level_builder::{LevelBuilder, MarkerEntry};
 use board::domain::alias::ID;
 use board::ecs_types::components::{Occupant, Position};
+use board::ecs_types::resources::Board;
+use board::error::Result;
 use board::loader_schema::{
     AoeShape, AttackStyle, Mechanic, SkillEffect, SkillType, TargetFilter, TargetMode, ValueFormula,
 };
@@ -15,7 +17,13 @@ const ALLY_FACTION: ID = 1;
 const ENEMY_FACTION: ID = 2;
 
 /// 標準棋盤建構：C=施放者(player), Pt/Pa/Pn=玩家, At/Aa/An=友軍, Et/Ea/En=敵軍
-fn standard_board(ascii: &str) -> LevelBuilder {
+fn standard_board(
+    ascii: &str,
+) -> Result<(
+    Board,
+    HashMap<String, Vec<Position>>,
+    HashMap<String, Vec<MarkerEntry>>,
+)> {
     LevelBuilder::from_ascii(ascii)
         .unit("C", "caster", PLAYER_FACTION)
         .unit("Pa", "player", PLAYER_FACTION)
@@ -24,6 +32,7 @@ fn standard_board(ascii: &str) -> LevelBuilder {
         .unit("Ab", "ally", ALLY_FACTION)
         .unit("Ea", "enemy", ENEMY_FACTION)
         .unit("Eb", "enemy", ENEMY_FACTION)
+        .to_unit_map()
 }
 
 /// 建構只含一個 HpModify effect 的技能
@@ -992,9 +1001,8 @@ fn test_select_skill_targets_normal_case() {
 
     for (description, levels, skill_cases) in test_data.iter() {
         for level in levels.iter() {
-            let (board, marker_map) = standard_board(level)
-                .to_unit_map()
-                .expect(&format!("建立測試棋盤失敗：{}", description));
+            let (board, _, marker_map) =
+                standard_board(level).expect(&format!("建立測試棋盤失敗：{}", description));
             let position_map = to_position_map(&marker_map);
             let caster = CasterInfo {
                 position: marker_map["C"][0].position,
@@ -1056,10 +1064,7 @@ fn test_select_skill_targets_singletarget() {
         Pa T .
         Aa . .
         "#;
-    let (board, marker_map) = standard_board(level)
-        .to_unit_map()
-        .expect("建立測試棋盤失敗");
-    let (_, markers) = load_from_ascii(level).expect("抓 T 失敗");
+    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
     let position_map = to_position_map(&marker_map);
     let caster = CasterInfo {
         position: marker_map["C"][0].position,
@@ -1083,10 +1088,7 @@ fn test_select_skill_targets_multitarget() {
         Pa T .
         Aa . .
         "#;
-    let (board, marker_map) = standard_board(level)
-        .to_unit_map()
-        .expect("建立測試棋盤失敗");
-    let (_, markers) = load_from_ascii(level).expect("抓 T 失敗");
+    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
     let position_map = to_position_map(&marker_map);
     let caster = CasterInfo {
         position: marker_map["C"][0].position,
@@ -1154,10 +1156,7 @@ fn test_select_skill_targets_area_diamond_and_cross() {
         Pa T .
         Aa . .
         "#;
-    let (board, marker_map) = standard_board(level)
-        .to_unit_map()
-        .expect("建立測試棋盤失敗");
-    let (_, markers) = load_from_ascii(level).expect("抓 T 失敗");
+    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
     let position_map = to_position_map(&marker_map);
     let caster = CasterInfo {
         position: marker_map["C"][0].position,
@@ -1234,10 +1233,7 @@ fn test_select_skill_targets_area_line() {
         Pa . .
         Aa . .
         "#;
-    let (board, marker_map) = standard_board(level)
-        .to_unit_map()
-        .expect("建立測試棋盤失敗");
-    let (_, markers) = load_from_ascii(level).expect("抓 T 失敗");
+    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
     let position_map = to_position_map(&marker_map);
     let caster = CasterInfo {
         position: marker_map["C"][0].position,

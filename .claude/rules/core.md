@@ -1,11 +1,7 @@
----
-paths:
-  - "core/**/*"
----
-
 # Core/Board 規則
 
 本檔案包含 `core/board` crate 的專屬規則。
+此檔案不設定 paths 限制，以免寫測試的時候不會載入。
 
 ## 核心設計原則
 
