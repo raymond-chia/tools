@@ -152,7 +152,7 @@ ECS 框架相關的型別定義
 
 ### logic/id_generator.rs
 
-- `pub fn generate_unique_id(used_ids: &mut HashSet<ID>) -> ID` - 產生不重複的 ID
+- `pub fn generate_unique_id(used_ids: &mut HashSet<ID>) -> Result<ID>` - 產生不重複的 ID
 
 ### logic/movement.rs
 

@@ -11,7 +11,7 @@ use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{With, World};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// 將玩家單位部署到指定位置
 ///
@@ -41,17 +41,15 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
 
         // resource 借用已結束，可再次查詢 world
         // 計算站在部署點上的玩家單位數（即已部署的單位，不含關卡預設單位）
-        let deployed: Vec<_> = world
-            .query_filtered::<(Entity, &Position, &UnitFaction), With<Unit>>()
+        let deployed: HashMap<Position, Entity> = world
+            .query_filtered::<(Entity, &Position), With<Unit>>()
             .iter(world)
-            .filter(|(_, pos, _)| deployment_config.deployment_positions.contains(pos))
+            .filter(|(_, pos)| deployment_config.deployment_positions.contains(pos))
+            .map(|(entity, pos)| (*pos, entity))
             .collect();
         let current_player_unit_count = deployed.len();
         // 找出同格的玩家單位（準備替換）
-        let entity_to_remove = deployed
-            .iter()
-            .find(|(_, pos, unit_faction)| **pos == position && unit_faction.0 == PLAYER_FACTION_ID)
-            .map(|(entity, _, _)| *entity);
+        let entity_to_remove = deployed.get(&position).copied();
 
         let game_data = world
             .get_resource::<GameData>()
@@ -77,7 +75,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
         .into());
     }
 
-    let new_id = generate_unique_id(&mut used_ids);
+    let new_id = generate_unique_id(&mut used_ids)?;
     let unit_type =
         game_data
             .unit_type_map

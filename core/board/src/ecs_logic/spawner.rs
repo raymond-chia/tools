@@ -1,7 +1,7 @@
 use crate::domain::alias::ID;
 use crate::ecs_types::components::{
     BlocksSight, BlocksSound, HpModify, MovementUsed, Object, ObjectBundle, Occupant,
-    OccupantTypeName, Position, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
+    OccupantTypeName, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
@@ -29,16 +29,15 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
             })?;
 
         let mut used_ids: HashSet<ID> = HashSet::new();
-
         let mut unit_bundles: Vec<UnitBundle> = Vec::new();
         for placement in &level.unit_placements {
+            let id = generate_unique_id(&mut used_ids)?;
             let unit_type = game_data
                 .unit_type_map
                 .get(&placement.unit_type_name)
                 .ok_or_else(|| DataError::UnitTypeNotFound {
                     type_name: placement.unit_type_name.clone(),
                 })?;
-
             let no_buffs: &[BuffEffect] = &[];
             let attributes = unit_attributes::calculate_attributes(
                 &unit_type.skills,
@@ -48,11 +47,8 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
 
             unit_bundles.push(UnitBundle {
                 unit: Unit,
-                position: Position {
-                    x: placement.position.x,
-                    y: placement.position.y,
-                },
-                occupant: Occupant::Unit(generate_unique_id(&mut used_ids)),
+                position: placement.position,
+                occupant: Occupant::Unit(id),
                 occupant_type_name: OccupantTypeName(unit_type.name.clone()),
                 unit_faction: UnitFaction(placement.faction_id),
                 skills: Skills(unit_type.skills.clone()),
@@ -64,6 +60,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
         let mut object_spawn_data: Vec<(ObjectBundle, Option<BlocksSight>, Option<BlocksSound>)> =
             Vec::new();
         for placement in &level.object_placements {
+            let id = generate_unique_id(&mut used_ids)?;
             let object_type = game_data
                 .object_type_map
                 .get(&placement.object_type_name)
@@ -74,11 +71,8 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
             object_spawn_data.push((
                 ObjectBundle {
                     object: Object,
-                    position: Position {
-                        x: placement.position.x,
-                        y: placement.position.y,
-                    },
-                    occupant: Occupant::Object(generate_unique_id(&mut used_ids)),
+                    position: placement.position,
+                    occupant: Occupant::Object(id),
                     occupant_type_name: OccupantTypeName(object_type.name.clone()),
                     terrain_movement_cost: TerrainMovementCost(object_type.movement_cost),
                     hp_modify: HpModify(object_type.hp_modify),
@@ -101,14 +95,14 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
 
     // 插入 LevelConfig resource
     world.insert_resource(LevelConfig {
-        name: level.name.clone(),
-        factions: level.factions.clone(),
+        name: level.name,
+        factions: level.factions.into_iter().map(|f| (f.id, f)).collect(),
     });
 
     // 插入 DeploymentConfig resource
     world.insert_resource(DeploymentConfig {
         max_player_units: level.max_player_units,
-        deployment_positions: level.deployment_positions.clone(),
+        deployment_positions: level.deployment_positions.into_iter().collect(),
     });
 
     // Spawn Unit entities

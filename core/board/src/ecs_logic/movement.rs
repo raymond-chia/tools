@@ -48,7 +48,7 @@ pub fn get_reachable_positions(
     let faction_to_alliance: HashMap<ID, ID> = level_config
         .factions
         .iter()
-        .map(|f| (f.id, f.alliance))
+        .map(|(id, f)| (*id, f.alliance))
         .collect();
 
     // 構建 occupant closure（查詢位置上的佔據者所屬的同盟）

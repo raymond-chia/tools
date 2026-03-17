@@ -58,6 +58,8 @@ pub enum DataError {
     MissingComponent { name: String },
     #[error("Entity component 值無效: {name}\nNOTE: {note}")]
     InvalidComponent { name: String, note: String },
+    #[error("ID 生成失敗")]
+    IDGenerationFailed,
     #[error("找不到單位類型: {type_name}")]
     UnitTypeNotFound { type_name: TypeName },
     #[error("找不到物件類型: {type_name}")]

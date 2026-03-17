@@ -6,7 +6,7 @@ pub mod spawner;
 pub mod turn;
 
 /// 從 EntityRef 取得 component，若缺少則回傳 DataError::MissingComponent
-macro_rules! get_component {
+macro_rules! clone_component {
     ($entity_ref:expr, $component:ty) => {
         $entity_ref
             .get::<$component>()
@@ -17,4 +17,4 @@ macro_rules! get_component {
     };
 }
 
-pub(super) use get_component;
+pub(super) use clone_component;

@@ -1,4 +1,4 @@
-use super::get_component;
+use super::clone_component;
 use crate::ecs_types::components::{
     AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, CurrentHp, CurrentMp,
     Evasion, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
@@ -61,30 +61,30 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
         let bundle = UnitBundle {
             unit: Unit,
             position,
-            occupant: get_component!(entity_ref, Occupant),
-            occupant_type_name: get_component!(entity_ref, OccupantTypeName),
-            unit_faction: get_component!(entity_ref, UnitFaction),
-            skills: get_component!(entity_ref, Skills),
+            occupant: clone_component!(entity_ref, Occupant),
+            occupant_type_name: clone_component!(entity_ref, OccupantTypeName),
+            unit_faction: clone_component!(entity_ref, UnitFaction),
+            skills: clone_component!(entity_ref, Skills),
             attributes: AttributeBundle {
-                max_hp: get_component!(entity_ref, MaxHp),
-                current_hp: get_component!(entity_ref, CurrentHp),
-                max_mp: get_component!(entity_ref, MaxMp),
-                current_mp: get_component!(entity_ref, CurrentMp),
-                initiative: get_component!(entity_ref, Initiative),
-                hit: get_component!(entity_ref, Hit),
-                evasion: get_component!(entity_ref, Evasion),
-                block: get_component!(entity_ref, Block),
-                block_protection: get_component!(entity_ref, BlockProtection),
-                physical_attack: get_component!(entity_ref, PhysicalAttack),
-                magical_attack: get_component!(entity_ref, MagicalAttack),
-                magical_dc: get_component!(entity_ref, MagicalDc),
-                fortitude: get_component!(entity_ref, Fortitude),
-                reflex: get_component!(entity_ref, Reflex),
-                will: get_component!(entity_ref, Will),
-                movement: get_component!(entity_ref, Movement),
-                reaction: get_component!(entity_ref, Reaction),
+                max_hp: clone_component!(entity_ref, MaxHp),
+                current_hp: clone_component!(entity_ref, CurrentHp),
+                max_mp: clone_component!(entity_ref, MaxMp),
+                current_mp: clone_component!(entity_ref, CurrentMp),
+                initiative: clone_component!(entity_ref, Initiative),
+                hit: clone_component!(entity_ref, Hit),
+                evasion: clone_component!(entity_ref, Evasion),
+                block: clone_component!(entity_ref, Block),
+                block_protection: clone_component!(entity_ref, BlockProtection),
+                physical_attack: clone_component!(entity_ref, PhysicalAttack),
+                magical_attack: clone_component!(entity_ref, MagicalAttack),
+                magical_dc: clone_component!(entity_ref, MagicalDc),
+                fortitude: clone_component!(entity_ref, Fortitude),
+                reflex: clone_component!(entity_ref, Reflex),
+                will: clone_component!(entity_ref, Will),
+                movement: clone_component!(entity_ref, Movement),
+                reaction: clone_component!(entity_ref, Reaction),
             },
-            movement_used: get_component!(entity_ref, MovementUsed),
+            movement_used: clone_component!(entity_ref, MovementUsed),
         };
         result.insert(position, bundle);
     }
@@ -113,10 +113,10 @@ pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQuer
         let bundle = ObjectBundle {
             object: Object,
             position,
-            occupant: get_component!(entity_ref, Occupant),
-            occupant_type_name: get_component!(entity_ref, OccupantTypeName),
-            terrain_movement_cost: get_component!(entity_ref, TerrainMovementCost),
-            hp_modify: get_component!(entity_ref, HpModify),
+            occupant: clone_component!(entity_ref, Occupant),
+            occupant_type_name: clone_component!(entity_ref, OccupantTypeName),
+            terrain_movement_cost: clone_component!(entity_ref, TerrainMovementCost),
+            hp_modify: clone_component!(entity_ref, HpModify),
         };
         let blocks_sight = entity_ref.get::<BlocksSight>().is_some();
         let blocks_sound = entity_ref.get::<BlocksSound>().is_some();

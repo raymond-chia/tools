@@ -24,8 +24,7 @@ pub struct VisibleGridRange {
 pub struct Snapshot {
     pub board: Board,
     pub max_player_units: usize,
-    pub deployment_set: HashSet<Position>,
-    pub deployment_positions: Vec<Position>,
+    pub deployment_positions: HashSet<Position>,
     pub level_config: LevelConfig,
     pub unit_map: HashMap<Position, UnitBundle>,
     pub object_map: HashMap<Position, ObjectQueryResult>,
@@ -43,11 +42,6 @@ pub fn query_snapshot(world: &mut World) -> CResult<Snapshot> {
     Ok(Snapshot {
         board,
         max_player_units: deployment_config.max_player_units,
-        deployment_set: deployment_config
-            .deployment_positions
-            .iter()
-            .cloned()
-            .collect(),
         deployment_positions: deployment_config.deployment_positions,
         level_config,
         unit_map,
@@ -124,7 +118,7 @@ pub fn get_cell_info(
     snapshot: &Snapshot,
 ) -> impl Fn(Position) -> (String, egui::Color32, egui::Color32) {
     |pos: Position| -> (String, egui::Color32, egui::Color32) {
-        if snapshot.deployment_set.contains(&pos) {
+        if snapshot.deployment_positions.contains(&pos) {
             if let Some(bundle) = snapshot.unit_map.get(&pos) {
                 let faction_color =
                     get_faction_color(&snapshot.level_config.factions, bundle.unit_faction.0);
@@ -161,7 +155,7 @@ pub fn is_border_highlight(highlight_pos: Option<Position>) -> impl Fn(Position)
 
 pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String {
     |pos| -> String {
-        if snapshot.deployment_set.contains(&pos) {
+        if snapshot.deployment_positions.contains(&pos) {
             if let Some(bundle) = snapshot.unit_map.get(&pos) {
                 format!(
                     "({}, {})\n部署點：{}",
@@ -307,13 +301,12 @@ pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapsho
     }
 }
 
-fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &[Faction]) {
+fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &HashMap<ID, Faction>) {
     ui.label(format!("類型：單位"));
     ui.label(format!("名稱：{}", bundle.occupant_type_name.0));
 
     let faction_name = factions
-        .iter()
-        .find(|f| f.id == bundle.unit_faction.0)
+        .get(&bundle.unit_faction.0)
         .map(|f| f.name.as_str())
         .unwrap_or("未知");
     ui.label(format!("陣營：{}", faction_name));
@@ -408,7 +401,7 @@ pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle> {
     let enemy_faction_ids: HashSet<ID> = snapshot
         .level_config
         .factions
-        .iter()
+        .values()
         .filter(|f| f.alliance != PLAYER_ALLIANCE_ID)
         .map(|f| f.id)
         .collect();
@@ -418,10 +411,9 @@ pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle> {
         .filter(move |bundle| enemy_faction_ids.contains(&bundle.unit_faction.0))
 }
 
-pub fn get_faction_color(factions: &[Faction], unit_faction_id: ID) -> egui::Color32 {
+pub fn get_faction_color(factions: &HashMap<ID, Faction>, unit_faction_id: ID) -> egui::Color32 {
     factions
-        .iter()
-        .find(|f| f.id == unit_faction_id)
+        .get(&unit_faction_id)
         .map(|f| egui::Color32::from_rgb(f.color[0], f.color[1], f.color[2]))
         .unwrap_or(egui::Color32::BLACK)
 }

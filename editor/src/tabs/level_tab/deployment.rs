@@ -175,7 +175,7 @@ fn render_player_deployment_panel(
             // ComboBox 區塊：選中部署點時才顯示
             let selected_deploy_pos = ui_state
                 .selected_left_pos
-                .filter(|pos| snapshot.deployment_set.contains(pos));
+                .filter(|pos| snapshot.deployment_positions.contains(pos));
 
             if let Some(pos) = selected_deploy_pos {
                 let deployed_name = snapshot
@@ -338,7 +338,7 @@ fn handle_mouse_click(
 ) {
     if response.clicked() {
         // 左鍵：選擇部署點
-        if snapshot.deployment_set.contains(&clicked_pos) {
+        if snapshot.deployment_positions.contains(&clicked_pos) {
             ui_state.selected_left_pos = Some(clicked_pos);
         } else {
             ui_state.selected_left_pos = None;
@@ -361,5 +361,5 @@ fn deployed_positions(snapshot: &Snapshot) -> impl Iterator<Item = &Position> {
     snapshot
         .unit_map
         .keys()
-        .filter(|pos| snapshot.deployment_set.contains(pos))
+        .filter(|pos| snapshot.deployment_positions.contains(pos))
 }
