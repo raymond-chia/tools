@@ -32,7 +32,7 @@ pub fn parse_and_insert_game_data(
     let skill_map = parsed_skills
         .skills
         .into_iter()
-        .map(|skill| (skill.name.clone(), skill))
+        .map(|skill| (skill.name().clone(), skill))
         .collect::<HashMap<_, _>>();
 
     let unit_type_map = parsed_units

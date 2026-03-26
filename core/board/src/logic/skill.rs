@@ -1,10 +1,10 @@
 //! 技能邏輯
 
 use crate::domain::alias::{Coord, ID};
+use crate::domain::core_types::{Area, Target, TargetFilter, TargetSelection};
 use crate::ecs_types::components::{Occupant, Position};
 use crate::ecs_types::resources::Board;
-use crate::error::{BoardError, Result, UnitError};
-use crate::loader_schema::{AoeShape, SkillEffect, SkillType, TargetFilter, TargetMode};
+use crate::error::{BoardError, Result};
 use crate::logic::board;
 use std::collections::{HashMap, HashSet};
 
@@ -25,82 +25,71 @@ pub struct CasterInfo {
 
 /// 驗證並解析技能目標
 /// targets: 玩家在 UI 上選擇的目標位置
-///   - SingleTarget: 1 個格子
-///   - MultiTarget: 多個格子
-///   - Area: 1 個格子作為 AoE 中心
+///   - count=1 + Single: 單一目標
+///   - count>1 + Single: 多目標
+///   - area != Single: AOE
 pub fn select_skill_targets(
     caster: &CasterInfo,
-    skill: &SkillType,
+    target_def: &Target,
     targets: &[Position],
     units_on_board: &HashMap<Position, UnitInfo>,
-    board: Board,
+    board_size: Board,
 ) -> Result<Vec<Occupant>> {
-    let target_mode = get_target_mode(&skill.name, &skill.effects)?;
+    let (min_range, max_range) = target_def.range;
+    let filter = &target_def.selectable_filter;
+    let targets_unit = match target_def.selection {
+        TargetSelection::Unit => true,
+        TargetSelection::Ground => false,
+    };
 
-    match target_mode {
-        TargetMode::SingleTarget { filter } => {
-            validate_target_count(targets, 1)?;
-            let target_pos = targets[0];
-            validate_range(
-                caster.position,
-                target_pos,
-                skill.min_range,
-                skill.max_range,
-            )?;
-            let target_unit = get_unit_at(target_pos, units_on_board)?;
-            validate_filter(caster, target_unit, target_pos, filter)?;
-            Ok(vec![target_unit.occupant])
-        }
-        TargetMode::MultiTarget {
-            count,
-            allow_duplicate,
-            filter,
-        } => {
-            let count = *count as usize;
-            if targets.len() > count {
-                return Err(BoardError::WrongTargetCount {
-                    expected: count,
-                    actual: targets.len(),
+    match target_def.area {
+        Area::Single => {
+            let count = target_def.count;
+            if count == 1 {
+                validate_target_count(targets, 1)?;
+                let target_pos = targets[0];
+                validate_range(caster.position, target_pos, min_range, max_range)?;
+                if targets_unit {
+                    let target_unit = get_unit_at(target_pos, units_on_board)?;
+                    validate_filter(caster, target_unit, target_pos, filter)?;
+                    Ok(vec![target_unit.occupant])
+                } else {
+                    Ok(Vec::new())
                 }
-                .into());
+            } else {
+                if targets.len() > count {
+                    return Err(BoardError::WrongTargetCount {
+                        expected: count,
+                        actual: targets.len(),
+                    }
+                    .into());
+                }
+                if !target_def.allow_same_target {
+                    validate_no_duplicates(targets)?;
+                }
+                let mut result = Vec::new();
+                if targets_unit {
+                    for &target_pos in targets {
+                        validate_range(caster.position, target_pos, min_range, max_range)?;
+                        let target_unit = get_unit_at(target_pos, units_on_board)?;
+                        validate_filter(caster, target_unit, target_pos, filter)?;
+                        result.push(target_unit.occupant);
+                    }
+                }
+                Ok(result)
             }
-            if !allow_duplicate {
-                validate_no_duplicates(targets)?;
-            }
-            let mut result = Vec::new();
-            for &target_pos in targets {
-                validate_range(
-                    caster.position,
-                    target_pos,
-                    skill.min_range,
-                    skill.max_range,
-                )?;
-                let target_unit = get_unit_at(target_pos, units_on_board)?;
-                validate_filter(caster, target_unit, target_pos, filter)?;
-                result.push(target_unit.occupant);
-            }
-            Ok(result)
         }
-        TargetMode::Area {
-            aoe_shape,
-            targets_unit,
-            filter,
-        } => {
+        Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
             validate_target_count(targets, 1)?;
             let target_pos = targets[0];
-            validate_range(
-                caster.position,
-                target_pos,
-                skill.min_range,
-                skill.max_range,
-            )?;
+            validate_range(caster.position, target_pos, min_range, max_range)?;
             resolve_area_targets(
                 caster,
                 target_pos,
                 units_on_board,
-                board,
-                aoe_shape,
-                *targets_unit,
+                board_size,
+                &target_def.area,
+                targets_unit,
                 filter,
             )
         }
@@ -108,18 +97,20 @@ pub fn select_skill_targets(
 }
 
 /// 計算 AOE 影響的所有位置
+/// - Single: 回傳該格
 /// - Diamond/Cross: 以 target 為中心，忽略 caster
 /// - Line: 以 caster→target 方向延伸
 pub fn compute_affected_positions(
-    shape: &AoeShape,
+    area: &Area,
     caster: Position,
     target: Position,
-    board: Board,
+    board_size: Board,
 ) -> Result<Vec<Position>> {
-    match shape {
-        AoeShape::Diamond { radius } => Ok(compute_diamond(target, *radius, board)),
-        AoeShape::Cross { length } => Ok(compute_cross(target, *length, board)),
-        AoeShape::Line { length } => compute_line(caster, target, *length, board),
+    match area {
+        Area::Single => Ok(vec![target]),
+        Area::Diamond { radius } => Ok(compute_diamond(target, *radius, board_size)),
+        Area::Cross { length } => Ok(compute_cross(target, *length, board_size)),
+        Area::Line { length } => compute_line(caster, target, *length, board_size),
     }
 }
 
@@ -132,8 +123,8 @@ fn resolve_area_targets(
     caster: &CasterInfo,
     target_pos: Position,
     units_on_board: &HashMap<Position, UnitInfo>,
-    board: Board,
-    aoe_shape: &AoeShape,
+    board_size: Board,
+    area: &Area,
     targets_unit: bool,
     filter: &TargetFilter,
 ) -> Result<Vec<Occupant>> {
@@ -152,7 +143,7 @@ fn resolve_area_targets(
         }
     }
 
-    let aoe_positions = compute_affected_positions(aoe_shape, caster.position, target_pos, board)?;
+    let aoe_positions = compute_affected_positions(area, caster.position, target_pos, board_size)?;
 
     // 收集 AOE 範圍內通過篩選的單位
     let filtered: Vec<Occupant> = aoe_positions
@@ -178,18 +169,6 @@ fn resolve_area_targets(
     }
 
     Ok(filtered)
-}
-
-/// 從 effects 中取得 TargetMode（目前只看第一個 effect）
-fn get_target_mode<'a>(skill_name: &str, effects: &'a [SkillEffect]) -> Result<&'a TargetMode> {
-    let first = effects.first().ok_or(UnitError::EmptySkillEffects {
-        skill_name: skill_name.to_string(),
-    })?;
-    match first {
-        SkillEffect::HpModify { target_mode, .. } => Ok(target_mode),
-        SkillEffect::AttributeModify { target_mode, .. } => Ok(target_mode),
-        SkillEffect::Push { target_mode, .. } => Ok(target_mode),
-    }
 }
 
 /// 驗證目標數量
@@ -265,12 +244,12 @@ fn is_in_filter(caster: &CasterInfo, target: &UnitInfo, filter: &TargetFilter) -
     let is_same_alliance = target.alliance_id == caster.unit_info.alliance_id;
 
     match filter {
-        TargetFilter::All => true,
-        TargetFilter::AllExcludingCaster => !is_caster,
+        TargetFilter::Any => true,
+        TargetFilter::AnyExceptCaster => !is_caster,
         TargetFilter::Enemy => !is_same_alliance,
         TargetFilter::Ally => is_same_alliance,
-        TargetFilter::AllyExcludingCaster => is_same_alliance && !is_caster,
-        TargetFilter::Caster => is_caster,
+        TargetFilter::AllyExceptCaster => is_same_alliance && !is_caster,
+        TargetFilter::CasterOnly => is_caster,
     }
 }
 
@@ -290,7 +269,7 @@ fn validate_no_duplicates(targets: &[Position]) -> Result<()> {
 // ============================================================================
 
 /// 計算菱形 AOE（曼哈頓距離）
-fn compute_diamond(target: Position, radius: Coord, board: Board) -> Vec<Position> {
+fn compute_diamond(target: Position, radius: Coord, board_size: Board) -> Vec<Position> {
     let mut positions = Vec::new();
     let target_x = target.x as i32;
     let target_y = target.y as i32;
@@ -304,7 +283,7 @@ fn compute_diamond(target: Position, radius: Coord, board: Board) -> Vec<Positio
             let x = target_x + dx;
             let y = target_y + dy;
 
-            if let Some(pos) = board::try_position(board, x, y) {
+            if let Some(pos) = board::try_position(board_size, x, y) {
                 positions.push(pos);
             }
         }
@@ -314,7 +293,7 @@ fn compute_diamond(target: Position, radius: Coord, board: Board) -> Vec<Positio
 }
 
 /// 計算十字形 AOE
-fn compute_cross(target: Position, length: Coord, board: Board) -> Vec<Position> {
+fn compute_cross(target: Position, length: Coord, board_size: Board) -> Vec<Position> {
     let mut positions = vec![target];
     let target_x = target.x as i32;
     let target_y = target.y as i32;
@@ -326,7 +305,7 @@ fn compute_cross(target: Position, length: Coord, board: Board) -> Vec<Position>
         for i in 1..=length {
             let x = target_x + step_x * i;
             let y = target_y + step_y * i;
-            match board::try_position(board, x, y) {
+            match board::try_position(board_size, x, y) {
                 Some(pos) => positions.push(pos),
                 // 邊界裁切：遇到無效位置就停止該方向的延伸
                 None => break,
@@ -342,7 +321,7 @@ fn compute_line(
     caster: Position,
     target: Position,
     length: Coord,
-    board: Board,
+    board_size: Board,
 ) -> Result<Vec<Position>> {
     let dx = (target.x as i32) - (caster.x as i32);
     let dy = (target.y as i32) - (caster.y as i32);
@@ -364,7 +343,7 @@ fn compute_line(
     for i in 0..=length {
         let x = caster_x + step_x * i;
         let y = caster_y + step_y * i;
-        match board::try_position(board, x, y) {
+        match board::try_position(board_size, x, y) {
             Some(pos) => positions.push(pos),
             // 邊界裁切：遇到無效位置就停止延伸
             None => break,

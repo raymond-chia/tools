@@ -1,8 +1,8 @@
 //! compute_affected_positions 測試
 
 use crate::helpers::level_builder::load_from_ascii;
+use board::domain::core_types::Area;
 use board::ecs_types::components::Position;
-use board::loader_schema::AoeShape;
 use board::logic::skill::compute_affected_positions;
 use std::collections::{HashMap, HashSet};
 
@@ -19,7 +19,7 @@ fn test_compute_affected_positions() {
     let test_data = [
         // Diamond 測試
         (
-            AoeShape::Diamond { radius: 0 },
+            Area::Diamond { radius: 0 },
             "
             . . . . . .
             . . . . . .
@@ -30,7 +30,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 0 },
+            Area::Diamond { radius: 0 },
             "
             . . . . . .
             . . . . . .
@@ -41,7 +41,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 1 },
+            Area::Diamond { radius: 1 },
             "
             . . . . . .
             . . . . . .
@@ -52,7 +52,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 1 },
+            Area::Diamond { radius: 1 },
             "
             C A . . . .
             A . . . . .
@@ -63,7 +63,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 1 },
+            Area::Diamond { radius: 1 },
             "
             . . . . . .
             . . . . . A
@@ -74,7 +74,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 2 },
+            Area::Diamond { radius: 2 },
             "
             . . A . . .
             . A A A . .
@@ -85,7 +85,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 2 },
+            Area::Diamond { radius: 2 },
             "
             . . . . . .
             . . . . . .
@@ -96,7 +96,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 2 },
+            Area::Diamond { radius: 2 },
             "
             . A A A . .
             A A C A A .
@@ -107,7 +107,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 2 },
+            Area::Diamond { radius: 2 },
             "
             . . . . . .
             . . . . . .
@@ -118,7 +118,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Diamond { radius: 3 },
+            Area::Diamond { radius: 3 },
             "
             . . . A . .
             . . A A A .
@@ -130,7 +130,7 @@ fn test_compute_affected_positions() {
         ),
         // Cross 測試
         (
-            AoeShape::Cross { length: 0 },
+            Area::Cross { length: 0 },
             "
             . . . . . .
             . . . . . .
@@ -141,7 +141,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 0 },
+            Area::Cross { length: 0 },
             "
             . . . . . .
             . . . . . .
@@ -152,7 +152,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 1 },
+            Area::Cross { length: 1 },
             "
             . . . . . .
             . . . . . .
@@ -163,7 +163,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 1 },
+            Area::Cross { length: 1 },
             "
             C A . . . .
             A . . . . .
@@ -174,7 +174,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 1 },
+            Area::Cross { length: 1 },
             "
             . . . . . .
             . . . . . .
@@ -185,7 +185,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 2 },
+            Area::Cross { length: 2 },
             "
             . . . . . .
             A . . . . .
@@ -196,7 +196,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 2 },
+            Area::Cross { length: 2 },
             "
             . . . . . .
             . . . . . .
@@ -207,7 +207,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 2 },
+            Area::Cross { length: 2 },
             "
             . . . . . .
             . . . . . .
@@ -218,7 +218,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 3 },
+            Area::Cross { length: 3 },
             "
             . A . . . .
             A C A A A .
@@ -229,7 +229,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Cross { length: 3 },
+            Area::Cross { length: 3 },
             "
             . . . . . .
             . . . . . A
@@ -241,7 +241,7 @@ fn test_compute_affected_positions() {
         ),
         // Line 測試：C=caster, T=target 決定方向
         (
-            AoeShape::Line { length: 1 },
+            Area::Line { length: 1 },
             "
             . . . . . .
             . . . . . .
@@ -252,7 +252,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 1 },
+            Area::Line { length: 1 },
             "
             . . . . . .
             . C . . . .
@@ -263,7 +263,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 1 },
+            Area::Line { length: 1 },
             "
             . . . . . .
             . . . . . .
@@ -274,7 +274,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 1 },
+            Area::Line { length: 1 },
             "
             . . . . . .
             . . . . . .
@@ -285,7 +285,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 2 },
+            Area::Line { length: 2 },
             "
             . . . . . .
             . . . T . .
@@ -296,7 +296,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 2 },
+            Area::Line { length: 2 },
             "
             . . . . . .
             . . . . . .
@@ -307,7 +307,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 2 },
+            Area::Line { length: 2 },
             "
             . . . . . .
             . . . . . .
@@ -318,7 +318,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 2 },
+            Area::Line { length: 2 },
             "
             . . . . . .
             . . . . . .
@@ -329,7 +329,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 2 },
+            Area::Line { length: 2 },
             "
             . . . . . .
             . . . . . .
@@ -340,7 +340,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 3 },
+            Area::Line { length: 3 },
             "
             . . . . . .
             . . . . T .
@@ -351,7 +351,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 3 },
+            Area::Line { length: 3 },
             "
             . . . . . .
             . . C . . .
@@ -362,7 +362,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 3 },
+            Area::Line { length: 3 },
             "
             . . . . . .
             . . . . . .
@@ -373,7 +373,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 3 },
+            Area::Line { length: 3 },
             "
             . . . . . .
             . . . . . .
@@ -384,7 +384,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 3 },
+            Area::Line { length: 3 },
             "
             . . . . . .
             . . . . . .
@@ -395,7 +395,7 @@ fn test_compute_affected_positions() {
             ",
         ),
         (
-            AoeShape::Line { length: 3 },
+            Area::Line { length: 3 },
             "
             . . . . . .
             . . . . . .

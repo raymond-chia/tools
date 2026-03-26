@@ -1,9 +1,9 @@
 //! 移動反應收集邏輯
 
 use crate::domain::alias::SkillName;
+use crate::domain::core_types::{ReactionTrigger, SkillType, TargetFilter};
 use crate::ecs_types::components::{Occupant, Position};
 use crate::error::Result;
-use crate::loader_schema::{SkillType, TargetFilter, TriggerEvent};
 use crate::logic::skill::{UnitInfo, manhattan_distance};
 use std::collections::HashMap;
 
@@ -51,15 +51,30 @@ pub fn collect_move_reactions(
             continue;
         }
 
-        // 預過濾：只保留 trigger 和 unit_filter 符合的技能
-        let reaction_skills: Vec<&SkillType> = reactor
+        // 預過濾：只保留 Reaction 且 trigger 為 AttackOfOpportunity 且 filter 符合的技能
+        let reaction_skills: Vec<_> = reactor
             .skills
             .iter()
-            .filter(|skill| match &skill.trigger {
-                TriggerEvent::OnAdjacentUnitMove { unit_filter } => {
-                    matches_filter(&reactor.unit_info, mover, unit_filter)
+            .filter_map(|skill| match skill {
+                SkillType::Reaction {
+                    name,
+                    triggering_unit,
+                    ..
+                } => {
+                    if matches!(
+                        triggering_unit.trigger,
+                        ReactionTrigger::AttackOfOpportunity
+                    ) && matches_filter(
+                        &reactor.unit_info,
+                        mover,
+                        &triggering_unit.source_filter,
+                    ) {
+                        Some((name, triggering_unit))
+                    } else {
+                        None
+                    }
                 }
-                _ => false,
+                SkillType::Active { .. } | SkillType::Passive { .. } => None,
             })
             .collect();
 
@@ -72,10 +87,12 @@ pub fn collect_move_reactions(
         for (step_index, from) in path.iter().enumerate().take(earliest_from_idx + 1) {
             let distance = manhattan_distance(*reactor_pos, *from);
 
+            let is_in_range = |range: (usize, usize)| distance >= range.0 && distance <= range.1;
+
             let matching_skills: Vec<SkillName> = reaction_skills
                 .iter()
-                .filter(|skill| distance >= skill.min_range && distance <= skill.max_range)
-                .map(|skill| skill.name.clone())
+                .filter(|(_, t)| is_in_range(t.source_range))
+                .map(|(name, _)| (*name).clone())
                 .collect();
 
             if matching_skills.is_empty() {
@@ -109,11 +126,11 @@ fn matches_filter(reactor: &UnitInfo, mover: &UnitInfo, filter: &TargetFilter) -
     let is_same_alliance = reactor.alliance_id == mover.alliance_id;
 
     match filter {
-        TargetFilter::All => true,
-        TargetFilter::AllExcludingCaster => true, // mover 不是 reactor，一定通過
+        TargetFilter::Any => true,
+        TargetFilter::AnyExceptCaster => true, // mover 不是 reactor，一定通過
         TargetFilter::Enemy => !is_same_alliance,
         TargetFilter::Ally => is_same_alliance,
-        TargetFilter::AllyExcludingCaster => is_same_alliance, // mover 不是 reactor
-        TargetFilter::Caster => false,                         // mover 不是 reactor
+        TargetFilter::AllyExceptCaster => is_same_alliance, // mover 不是 reactor
+        TargetFilter::CasterOnly => false,                  // mover 不是 reactor
     }
 }

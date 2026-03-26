@@ -3,7 +3,7 @@
 use crate::constants::DRAG_VALUE_SPEED;
 use crate::editor_item::EditorItem;
 use crate::generic_editor::MessageState;
-use board::domain::constants::{HP_MODIFY_DAMAGE, IMPASSABLE_MOVEMENT_COST};
+use board::domain::constants::IMPASSABLE_MOVEMENT_COST;
 use board::loader_schema::ObjectType;
 
 // ==================== EditorItem 實作 ====================
@@ -62,14 +62,5 @@ pub fn render_form(
     ui.horizontal(|ui| {
         ui.label("阻擋聲音：");
         ui.checkbox(&mut obj.blocks_sound, "");
-    });
-
-    ui.horizontal(|ui| {
-        ui.label("立即 HP 效果：");
-        ui.add(
-            egui::DragValue::new(&mut obj.hp_modify)
-                .speed(DRAG_VALUE_SPEED)
-                .range(-HP_MODIFY_DAMAGE..=HP_MODIFY_DAMAGE),
-        );
     });
 }

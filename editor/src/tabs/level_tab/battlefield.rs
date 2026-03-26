@@ -319,10 +319,10 @@ fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &HashMa
     ui.label(format!("HP：{} / {}", attrs.current_hp.0, attrs.max_hp.0));
     ui.label(format!("MP：{} / {}", attrs.current_mp.0, attrs.max_mp.0));
     ui.label(format!("先攻：{}", attrs.initiative.0));
-    ui.label(format!("移動：{}", attrs.movement.0));
+    ui.label(format!("移動：{}", attrs.movement_point.0));
     ui.label(format!("物攻：{}", attrs.physical_attack.0));
     ui.label(format!("魔攻：{}", attrs.magical_attack.0));
-    ui.label(format!("命中：{}", attrs.hit.0));
+    ui.label(format!("命中：{}", attrs.accuracy.0));
     ui.label(format!("迴避：{}", attrs.evasion.0));
     ui.label(format!("格擋：{}", attrs.block.0));
     ui.label(format!("格擋減傷：{}", attrs.block_protection.0));
@@ -330,7 +330,7 @@ fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &HashMa
     ui.label(format!("剛毅：{}", attrs.fortitude.0));
     ui.label(format!("反射：{}", attrs.reflex.0));
     ui.label(format!("意志：{}", attrs.will.0));
-    ui.label(format!("反應：{}", attrs.reaction.0));
+    ui.label(format!("反應：{}", attrs.reaction_point.0));
 
     if !bundle.skills.0.is_empty() {
         ui.add_space(SPACING_SMALL);
@@ -350,7 +350,6 @@ fn render_object_details(ui: &mut egui::Ui, obj: &ObjectQueryResult) {
     ui.separator();
 
     ui.label(format!("移動花費：{}", obj.bundle.terrain_movement_cost.0));
-    ui.label(format!("HP 修正：{}", obj.bundle.hp_modify.0));
     ui.label(format!("阻擋視線：{}", obj.blocks_sight));
     ui.label(format!("阻擋聲音：{}", obj.blocks_sound));
 }

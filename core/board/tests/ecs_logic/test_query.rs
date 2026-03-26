@@ -104,14 +104,7 @@ fn test_get_all_objects_returns_correct_data() {
                 . . .
             ",
             vec![("w", OBJECT_TYPE_WALL)],
-            vec![(
-                Position { x: 0, y: 0 },
-                OBJECT_TYPE_WALL,
-                10000,
-                0,
-                true,
-                true,
-            )],
+            vec![(Position { x: 0, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true)],
         ),
         (
             "單一 pit",
@@ -121,14 +114,7 @@ fn test_get_all_objects_returns_correct_data() {
                 . . .
             ",
             vec![("p", OBJECT_TYPE_PIT)],
-            vec![(
-                Position { x: 1, y: 1 },
-                OBJECT_TYPE_PIT,
-                0,
-                -10000,
-                false,
-                false,
-            )],
+            vec![(Position { x: 1, y: 1 }, OBJECT_TYPE_PIT, 0, false, false)],
         ),
         (
             "混合多種物件",
@@ -140,30 +126,9 @@ fn test_get_all_objects_returns_correct_data() {
             ",
             vec![("w", OBJECT_TYPE_WALL), ("p", OBJECT_TYPE_PIT)],
             vec![
-                (
-                    Position { x: 0, y: 0 },
-                    OBJECT_TYPE_WALL,
-                    10000,
-                    0,
-                    true,
-                    true,
-                ),
-                (
-                    Position { x: 1, y: 3 },
-                    OBJECT_TYPE_WALL,
-                    10000,
-                    0,
-                    true,
-                    true,
-                ),
-                (
-                    Position { x: 2, y: 2 },
-                    OBJECT_TYPE_PIT,
-                    0,
-                    -10000,
-                    false,
-                    false,
-                ),
+                (Position { x: 0, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
+                (Position { x: 1, y: 3 }, OBJECT_TYPE_WALL, 10000, true, true),
+                (Position { x: 2, y: 2 }, OBJECT_TYPE_PIT, 0, false, false),
             ],
         ),
         (
@@ -175,30 +140,9 @@ fn test_get_all_objects_returns_correct_data() {
             ",
             vec![("w", OBJECT_TYPE_WALL)],
             vec![
-                (
-                    Position { x: 0, y: 0 },
-                    OBJECT_TYPE_WALL,
-                    10000,
-                    0,
-                    true,
-                    true,
-                ),
-                (
-                    Position { x: 1, y: 0 },
-                    OBJECT_TYPE_WALL,
-                    10000,
-                    0,
-                    true,
-                    true,
-                ),
-                (
-                    Position { x: 2, y: 0 },
-                    OBJECT_TYPE_WALL,
-                    10000,
-                    0,
-                    true,
-                    true,
-                ),
+                (Position { x: 0, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
+                (Position { x: 1, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
+                (Position { x: 2, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
             ],
         ),
     ];
@@ -214,7 +158,7 @@ fn test_get_all_objects_returns_correct_data() {
         let objects = get_all_objects(&mut world).expect("get_all_objects 應成功");
 
         assert_eq!(objects.len(), expected.len(), "[{label}] 物件數量不符");
-        for (pos, typ, movement_cost, hp_modify, blocks_sight, blocks_sound) in &expected {
+        for (pos, typ, movement_cost, blocks_sight, blocks_sound) in &expected {
             let result = objects
                 .get(pos)
                 .expect(&format!("應有位置 ({}, {}) 的物件", pos.x, pos.y));
@@ -230,10 +174,6 @@ fn test_get_all_objects_returns_correct_data() {
             assert_eq!(
                 result.bundle.terrain_movement_cost.0, *movement_cost,
                 "movement_cost 應為 {movement_cost}"
-            );
-            assert_eq!(
-                result.bundle.hp_modify.0, *hp_modify,
-                "hp_modify 應為 {hp_modify}"
             );
             assert_eq!(
                 result.blocks_sight, *blocks_sight,

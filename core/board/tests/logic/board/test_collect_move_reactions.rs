@@ -3,9 +3,9 @@
 use crate::helpers::level_builder::{LevelBuilder, MarkerEntry};
 use board::domain::alias::ID;
 use board::domain::constants::PLAYER_ALLIANCE_ID;
+use board::domain::core_types::{ReactionTrigger, SkillType, TargetFilter, TriggeringSource};
 use board::ecs_types::components::Position;
 use board::error::Result;
-use board::loader_schema::{SkillType, TargetFilter, TriggerEvent};
 use board::logic::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
 use std::collections::HashMap;
 
@@ -72,21 +72,23 @@ fn reaction_config(remaining: i32, skills: Vec<SkillType>) -> ReactionConfig {
     }
 }
 
-/// 建立 OnAdjacentUnitMove 技能
+/// 建立 AttackOfOpportunity 技能
 fn reaction_skill(
     name: &str,
     min_range: usize,
     max_range: usize,
     filter: TargetFilter,
 ) -> SkillType {
-    SkillType {
+    SkillType::Reaction {
         name: name.to_string(),
-        min_range,
-        max_range,
-        trigger: TriggerEvent::OnAdjacentUnitMove {
-            unit_filter: filter,
+        tags: Vec::new(),
+        cost: 0,
+        triggering_unit: TriggeringSource {
+            source_range: (min_range, max_range),
+            source_filter: filter,
+            trigger: ReactionTrigger::AttackOfOpportunity,
         },
-        ..Default::default()
+        effects: Vec::new(),
     }
 }
 

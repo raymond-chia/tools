@@ -56,6 +56,8 @@ core/board/
 │       ├── turn_order.rs - 回合順序計算邏輯
 │       ├── unit_attributes.rs - 單位屬性計算邏輯
 │       ├── skill.rs      - 技能效果計算邏輯
+│       ├── skill_check.rs - 技能命中與豁免判定邏輯
+│       ├── skill_reaction.rs - 技能反應收集邏輯
 │       └── debug.rs      - 調試工具函數
 └── tests/
     ├── test.rs           - 集成測試入口
@@ -162,7 +164,8 @@ ECS 框架相關的型別定義
 
 ### logic/unit_attributes.rs
 
-- `pub fn calculate_attributes(skill_names: &[SkillName], buffs: &[BuffEffect], skill_map: &HashMap<SkillName, SkillType>) -> Result<CalculatedAttributes>` - 計算單位屬性
+- `pub fn filter_continuous_effect<'a>(skill_names: &'a [SkillName], buffs: &'a [BuffType], skill_map: &'a HashMap<SkillName, SkillType>) -> Result<impl Iterator<Item = &'a ContinuousEffect>>` - 從技能和狀態中篩選並合併持續性效果
+- `pub fn calculate_attributes<'a>(effects: impl Iterator<Item = &'a ContinuousEffect>) -> AttributeBundle` - 計算單位屬性
 
 ### logic/turn_order.rs
 
@@ -174,8 +177,18 @@ ECS 框架相關的型別定義
 
 ### logic/skill.rs
 
-- `pub fn select_skill_targets(caster: &CasterInfo, skill: &SkillType, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
-- `pub fn compute_affected_positions(input: AoeInput, board: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
+- `pub fn select_skill_targets(caster: &CasterInfo, target_def: &Target, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
+- `pub fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
+- `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
+
+### logic/skill_check.rs
+
+- `pub fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
+- `pub fn resolve_dc(attacker_dc: i32, defender_save: i32, rng_int: &mut impl FnMut() -> i32) -> DcResult` - 解析 DC 豁免判定結果
+
+### logic/skill_reaction.rs
+
+- `pub fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
 
 ### logic/debug.rs
 

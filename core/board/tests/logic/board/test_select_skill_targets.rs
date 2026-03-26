@@ -1,13 +1,12 @@
 //! select_skill_targets 測試
 
 use crate::helpers::level_builder::{LevelBuilder, MarkerEntry};
+use board::domain::alias::Coord;
 use board::domain::alias::ID;
+use board::domain::core_types::{Area, Target, TargetFilter, TargetSelection};
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::error::Result;
-use board::loader_schema::{
-    AoeShape, AttackStyle, Mechanic, SkillEffect, SkillType, TargetFilter, TargetMode, ValueFormula,
-};
 use board::logic::skill::{CasterInfo, UnitInfo, select_skill_targets};
 use std::collections::{HashMap, HashSet};
 use strum::IntoEnumIterator;
@@ -35,20 +34,54 @@ fn standard_board(
         .to_unit_map()
 }
 
-/// 建構只含一個 HpModify effect 的技能
-fn skill_with(min_range: usize, max_range: usize, target_mode: TargetMode) -> SkillType {
-    SkillType {
-        name: "test-skill".to_string(),
-        min_range,
-        max_range,
-        effects: vec![SkillEffect::HpModify {
-            mechanic: Mechanic::Guaranteed,
-            target_mode,
-            formula: ValueFormula::Fixed { value: -10 },
-            style: AttackStyle::Physical,
-        }],
-        ..Default::default()
+fn skill_with(
+    range: (Coord, Coord),
+    selection: TargetSelection,
+    filter: TargetFilter,
+    count: usize,
+    allow_same_target: bool,
+    area: Area,
+) -> Target {
+    Target {
+        range,
+        selection,
+        selectable_filter: filter,
+        count,
+        allow_same_target,
+        area,
     }
+}
+
+fn skill_with_unit_target(
+    filter: TargetFilter,
+    count: usize,
+    allow_same_target: bool,
+    area: Area,
+) -> Target {
+    skill_with(
+        (0, 2),
+        TargetSelection::Unit,
+        filter,
+        count,
+        allow_same_target,
+        area,
+    )
+}
+
+fn skill_with_ground_target(
+    filter: TargetFilter,
+    count: usize,
+    allow_same_target: bool,
+    area: Area,
+) -> Target {
+    skill_with(
+        (0, 2),
+        TargetSelection::Ground,
+        filter,
+        count,
+        allow_same_target,
+        area,
+    )
 }
 
 /// 從 marker map 建立 select_skill_targets 需要的 HashMap<Position, UnitInfo>
@@ -78,6 +111,9 @@ fn all_occupants_of(marker_map: &HashMap<String, Vec<MarkerEntry>>, marker: &str
 
 #[test]
 fn test_select_skill_targets_normal_case() {
+    let skill_with_fixed_range =
+        |filter: TargetFilter, area: Area| skill_with_unit_target(filter, 1, false, area);
+
     let test_data = [
         (
             "--- SingleTarget",
@@ -97,11 +133,12 @@ fn test_select_skill_targets_normal_case() {
                 // 方便起見，只在這邊測試技能距離
                 (
                     skill_with(
+                        (1, 1),
+                        TargetSelection::Unit,
+                        TargetFilter::Any,
                         1,
-                        1,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::All,
-                        },
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         // 太近
@@ -114,13 +151,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::All,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Any, Area::Single),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
                         (vec!["Pa"], Some(vec!["Pa"])),
@@ -132,13 +163,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::AllExcludingCaster,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::AnyExceptCaster, Area::Single),
                     vec![
                         (vec!["C"], None),
                         (vec!["Pa"], Some(vec!["Pa"])),
@@ -150,13 +175,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::Enemy,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Enemy, Area::Single),
                     vec![
                         (vec!["C"], None),
                         (vec!["Pa"], None),
@@ -168,13 +187,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::Ally,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Ally, Area::Single),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
                         (vec!["Pa"], Some(vec!["Pa"])),
@@ -186,13 +199,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::AllyExcludingCaster,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::AllyExceptCaster, Area::Single),
                     vec![
                         (vec!["C"], None),
                         (vec!["Pa"], Some(vec!["Pa"])),
@@ -204,13 +211,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::Caster,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::CasterOnly, Area::Single),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
                         (vec!["Pa"], None),
@@ -240,13 +241,12 @@ fn test_select_skill_targets_normal_case() {
             vec![
                 (
                     skill_with(
-                        0,
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::Any,
                         2,
-                        TargetMode::MultiTarget {
-                            count: 2,
-                            allow_duplicate: false,
-                            filter: TargetFilter::All,
-                        },
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
@@ -268,13 +268,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
-                        2,
-                        TargetMode::MultiTarget {
-                            count: 3,
-                            allow_duplicate: false,
-                            filter: TargetFilter::All,
-                        },
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::Any,
+                        3,
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
@@ -296,13 +295,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::AnyExceptCaster,
                         2,
-                        TargetMode::MultiTarget {
-                            count: 2,
-                            allow_duplicate: false,
-                            filter: TargetFilter::AllExcludingCaster,
-                        },
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], None),
@@ -324,13 +322,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
-                        2,
-                        TargetMode::MultiTarget {
-                            count: 3,
-                            allow_duplicate: false,
-                            filter: TargetFilter::AllExcludingCaster,
-                        },
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::AnyExceptCaster,
+                        3,
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], None),
@@ -352,13 +349,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::Enemy,
                         2,
-                        TargetMode::MultiTarget {
-                            count: 2,
-                            allow_duplicate: false,
-                            filter: TargetFilter::Enemy,
-                        },
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], None),
@@ -380,13 +376,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::Ally,
                         2,
-                        TargetMode::MultiTarget {
-                            count: 2,
-                            allow_duplicate: false,
-                            filter: TargetFilter::Ally,
-                        },
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
@@ -408,13 +403,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
-                        2,
-                        TargetMode::MultiTarget {
-                            count: 3,
-                            allow_duplicate: false,
-                            filter: TargetFilter::Ally,
-                        },
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::Ally,
+                        3,
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
@@ -436,13 +430,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::AllyExceptCaster,
                         2,
-                        TargetMode::MultiTarget {
-                            count: 2,
-                            allow_duplicate: false,
-                            filter: TargetFilter::AllyExcludingCaster,
-                        },
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], None),
@@ -464,13 +457,12 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 (
                     skill_with(
-                        0,
-                        2,
-                        TargetMode::MultiTarget {
-                            count: 3,
-                            allow_duplicate: false,
-                            filter: TargetFilter::AllyExcludingCaster,
-                        },
+                        (0, 2),
+                        TargetSelection::Unit,
+                        TargetFilter::AllyExceptCaster,
+                        3,
+                        false,
+                        Area::Single,
                     ),
                     vec![
                         (vec!["C"], None),
@@ -484,34 +476,6 @@ fn test_select_skill_targets_normal_case() {
                         (vec!["C", "Aa"], None),
                         (vec!["C", "Ea"], None),
                         (vec!["Pa", "Aa"], Some(vec!["Pa", "Aa"])),
-                        (vec!["Pa", "Ea"], None),
-                        (vec!["Aa", "Ea"], None),
-                        (vec!["Ea", "Eb"], None),
-                        (vec!["C", "Pa", "Aa"], None),
-                    ],
-                ),
-                (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::MultiTarget {
-                            count: 2,
-                            allow_duplicate: false,
-                            filter: TargetFilter::Caster,
-                        },
-                    ),
-                    vec![
-                        (vec!["C"], Some(vec!["C"])),
-                        (vec!["Pa"], None),
-                        (vec!["Pb"], None),
-                        (vec!["Aa"], None),
-                        (vec!["Ab"], None),
-                        (vec!["Ea"], None),
-                        (vec!["Eb"], None),
-                        (vec!["C", "Pa"], None),
-                        (vec!["C", "Aa"], None),
-                        (vec!["C", "Ea"], None),
-                        (vec!["Pa", "Aa"], None),
                         (vec!["Pa", "Ea"], None),
                         (vec!["Aa", "Ea"], None),
                         (vec!["Ea", "Eb"], None),
@@ -530,37 +494,9 @@ fn test_select_skill_targets_normal_case() {
                     "#,
             ],
             vec![
-                // 方便起見，只測試這個 diamond radius 0
+                // radius 0 不合法，不測試
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 0 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
-                    vec![
-                        (vec!["C"], Some(vec!["C"])),
-                        (vec!["Pa"], Some(vec!["Pa"])),
-                        (vec!["Pb"], Some(vec!["Pb"])),
-                        (vec!["Aa"], Some(vec!["Aa"])),
-                        (vec!["Ab"], None),
-                        (vec!["Ea"], Some(vec!["Ea"])),
-                        (vec!["Eb"], Some(vec!["Eb"])),
-                    ],
-                ),
-                (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Any, Area::Diamond { radius: 1 }),
                     vec![
                         (vec!["C"], Some(vec!["C", "Ea", "Pa"])),
                         (vec!["Pa"], Some(vec!["Pa", "C", "Aa", "Pb"])),
@@ -573,15 +509,7 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 // 方便起見，只測試這個 diamond radius 2
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Any, Area::Diamond { radius: 2 }),
                     vec![
                         (vec!["C"], Some(vec!["C", "Ea", "Eb", "Pa", "Aa", "Pb"])),
                         (vec!["Pa"], Some(vec!["Pa", "C", "Ea", "Aa", "Ab", "Pb"])),
@@ -596,14 +524,9 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::AllExcludingCaster,
-                        },
+                    skill_with_fixed_range(
+                        TargetFilter::AnyExceptCaster,
+                        Area::Diamond { radius: 1 },
                     ),
                     vec![
                         (vec!["C"], None),
@@ -616,15 +539,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::Enemy,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Enemy, Area::Diamond { radius: 1 }),
                     vec![
                         (vec!["C"], None),
                         (vec!["Pa"], None),
@@ -636,15 +551,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::Ally,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Ally, Area::Diamond { radius: 1 }),
                     vec![
                         (vec!["C"], Some(vec!["C", "Pa"])),
                         (vec!["Pa"], Some(vec!["Pa", "C", "Aa", "Pb"])),
@@ -656,14 +563,9 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::AllyExcludingCaster,
-                        },
+                    skill_with_fixed_range(
+                        TargetFilter::AllyExceptCaster,
+                        Area::Diamond { radius: 1 },
                     ),
                     vec![
                         (vec!["C"], None),
@@ -676,15 +578,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Diamond { radius: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::Caster,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::CasterOnly, Area::Diamond { radius: 1 }),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
                         (vec!["Pa"], None),
@@ -707,37 +601,8 @@ fn test_select_skill_targets_normal_case() {
                     "#,
             ],
             vec![
-                // 方便起見，只測試這個 cross length 0
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 0 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
-                    vec![
-                        (vec!["C"], Some(vec!["C"])),
-                        (vec!["Pa"], Some(vec!["Pa"])),
-                        (vec!["Pb"], Some(vec!["Pb"])),
-                        (vec!["Aa"], Some(vec!["Aa"])),
-                        (vec!["Ab"], None),
-                        (vec!["Ea"], Some(vec!["Ea"])),
-                        (vec!["Eb"], Some(vec!["Eb"])),
-                    ],
-                ),
-                (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Any, Area::Cross { length: 1 }),
                     vec![
                         (vec!["C"], Some(vec!["C", "Ea", "Pa"])),
                         (vec!["Pa"], Some(vec!["Pa", "C", "Aa", "Pb"])),
@@ -750,15 +615,7 @@ fn test_select_skill_targets_normal_case() {
                 ),
                 // 方便起見，只測試這個 cross length 2
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Any, Area::Cross { length: 2 }),
                     vec![
                         (vec!["C"], Some(vec!["C", "Ea", "Eb", "Pa", "Pb"])),
                         (vec!["Pa"], Some(vec!["Pa", "C", "Aa", "Ab", "Pb"])),
@@ -770,14 +627,9 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::AllExcludingCaster,
-                        },
+                    skill_with_fixed_range(
+                        TargetFilter::AnyExceptCaster,
+                        Area::Cross { length: 1 },
                     ),
                     vec![
                         (vec!["C"], None),
@@ -790,15 +642,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::Enemy,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Enemy, Area::Cross { length: 1 }),
                     vec![
                         (vec!["C"], None),
                         (vec!["Pa"], None),
@@ -810,15 +654,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::Ally,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Ally, Area::Cross { length: 1 }),
                     vec![
                         (vec!["C"], Some(vec!["C", "Pa"])),
                         (vec!["Pa"], Some(vec!["Pa", "C", "Aa", "Pb"])),
@@ -830,14 +666,9 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::AllyExcludingCaster,
-                        },
+                    skill_with_fixed_range(
+                        TargetFilter::AllyExceptCaster,
+                        Area::Cross { length: 1 },
                     ),
                     vec![
                         (vec!["C"], None),
@@ -850,15 +681,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        0,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Cross { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::Caster,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::CasterOnly, Area::Cross { length: 1 }),
                     vec![
                         (vec!["C"], Some(vec!["C"])),
                         (vec!["Pa"], None),
@@ -883,13 +706,12 @@ fn test_select_skill_targets_normal_case() {
             vec![
                 (
                     skill_with(
+                        (1, 1),
+                        TargetSelection::Unit,
+                        TargetFilter::Any,
                         1,
-                        1,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Line { length: 1 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
+                        false,
+                        Area::Line { length: 1 },
                     ),
                     vec![
                         (vec!["Pa"], Some(vec!["C", "Pa"])),
@@ -901,15 +723,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        1,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Line { length: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::All,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Any, Area::Line { length: 2 }),
                     vec![
                         (vec!["Pa"], Some(vec!["C", "Pa", "Pb"])),
                         (vec!["Pb"], Some(vec!["C", "Pa", "Pb"])),
@@ -920,15 +734,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        1,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Line { length: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::AllExcludingCaster,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::AnyExceptCaster, Area::Line { length: 2 }),
                     vec![
                         (vec!["Pa"], Some(vec!["Pa", "Pb"])),
                         (vec!["Pb"], Some(vec!["Pa", "Pb"])),
@@ -939,15 +745,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        1,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Line { length: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::Enemy,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Enemy, Area::Line { length: 2 }),
                     vec![
                         (vec!["Pa"], None),
                         (vec!["Pb"], None),
@@ -958,15 +756,7 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        1,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Line { length: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::Ally,
-                        },
-                    ),
+                    skill_with_fixed_range(TargetFilter::Ally, Area::Line { length: 2 }),
                     vec![
                         (vec!["Pa"], Some(vec!["C", "Pa", "Pb"])),
                         (vec!["Pb"], Some(vec!["C", "Pa", "Pb"])),
@@ -977,14 +767,9 @@ fn test_select_skill_targets_normal_case() {
                     ],
                 ),
                 (
-                    skill_with(
-                        1,
-                        2,
-                        TargetMode::Area {
-                            aoe_shape: AoeShape::Line { length: 2 },
-                            targets_unit: true,
-                            filter: TargetFilter::AllyExcludingCaster,
-                        },
+                    skill_with_fixed_range(
+                        TargetFilter::AllyExceptCaster,
+                        Area::Line { length: 2 },
                     ),
                     vec![
                         (vec!["Pa"], Some(vec!["Pa", "Pb"])),
@@ -1073,11 +858,21 @@ fn test_select_skill_targets_singletarget() {
 
     for filter in TargetFilter::iter() {
         let msg = format!("filter={filter:?} 不可以瞄準空地");
-        let skill = skill_with(0, 2, TargetMode::SingleTarget { filter });
+        let skill = skill_with_unit_target(filter, 1, false, Area::Single);
         let m = "T";
         let targets = vec![markers[m][0]];
         let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
         assert!(result.is_err(), "{}", msg);
+    }
+
+    for filter in TargetFilter::iter() {
+        let msg = format!("filter={filter:?} Ground 可以瞄準空地");
+        let skill = skill_with_ground_target(filter, 1, false, Area::Single);
+        let m = "T";
+        let targets = vec![markers[m][0]];
+        let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
+        assert!(result.is_ok(), "{}", msg);
+        assert!(result.expect(&msg).is_empty(), "{}", msg);
     }
 }
 
@@ -1100,15 +895,7 @@ fn test_select_skill_targets_multitarget() {
             let msg = format!(
                 "filter={filter:?} 不可以瞄準空地 - 重複瞄準同一個目標 {allow_duplicate:?}"
             );
-            let skill = skill_with(
-                0,
-                2,
-                TargetMode::MultiTarget {
-                    count: 2,
-                    allow_duplicate,
-                    filter,
-                },
-            );
+            let skill = skill_with_unit_target(filter, 2, allow_duplicate, Area::Single);
             let m = "T";
             let targets = vec![markers[m][0]];
             let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
@@ -1116,20 +903,23 @@ fn test_select_skill_targets_multitarget() {
         }
 
         for filter in TargetFilter::iter() {
+            let msg =
+                format!("filter={filter:?} 可以瞄準空地 - 重複瞄準同一個目標 {allow_duplicate:?}");
+            let skill = skill_with_ground_target(filter, 2, allow_duplicate, Area::Single);
+            let m = "T";
+            let targets = vec![markers[m][0]];
+            let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
+            assert!(result.is_ok(), "{}", msg);
+            assert!(result.expect(&msg).is_empty(), "{}", msg);
+        }
+
+        for filter in TargetFilter::iter() {
             let msg = format!("filter={filter:?} 重複瞄準同一個目標 {allow_duplicate:?}");
-            let skill = skill_with(
-                0,
-                2,
-                TargetMode::MultiTarget {
-                    count: 2,
-                    allow_duplicate,
-                    filter: filter.clone(),
-                },
-            );
+            let skill = skill_with_unit_target(filter, 2, allow_duplicate, Area::Single);
             let m = match &filter {
-                TargetFilter::All | TargetFilter::AllExcludingCaster | TargetFilter::Enemy => "Ea",
-                TargetFilter::Ally | TargetFilter::AllyExcludingCaster => "Aa",
-                TargetFilter::Caster => "C",
+                TargetFilter::Any | TargetFilter::AnyExceptCaster | TargetFilter::Enemy => "Ea",
+                TargetFilter::Ally | TargetFilter::AllyExceptCaster => "Aa",
+                TargetFilter::CasterOnly => "C",
             };
             let targets = vec![markers[m][0], markers[m][0]];
             let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
@@ -1163,20 +953,18 @@ fn test_select_skill_targets_area_diamond_and_cross() {
         unit_info: marker_map["C"][0].unit_info.clone(),
     };
 
-    for aoe_shape in [
-        AoeShape::Diamond { radius: 1 },
-        AoeShape::Cross { length: 1 },
-    ] {
+    for area in [Area::Diamond { radius: 1 }, Area::Cross { length: 1 }] {
         for filter in TargetFilter::iter() {
+            // Ground target：瞄準空地必須成功
             let test_case = match &filter {
-                TargetFilter::All => {
+                TargetFilter::Any => {
                     vec![
                         ("T", vec!["Pa", "Ea"]),
                         ("Ea", vec!["C", "Ea", "Eb"]),
                         ("Pa", vec!["C", "Pa", "Aa"]),
                     ]
                 }
-                TargetFilter::AllExcludingCaster => {
+                TargetFilter::AnyExceptCaster => {
                     vec![
                         ("T", vec!["Pa", "Ea"]),
                         ("Ea", vec!["Ea", "Eb"]),
@@ -1193,24 +981,16 @@ fn test_select_skill_targets_area_diamond_and_cross() {
                         ("Pa", vec!["C", "Pa", "Aa"]),
                     ]
                 }
-                TargetFilter::AllyExcludingCaster => {
+                TargetFilter::AllyExceptCaster => {
                     vec![("T", vec!["Pa"]), ("Ea", vec![]), ("Pa", vec!["Pa", "Aa"])]
                 }
-                TargetFilter::Caster => vec![("T", vec![]), ("Ea", vec!["C"]), ("Pa", vec!["C"])],
+                TargetFilter::CasterOnly => {
+                    vec![("T", vec![]), ("Ea", vec!["C"]), ("Pa", vec!["C"])]
+                }
             };
             for (m, expected) in test_case {
-                let aoe_shape = aoe_shape.clone();
-                let filter = filter.clone();
-                let msg = format!("{aoe_shape:?} - {filter:?} - 不用瞄準單位:{m}");
-                let skill = skill_with(
-                    0,
-                    2,
-                    TargetMode::Area {
-                        aoe_shape,
-                        targets_unit: false,
-                        filter,
-                    },
-                );
+                let msg = format!("{area:?} - {filter:?} - 不用瞄準單位:{m}");
+                let skill = skill_with_ground_target(filter, 1, false, area);
                 let targets = vec![markers[m][0]];
                 let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
                 assert!(result.is_ok(), "{}", msg);
@@ -1221,6 +1001,52 @@ fn test_select_skill_targets_area_diamond_and_cross() {
                         .map(|m| all_occupants_of(&marker_map, m)[0]),
                 );
                 assert_eq!(result_set, occupants, "{}", msg);
+            }
+
+            // Unit target：瞄準空地必須失敗
+            {
+                let msg = format!("{area:?} - {filter:?} - 瞄準單位:空地必須失敗");
+                let skill = skill_with_unit_target(filter, 1, false, area);
+                let targets = vec![markers["T"][0]];
+                let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
+                assert!(result.is_err(), "{}", msg);
+            }
+            // Unit target：瞄準有單位的位置
+            let unit_test_case: Vec<(&str, std::result::Result<Vec<&str>, ()>)> = match &filter {
+                TargetFilter::Any => vec![
+                    ("Ea", Ok(vec!["C", "Ea", "Eb"])),
+                    ("Pa", Ok(vec!["C", "Pa", "Aa"])),
+                ],
+                TargetFilter::AnyExceptCaster => {
+                    vec![("Ea", Ok(vec!["Ea", "Eb"])), ("Pa", Ok(vec!["Pa", "Aa"]))]
+                }
+                TargetFilter::Enemy => vec![("Ea", Ok(vec!["Ea", "Eb"])), ("Pa", Err(()))],
+                TargetFilter::Ally => vec![("Ea", Err(())), ("Pa", Ok(vec!["C", "Pa", "Aa"]))],
+                TargetFilter::AllyExceptCaster => {
+                    vec![("Ea", Err(())), ("Pa", Ok(vec!["Pa", "Aa"]))]
+                }
+                TargetFilter::CasterOnly => vec![("Ea", Err(())), ("Pa", Err(()))],
+            };
+            for (m, expected) in unit_test_case {
+                let msg = format!("{area:?} - {filter:?} - 瞄準單位:{m}");
+                let skill = skill_with_unit_target(filter, 1, false, area);
+                let targets = vec![markers[m][0]];
+                let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
+                match expected {
+                    Ok(expected_markers) => {
+                        assert!(result.is_ok(), "{}", msg);
+                        let result_set: HashSet<_> = result.expect(&msg).into_iter().collect();
+                        let occupants = HashSet::from_iter(
+                            expected_markers
+                                .into_iter()
+                                .map(|m| all_occupants_of(&marker_map, m)[0]),
+                        );
+                        assert_eq!(result_set, occupants, "{}", msg);
+                    }
+                    Err(()) => {
+                        assert!(result.is_err(), "{}", msg);
+                    }
+                }
             }
         }
     }
@@ -1242,14 +1068,14 @@ fn test_select_skill_targets_area_line() {
 
     for filter in TargetFilter::iter() {
         let test_case = match &filter {
-            TargetFilter::All => {
+            TargetFilter::Any => {
                 vec![
                     ("T", vec!["C", "Eb"]),
                     ("Eb", vec!["C", "Eb"]),
                     ("Pa", vec!["C", "Pa", "Aa"]),
                 ]
             }
-            TargetFilter::AllExcludingCaster => {
+            TargetFilter::AnyExceptCaster => {
                 vec![
                     ("T", vec!["Eb"]),
                     ("Eb", vec!["Eb"]),
@@ -1266,25 +1092,16 @@ fn test_select_skill_targets_area_line() {
                     ("Pa", vec!["C", "Pa", "Aa"]),
                 ]
             }
-            TargetFilter::AllyExcludingCaster => {
+            TargetFilter::AllyExceptCaster => {
                 vec![("T", vec![]), ("Eb", vec![]), ("Pa", vec!["Pa", "Aa"])]
             }
-            TargetFilter::Caster => {
+            TargetFilter::CasterOnly => {
                 vec![("T", vec!["C"]), ("Eb", vec!["C"]), ("Pa", vec!["C"])]
             }
         };
         for (m, expected) in test_case {
-            let filter = filter.clone();
             let msg = format!("line - {filter:?} - 不用瞄準單位:{m}");
-            let skill = skill_with(
-                0,
-                2,
-                TargetMode::Area {
-                    aoe_shape: AoeShape::Line { length: 2 },
-                    targets_unit: false,
-                    filter,
-                },
-            );
+            let skill = skill_with_ground_target(filter, 1, false, Area::Line { length: 2 });
             let targets = vec![markers[m][0]];
             let result = select_skill_targets(&caster, &skill, &targets, &position_map, board);
             assert!(result.is_ok(), "{}", msg);

@@ -5,7 +5,6 @@ use crate::ecs_types::components::{
 };
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
-use crate::loader_schema::BuffEffect;
 use crate::logic::debug::short_type_name;
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
@@ -83,9 +82,13 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
             .ok_or_else(|| DataError::UnitTypeNotFound {
                 type_name: unit_type_name.clone(),
             })?;
-    let no_buffs: &[BuffEffect] = &[];
-    let attributes =
-        unit_attributes::calculate_attributes(&unit_type.skills, no_buffs, &game_data.skill_map)?;
+    let no_buffs = &[];
+    let effects = unit_attributes::filter_continuous_effect(
+        &unit_type.skills,
+        no_buffs,
+        &game_data.skill_map,
+    )?;
+    let attributes = unit_attributes::calculate_attributes(effects);
     let bundle = UnitBundle {
         unit: Unit,
         position,

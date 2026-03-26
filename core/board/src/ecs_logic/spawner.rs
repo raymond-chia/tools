@@ -1,11 +1,11 @@
 use crate::domain::alias::ID;
 use crate::ecs_types::components::{
-    BlocksSight, BlocksSound, HpModify, MovementUsed, Object, ObjectBundle, Occupant,
+    BlocksSight, BlocksSound, ContactEffects, MovementUsed, Object, ObjectBundle, Occupant,
     OccupantTypeName, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
-use crate::loader_schema::{BuffEffect, LevelType};
+use crate::loader_schema::LevelType;
 use crate::logic::debug::short_type_name;
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
@@ -38,12 +38,13 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 .ok_or_else(|| DataError::UnitTypeNotFound {
                     type_name: placement.unit_type_name.clone(),
                 })?;
-            let no_buffs: &[BuffEffect] = &[];
-            let attributes = unit_attributes::calculate_attributes(
+            let no_buffs = &vec![];
+            let effects = unit_attributes::filter_continuous_effect(
                 &unit_type.skills,
                 no_buffs,
                 &game_data.skill_map,
             )?;
+            let attributes = unit_attributes::calculate_attributes(effects);
 
             unit_bundles.push(UnitBundle {
                 unit: Unit,
@@ -75,7 +76,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                     occupant: Occupant::Object(id),
                     occupant_type_name: OccupantTypeName(object_type.name.clone()),
                     terrain_movement_cost: TerrainMovementCost(object_type.movement_cost),
-                    hp_modify: HpModify(object_type.hp_modify),
+                    contact_effects: ContactEffects(Vec::new()),
                 },
                 object_type.blocks_sight.then_some(BlocksSight),
                 object_type.blocks_sound.then_some(BlocksSound),

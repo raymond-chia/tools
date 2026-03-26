@@ -6,117 +6,67 @@ pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_PIT: &str = "pit";
 pub const OBJECT_TYPE_SWAMP: &str = "swamp";
 
-/// 最小技能 TOML：包含一個被動技能（給 warrior 用）和一個主動技能
 pub const SKILLS_TOML: &str = r#"
 [[skills]]
+
+[skills.Passive]
 name = "warrior-passive"
-mp_change = 0
-min_range = 0
-max_range = 0
 tags = []
-allows_movement_after = false
 
-[skills.trigger]
-type = "Passive"
+[[skills.Passive.effects]]
 
-[[skills.effects]]
-type = "AttributeModify"
+[skills.Passive.effects.AttributeFlat]
 attribute = "Hp"
-
-[skills.effects.mechanic]
-type = "Guaranteed"
-
-[skills.effects.target_mode]
-type = "SingleTarget"
-filter = "Caster"
-
-[skills.effects.formula]
-type = "Fixed"
 value = 100
 
-[[skills.effects]]
-type = "AttributeModify"
-attribute = "Movement"
+[[skills.Passive.effects]]
 
-[skills.effects.mechanic]
-type = "Guaranteed"
-
-[skills.effects.target_mode]
-type = "SingleTarget"
-filter = "Caster"
-
-[skills.effects.formula]
-type = "Fixed"
+[skills.Passive.effects.AttributeFlat]
+attribute = "MovementPoint"
 value = 50
 
 [[skills]]
+
+[skills.Passive]
 name = "mage-passive"
-mp_change = 0
-min_range = 0
-max_range = 0
 tags = []
-allows_movement_after = false
 
-[skills.trigger]
-type = "Passive"
+[[skills.Passive.effects]]
 
-[[skills.effects]]
-type = "AttributeModify"
+[skills.Passive.effects.AttributeFlat]
 attribute = "Hp"
-
-[skills.effects.mechanic]
-type = "Guaranteed"
-
-[skills.effects.target_mode]
-type = "SingleTarget"
-filter = "Caster"
-
-[skills.effects.formula]
-type = "Fixed"
 value = 80
 
-[[skills.effects]]
-type = "AttributeModify"
-attribute = "Movement"
+[[skills.Passive.effects]]
 
-[skills.effects.mechanic]
-type = "Guaranteed"
-
-[skills.effects.target_mode]
-type = "SingleTarget"
-filter = "Caster"
-
-[skills.effects.formula]
-type = "Fixed"
+[skills.Passive.effects.AttributeFlat]
+attribute = "MovementPoint"
 value = 50
 
 [[skills]]
+
+[skills.Active]
 name = "melee-attack"
-mp_change = 0
-min_range = 1
-max_range = 1
 tags = []
-allows_movement_after = false
+cost = 0
 
-[skills.trigger]
-type = "Active"
+[skills.Active.target]
+range = [1, 1]
+selection = "Unit"
+selectable_filter = "Enemy"
+count = 1
+allow_same_target = false
+area = "Single"
 
-[[skills.effects]]
-type = "HpModify"
-style = "Physical"
+[[skills.Active.effects]]
 
-[skills.effects.mechanic]
-type = "HitBased"
-hit_bonus = 80
-crit_rate = 5
+[skills.Active.effects.Leaf]
+who = "Target"
 
-[skills.effects.target_mode]
-type = "SingleTarget"
-filter = "Enemy"
-
-[skills.effects.formula]
-type = "Fixed"
-value = 10
+[skills.Active.effects.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = 100
 "#;
 
 /// 最小單位 TOML：包含一個 warrior 單位類型
@@ -137,19 +87,16 @@ name = "wall"
 movement_cost = 10000
 blocks_sight = true
 blocks_sound = true
-hp_modify = 0
 
 [[objects]]
 name = "pit"
 movement_cost = 0
 blocks_sight = false
 blocks_sound = false
-hp_modify = -10000
 
 [[objects]]
 name = "swamp"
 movement_cost = 10
 blocks_sight = false
 blocks_sound = false
-hp_modify = 0
 "#;

@@ -1,6 +1,7 @@
 //! ECS Component 定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
+use crate::domain::core_types::{BuffType, DcType, EffectNode};
 use bevy_ecs::bundle::Bundle;
 use bevy_ecs::component::Component;
 use serde::{Deserialize, Serialize};
@@ -96,7 +97,7 @@ define_attribute_components!(
     (max_mp, MaxMp),
     (current_mp, CurrentMp),
     (initiative, Initiative),
-    (hit, Hit),
+    (accuracy, Accuracy),
     (evasion, Evasion),
     (block, Block),
     (block_protection, BlockProtection),
@@ -106,8 +107,8 @@ define_attribute_components!(
     (fortitude, Fortitude),
     (reflex, Reflex),
     (will, Will),
-    (movement, Movement),
-    (reaction, Reaction),
+    (movement_point, MovementPoint),
+    (reaction_point, ReactionPoint),
 );
 
 /// 單位已使用的移動力
@@ -122,11 +123,26 @@ pub struct MovementUsed(pub MovementCost);
 #[derive(Debug, Clone, Component)]
 pub struct TerrainMovementCost(pub MovementCost);
 
-/// HP 修正量（正數為增益，負數為減益）
-#[derive(Debug, Clone, Component)]
-pub struct HpModify(pub i32);
-
 define_tag_components!(BlocksSight, BlocksSound);
+
+/// 接觸效果（單位接觸物件時觸發的效果鏈）
+// by claude
+// - 每幀/熱迴圈：即使幾百 bytes 也值得避免
+// - 每回合操作（像你這裡）：幾 KB 完全沒問題，甚至幾十 KB 都不會有感
+// - 真正該擔心的：大型集合（上千元素的 Vec/HashMap）在熱路徑中反覆 clone
+#[derive(Debug, Clone, Component)]
+pub struct ContactEffects(pub Vec<EffectNode>);
+
+/// 施加在單位上的 Buff
+/// Buff 施加後的運行時狀態
+#[derive(Debug, Component)]
+pub struct AppliedBuff {
+    pub def: BuffType,
+    pub caster: Occupant,
+    pub target: Occupant,
+    pub remaining_duration: Option<u32>,
+    pub inherited_dc: Option<DcType>,
+}
 
 // ============================================================================
 // Bundles
@@ -153,7 +169,7 @@ pub struct ObjectBundle {
     pub occupant: Occupant,
     pub occupant_type_name: OccupantTypeName,
     pub terrain_movement_cost: TerrainMovementCost,
-    pub hp_modify: HpModify,
+    pub contact_effects: ContactEffects,
     // block sight
     // block sound
 }

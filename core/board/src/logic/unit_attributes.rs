@@ -1,105 +1,99 @@
 //! 單位屬性計算邏輯
 
 use crate::domain::alias::SkillName;
-use crate::domain::core_types::Attribute;
+use crate::domain::core_types::{Attribute, BuffType, ContinuousEffect, SkillType};
 use crate::ecs_types::components::*;
 use crate::error::{Result, UnitError};
-use crate::loader_schema::{
-    AttributeSource, BuffEffect, Mechanic, SkillEffect, SkillType, TargetFilter, TargetMode,
-    TriggerEvent, ValueFormula,
-};
 use std::collections::HashMap;
 
+pub fn filter_continuous_effect<'a>(
+    skill_names: &'a [SkillName],
+    buffs: &'a [BuffType],
+    skill_map: &'a HashMap<SkillName, SkillType>,
+) -> Result<impl Iterator<Item = &'a ContinuousEffect>> {
+    let passives = skill_names
+        .iter()
+        .map(|name| {
+            skill_map.get(name).ok_or_else(|| {
+                UnitError::SkillNotFound {
+                    skill_name: name.clone(),
+                }
+                .into()
+            })
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .filter_map(|skill| match skill {
+            SkillType::Passive { effects, .. } => {
+                if effects.is_empty() {
+                    None
+                } else {
+                    Some(effects.iter())
+                }
+            }
+            SkillType::Active { .. } | SkillType::Reaction { .. } => None,
+        })
+        .flatten();
+
+    let from_buffs = buffs.iter().flat_map(|buff| buff.while_active.iter());
+
+    Ok(passives.chain(from_buffs))
+}
+
 /// 計算單位屬性
-pub fn calculate_attributes(
-    skill_names: &[SkillName],
-    buffs: &[BuffEffect],
-    skill_map: &HashMap<SkillName, SkillType>,
-) -> Result<AttributeBundle> {
+pub fn calculate_attributes<'a>(
+    effects: impl Iterator<Item = &'a ContinuousEffect>,
+) -> AttributeBundle {
     let mut attributes = CalculatedAttributes::default();
 
     // 收集所有被動技能效果
-    let mut fixed_effects = Vec::new();
-    let mut multiplier_effects = Vec::new();
+    let mut flat_effects = Vec::new();
+    let mut scaling_effects = Vec::new();
 
-    for skill_name in skill_names {
-        let skill = skill_map.get(skill_name).ok_or(UnitError::SkillNotFound {
-            skill_name: skill_name.clone(),
-        })?;
-
-        if skill.trigger != TriggerEvent::Passive {
-            continue;
-        }
-
-        for effect in &skill.effects {
-            match effect {
-                SkillEffect::AttributeModify {
-                    formula,
-                    attribute,
-                    // 確保其他設定沒問題
-                    mechanic: Mechanic::Guaranteed,
-                    target_mode:
-                        TargetMode::SingleTarget {
-                            filter: TargetFilter::Caster,
-                        },
-                    duration: None,
-                } => {
-                    collect_formula_effect(
-                        *attribute,
-                        &formula,
-                        &mut fixed_effects,
-                        &mut multiplier_effects,
-                    );
-                }
-                _ => {}
-            }
-        }
+    for effect in effects {
+        collect_continuous_effect(effect, &mut flat_effects, &mut scaling_effects);
     }
 
-    // 收集所有 Buff 效果
-    for buff in buffs {
-        collect_formula_effect(
-            buff.attribute,
-            &buff.formula,
-            &mut fixed_effects,
-            &mut multiplier_effects,
-        );
-    }
-
-    // 第一階段：累加所有 Fixed 值
-    for (attribute, value) in fixed_effects {
+    // 第一階段：累加所有固定值
+    for (attribute, value) in flat_effects {
         add_attribute_value(&mut attributes, attribute, value);
     }
 
     // 第二階段：應用所有倍率效果
-    for (attribute, multiplier) in multiplier_effects {
+    for (attribute, multiplier) in scaling_effects {
         let base_value = get_attribute_value(&attributes, attribute);
         let new_value = (base_value * multiplier) / 100;
         set_attribute_value(&mut attributes, attribute, new_value);
     }
 
-    Ok(attributes.into())
+    attributes.into()
 }
 
-fn collect_formula_effect(
-    target_attribute: Attribute,
-    formula: &ValueFormula,
-    fixed_effects: &mut Vec<(Attribute, i32)>,
-    multiplier_effects: &mut Vec<(Attribute, i32)>,
+fn collect_continuous_effect(
+    effect: &ContinuousEffect,
+    flat_effects: &mut Vec<(Attribute, i32)>,
+    scaling_effects: &mut Vec<(Attribute, i32)>,
 ) {
-    match formula {
-        ValueFormula::Fixed { value } => {
-            fixed_effects.push((target_attribute, *value));
+    match effect {
+        ContinuousEffect::AttributeFlat { attribute, value } => {
+            flat_effects.push((*attribute, *value));
         }
-        ValueFormula::Attribute {
-            source: AttributeSource::Caster,
-            multiplier,
+        ContinuousEffect::AttributeScaling {
+            target_attribute,
+            value_percent,
             ..
         } => {
-            // 假設 formula.attribute == buff.attribute
-            multiplier_effects.push((target_attribute, *multiplier));
+            scaling_effects.push((*target_attribute, *value_percent));
         }
-        _ => {}
+        ContinuousEffect::NearbyAllyScaling { .. } | ContinuousEffect::HpRatioScaling { .. } => {
+            // TODO
+        }
+        ContinuousEffect::Perception { .. }
+        | ContinuousEffect::DamageToMp { .. }
+        | ContinuousEffect::EmitLight { .. }
+        | ContinuousEffect::Blinded => {
+            // 不影響屬性
+        }
     }
 }
 
@@ -136,7 +130,7 @@ define_attribute_accessors!(
     (hp, Hp),
     (mp, Mp),
     (initiative, Initiative),
-    (hit, Hit),
+    (accuracy, Accuracy),
     (evasion, Evasion),
     (block, Block),
     (block_protection, BlockProtection),
@@ -146,8 +140,8 @@ define_attribute_accessors!(
     (fortitude, Fortitude),
     (reflex, Reflex),
     (will, Will),
-    (movement, Movement),
-    (reaction, Reaction),
+    (movement_point, MovementPoint),
+    (reaction_point, ReactionPoint),
 );
 
 impl From<CalculatedAttributes> for AttributeBundle {
@@ -158,7 +152,7 @@ impl From<CalculatedAttributes> for AttributeBundle {
             max_mp: MaxMp(attributes.mp),
             current_mp: CurrentMp(attributes.mp),
             initiative: Initiative(attributes.initiative),
-            hit: Hit(attributes.hit),
+            accuracy: Accuracy(attributes.accuracy),
             evasion: Evasion(attributes.evasion),
             block: Block(attributes.block),
             block_protection: BlockProtection(attributes.block_protection),
@@ -168,8 +162,8 @@ impl From<CalculatedAttributes> for AttributeBundle {
             fortitude: Fortitude(attributes.fortitude),
             reflex: Reflex(attributes.reflex),
             will: Will(attributes.will),
-            movement: Movement(attributes.movement),
-            reaction: Reaction(attributes.reaction),
+            movement_point: MovementPoint(attributes.movement_point),
+            reaction_point: ReactionPoint(attributes.reaction_point),
         }
     }
 }

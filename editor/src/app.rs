@@ -8,7 +8,8 @@ use crate::generic_io::{load_file, save_file};
 use crate::tabs;
 use crate::utils::dnd::render_dnd_handle;
 use crate::utils::search::{match_search_query, render_search_input};
-use board::loader_schema::{LevelType, ObjectType, SkillType, UnitType};
+use board::domain::core_types::SkillType;
+use board::loader_schema::{LevelType, ObjectType, UnitType};
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
@@ -70,7 +71,7 @@ impl eframe::App for EditorApp {
                     .skill_editor
                     .items
                     .iter()
-                    .map(|skill| skill.name.clone())
+                    .map(|skill| skill.name().clone())
                     .collect();
 
                 render_editor_ui(

@@ -253,7 +253,8 @@ fn render_battlefield(
                 .values()
                 .find(|b| b.occupant == occupant)
                 .ok_or_else(|| board::error::BoardError::OccupantNotFound { occupant })?;
-            let remaining = unit_bundle.attributes.movement.0 - unit_bundle.movement_used.0 as i32;
+            let remaining =
+                unit_bundle.attributes.movement_point.0 - unit_bundle.movement_used.0 as i32;
             (reachable, remaining, Some(unit_bundle.position))
         }
         _ => (HashMap::new(), 0, None),

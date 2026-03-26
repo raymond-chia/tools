@@ -1,3 +1,5 @@
 target/
 
+bash.exe.stackdump
+
 ignore-*

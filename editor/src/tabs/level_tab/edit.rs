@@ -7,11 +7,12 @@ use crate::utils::search::{
 use bevy_ecs::world::World;
 use board::domain::alias::{Coord, ID, TypeName};
 use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
+use board::domain::core_types::SkillType;
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
 use board::loader_schema::{
-    Faction, LevelType, ObjectPlacement, ObjectType, ObjectsToml, SkillType, SkillsToml,
-    UnitPlacement, UnitType, UnitsToml,
+    Faction, LevelType, ObjectPlacement, ObjectType, ObjectsToml, SkillsToml, UnitPlacement,
+    UnitType, UnitsToml,
 };
 use std::collections::{HashMap, HashSet};
 

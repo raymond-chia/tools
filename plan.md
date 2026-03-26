@@ -7,7 +7,7 @@
 - 效果條件鏈用巢狀結構，每個節點是「條件 → 效果」，可分支
 - 位移統一為 ForcedMove，SwapPosition 和 Trample 因語義獨立仍為獨立效果
 - 推的碰撞傷害在 ForcedMove 內部處理
-- 反應技能的 source_filter 篩選觸發源，觸發源即為反應效果的目標；效果鏈中的 EffectTarget::Target 都鎖定觸發源
+- 反應技能的 source_filter 篩選觸發源，觸發源即為反應效果的目標；效果鏈中的 CasterOrTarget::Target 都鎖定觸發源
 - 地面持續效果 = SpawnObject，contact_effects 定義單位接觸時的效果鏈
 - EndCondition 之間為 OR 關係
 - Buff 內嵌在技能 TOML，AppliedBuff 記錄施法者、目標、繼承的 DcType
@@ -38,7 +38,7 @@ enum SkillType {
     Passive {
         name: SkillName,
         tags: Vec<SkillTag>,
-        effects: Vec<PassiveEffect>,
+        effects: Vec<ContinuousEffect>,
     },
 }
 
@@ -48,7 +48,7 @@ enum SkillTag {
 }
 
 struct Target {
-    range: u32,
+    range: (u32, u32),
     selection: TargetSelection,
     selectable_filter: TargetFilter,
     count: u32,
@@ -66,7 +66,7 @@ enum Area {
 }
 
 struct TriggeringSource {
-    source_range: u32,
+    source_range: (u32, u32),
     source_filter: TargetFilter,
     trigger: ReactionTrigger,
 }
@@ -93,10 +93,10 @@ enum EffectNode {
         on_success: Vec<EffectNode>,
         on_failure: Vec<EffectNode>,
     },
-    Leaf { who: EffectTarget, effect: Effect },
+    Leaf { who: CasterOrTarget, effect: Effect },
 }
 
-enum EffectTarget { Caster, Target }
+enum CasterOrTarget { Caster, Target }
 
 enum EffectCondition {
     HitCheck { accuracy_bonus: i32, crit_bonus: i32 },
@@ -105,14 +105,20 @@ enum EffectCondition {
 
 enum DcType { Fort, Reflex, Will }
 
+struct Scaling {
+    source: CasterOrTarget,
+    attribute: Attribute,
+    value_percent: i32
+}
+
 enum Effect {
-    HpEffect { value_percent: i32 },
+    HpEffect { scaling: Scaling },
     MpEffect { value: i32 },
     ApplyBuff { buff: BuffType },
     ForcedMove { direction: MoveDirection, distance: u32 },
     AllowRemainingMovement,
     SwapPosition,
-    Trample { distance: u32, value_percent: i32, accuracy_bonus: i32, crit_bonus: i32 },
+    Trample { distance: u32, scaling: Scaling },
     SpawnObject {
         object_type: TypeName,
         duration: Option<u32>,
@@ -125,7 +131,7 @@ enum LightType { Bright, Dim, Darkness }
 
 struct BuffType {
     stackable: bool,
-    while_active: Vec<WhileActiveEffect>,
+    while_active: Vec<ContinuousEffect>,
     per_turn_effects: Vec<EffectNode>,
     end_conditions: Vec<EndCondition>,
 }
@@ -138,13 +144,18 @@ struct AppliedBuff {
     inherited_dc: Option<DcType>,
 }
 
-enum WhileActiveEffect {
-    ModifyAttribute { attribute: Attribute, value: i32 },
+enum ContinuousEffect {
+    AttributeFlat { attribute: Attribute, value: i32 },
+    AttributeScaling{ target_attribute: Attribute, source: CasterOrTarget, source_attribute: Attribute, value_percent: i32 },
+    NearbyAllyScaling { range: u32, attribute: Attribute, per_ally_percent: i32, base_percent: i32 },
+    HpRatioScaling { attribute: Attribute, min_bonus_percent: i32, step_percent: u32, bonus_per_step: i32, max_bonus_percent: i32 },
+    Perception { perception_type: PerceptionType, range: u32 },
+    DamageToMp { ratio_percent: i32 },
     EmitLight { light_type: LightType, range: u32 },
     Blinded,
 }
 
-enum Attribute { Accuracy, Evasion, Block, BlockProtection, PhysicalAttack, MagicalAttack, MagicalDc, Fortitude, Reflex, Will, MovementPoint, Initiative, ReactionCount }
+enum Attribute { Accuracy, Evasion, Block, BlockProtection, PhysicalAttack, MagicalAttack, MagicalDc, Fortitude, Reflex, Will, MovementPoint, Initiative, ReactionPoint }
 
 enum EndCondition {
     Duration(u32),
@@ -153,14 +164,6 @@ enum EndCondition {
     EitherDies,
     EitherMoves,
     TargetMoves,
-}
-
-enum PassiveEffect {
-    FlatModifier { attribute: Attribute, value: i32 },
-    NearbyAllyScaling { range: u32, attribute: Attribute, per_ally_percent: i32, base_percent: i32 },
-    HpRatioScaling { attribute: Attribute, min_bonus_percent: i32, step_percent: u32, bonus_per_step: i32, max_bonus_percent: i32 },
-    Perception { perception_type: PerceptionType, range: u32 },
-    DamageToMp { ratio_percent: i32 },
 }
 ```
 
@@ -226,7 +229,7 @@ effects: [
                     stackable: true,
                     while_active: [EmitLight { light_type: Dim, range: 2 }],
                     per_turn_effects: [Leaf { who: Target, effect: HpEffect {
-                        value_percent: -20,
+                        scaling: Scaling { source: Caster, attribute: MagicalAttack, value_percent: -20 },
                     }}],
                     end_conditions: [Duration(2)],
                 },

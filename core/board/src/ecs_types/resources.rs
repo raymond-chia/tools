@@ -1,9 +1,9 @@
 //! ECS World Resource 定義
 
 use crate::domain::alias::{Coord, ID, SkillName, TypeName};
-use crate::domain::core_types::TurnEntry;
+use crate::domain::core_types::{SkillType, TurnEntry};
 use crate::ecs_types::components::Position;
-use crate::loader_schema::{Faction, ObjectType, SkillType, UnitType};
+use crate::loader_schema::{Faction, ObjectType, UnitType};
 use bevy_ecs::prelude::Resource;
 use std::collections::{HashMap, HashSet};
 

@@ -138,7 +138,7 @@ GenericEditorState 的方法：
 - `pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String` - 取得懸停提示資訊
 - `pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapshot)` - 渲染詳情面板
 - `pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle>` - 取得敵方單位
-- `pub fn get_faction_color(factions: &[Faction], unit_faction_id: ID) -> Color32` - 取得陣營顏色
+- `pub fn get_faction_color(factions: &HashMap<ID, Faction>, unit_faction_id: ID) -> Color32` - 取得陣營顏色
 - `pub fn get_unit_abbr(unit_name: &str) -> String` - 取得單位名稱縮寫
 
 ### editor/tabs/level_tab/deployment.rs

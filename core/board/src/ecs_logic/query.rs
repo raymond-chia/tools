@@ -1,9 +1,10 @@
 use super::clone_component;
 use crate::ecs_types::components::{
-    AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, CurrentHp, CurrentMp,
-    Evasion, Fortitude, Hit, HpModify, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
-    Movement, MovementUsed, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
-    Position, Reaction, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction, Will,
+    Accuracy, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, ContactEffects,
+    CurrentHp, CurrentMp, Evasion, Fortitude, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
+    MovementPoint, MovementUsed, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
+    Position, ReactionPoint, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
+    Will,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, LevelConfig};
 use crate::error::{DataError, Result};
@@ -71,7 +72,7 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
                 max_mp: clone_component!(entity_ref, MaxMp),
                 current_mp: clone_component!(entity_ref, CurrentMp),
                 initiative: clone_component!(entity_ref, Initiative),
-                hit: clone_component!(entity_ref, Hit),
+                accuracy: clone_component!(entity_ref, Accuracy),
                 evasion: clone_component!(entity_ref, Evasion),
                 block: clone_component!(entity_ref, Block),
                 block_protection: clone_component!(entity_ref, BlockProtection),
@@ -81,8 +82,8 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
                 fortitude: clone_component!(entity_ref, Fortitude),
                 reflex: clone_component!(entity_ref, Reflex),
                 will: clone_component!(entity_ref, Will),
-                movement: clone_component!(entity_ref, Movement),
-                reaction: clone_component!(entity_ref, Reaction),
+                movement_point: clone_component!(entity_ref, MovementPoint),
+                reaction_point: clone_component!(entity_ref, ReactionPoint),
             },
             movement_used: clone_component!(entity_ref, MovementUsed),
         };
@@ -116,7 +117,7 @@ pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQuer
             occupant: clone_component!(entity_ref, Occupant),
             occupant_type_name: clone_component!(entity_ref, OccupantTypeName),
             terrain_movement_cost: clone_component!(entity_ref, TerrainMovementCost),
-            hp_modify: clone_component!(entity_ref, HpModify),
+            contact_effects: clone_component!(entity_ref, ContactEffects),
         };
         let blocks_sight = entity_ref.get::<BlocksSight>().is_some();
         let blocks_sound = entity_ref.get::<BlocksSound>().is_some();

@@ -9,9 +9,10 @@ use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::MessageState;
 use bevy_ecs::world::World;
 use board::domain::alias::TypeName;
+use board::domain::core_types::SkillType;
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
-use board::loader_schema::{LevelType, ObjectType, SkillType, UnitType};
+use board::loader_schema::{LevelType, ObjectType, UnitType};
 use std::collections::HashSet;
 
 /// 拖曳物體的類型和索引

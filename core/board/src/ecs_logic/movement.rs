@@ -3,7 +3,7 @@
 use crate::domain::alias::{ID, MovementCost};
 use crate::domain::constants::BASIC_MOVEMENT_COST;
 use crate::ecs_logic::query::{get_all_objects, get_all_units, get_board, get_level_config};
-use crate::ecs_types::components::{Movement, MovementUsed, Occupant, Position, UnitFaction};
+use crate::ecs_types::components::{MovementPoint, MovementUsed, Occupant, Position, UnitFaction};
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
@@ -28,7 +28,13 @@ pub fn get_reachable_positions(
 ) -> Result<HashMap<Position, ReachableInfo>> {
     // 查詢單位的位置、陣營與移動資訊
     let (unit_pos, faction, movement, movement_used) = world
-        .query::<(&Occupant, &Position, &UnitFaction, &Movement, &MovementUsed)>()
+        .query::<(
+            &Occupant,
+            &Position,
+            &UnitFaction,
+            &MovementPoint,
+            &MovementUsed,
+        )>()
         .iter(world)
         .find(|(occ, _, _, _, _)| **occ == occupant)
         .map(|(_, pos, unit_faction, movement, used)| {
