@@ -1,8 +1,4 @@
 {
-  "statusLine": {
-    "type": "command",
-    "command": "bash D:/Mega/prog/rust/tools/.claude/statusline/statusline-command.sh"
-  },
   "permissions": {
     "allow": [
       "Bash(cargo test:*)",
@@ -23,5 +19,9 @@
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash D:/Mega/prog/rust/tools/.claude/statusline/statusline-command.sh"
   }
 }

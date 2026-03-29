@@ -3,7 +3,7 @@
 use crate::domain::alias::{Coord, SkillName, TypeName};
 use crate::ecs_types::components::Occupant;
 use serde::{Deserialize, Serialize};
-use strum_macros::EnumIter;
+use strum_macros::{Display, EnumIter};
 
 // ============================================================================
 // 回合系統
@@ -31,7 +31,7 @@ pub struct TurnEntry {
 macro_rules! define_attributes {
     ($(($field:ident, $variant:ident)),* $(,)?) => {
         /// 角色屬性類型
-        #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, EnumIter)]
+        #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display, EnumIter)]
         pub enum Attribute {
             #[default]
             $($variant,)*
@@ -62,23 +62,15 @@ define_attributes!(
 // ============================================================================
 
 /// 技能標籤
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum SkillTag {
     #[default]
     UsableAfterDoubleMove,
     AllowedDuringGrabbing,
 }
 
-/// 傷害類型
-#[derive(Debug, Default, Serialize, Deserialize, EnumIter)]
-pub enum AttackStyle {
-    #[default]
-    Physical,
-    Magical,
-}
-
 /// DC 檢定類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum DcType {
     #[default]
     Fortitude,
@@ -87,7 +79,7 @@ pub enum DcType {
 }
 
 /// 效果目標
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum CasterOrTarget {
     Caster,
     #[default]
@@ -95,7 +87,7 @@ pub enum CasterOrTarget {
 }
 
 /// 目標過濾條件
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum TargetFilter {
     #[default]
     Any,
@@ -107,7 +99,7 @@ pub enum TargetFilter {
 }
 
 /// 強制位移方向
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum MoveDirection {
     #[default]
     AwayFromCaster,
@@ -117,7 +109,7 @@ pub enum MoveDirection {
 }
 
 /// 範圍形狀
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum Area {
     #[default]
     Single,
@@ -133,7 +125,7 @@ pub enum Area {
 }
 
 /// 目標選擇方式
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum TargetSelection {
     #[default]
     Unit,
@@ -141,7 +133,7 @@ pub enum TargetSelection {
 }
 
 /// 反應觸發類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum ReactionTrigger {
     #[default]
     AttackOfOpportunity,
@@ -149,7 +141,7 @@ pub enum ReactionTrigger {
 }
 
 /// 效果條件
-#[derive(Debug, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum EffectCondition {
     HitCheck {
         accuracy_bonus: i32,
@@ -162,7 +154,7 @@ pub enum EffectCondition {
 }
 
 /// Buff 結束條件（多個條件之間為 OR 關係）
-#[derive(Debug, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum EndCondition {
     Duration(u32),
     TargetSavesPerTurn,
@@ -173,14 +165,14 @@ pub enum EndCondition {
 }
 
 /// 感知類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum PerceptionType {
     #[default]
     Auditory,
 }
 
 /// 光源類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum LightType {
     #[default]
     Bright,
@@ -224,7 +216,7 @@ pub struct Scaling {
 // ============================================================================
 
 /// 效果節點（遞迴巢狀結構）
-#[derive(Debug, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum EffectNode {
     Area {
         area: Area,
@@ -244,7 +236,7 @@ pub enum EffectNode {
 }
 
 /// 技能效果
-#[derive(Debug, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum Effect {
     HpEffect {
         scaling: Scaling,
@@ -273,7 +265,7 @@ pub enum Effect {
 }
 
 /// 持續性效果（被動技能與 Buff 共用）
-#[derive(Debug, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum ContinuousEffect {
     AttributeFlat {
         attribute: Attribute,
@@ -317,7 +309,7 @@ pub enum ContinuousEffect {
 // ============================================================================
 
 /// 技能類型定義
-#[derive(Debug, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum SkillType {
     Active {
         name: SkillName,
@@ -407,14 +399,6 @@ impl Default for SkillType {
 }
 
 impl SkillType {
-    pub fn set_name(&mut self, name: String) {
-        match self {
-            Self::Active { name: n, .. } => *n = name,
-            Self::Reaction { name: n, .. } => *n = name,
-            Self::Passive { name: n, .. } => *n = name,
-        }
-    }
-
     /// 獲取技能名稱
     pub fn name(&self) -> &SkillName {
         match self {
