@@ -4,17 +4,30 @@ use crate::constants::*;
 use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::MessageState;
 use crate::utils::dnd::render_dnd_handle;
+use crate::utils::search::{
+    combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
+};
+use board::domain::alias::TypeName;
 use board::domain::core_types::{
     Area, Attribute, BuffType, ContinuousEffect, Effect, EffectCondition, EffectNode, EndCondition,
     Scaling, SkillTag, SkillType, Target, TriggeringSource,
 };
+use std::collections::HashSet;
 use std::fmt::Display;
+use std::mem::discriminant;
 use strum::IntoEnumIterator;
+
+/// 技能編輯器的 UI 狀態
+#[derive(Debug, Default)]
+pub struct SkillTabUIState {
+    pub available_objects: Vec<TypeName>,
+    pub object_search_query: String,
+}
 
 // ==================== EditorItem 實作 ====================
 
 impl EditorItem for SkillType {
-    type UIState = ();
+    type UIState = SkillTabUIState;
 
     fn name(&self) -> &str {
         &self.name()
@@ -34,7 +47,179 @@ impl EditorItem for SkillType {
 
     fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String> {
         validate_name(self, all_items, editing_index)?;
+
+        // 驗證 tags 不重複
+        let tags = match self {
+            Self::Active { tags, .. }
+            | Self::Reaction { tags, .. }
+            | Self::Passive { tags, .. } => tags,
+        };
+        let mut seen_tags = HashSet::new();
+        for tag in tags {
+            let tag_str = tag.to_string();
+            if !seen_tags.insert(tag_str.clone()) {
+                return Err(format!("標籤「{tag_str}」重複"));
+            }
+        }
+
+        match self {
+            Self::Active {
+                target, effects, ..
+            } => {
+                validate_target(target)?;
+                validate_effect_nodes(effects)?;
+            }
+            Self::Reaction {
+                triggering_unit,
+                effects,
+                ..
+            } => {
+                validate_triggering_source(triggering_unit)?;
+                validate_effect_nodes(effects)?;
+            }
+            Self::Passive { effects, .. } => {
+                validate_continuous_effects(effects)?;
+            }
+        }
+
         Ok(())
+    }
+}
+
+// ==================== 驗證函數 ====================
+
+fn validate_area(area: &Area) -> Result<(), String> {
+    match area {
+        Area::Single => Ok(()),
+        Area::Diamond { radius } => {
+            if *radius < 1 {
+                return Err("Diamond 半徑必須 >= 1".to_string());
+            }
+            Ok(())
+        }
+        Area::Cross { length } => {
+            if *length < 1 {
+                return Err("Cross 長度必須 >= 1".to_string());
+            }
+            Ok(())
+        }
+        Area::Line { length } => {
+            if *length < 1 {
+                return Err("Line 長度必須 >= 1".to_string());
+            }
+            Ok(())
+        }
+    }
+}
+
+fn validate_target(target: &Target) -> Result<(), String> {
+    if target.range.0 > target.range.1 {
+        return Err(format!(
+            "射程下限 {} 不能大於上限 {}",
+            target.range.0, target.range.1
+        ));
+    }
+    validate_area(&target.area)
+}
+
+fn validate_triggering_source(source: &TriggeringSource) -> Result<(), String> {
+    if source.source_range.0 > source.source_range.1 {
+        return Err(format!(
+            "觸發範圍下限 {} 不能大於上限 {}",
+            source.source_range.0, source.source_range.1
+        ));
+    }
+    Ok(())
+}
+
+fn validate_end_conditions(conditions: &[EndCondition]) -> Result<(), String> {
+    let mut seen = HashSet::new();
+    for condition in conditions {
+        // discriminant 只比較 variant 種類，忽略內部值
+        if !seen.insert(discriminant(condition)) {
+            return Err(format!("結束條件「{condition}」重複"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_continuous_effects(effects: &[ContinuousEffect]) -> Result<(), String> {
+    for effect in effects {
+        match effect {
+            ContinuousEffect::HpRatioScaling { step_percent, .. } => {
+                if *step_percent > 100 {
+                    return Err(format!(
+                        "step_percent 必須介於 0 到 100，目前為 {step_percent}"
+                    ));
+                }
+            }
+            ContinuousEffect::AttributeFlat { .. }
+            | ContinuousEffect::AttributeScaling { .. }
+            | ContinuousEffect::NearbyAllyScaling { .. }
+            | ContinuousEffect::Perception { .. }
+            | ContinuousEffect::DamageToMp { .. }
+            | ContinuousEffect::EmitLight { .. }
+            | ContinuousEffect::Blinded => {}
+        }
+    }
+    Ok(())
+}
+
+fn validate_effect_condition(condition: &EffectCondition) -> Result<(), String> {
+    match condition {
+        EffectCondition::HitCheck { crit_bonus, .. } => {
+            if *crit_bonus < 0 || *crit_bonus > 100 {
+                return Err(format!("暴擊加成必須介於 0 到 100，目前為 {crit_bonus}"));
+            }
+        }
+        EffectCondition::DcCheck { .. } => {}
+    }
+    Ok(())
+}
+
+fn validate_buff(buff: &BuffType) -> Result<(), String> {
+    validate_end_conditions(&buff.end_conditions)?;
+    validate_continuous_effects(&buff.while_active)?;
+    validate_effect_nodes(&buff.per_turn_effects)
+}
+
+fn validate_effect_nodes(nodes: &[EffectNode]) -> Result<(), String> {
+    for node in nodes {
+        match node {
+            EffectNode::Area { area, nodes, .. } => {
+                validate_area(area)?;
+                validate_effect_nodes(nodes)?;
+            }
+            EffectNode::Branch {
+                condition,
+                on_success,
+                on_failure,
+                ..
+            } => {
+                validate_effect_condition(condition)?;
+                validate_effect_nodes(on_success)?;
+                validate_effect_nodes(on_failure)?;
+            }
+            EffectNode::Leaf { effect, .. } => {
+                validate_effect(effect)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_effect(effect: &Effect) -> Result<(), String> {
+    match effect {
+        Effect::ApplyBuff { buff } => validate_buff(buff),
+        Effect::SpawnObject {
+            contact_effects, ..
+        } => validate_effect_nodes(contact_effects),
+        Effect::Trample { .. } => Ok(()),
+        Effect::HpEffect { .. }
+        | Effect::MpEffect { .. }
+        | Effect::ForcedMove { .. }
+        | Effect::AllowRemainingMovement
+        | Effect::SwapPosition => Ok(()),
     }
 }
 
@@ -140,7 +325,7 @@ fn render_simple_vec<E, F>(
 pub fn render_form(
     ui: &mut egui::Ui,
     skill: &mut SkillType,
-    _ui_state: &mut (),
+    ui_state: &mut SkillTabUIState,
     _message_state: &mut MessageState,
 ) {
     // 步驟 2：variant 切換
@@ -180,7 +365,7 @@ pub fn render_form(
             ui.add_space(SPACING_SMALL);
             ui.separator();
             ui.heading("效果節點");
-            render_effect_node_list(ui, effects, "active_effects", 0);
+            render_effect_node_list(ui, effects, "active_effects", 0, ui_state);
         }
         SkillType::Reaction {
             triggering_unit,
@@ -192,7 +377,7 @@ pub fn render_form(
             ui.add_space(SPACING_SMALL);
             ui.separator();
             ui.heading("效果節點");
-            render_effect_node_list(ui, effects, "reaction_effects", 0);
+            render_effect_node_list(ui, effects, "reaction_effects", 0, ui_state);
         }
         SkillType::Passive { effects, .. } => {
             ui.heading("持續效果");
@@ -223,9 +408,9 @@ fn render_variant_selector(ui: &mut egui::Ui, skill: &mut SkillType) {
 /// 渲染技能標籤列表
 fn render_skill_tags(ui: &mut egui::Ui, skill: &mut SkillType) {
     let tags = match skill {
-        SkillType::Active { tags, .. } => tags,
-        SkillType::Reaction { tags, .. } => tags,
-        SkillType::Passive { tags, .. } => tags,
+        SkillType::Active { tags, .. }
+        | SkillType::Reaction { tags, .. }
+        | SkillType::Passive { tags, .. } => tags,
     };
 
     render_simple_vec(ui, "標籤：", tags, "skill_tags", |ui, tag, id| {
@@ -294,14 +479,14 @@ fn render_reorderable_list<T: Display>(
     ui: &mut egui::Ui,
     items: &mut Vec<T>,
     id_salt: &str,
-    render_item: impl Fn(&mut egui::Ui, &mut T, &str),
+    mut render_item: impl FnMut(&mut egui::Ui, &mut T, &str),
 ) {
     let mut to_remove = None;
     let mut dnd_result = None;
 
     for (idx, item) in items.iter_mut().enumerate() {
         let item_id = egui::Id::new(id_salt).with(idx);
-        let header_label = format!("#{} {}", idx, item);
+        let header_label = format!("#{} {}", idx + 1, item);
 
         ui.horizontal(|ui| {
             if let Some(result) = render_dnd_handle(ui, item_id, idx, "☰") {
@@ -435,15 +620,22 @@ fn render_effect_node_list(
     nodes: &mut Vec<EffectNode>,
     id_salt: &str,
     depth: usize,
+    ui_state: &mut SkillTabUIState,
 ) {
     render_reorderable_list(ui, nodes, id_salt, |ui, node, child_id| {
-        render_effect_node(ui, node, child_id, depth);
+        render_effect_node(ui, node, child_id, depth, ui_state);
     });
 
     enum_add_buttons(ui, nodes, &format!("{id_salt}_add"), 3);
 }
 
-fn render_effect_node(ui: &mut egui::Ui, node: &mut EffectNode, id_salt: &str, depth: usize) {
+fn render_effect_node(
+    ui: &mut egui::Ui,
+    node: &mut EffectNode,
+    id_salt: &str,
+    depth: usize,
+    ui_state: &mut SkillTabUIState,
+) {
     match node {
         EffectNode::Area {
             area,
@@ -455,7 +647,13 @@ fn render_effect_node(ui: &mut egui::Ui, node: &mut EffectNode, id_salt: &str, d
             ui.add_space(SPACING_SMALL);
             ui.label("子節點：");
             ui.indent(format!("{id_salt}_children"), |ui| {
-                render_effect_node_list(ui, nodes, &format!("{id_salt}_nodes"), depth + 1);
+                render_effect_node_list(
+                    ui,
+                    nodes,
+                    &format!("{id_salt}_nodes"),
+                    depth + 1,
+                    ui_state,
+                );
             });
         }
         EffectNode::Branch {
@@ -469,23 +667,40 @@ fn render_effect_node(ui: &mut egui::Ui, node: &mut EffectNode, id_salt: &str, d
             ui.add_space(SPACING_SMALL);
             ui.label("成功時：");
             ui.indent(format!("{id_salt}_success"), |ui| {
-                render_effect_node_list(ui, on_success, &format!("{id_salt}_succ"), depth + 1);
+                render_effect_node_list(
+                    ui,
+                    on_success,
+                    &format!("{id_salt}_succ"),
+                    depth + 1,
+                    ui_state,
+                );
             });
             ui.label("失敗時：");
             ui.indent(format!("{id_salt}_failure"), |ui| {
-                render_effect_node_list(ui, on_failure, &format!("{id_salt}_fail"), depth + 1);
+                render_effect_node_list(
+                    ui,
+                    on_failure,
+                    &format!("{id_salt}_fail"),
+                    depth + 1,
+                    ui_state,
+                );
             });
         }
         EffectNode::Leaf { who, effect } => {
             enum_combo_box(ui, "效果對象：", who, &format!("{id_salt}_who"));
-            render_effect(ui, effect, &format!("{id_salt}_effect"));
+            render_effect(ui, effect, &format!("{id_salt}_effect"), ui_state);
         }
     }
 }
 
 // ==================== 步驟 7：Effect ====================
 
-fn render_effect(ui: &mut egui::Ui, effect: &mut Effect, id_salt: &str) {
+fn render_effect(
+    ui: &mut egui::Ui,
+    effect: &mut Effect,
+    id_salt: &str,
+    ui_state: &mut SkillTabUIState,
+) {
     enum_combo_box(ui, "效果類型：", effect, &format!("{id_salt}_type"));
 
     ui.add_space(SPACING_SMALL);
@@ -498,7 +713,7 @@ fn render_effect(ui: &mut egui::Ui, effect: &mut Effect, id_salt: &str) {
             drag_value(ui, "MP 值：", value);
         }
         Effect::ApplyBuff { buff } => {
-            render_buff_type(ui, buff, &format!("{id_salt}_buff"));
+            render_buff_type(ui, buff, &format!("{id_salt}_buff"), ui_state);
         }
         Effect::ForcedMove {
             direction,
@@ -516,10 +731,7 @@ fn render_effect(ui: &mut egui::Ui, effect: &mut Effect, id_salt: &str) {
             duration,
             contact_effects,
         } => {
-            ui.horizontal(|ui| {
-                ui.label("物件類型：");
-                ui.text_edit_singleline(object_type);
-            });
+            render_object_type_selector(ui, object_type, ui_state, id_salt);
             ui.horizontal(|ui| {
                 let mut has_duration = duration.is_some();
                 ui.checkbox(&mut has_duration, "持續時間");
@@ -542,6 +754,7 @@ fn render_effect(ui: &mut egui::Ui, effect: &mut Effect, id_salt: &str) {
                     contact_effects,
                     &format!("{id_salt}_contact_nodes"),
                     0,
+                    ui_state,
                 );
             });
         }
@@ -549,6 +762,46 @@ fn render_effect(ui: &mut egui::Ui, effect: &mut Effect, id_salt: &str) {
             ui.label("（無額外欄位）");
         }
     }
+}
+
+/// 渲染物件類型選擇器（含搜尋）
+fn render_object_type_selector(
+    ui: &mut egui::Ui,
+    object_type: &mut TypeName,
+    ui_state: &mut SkillTabUIState,
+    id_salt: &str,
+) {
+    if ui_state.available_objects.is_empty() {
+        ui.label("（尚未定義任何物件，請先到「物件」tab 創建物件）");
+        return;
+    }
+
+    let visible_objects =
+        filter_by_search(&ui_state.available_objects, &ui_state.object_search_query);
+    let hidden_count = ui_state.available_objects.len() - visible_objects.len();
+
+    ui.horizontal(|ui| {
+        ui.label("物件類型：");
+        combobox_with_dynamic_height(
+            &format!("{id_salt}_object_type"),
+            if object_type.is_empty() {
+                "選擇物件"
+            } else {
+                object_type
+            },
+            visible_objects.len(),
+        )
+        .show_ui(ui, |ui| {
+            render_search_input(ui, &mut ui_state.object_search_query);
+            render_filtered_options(
+                ui,
+                &visible_objects,
+                hidden_count,
+                object_type,
+                &ui_state.object_search_query,
+            );
+        });
+    });
 }
 
 /// 渲染 Scaling 結構
@@ -565,7 +818,12 @@ fn render_scaling(ui: &mut egui::Ui, scaling: &mut Scaling, id_salt: &str) {
 
 // ==================== 步驟 8：BuffType ====================
 
-fn render_buff_type(ui: &mut egui::Ui, buff: &mut BuffType, id_salt: &str) {
+fn render_buff_type(
+    ui: &mut egui::Ui,
+    buff: &mut BuffType,
+    id_salt: &str,
+    ui_state: &mut SkillTabUIState,
+) {
     ui.horizontal(|ui| {
         ui.label("可疊加：");
         ui.checkbox(&mut buff.stackable, "");
@@ -585,6 +843,7 @@ fn render_buff_type(ui: &mut egui::Ui, buff: &mut BuffType, id_salt: &str) {
             &mut buff.per_turn_effects,
             &format!("{id_salt}_perturn"),
             0,
+            ui_state,
         );
     });
 

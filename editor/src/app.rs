@@ -60,12 +60,21 @@ impl eframe::App for EditorApp {
                 tabs::object_tab::file_name(),
                 tabs::object_tab::render_form,
             ),
-            EditorTab::Skill => render_editor_ui(
-                ui,
-                &mut self.skill_editor,
-                tabs::skill_tab::file_name(),
-                tabs::skill_tab::render_form,
-            ),
+            EditorTab::Skill => {
+                self.skill_editor.ui_state.available_objects = self
+                    .object_editor
+                    .items
+                    .iter()
+                    .map(|obj| obj.name().to_string())
+                    .collect();
+
+                render_editor_ui(
+                    ui,
+                    &mut self.skill_editor,
+                    tabs::skill_tab::file_name(),
+                    tabs::skill_tab::render_form,
+                )
+            }
             EditorTab::Unit => {
                 self.unit_editor.ui_state.available_skills = self
                     .skill_editor
