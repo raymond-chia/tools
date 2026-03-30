@@ -1,8 +1,8 @@
 use super::clone_component;
 use crate::ecs_types::components::{
-    Accuracy, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound, ContactEffects,
-    CurrentHp, CurrentMp, Evasion, Fortitude, Initiative, MagicalAttack, MagicalDc, MaxHp, MaxMp,
-    MovementPoint, MovementUsed, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
+    Accuracy, ActionState, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
+    ContactEffects, CurrentHp, CurrentMp, Evasion, Fortitude, Initiative, MagicalAttack, MagicalDc,
+    MaxHp, MaxMp, MovementPoint, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
     Position, ReactionPoint, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
     Will,
 };
@@ -85,7 +85,7 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
                 movement_point: clone_component!(entity_ref, MovementPoint),
                 reaction_point: clone_component!(entity_ref, ReactionPoint),
             },
-            movement_used: clone_component!(entity_ref, MovementUsed),
+            action_state: clone_component!(entity_ref, ActionState),
         };
         result.insert(position, bundle);
     }

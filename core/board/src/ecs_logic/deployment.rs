@@ -1,7 +1,7 @@
 use crate::domain::alias::{ID, TypeName};
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_types::components::{
-    MovementUsed, Occupant, OccupantTypeName, Position, Skills, Unit, UnitBundle, UnitFaction,
+    ActionState, Occupant, OccupantTypeName, Position, Skills, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
@@ -97,7 +97,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
         unit_faction: UnitFaction(PLAYER_FACTION_ID),
         skills: Skills(unit_type.skills.clone()),
         attributes,
-        movement_used: MovementUsed(0),
+        action_state: ActionState::Moved { cost: 0 },
     };
 
     // 第二階段：resource 借用已結束，可以可變借用 world

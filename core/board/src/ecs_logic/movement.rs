@@ -3,7 +3,7 @@
 use crate::domain::alias::{ID, MovementCost};
 use crate::domain::constants::BASIC_MOVEMENT_COST;
 use crate::ecs_logic::query::{get_all_objects, get_all_units, get_board, get_level_config};
-use crate::ecs_types::components::{MovementPoint, MovementUsed, Occupant, Position, UnitFaction};
+use crate::ecs_types::components::{ActionState, MovementPoint, Occupant, Position, UnitFaction};
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
@@ -27,18 +27,22 @@ pub fn get_reachable_positions(
     occupant: Occupant,
 ) -> Result<HashMap<Position, ReachableInfo>> {
     // 查詢單位的位置、陣營與移動資訊
-    let (unit_pos, faction, movement, movement_used) = world
+    let (unit_pos, faction, movement_point, movement_used) = world
         .query::<(
             &Occupant,
             &Position,
             &UnitFaction,
             &MovementPoint,
-            &MovementUsed,
+            &ActionState,
         )>()
         .iter(world)
         .find(|(occ, _, _, _, _)| **occ == occupant)
-        .map(|(_, pos, unit_faction, movement, used)| {
-            (*pos, unit_faction.0, movement.0 as MovementCost, used.0)
+        .map(|(_, pos, unit_faction, movement_point, action_state)| {
+            let used = match action_state {
+                ActionState::Moved { cost } => *cost,
+                ActionState::Done => movement_point.0 as MovementCost * 2, // 已結束，無剩餘預算
+            };
+            (*pos, unit_faction.0, movement_point.0 as MovementCost, used)
         })
         .ok_or_else(|| BoardError::OccupantNotFound { occupant })?;
 
@@ -48,7 +52,7 @@ pub fn get_reachable_positions(
     let level_config = get_level_config(world)?;
 
     // 計算可用預算（2 倍移動力 - 已使用的）
-    let budget = movement * 2 - movement_used;
+    let budget = movement_point * 2 - movement_used;
 
     // 構建陣營 ID -> alliance ID 的對應表
     let faction_to_alliance: HashMap<ID, ID> = level_config
@@ -176,13 +180,23 @@ pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
         *pos = target;
     }
     {
-        let mut used =
+        let mut action_state =
             entity_mut
-                .get_mut::<MovementUsed>()
+                .get_mut::<ActionState>()
                 .ok_or_else(|| DataError::MissingComponent {
-                    name: short_type_name::<MovementUsed>(),
+                    name: short_type_name::<ActionState>(),
                 })?;
-        used.0 += cost_to_target;
+        match action_state.as_ref() {
+            ActionState::Moved { cost } => {
+                *action_state = ActionState::Moved {
+                    cost: cost + cost_to_target,
+                };
+            }
+            ActionState::Done => {
+                // 理論上不會到這裡，因為 budget 為 0 時 reachable 為空
+                unreachable!("ActionState::Done 時不應有可到達位置");
+            }
+        }
     }
 
     Ok(MoveResult {

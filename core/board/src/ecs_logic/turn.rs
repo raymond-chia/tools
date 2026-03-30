@@ -1,7 +1,7 @@
 //! 回合順序 ECS 操作函數
 
 use crate::domain::constants::PLAYER_FACTION_ID;
-use crate::ecs_types::components::{Initiative, MovementUsed, Occupant, Unit, UnitFaction};
+use crate::ecs_types::components::{ActionState, Initiative, Occupant, Unit, UnitFaction};
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
@@ -91,15 +91,16 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
         }
     }
 
-    // 重置當前單位的 MovementUsed
-    let (_, mut movement_used) = world
-        .query::<(&Occupant, &mut MovementUsed)>()
+    // 重置當前單位的 ActionState
+    // TODO 重置反應次數
+    let (_, mut action_state) = world
+        .query::<(&Occupant, &mut ActionState)>()
         .iter_mut(world)
         .find(|(occ, _)| **occ == current_occupant)
         .ok_or_else(|| BoardError::OccupantNotFound {
             occupant: current_occupant,
         })?;
-    movement_used.0 = 0;
+    *action_state = ActionState::Moved { cost: 0 };
 
     require_turn_order(world)
 }
@@ -109,15 +110,15 @@ pub fn can_delay_current_unit(world: &mut World) -> Result<bool> {
     let turn_order = require_turn_order(world)?;
     let current_occupant = turn_order.entries[turn_order.current_index].occupant;
 
-    let (_, movement_used) = world
-        .query::<(&Occupant, &MovementUsed)>()
+    let (_, action_state) = world
+        .query::<(&Occupant, &ActionState)>()
         .iter(world)
         .find(|(occ, _)| **occ == current_occupant)
         .ok_or_else(|| BoardError::OccupantNotFound {
             occupant: current_occupant,
         })?;
 
-    Ok(movement_used.0 == 0)
+    Ok(matches!(action_state, ActionState::Moved { cost: 0 }))
 }
 
 /// 延後當前單位到指定位置

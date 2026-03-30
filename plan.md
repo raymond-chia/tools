@@ -1,109 +1,98 @@
-# 實作 skill_tab.rs 技能編輯表單
+# 使用技能機制
 
 ## 目標與範圍
 
-為 `editor/src/tabs/skill_tab.rs` 的 `render_form` 實作完整的技能編輯表單，涵蓋 `SkillType` 的所有三個 variant（Active / Reaction / Passive）及其所有巢狀型別。
+在 core/board 實作「使用主動技能」的完整流程，從查詢可用技能到執行判定。效果暫時只寫 log，不實際套用（不扣 HP、不施加 Buff）。不處理反應技能。
 
 ## 設計決策
 
-1. **Variant 切換**：切換 Active / Reaction / Passive 時清空所有欄位，使用 `Default` 重建
-2. **簡單 Vec**（`Vec<SkillTag>`、`Vec<EndCondition>` 等）：平鋪顯示，每項旁邊放刪除按鈕，底部放新增按鈕，不支援排序
-3. **複雜 Vec**（`Vec<EffectNode>`、`Vec<ContinuousEffect>`）：用 `CollapsingHeader` 包每個項目，附拖曳 handle + 刪除按鈕，底部用 variant 按鈕新增（如 Area / Branch / Leaf 三個按鈕）
-4. **Enum 下拉**：所有簡單 enum（Attribute、DcType、CasterOrTarget、TargetFilter 等）都有 `EnumIter`，統一用 `ComboBox` 迭代產生下拉選項
+### 屬性儲存：應改為單一 struct component
 
-## 型別結構概覽
+- 所有場景都是整體存取，拆開只增加查詢簽名複雜度
+- 這是重構，不在這次範圍
 
+### 技能儲存：`Skills(Vec<SkillName>)` 單一 component
+
+- 所有場景都是遍歷全部技能，沒有「只查某個技能」的獨立需求
+- 數十個技能 × 幾十個單位，遍歷成本可忽略
+- 拆成獨立 entity 增加關聯管理複雜度，換來的 query 過濾能力在這個規模用不到
+- 維持現狀，不需修改
+
+### AP 追蹤：`ActionState` enum component
+
+```rust
+enum ActionState {
+    Moved { cost: MovementCost },
+    Done,
+}
 ```
-SkillType
-├── Active  { name, tags: Vec<SkillTag>, cost, target: Target, effects: Vec<EffectNode> }
-├── Reaction { name, tags: Vec<SkillTag>, cost, triggering_unit: TriggeringSource, effects: Vec<EffectNode> }
-└── Passive { name, tags: Vec<SkillTag>, effects: Vec<ContinuousEffect> }
 
-EffectNode（遞迴）
-├── Area { area: Area, filter: TargetFilter, nodes: Vec<EffectNode> }
-├── Branch { who: CasterOrTarget, condition: EffectCondition, on_success: Vec<EffectNode>, on_failure: Vec<EffectNode> }
-└── Leaf { who: CasterOrTarget, effect: Effect }
+初始值 `Moved { cost: 0 }`。
 
-Effect
-├── HpEffect { scaling: Scaling }
-├── MpEffect { value }
-├── ApplyBuff { buff: BuffType }
-├── ForcedMove { direction: MoveDirection, distance }
-├── AllowRemainingMovement
-├── SwapPosition
-├── Trample { distance, scaling: Scaling }
-└── SpawnObject { object_type, duration, contact_effects: Vec<EffectNode> }
+| 比較方案                          | 優點                                   | 缺點                                       |
+| --------------------------------- | -------------------------------------- | ------------------------------------------ |
+| `Moved/Done` enum                 | 一個欄位管所有狀態，不可能出現矛盾狀態 | 移動消耗綁在 enum 裡，其他系統要從 enum 取 |
+| `RemainingAp(u8)`                 | 最簡單                                 | 無法表達「技能只能用一次」，語義丟失       |
+| `MovementUsed + SkillUsed` 兩欄位 | 各自語義清晰                           | 隱含約束沒有型別保護，可能出現矛盾狀態     |
 
-BuffType { stackable, while_active: Vec<ContinuousEffect>, per_turn_effects: Vec<EffectNode>, end_conditions: Vec<EndCondition> }
-```
+選擇 enum 方案，因為規則本身就是狀態機。
+
+### 查詢可選範圍：由 ecs_logic 提供，不讓 UI 自行計算
+
+- UI 不應持有 World 查詢邏輯
+- 拆成兩個函數：可選格子 + AOE 預覽
+
+## 玩家使用技能流程
+
+### 前提
+
+- `start_new_round` 已呼叫，有 active unit
+- 單位的 `ActionState` 為 `Moved { .. }`（未 Done）
+
+### 步驟
+
+1. **查詢可用技能** — `get_available_skills(world) -> Vec<AvailableSkill>`
+   - 從 TurnOrder 取得當前行動單位
+   - 查詢 `Skills` component → 對應 `GameData.skill_map` 取得 Active 技能
+   - MP 不足的技能也回傳，標記 `usable: false`（供 UI 顯示灰色）
+   - 只回傳 Active 技能
+
+2. **查詢可選目標格子** — `get_skill_targetable_positions(world, skill_name) -> Vec<Position>`
+   - 根據技能的 `Target.range` + 施放者位置，計算射程內格子
+   - 根據 `Target.selection`（Unit/Ground）和 `Target.selectable_filter` 過濾
+   - 回傳可選格子集合（供 UI 高亮）
+
+3. **預覽 AOE 影響範圍** — `preview_skill_affected_positions(world, skill_name, target_pos) -> Vec<Position>`
+   - 玩家 hover 某格時呼叫
+   - 根據技能的 `Area` 計算影響格子（內部呼叫 `compute_affected_positions`）
+
+4. **執行技能** — `execute_skill(world, skill_name, targets: Vec<Position>) -> SkillResult`
+   - 驗證 `ActionState` 不是 `Done`
+   - 驗證 MP 足夠 → 扣除 MP
+   - 呼叫 `select_skill_targets` 驗證並解析目標
+   - 對每個目標：根據 `EffectNode` 遍歷效果樹，遇到判定（Hit/DC）執行檢定
+   - 效果暫時只寫 log
+   - 設定 `ActionState` 為 `Done`
+   - 回傳 `SkillResult`（每個目標的判定結果）
 
 ## 實作步驟
 
-### 步驟 1：enum 下拉輔助函數
-
-建立通用的 enum ComboBox 渲染函數，利用 `EnumIter + Default + Debug + Clone + PartialEq`：
-- `fn enum_combo_box<E>(ui, label, value: &mut E, id_salt)` — 適用於所有簡單 enum
-
-### 步驟 2：SkillType variant 選擇 + 共用欄位
-
-- 三個按鈕或 radio 切換 Active / Reaction / Passive，切換時重建為 `Default`
-- 渲染共用欄位：name（text edit）、tags（簡單 Vec）、cost（DragValue，Passive 沒有）
-
-### 步驟 3：Target 結構表單（Active 專用）
-
-- range: (Coord, Coord) — 兩個 DragValue
-- selection: TargetSelection — enum 下拉
-- selectable_filter: TargetFilter — enum 下拉
-- count: usize — DragValue
-- allow_same_target: bool — checkbox
-- area: Area — enum 下拉 + 根據 variant 顯示額外欄位（radius / length）
-
-### 步驟 4：TriggeringSource 結構表單（Reaction 專用）
-
-- source_range: (Coord, Coord) — 兩個 DragValue
-- source_filter: TargetFilter — enum 下拉
-- trigger: ReactionTrigger — enum 下拉
-
-### 步驟 5：ContinuousEffect 列表（Passive 專用 + BuffType 內共用）
-
-- CollapsingHeader + 拖曳 handle + 刪除按鈕
-- 底部用 variant 按鈕新增（AttributeFlat / AttributeScaling / NearbyAllyScaling / HpRatioScaling / Perception / DamageToMp / EmitLight / Blinded）
-- 每個 variant 展開對應欄位
-
-### 步驟 6：EffectNode 列表（Active / Reaction 的 effects）
-
-- CollapsingHeader + 拖曳 handle + 刪除按鈕
-- 底部三個按鈕：Area / Branch / Leaf
-- Area：area 下拉 + filter 下拉 + 遞迴 Vec<EffectNode>
-- Branch：who 下拉 + condition（EffectCondition）+ on_success/on_failure 各自遞迴 Vec<EffectNode>
-- Leaf：who 下拉 + Effect 表單
-
-### 步驟 7：Effect 表單
-
-- variant 下拉或按鈕選擇
-- 各 variant 欄位：Scaling 結構、DragValue、BuffType 子表單、MoveDirection 下拉等
-
-### 步驟 8：BuffType 子表單
-
-- stackable: checkbox
-- while_active: Vec<ContinuousEffect>（複用步驟 5）
-- per_turn_effects: Vec<EffectNode>（複用步驟 6）
-- end_conditions: Vec<EndCondition>（簡單 Vec）
-
-### 步驟 9：EndCondition 列表
-
-- variant 下拉 + 對應欄位（Duration 需要 u32 輸入等）
-- 簡單 Vec 操作（新增/刪除，無排序）
-
-### 步驟 10：EffectCondition 表單
-
-- HitCheck：accuracy_bonus + crit_bonus（兩個 DragValue）
-- DcCheck：dc_type 下拉 + dc_bonus DragValue
+1. 新增 `ActionState` enum component
+   - 加入 `UnitBundle`
+   - 修改 `spawner` 初始化為 `Moved { cost: 0 }`
+2. 修改 `execute_move` 改用 `ActionState` 取代 `MovementUsed`
+3. 修改 `end_current_turn` 重置 `ActionState` 為 `Moved { cost: 0 }`
+4. 在 `ecs_logic/` 新增 `skill.rs`，實作：
+   - `get_available_skills`
+   - `get_skill_targetable_positions`
+   - `preview_skill_affected_positions`
+   - `execute_skill`
+5. 在 `logic/skill.rs` 補充需要的純邏輯函數（如計算射程內格子）
+6. 撰寫測試
 
 ## 注意事項
 
-- EffectNode 是遞迴結構，渲染函數需要接受深度參數或用 unique id_salt 避免 egui ID 衝突
-- CollapsingHeader 的 id 必須唯一（用 index + 深度 + 路徑組合）
-- `SkillType` 的 `name()` / `set_name()` 是方法不是欄位，render_form 中直接操作即可
-- 所有 enum 都已 derive `EnumIter + Default`，可統一處理
-- 拖曳排序可複用 `crate::utils::dnd::render_dnd_handle`
+- `MovementUsed` component 被 `ActionState` 取代，需移除並更新所有引用處
+- `can_delay_current_unit` 目前檢查 `MovementUsed`，需改為檢查 `ActionState` 是否為 `Moved { cost: 0 }`
+- 效果執行（HpEffect、ApplyBuff、ForcedMove 等）留待下一次實作
+- 反應技能的執行留待下一次實作

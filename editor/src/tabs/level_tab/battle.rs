@@ -3,6 +3,7 @@
 use super::battlefield::{self, Snapshot};
 use super::{LevelTabMode, LevelTabUIState, MessageState};
 use crate::constants::*;
+use board::domain::alias::MovementCost;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
@@ -253,8 +254,13 @@ fn render_battlefield(
                 .values()
                 .find(|b| b.occupant == occupant)
                 .ok_or_else(|| board::error::BoardError::OccupantNotFound { occupant })?;
-            let remaining =
-                unit_bundle.attributes.movement_point.0 - unit_bundle.movement_used.0 as i32;
+            let cost_used = match &unit_bundle.action_state {
+                board::ecs_types::components::ActionState::Moved { cost } => *cost as i32,
+                board::ecs_types::components::ActionState::Done => {
+                    unit_bundle.attributes.movement_point.0 * 2
+                }
+            };
+            let remaining = unit_bundle.attributes.movement_point.0 - cost_used;
             (reachable, remaining, Some(unit_bundle.position))
         }
         _ => (HashMap::new(), 0, None),

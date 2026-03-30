@@ -111,9 +111,16 @@ define_attribute_components!(
     (reaction_point, ReactionPoint),
 );
 
-/// 單位已使用的移動力
+/// 單位的行動狀態
+///
+/// 初始值為 `Moved { cost: 0 }`，使用技能後變為 `Done`
 #[derive(Debug, Clone, Component)]
-pub struct MovementUsed(pub MovementCost);
+pub enum ActionState {
+    /// 尚未使用技能，記錄已消耗的移動力
+    Moved { cost: MovementCost },
+    /// 已使用技能，回合結束
+    Done,
+}
 
 // ============================================================================
 // 物件專用 Components
@@ -158,7 +165,7 @@ pub struct UnitBundle {
     pub unit_faction: UnitFaction,
     pub skills: Skills,
     pub attributes: AttributeBundle,
-    pub movement_used: MovementUsed,
+    pub action_state: ActionState,
 }
 
 /// 物件 Entity 的完整 Bundle

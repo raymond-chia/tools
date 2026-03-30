@@ -1,6 +1,6 @@
 use crate::domain::alias::ID;
 use crate::ecs_types::components::{
-    BlocksSight, BlocksSound, ContactEffects, MovementUsed, Object, ObjectBundle, Occupant,
+    ActionState, BlocksSight, BlocksSound, ContactEffects, Object, ObjectBundle, Occupant,
     OccupantTypeName, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
@@ -54,7 +54,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 unit_faction: UnitFaction(placement.faction_id),
                 skills: Skills(unit_type.skills.clone()),
                 attributes,
-                movement_used: MovementUsed(0),
+                action_state: ActionState::Moved { cost: 0 },
             });
         }
 
