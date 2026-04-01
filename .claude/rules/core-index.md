@@ -19,7 +19,9 @@
 
 ### Function 集簽名
 
-保留完整簽名（pub fn、trait 方法），移除實現細節, 常數值, enum, struct
+保留完整簽名（pub fn、pub struct、pub trait、pub enum）。
+不記錄 `impl Trait for Type`（trait 實現）。
+移除實現細節、常數值。
 
 例子：
 
@@ -38,17 +40,18 @@ core/board/
 │   │   ├── constants.rs  - 遊戲常數定義
 │   │   └── core_types.rs - 遊戲核心資料型別定義
 │   ├── ecs_types/        - ECS 型別定義
-│   │   ├── components.rs - ECS Component 定義
+│   │   ├── components.rs - ECS Component 定義（只存資料，derive Component 和 Debug，禁止 impl）
 │   │   └── resources.rs  - ECS World Resource 定義
-│   ├── ecs_logic/        - ECS 操作函數
+│   ├── ecs_logic/        - ECS 操作函數（讀寫 World，整合 logic）
 │   │   ├── mod.rs        - 模組宣告
 │   │   ├── loader.rs     - 遊戲資料載入函數
 │   │   ├── spawner.rs    - 關卡生成函數
 │   │   ├── deployment.rs - 單位部署函數
 │   │   ├── query.rs      - World 查詢函數
 │   │   ├── movement.rs   - 單位移動 ECS 操作函數
-│   │   └── turn.rs       - 回合順序 ECS 操作函數
-│   └── logic/            - 核心業務邏輯
+│   │   ├── turn.rs       - 回合順序 ECS 操作函數
+│   │   └── skill.rs      - 技能系統 ECS 操作函數
+│   └── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
 │       ├── mod.rs        - 邏輯模組定義
 │       ├── board.rs      - 棋盤驗證邏輯
 │       ├── id_generator.rs - ID 產生邏輯
@@ -81,6 +84,7 @@ core/board/
         │   ├── mod.rs    - 模組宣告
         │   ├── test_board.rs - 棋盤驗證測試
         │   ├── test_movement.rs - 移動邏輯測試
+        │   ├── test_collect_move_reactions.rs - 移動反應收集測試
         │   ├── test_compute_affected_positions.rs - AOE 計算測試
         │   └── test_select_skill_targets.rs - 技能目標選擇測試
         ├── turn/         - 回合順序測試
@@ -89,61 +93,9 @@ core/board/
         └── unit/         - 單位屬性與 ID 測試
             ├── mod.rs    - 模組宣告
             ├── test_attribute.rs - 屬性計算測試
-            └── test_id.rs - ID 生成測試
+            ├── test_id.rs - ID 生成測試
+            └── test_skill_check.rs - 命中與豁免判定測試
 ```
-
-### error.rs
-
-- 集中定義所有錯誤類型
-- 確保錯誤訊息包含豐富上下文
-
-### loader_schema.rs
-
-- 載入相關資料結構定義
-
-### domain/
-
-遊戲領域模型（與 ECS 無關）
-
-#### alias.rs
-
-- 類型別名定義
-
-#### constants.rs
-
-- 遊戲常數定義
-
-#### core_types.rs
-
-- 遊戲核心資料型別定義
-
-### ecs_types/
-
-ECS 框架相關的型別定義
-
-#### components.rs
-
-- ECS Component 定義（只存資料，不含業務邏輯）
-- 必須 derive `Component` 和 `Debug`
-- 禁止出現 impl
-
-#### resources.rs
-
-- ECS World Resource 型別定義
-
-### logic/
-
-核心業務邏輯函數（純邏輯運算，不依賴 ECS Query）
-
-- 可以依賴 domain/ 的類型
-- 函數參數類型放在同一個檔案中
-
-### ecs_logic/
-
-直接操作 World 的函數（讀寫 World）
-
-- 負責整合 logic/ 和 World
-- 提供完整的遊戲操作 API
 
 ## Function 集
 
@@ -194,6 +146,10 @@ ECS 框架相關的型別定義
 
 - `pub fn short_type_name<T: ?Sized>() -> String` - 取得泛型型別的短名稱
 
+### domain/core_types.rs
+
+- `pub fn name(&self) -> &SkillName` (SkillType 方法) - 取得技能名稱
+
 ### tests/helpers/level_builder.rs
 
 - `pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤
@@ -241,6 +197,10 @@ ECS 框架相關的型別定義
 - `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOrder>` - 移除死亡單位並回傳
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
 - `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
+
+### ecs_logic/skill.rs
+
+- `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
 
 ### error.rs
 

@@ -1,61 +1,17 @@
 //! execute_move 整合測試
 
-use super::super::helpers::level_builder::{LevelBuilder, load_from_ascii};
-use super::constants::{OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, UNIT_TYPE_WARRIOR};
-use super::setup_world_with_level;
-use bevy_ecs::entity::Entity;
+use super::super::helpers::level_builder::load_from_ascii;
 use bevy_ecs::world::World;
-use board::domain::constants::{BASIC_MOVEMENT_COST, PLAYER_FACTION_ID};
+use board::domain::constants::BASIC_MOVEMENT_COST;
 use board::ecs_logic::movement::execute_move;
 use board::ecs_logic::turn::{end_current_turn, start_new_round};
-use board::ecs_types::components::{Initiative, Occupant, Position};
-
-const ALLY_FACTION_ID: u32 = 1;
-const ENEMY_FACTION_ID: u32 = 2;
+use board::ecs_types::components::{Occupant, Position};
 
 /// 從 ASCII 建構 World 並回傳玩家單位 Occupant 與目的地座標
 ///
 /// 目的地標記：T 或 T1/T2，按 T → T1 → T2 順序收集回傳
 fn build_world(ascii: &str) -> (World, Occupant, Vec<Position>) {
-    let (_, markers) = load_from_ascii(ascii).expect("load_from_ascii 應成功");
-    let mut builder = LevelBuilder::from_ascii(ascii);
-
-    const MARKER_PLAYER: &str = "P";
-    if markers.contains_key(MARKER_PLAYER) {
-        builder = builder.unit(MARKER_PLAYER, UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID);
-    }
-    const MARKER_ALLY: &str = "A";
-    if markers.contains_key(MARKER_ALLY) {
-        builder = builder.unit(MARKER_ALLY, UNIT_TYPE_WARRIOR, ALLY_FACTION_ID);
-    }
-    const MARKER_ENEMY: &str = "E";
-    if markers.contains_key(MARKER_ENEMY) {
-        builder = builder.unit(MARKER_ENEMY, UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID);
-    }
-    const MARKER_WALL: &str = "w";
-    if markers.contains_key(MARKER_WALL) {
-        builder = builder.object(MARKER_WALL, OBJECT_TYPE_WALL);
-    }
-    const MARKER_SWAMP: &str = "p";
-    if markers.contains_key(MARKER_SWAMP) {
-        builder = builder.object(MARKER_SWAMP, OBJECT_TYPE_SWAMP);
-    }
-
-    let level_toml = builder.to_toml().expect("LevelBuilder::to_toml 應成功");
-    let mut world = setup_world_with_level(&level_toml);
-
-    // 取得玩家單位的 Occupant 並設置高 Initiative
-    let player_pos = markers[MARKER_PLAYER][0];
-    let (player_entity, occupant) = {
-        let mut query = world.query::<(Entity, &Occupant, &Position)>();
-        query
-            .iter(&world)
-            .find(|(_, _, p)| **p == player_pos)
-            .map(|(entity, occ, _)| (entity, *occ))
-            .expect("應找到玩家單位的 Occupant")
-    };
-    // 設置玩家 Initiative 最高，確保其為 active unit
-    world.entity_mut(player_entity).insert(Initiative(100));
+    let (world, occupant, markers) = super::build_world(ascii);
 
     // 收集目的地：T → T1 → T2
     const MARKER_TARGET: &str = "T";

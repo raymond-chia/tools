@@ -22,11 +22,23 @@ disable-model-invocation: false
 
 ## 步驟 2：確認公開函數簽名
 
-讀取 `core/board/src/` 和 `editor/src/` 下所有 `.rs` 檔案，提取所有 `pub fn`，對照索引文件中的「Function 集」區塊，找出：
+執行以下指令取得所有函數簽名：
+
+```sh
+cd "$CLAUDE_PROJECT_DIR" && uv run scripts/collect_signatures.py
+```
+
+以輸出結果對照索引文件中的「Function 集」區塊，找出：
 
 - 索引中有但實際不存在的函數
 - 實際存在但索引中缺少的函數（包含步驟 1 發現的新增檔案）
 - 簽名與實際不符的函數
+
+注意：script 輸出包含所有 fn（含私有、trait impl），索引只需記錄：
+- `pub fn`、`pub(crate) fn`
+- `pub struct`、`pub enum`、`pub trait`
+- **不記錄** `impl Trait for Type`（trait 實現）
+請自行過濾。
 
 ## 步驟 3：更新索引文件
 

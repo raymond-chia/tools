@@ -2,6 +2,7 @@ pub mod deployment;
 pub mod loader;
 pub mod movement;
 pub mod query;
+pub mod skill;
 pub mod spawner;
 pub mod turn;
 

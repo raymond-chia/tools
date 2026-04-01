@@ -3,7 +3,6 @@
 use super::battlefield::{self, Snapshot};
 use super::{LevelTabMode, LevelTabUIState, MessageState};
 use crate::constants::*;
-use board::domain::alias::MovementCost;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;

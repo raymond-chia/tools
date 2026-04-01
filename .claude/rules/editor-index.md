@@ -18,12 +18,14 @@ paths:
 
 ### Function 集簽名
 
-保留完整簽名（pub fn、trait 方法），移除實現細節, 常數值, enum, struct
+保留完整簽名（pub fn、pub struct、pub trait、pub enum）。
+不記錄 `impl Trait for Type`（trait 實現）。
+移除實現細節、常數值。
 
 例子：
 
-- ❌ 錯誤：`pub fn render_search_input(ui: &mut egui::Ui, query: &mut String) -> egui::Response` - 檢查輸入是否為空、建立搜尋框寬度為 200px、清除按鈕顏色
-- ✓ 正確：`pub fn render_search_input(ui: &mut egui::Ui, query: &mut String) -> egui::Response` - 渲染搜尋輸入框
+- ❌ 錯誤：`pub fn render_search_input(...)` - 檢查輸入是否為空、建立搜尋框寬度為 200px、清除按鈕顏色
+- ✓ 正確：`pub fn render_search_input(...)` - 渲染搜尋輸入框
 
 ## 專案結構
 
@@ -57,6 +59,17 @@ editor/
 
 ## Function 集
 
+### editor/main.rs
+
+- `pub fn main() -> Result<(), eframe::Error>` - 程式進入點，初始化字體和視覺主題
+
+### editor/generic_io.rs
+
+- `pub fn new(key: &str, items: Vec<T>) -> Self` - 建立新的 GenericIO 實例
+- `pub fn get_items(&self, key: &str) -> Option<&Vec<T>>` - 取得指定 key 的項目清單
+- `pub fn load_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, data_key: &str)` - 從 TOML 檔案載入項目（通過狀態消息反映結果）
+- `pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, data_key: &str)` - 儲存項目到 TOML 檔案（通過狀態消息反映結果）
+
 ### editor/editor_item.rs
 
 - `pub trait EditorItem` - 所有可編輯項目必須實現的 trait
@@ -87,11 +100,6 @@ GenericEditorState 的方法：
 - `pub fn is_editing(&self) -> bool` - 判斷是否在編輯模式
 - `pub fn move_item(&mut self, from: usize, to: usize)` - 移動項目（拖曳排序用）
 
-### editor/generic_io.rs
-
-- `pub fn load_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, data_key: &str)` - 從 TOML 檔案載入項目（通過狀態消息反映結果）
-- `pub fn save_file<T: EditorItem>(state: &mut GenericEditorState<T>, path: &Path, data_key: &str)` - 儲存項目到 TOML 檔案（通過狀態消息反映結果）
-
 ### editor/editor_macros.rs
 
 - `pub macro define_editors` - 生成 EditorTab 枚舉、EditorApp 結構和 new() 方法（自動載入檔案）
@@ -108,37 +116,42 @@ GenericEditorState 的方法：
 - `pub fn combobox_with_dynamic_height(id_salt: &str, selected_text: &str, option_count: usize) -> egui::ComboBox` - 建立 ComboBox，將選項數量編入 id 以繞過快取問題
 - `pub fn render_filtered_options(ui: &mut egui::Ui, visible_items: &[&TypeName], hidden_count: usize, selected_value: &mut String, query: &str)` - 在 ComboBox 中渲染過濾後的選項
 
-### editor/tabs/object_tab.rs、skill_tab.rs、unit_tab.rs
+### editor/tabs/object_tab.rs
 
-每個 tab 提供：
+- `pub fn file_name() -> &'static str` - 取得物件檔案名稱
+- `pub fn render_form(ui: &mut egui::Ui, obj: &mut ObjectType, _ui_state: &mut (), _message_state: &mut MessageState)` - 渲染物件編輯表單
 
-- `pub fn file_name() -> &'static str` - 取得檔案名稱
-- `pub fn render_form(ui: &mut egui::Ui, item: &mut T)` - 渲染編輯表單
-- `impl EditorItem for T` - 實現 EditorItem trait
+### editor/tabs/unit_tab.rs
+
+- `pub fn file_name() -> &'static str` - 取得單位檔案名稱
+- `pub fn render_form(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTabUIState, _message_state: &mut MessageState)` - 渲染單位編輯表單
+
+### editor/tabs/skill_tab.rs
+
+- `pub fn file_name() -> &'static str` - 取得技能檔案名稱
+- `pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, ui_state: &mut SkillTabUIState, _message_state: &mut MessageState)` - 渲染技能編輯表單
+
+### editor/tabs/level_tab.rs
+
+- `pub fn file_name() -> &'static str` - 取得關卡檔案名稱
+- `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 根據模式渲染關卡編輯表單
 
 ### editor/tabs/level_tab/battlefield.rs
 
-網格渲染與座標轉換：
-
-- `pub struct VisibleGridRange` - 棋盤可見範圍
+- `pub fn query_snapshot(world: &mut World) -> CResult<Snapshot>` - 一次查詢所有關卡資料
 - `pub fn calculate_grid_dimensions(board: Board) -> egui::Vec2` - 計算棋盤預覽的總尺寸
 - `pub fn calculate_visible_range(scroll_offset: egui::Vec2, viewport_size: egui::Vec2, board: Board) -> VisibleGridRange` - 計算可見範圍內的格子索引
 - `pub fn screen_to_board_pos(screen_pos: egui::Pos2, rect: egui::Rect, board: Board) -> Option<Position>` - 將螢幕座標轉換為棋盤座標
 - `pub fn compute_hover_pos(response: &egui::Response, rect: egui::Rect, board: Board) -> Option<Position>` - 計算滑鼠懸停時的棋盤座標
-- `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, board: Board, scroll_offset: egui::Vec2, get_cell_info: impl Fn(Position) -> (String, Color32, Color32), is_highlight: impl Fn(Position) -> bool)` - 繪製棋盤格子
-- `pub fn render_hover_tooltip(ui: &mut egui::Ui, rect: egui::Rect, hovered_pos: Position, get_tooltip_info: impl Fn(Position) -> String)` - 渲染懸停提示
-- `pub fn render_battlefield_legend(ui: &mut egui::Ui)` - 渲染戰場圖例
-
-快照與共用邏輯：
-
-- `pub struct Snapshot` - 戰場模式所需的關卡查詢結果
-- `pub fn query_snapshot(world: &mut World) -> CResult<Snapshot>` - 一次查詢所有關卡資料
-- `pub fn get_cell_info(snapshot: &Snapshot) -> impl Fn(Position) -> (String, Color32, Color32)` - 取得格子顯示資訊
+- `pub fn get_cell_info(snapshot: &Snapshot) -> impl Fn(Position) -> (String, egui::Color32, egui::Color32)` - 取得格子顯示資訊
 - `pub fn is_border_highlight(highlight_pos: Option<Position>) -> impl Fn(Position) -> bool` - 判斷是否高亮
 - `pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String` - 取得懸停提示資訊
+- `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, board: Board, scroll_offset: egui::Vec2, get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32), is_border_highlight: impl Fn(Position) -> bool, get_bg_highlight: impl Fn(Position) -> Option<egui::Color32>)` - 繪製棋盤格子
+- `pub fn render_hover_tooltip(ui: &mut egui::Ui, rect: egui::Rect, hovered_pos: Position, get_tooltip_info: impl Fn(Position) -> String)` - 渲染懸停提示
 - `pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapshot)` - 渲染詳情面板
+- `pub fn render_battlefield_legend(ui: &mut egui::Ui)` - 渲染戰場圖例
 - `pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle>` - 取得敵方單位
-- `pub fn get_faction_color(factions: &HashMap<ID, Faction>, unit_faction_id: ID) -> Color32` - 取得陣營顏色
+- `pub fn get_faction_color(factions: &HashMap<ID, Faction>, unit_faction_id: ID) -> egui::Color32` - 取得陣營顏色
 - `pub fn get_unit_abbr(unit_name: &str) -> String` - 取得單位名稱縮寫
 
 ### editor/tabs/level_tab/deployment.rs
@@ -148,19 +161,6 @@ GenericEditorState 的方法：
 ### editor/tabs/level_tab/battle.rs
 
 - `pub fn render_form(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染戰鬥模式表單
-
-### editor/tabs/level_tab.rs
-
-- `pub fn file_name() -> &'static str` - 取得關卡的檔案名稱
-- `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 根據模式渲染關卡編輯表單
-
-型別和結構：
-
-- `pub enum DraggedObject` - 拖曳物體的類型（部署點、單位、物件）
-- `pub struct DragState` - 拖曳狀態
-- `pub enum LevelTabMode` - 關卡編輯器模式（編輯、部署、戰鬥）
-- `pub struct LevelTabUIState` - 關卡編輯器 UI 狀態
-- `impl EditorItem for LevelType` - 實現 EditorItem trait
 
 ### editor/tabs/level_tab/edit.rs
 

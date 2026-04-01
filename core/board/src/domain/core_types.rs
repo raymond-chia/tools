@@ -224,12 +224,14 @@ pub enum EffectNode {
         nodes: Vec<EffectNode>,
     },
     Branch {
+        // 檢查誰的屬性
         who: CasterOrTarget,
         condition: EffectCondition,
         on_success: Vec<EffectNode>,
         on_failure: Vec<EffectNode>,
     },
     Leaf {
+        // 套用在誰身上
         who: CasterOrTarget,
         effect: Effect,
     },
