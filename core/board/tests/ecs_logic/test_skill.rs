@@ -10,13 +10,13 @@ use bevy_ecs::world::World;
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::skill::{AvailableSkill, get_available_skills};
 use board::ecs_logic::turn::start_new_round;
-use board::ecs_types::components::{ActionState, CurrentMp, Occupant};
+use board::ecs_types::components::{ActionState, CurrentMp, Occupant, Position};
 use std::collections::{HashMap, HashSet};
 
 const ENEMY_FACTION_ID: u32 = 2;
 
-fn build_world(ascii: &str, mp: i32) -> (World, Occupant) {
-    let (mut world, occupant, _markers) = super::build_world(ascii);
+fn build_world(ascii: &str, mp: i32) -> (World, Occupant, HashMap<String, Vec<Position>>) {
+    let (mut world, occupant, markers) = super::build_world(ascii);
 
     start_new_round(&mut world).expect("start_new_round 應成功");
 
@@ -30,7 +30,7 @@ fn build_world(ascii: &str, mp: i32) -> (World, Occupant) {
     };
     world.entity_mut(entity).insert(CurrentMp(mp));
 
-    (world, occupant)
+    (world, occupant, markers)
 }
 
 /// 設定指定單位的 ActionState
@@ -64,7 +64,7 @@ fn test_usable_depends_on_mp() {
     let skill_names = [SKILL_MELEE, SKILL_WARRIOR_ACTIVE_2, SKILL_WARRIOR_ACTIVE_4];
 
     for (mp, expected_usable) in &test_data {
-        let (mut world, _) = build_world(
+        let (mut world, _, _) = build_world(
             "
             . . . . .
             . P . . .
@@ -118,7 +118,7 @@ fn test_done_state_all_unusable() {
     };
 
     for mp in [100, 1000] {
-        let (mut world, player_occupant) = build_world(
+        let (mut world, player_occupant, _) = build_world(
             "
             . . . . .
             . P . . .
@@ -189,4 +189,145 @@ fn test_no_active_unit_returns_error() {
     // 不呼叫 start_new_round
     let result = get_available_skills(&mut world);
     assert!(result.is_err(), "沒有 active unit 時應回傳錯誤");
+}
+
+// ============================================================================
+// 查詢可選目標格子（基於射程）
+// ============================================================================
+
+#[test]
+fn test_skill_targetable_positions_various_ranges() {
+    // (skill_name, ascii)
+    let test_data = [
+        // SKILL_MELEE range=[1,1]
+        (
+            SKILL_MELEE,
+            "
+            . . . . .
+            . . + . .
+            . + P + .
+            . . + . .
+            . . . . .
+            ",
+        ),
+        (
+            SKILL_MELEE,
+            "
+            P + . . .
+            + . . . .
+            . . . . .
+            . . . . .
+            . . . . .
+            ",
+        ),
+        (
+            SKILL_MELEE,
+            "
+            . . . + P
+            . . . . +
+            . . . . .
+            . . . . .
+            . . . . .
+            ",
+        ),
+        (
+            SKILL_MELEE,
+            "
+            . . . . .
+            . . . . .
+            . . . . .
+            . . + . .
+            . + P + .
+            ",
+        ),
+        (
+            SKILL_MELEE,
+            "
+            . . . . .
+            . . . . .
+            . . . + .
+            . . + P +
+            . . . + .
+            ",
+        ),
+        // SKILL_WARRIOR_ACTIVE_2 range=[1,2]
+        (
+            SKILL_WARRIOR_ACTIVE_2,
+            "
+            . . + . .
+            . + + + .
+            + + P + +
+            . + + + .
+            . . + . .
+            ",
+        ),
+        (
+            SKILL_WARRIOR_ACTIVE_2,
+            "
+            P + + . .
+            + + . . .
+            + . . . .
+            . . . . .
+            . . . . .
+            ",
+        ),
+        (
+            SKILL_WARRIOR_ACTIVE_2,
+            "
+            . . + + P
+            . . . + +
+            . . . . +
+            . . . . .
+            . . . . .
+            ",
+        ),
+        (
+            SKILL_WARRIOR_ACTIVE_2,
+            "
+            . . . . .
+            . . . . .
+            . . + . .
+            . + + + .
+            + + P + +
+            ",
+        ),
+        (
+            SKILL_WARRIOR_ACTIVE_2,
+            "
+            . . . . .
+            . . . + .
+            . . + + +
+            . + + P +
+            . . + + +
+            ",
+        ),
+    ];
+
+    for (skill_name, ascii) in &test_data {
+        let (mut world, _, markers) = build_world(ascii, 100);
+        let positions: HashSet<_> = board::ecs_logic::skill::get_skill_targetable_positions(
+            &mut world,
+            &skill_name.to_string(),
+        )
+        .expect("get_skill_targetable_positions 應成功")
+        .into_iter()
+        .collect();
+
+        let expected_positions: HashSet<_> = markers
+            .get("+")
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            positions,
+            expected_positions,
+            "技能 {} 佈局:\n{}\n應回傳 {} 個格子，實際 {}",
+            skill_name,
+            ascii,
+            expected_positions.len(),
+            positions.len()
+        );
+    }
 }

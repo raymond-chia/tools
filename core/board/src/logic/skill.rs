@@ -114,6 +114,39 @@ pub fn compute_affected_positions(
     }
 }
 
+/// 計算射程內所有格子（曼哈頓距離在 [min_range, max_range] 內）
+pub fn compute_range_positions(
+    caster: Position,
+    range: (Coord, Coord),
+    board_size: Board,
+) -> Vec<Position> {
+    let (min_range, max_range) = range;
+    let mut positions = Vec::new();
+
+    let caster_x = caster.x as i32;
+    let caster_y = caster.y as i32;
+    let max_range = max_range as i32;
+    let min_range = min_range as i32;
+
+    for dy in -max_range..=max_range {
+        for dx in -max_range..=max_range {
+            let distance = dx.abs() + dy.abs();
+            if distance < min_range || distance > max_range {
+                continue;
+            }
+
+            let x = caster_x + dx;
+            let y = caster_y + dy;
+
+            if let Some(pos) = board::try_position(board_size, x, y) {
+                positions.push(pos);
+            }
+        }
+    }
+
+    positions
+}
+
 // ============================================================================
 // 挑選目標
 // ============================================================================
@@ -352,6 +385,10 @@ fn compute_line(
 
     Ok(positions)
 }
+
+// ============================================================================
+// 工具函數
+// ============================================================================
 
 /// 將方向向量正規化為單位步進（僅支援正交方向）
 /// signum 將任意正負值壓縮為 1 或 -1

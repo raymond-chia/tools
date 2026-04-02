@@ -79,7 +79,7 @@ tags = []
 cost = 2
 
 [skills.Active.target]
-range = [1, 1]
+range = [1, 2]
 selection = "Unit"
 selectable_filter = "Enemy"
 count = 1

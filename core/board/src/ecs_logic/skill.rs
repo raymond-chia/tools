@@ -2,10 +2,13 @@
 
 use crate::domain::alias::SkillName;
 use crate::domain::core_types::SkillType;
-use crate::ecs_types::components::{ActionState, CurrentMp, MovementPoint, Occupant, Skills, Unit};
-use crate::ecs_types::resources::{GameData, TurnOrder};
+use crate::ecs_types::components::{
+    ActionState, CurrentMp, MovementPoint, Occupant, Position, Skills, Unit,
+};
+use crate::ecs_types::resources::{Board, GameData, TurnOrder};
 use crate::error::{BoardError, DataError, Result, UnitError};
 use crate::logic::debug::short_type_name;
+use crate::logic::skill as skill_logic;
 use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{With, World};
 
@@ -84,4 +87,71 @@ pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>> {
     }
 
     Ok(result)
+}
+
+/// 查詢指定技能的射程內所有可選格子
+///
+/// 根據技能的 Target.range 與施放者位置，回傳曼哈頓距離在射程內的所有格子
+pub fn get_skill_targetable_positions(
+    world: &mut World,
+    skill_name: &SkillName,
+) -> Result<Vec<Position>> {
+    // 讀取：TurnOrder → active unit
+    let turn_order =
+        world
+            .get_resource::<TurnOrder>()
+            .ok_or_else(|| DataError::MissingResource {
+                name: short_type_name::<TurnOrder>(),
+                note: "請先呼叫 start_new_round".to_string(),
+            })?;
+    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+
+    // 讀取：當前單位的位置
+    let caster_pos = {
+        let mut query = world.query_filtered::<(&Occupant, &Position), With<Unit>>();
+        query
+            .iter(world)
+            .find(|(occ, _)| **occ == active_occupant)
+            .map(|(_, pos)| *pos)
+            .ok_or_else(|| DataError::MissingComponent {
+                name: format!("Position for {:?}", active_occupant),
+            })?
+    };
+
+    // 讀取：GameData
+    let game_data = world
+        .get_resource::<GameData>()
+        .ok_or_else(|| DataError::MissingResource {
+            name: short_type_name::<GameData>(),
+            note: "請先呼叫 parse_and_insert_game_data".to_string(),
+        })?;
+
+    // 讀取：Board
+    let board = world
+        .get_resource::<Board>()
+        .ok_or_else(|| DataError::MissingResource {
+            name: short_type_name::<Board>(),
+            note: "請先呼叫 spawn_level".to_string(),
+        })?;
+
+    // 純邏輯：取得技能的 range，計算射程內格子
+    let skill_type =
+        game_data
+            .skill_map
+            .get(skill_name)
+            .ok_or_else(|| UnitError::SkillNotFound {
+                skill_name: skill_name.clone(),
+            })?;
+
+    match skill_type {
+        SkillType::Active { target, .. } => Ok(skill_logic::compute_range_positions(
+            caster_pos,
+            target.range,
+            *board,
+        )),
+        SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
+            skill_name: skill_name.clone(),
+        }
+        .into()),
+    }
 }
