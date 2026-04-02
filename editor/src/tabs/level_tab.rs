@@ -29,6 +29,15 @@ pub struct DragState {
     pub object: DraggedObject,
 }
 
+/// 戰鬥模式底部面板的動作狀態
+#[derive(Debug, Default, PartialEq)]
+pub enum BattleAction {
+    #[default]
+    Normal,
+    Delaying,
+    SkillPopup,
+}
+
 /// 關卡編輯器的模式
 #[derive(Debug, Default)]
 pub enum LevelTabMode {
@@ -63,8 +72,8 @@ pub struct LevelTabUIState {
     pub selected_left_pos: Option<Position>,
     /// 右鍵選中
     pub selected_right_pos: Option<Position>,
-    /// 是否處於延遲選擇模式
-    pub is_delaying: bool,
+    /// 底部操作面板的當前動作狀態
+    pub battle_action: BattleAction,
     /// 延遲置中：下一幀 render_battlefield 時消費
     pub pending_center_pos: Option<Position>,
 

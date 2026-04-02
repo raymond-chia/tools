@@ -1,7 +1,7 @@
 //! 關卡編輯器的戰鬥模式邏輯
 
 use super::battlefield::{self, Snapshot};
-use super::{LevelTabMode, LevelTabUIState, MessageState};
+use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState};
 use crate::constants::*;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
@@ -46,7 +46,8 @@ pub fn render_form(
 
     // 主要佈局：回合面板 + 戰場 + 右側詳情面板
     let mut errors = vec![];
-    let height = ui.available_height() - BOTTOM_PANEL_HEIGHT;
+    // 需要包含 separator 高度, margin, padding, ...
+    let height = ui.available_height() - BOTTOM_PANEL_HEIGHT - SPACING_SMALL * 5.0;
     ui.horizontal(|ui| {
         // 左側：回合順序面板
         ui.vertical(|ui| {
@@ -106,20 +107,16 @@ pub fn render_form(
 fn render_level_info(ui: &mut egui::Ui, snapshot: &Snapshot) {
     let enemy_count = battlefield::enemy_units(snapshot).count();
 
-    egui::Grid::new("battle_level_info_grid")
-        .spacing([SPACING_MEDIUM, SPACING_MEDIUM])
-        .show(ui, |ui| {
-            ui.label(format!("關卡名稱：{}", snapshot.level_config.name));
-
-            ui.end_row();
-
-            ui.label(format!(
-                "尺寸：{}×{}",
-                snapshot.board.width, snapshot.board.height
-            ));
-            ui.separator();
-            ui.label(format!("敵人數量：{}", enemy_count));
-        });
+    ui.horizontal(|ui| {
+        ui.label(format!("關卡名稱：{}", snapshot.level_config.name));
+        ui.separator();
+        ui.label(format!(
+            "尺寸：{}×{}",
+            snapshot.board.width, snapshot.board.height
+        ));
+        ui.separator();
+        ui.label(format!("敵人數量：{}", enemy_count));
+    });
 }
 
 /// 渲染回合順序面板（左側）
@@ -155,7 +152,7 @@ fn render_turn_order_panel(
                 let is_current = real_idx == turn_order.current_index;
 
                 // 延遲模式：在非當前條目之間顯示插入點
-                if ui_state.is_delaying && !is_current {
+                if ui_state.battle_action == BattleAction::Delaying && !is_current {
                     // 插入點只出現在當前單位（最底部）之上
                     if ui.button("── 插入 ──").clicked() {
                         // 我們需要的 target_index 是這個 entry 在 entries 中的 real_idx
@@ -166,7 +163,7 @@ fn render_turn_order_panel(
                             error = Err(format!("延遲失敗：{}", e));
                         }
                         // 無論成功與否，都關閉延遲模式（因為玩家已經點了插入）
-                        ui_state.is_delaying = false;
+                        ui_state.battle_action = BattleAction::Normal;
                         return;
                     }
                 }
@@ -199,14 +196,25 @@ fn render_turn_order_panel(
 fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Result<(), String> {
     let mut error = Ok(());
     ui.horizontal(|ui| {
-        ui.set_height(BOTTOM_PANEL_HEIGHT - SPACING_SMALL); // 預留一些空隙
+        // 預留一些空隙
+        let height = BOTTOM_PANEL_HEIGHT;
+        ui.set_height(height);
 
-        if ui.button("結束回合").clicked() {
+        let height = height - SPACING_SMALL * 2.0;
+        let button_size = egui::vec2(BOTTOM_PANEL_BUTTON_WIDTH, height);
+
+        if ui
+            .add_sized(
+                button_size,
+                egui::Button::new("結束回合").wrap_mode(egui::TextWrapMode::Wrap),
+            )
+            .clicked()
+        {
             if let Err(e) = board::ecs_logic::turn::end_current_turn(&mut ui_state.world) {
                 error = Err(format!("結束回合失敗：{}", e));
                 return;
             }
-            ui_state.is_delaying = false;
+            ui_state.battle_action = BattleAction::Normal;
             return;
         }
 
@@ -219,15 +227,48 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
                 return;
             }
         };
-        let delay_label = if ui_state.is_delaying {
-            "取消延遲"
+        let (label, battle_action) = if ui_state.battle_action == BattleAction::Delaying {
+            ("取消延遲", BattleAction::Normal)
         } else {
-            "延遲"
+            ("延遲", BattleAction::Delaying)
         };
-        let button = egui::Button::new(delay_label);
-        if ui.add_enabled(can_delay, button).clicked() {
-            ui_state.is_delaying = !ui_state.is_delaying;
+        let mut delay_clicked = false;
+        ui.add_enabled_ui(can_delay, |ui| {
+            if ui
+                .add_sized(
+                    button_size,
+                    egui::Button::new(label).wrap_mode(egui::TextWrapMode::Wrap),
+                )
+                .clicked()
+            {
+                delay_clicked = true;
+            }
+        });
+        if delay_clicked {
+            ui_state.battle_action = battle_action;
             return;
+        }
+
+        ui.separator();
+
+        let (label, battle_action) = if ui_state.battle_action == BattleAction::SkillPopup {
+            ("關閉技能", BattleAction::Normal)
+        } else {
+            ("技能", BattleAction::SkillPopup)
+        };
+        let skill_button_response = ui.add_sized(
+            button_size,
+            egui::Button::new(label).wrap_mode(egui::TextWrapMode::Wrap),
+        );
+        if skill_button_response.clicked() {
+            ui_state.battle_action = battle_action;
+        }
+        // 技能彈出面板
+        if ui_state.battle_action == BattleAction::SkillPopup {
+            let button_rect = skill_button_response.rect;
+            if let Err(e) = render_skill_popup(ui, ui_state, button_rect) {
+                error = Err(e);
+            }
         }
     });
     error
@@ -245,7 +286,7 @@ fn render_battlefield(
     // 取得當前行動單位的可移動範圍
     let current_occupant = board::logic::turn_order::get_active_unit(&turn_order.entries);
     let (reachable_positions, remaining_1mov, current_pos) = match current_occupant {
-        Some(occupant) if !ui_state.is_delaying => {
+        Some(occupant) if ui_state.battle_action == BattleAction::Normal => {
             let reachable =
                 board::ecs_logic::movement::get_reachable_positions(&mut ui_state.world, occupant)?;
             let unit_bundle = snapshot
@@ -329,6 +370,43 @@ fn render_battlefield(
     error
 }
 
+/// 渲染技能列表彈出面板
+fn render_skill_popup(
+    ui: &mut egui::Ui,
+    ui_state: &mut LevelTabUIState,
+    button_rect: egui::Rect,
+) -> Result<(), String> {
+    let skills = match board::ecs_logic::skill::get_available_skills(&mut ui_state.world) {
+        Ok(s) => s,
+        Err(e) => return Err(format!("取得技能列表失敗：{}", e)),
+    };
+
+    let popup_pos = egui::pos2(button_rect.left(), button_rect.top());
+    egui::Area::new(egui::Id::new("skill_popup"))
+        .fixed_pos(popup_pos)
+        .pivot(egui::Align2::LEFT_BOTTOM)
+        .order(egui::Order::Foreground)
+        .show(ui.ctx(), |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                for skill in &skills {
+                    if skill.usable {
+                        ui.label(&skill.name);
+                    } else {
+                        let label = egui::Label::new(
+                            egui::RichText::new(&skill.name).color(egui::Color32::GRAY),
+                        );
+                        ui.add(label).on_hover_text("缺乏魔力");
+                    }
+                }
+                if skills.is_empty() {
+                    ui.label("無可用技能");
+                }
+            });
+        });
+
+    Ok(())
+}
+
 // ==================== 輔助函數 ====================
 
 fn preview_path(
@@ -390,16 +468,25 @@ fn handle_mouse_click(
     ui_state: &mut LevelTabUIState,
     reachable_positions: &HashMap<Position, board::logic::movement::ReachableInfo>,
 ) -> CResult<()> {
-    if response.clicked() && !ui_state.is_delaying {
-        // 左鍵：執行移動（延遲模式下跳過）
-        match reachable_positions.get(&clicked_pos) {
-            Some(info) => {
-                if !info.passthrough_only {
-                    board::ecs_logic::movement::execute_move(&mut ui_state.world, clicked_pos)?;
-                    ui_state.selected_left_pos = Some(clicked_pos);
+    if response.clicked() {
+        match ui_state.battle_action {
+            BattleAction::Normal => {
+                // 左鍵：執行移動
+                match reachable_positions.get(&clicked_pos) {
+                    Some(info) => {
+                        if !info.passthrough_only {
+                            board::ecs_logic::movement::execute_move(
+                                &mut ui_state.world,
+                                clicked_pos,
+                            )?;
+                            ui_state.selected_left_pos = Some(clicked_pos);
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+            BattleAction::Delaying => {}
+            BattleAction::SkillPopup => {}
         }
     }
     if response.secondary_clicked() {

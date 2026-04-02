@@ -1,4 +1,4 @@
-use super::{DragState, DraggedObject, LevelTabMode, LevelTabUIState, battlefield};
+use super::{BattleAction, DragState, DraggedObject, LevelTabMode, LevelTabUIState, battlefield};
 use crate::constants::*;
 use crate::generic_editor::MessageState;
 use crate::utils::search::{
@@ -117,7 +117,7 @@ pub fn render_form(
                 ui_state.world = world;
                 ui_state.selected_left_pos = None;
                 ui_state.selected_right_pos = None;
-                ui_state.is_delaying = false;
+                ui_state.battle_action = BattleAction::Normal;
                 ui_state.mode = LevelTabMode::Deploy;
                 return;
             }
