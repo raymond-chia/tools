@@ -11,7 +11,7 @@ use board::ecs_types::components::{Occupant, Position};
 ///
 /// 目的地標記：T 或 T1/T2，按 T → T1 → T2 順序收集回傳
 fn build_world(ascii: &str) -> (World, Occupant, Vec<Position>) {
-    let (world, occupant, markers) = super::build_world(ascii);
+    let (world, occupant, markers) = super::build_warrior_world(ascii);
 
     // 收集目的地：T → T1 → T2
     const MARKER_TARGET: &str = "T";

@@ -33,12 +33,12 @@ paths:
 editor/
 ├── src/
 │   ├── main.rs              - 程式進入點和初始化
+│   ├── app.rs               - 主應用程式 UI 渲染
 │   ├── constants.rs         - UI 與編輯器常數定義
 │   ├── editor_item.rs       - EditorItem trait 定義
 │   ├── editor_macros.rs     - 編輯器結構自動生成巨集
 │   ├── generic_editor.rs    - 泛型編輯器狀態管理
 │   ├── generic_io.rs        - 泛型 TOML 檔案載入與儲存
-│   ├── app.rs               - 主應用程式 UI 渲染
 │   ├── utils/               - 通用工具模組
 │   │   ├── mod.rs           - 工具模組定義和導出
 │   │   ├── dnd.rs           - 拖放功能
@@ -50,10 +50,10 @@ editor/
 │       ├── unit_tab.rs      - 單位編輯器
 │       ├── level_tab.rs     - 關卡編輯器主邏輯
 │       └── level_tab/
-│           ├── mod.rs        - 關卡編輯模組定義（隱含）
-│           ├── edit.rs       - 編輯模式 UI
+│           ├── mod.rs       - 關卡編輯子模組定義
+│           ├── edit.rs      - 編輯模式 UI
 │           ├── deployment.rs - 部署模式 UI
-│           ├── battle.rs     - 戰鬥模式 UI
+│           ├── battle.rs    - 戰鬥模式 UI
 │           └── battlefield.rs - 戰場共用邏輯（網格、快照、詳情面板）
 ```
 
@@ -62,6 +62,10 @@ editor/
 ### editor/main.rs
 
 - `pub fn main() -> Result<(), eframe::Error>` - 程式進入點，初始化字體和視覺主題
+
+### editor/app.rs
+
+應用程式結構和渲染方法由 `define_editors` 巨集自動生成
 
 ### editor/generic_io.rs
 

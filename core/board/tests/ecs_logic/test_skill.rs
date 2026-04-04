@@ -1,22 +1,25 @@
 //! 技能系統 ECS 操作測試
 
 use super::constants::{
-    SKILL_MELEE, SKILL_WARRIOR_ACTIVE_2, SKILL_WARRIOR_ACTIVE_4, UNIT_TYPE_WARRIOR,
+    SKILL_DIAMOND_AOE, SKILL_MELEE, SKILL_WARRIOR_ACTIVE_2, SKILL_WARRIOR_ACTIVE_4,
+    UNIT_TYPE_WARRIOR,
 };
 use super::setup_world_with_level;
 use crate::helpers::level_builder::LevelBuilder;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::ecs_logic::skill::{AvailableSkill, get_available_skills};
+use board::ecs_logic::skill::{
+    AvailableSkill, PreviewAffectedPositions, get_available_skills, get_skill_affected_positions,
+};
 use board::ecs_logic::turn::start_new_round;
 use board::ecs_types::components::{ActionState, CurrentMp, Occupant, Position};
 use std::collections::{HashMap, HashSet};
 
 const ENEMY_FACTION_ID: u32 = 2;
 
-fn build_world(ascii: &str, mp: i32) -> (World, Occupant, HashMap<String, Vec<Position>>) {
-    let (mut world, occupant, markers) = super::build_world(ascii);
+fn build_warrior_world(ascii: &str, mp: i32) -> (World, Occupant, HashMap<String, Vec<Position>>) {
+    let (mut world, occupant, markers) = super::build_warrior_world(ascii);
 
     start_new_round(&mut world).expect("start_new_round 應成功");
 
@@ -31,6 +34,14 @@ fn build_world(ascii: &str, mp: i32) -> (World, Occupant, HashMap<String, Vec<Po
     world.entity_mut(entity).insert(CurrentMp(mp));
 
     (world, occupant, markers)
+}
+
+fn build_mage_world(ascii: &str) -> (World, HashMap<String, Vec<Position>>) {
+    let (mut world, _, markers) = super::build_mage_world(ascii);
+
+    start_new_round(&mut world).expect("start_new_round 應成功");
+
+    (world, markers)
 }
 
 /// 設定指定單位的 ActionState
@@ -64,7 +75,7 @@ fn test_usable_depends_on_mp() {
     let skill_names = [SKILL_MELEE, SKILL_WARRIOR_ACTIVE_2, SKILL_WARRIOR_ACTIVE_4];
 
     for (mp, expected_usable) in &test_data {
-        let (mut world, _, _) = build_world(
+        let (mut world, _, _) = build_warrior_world(
             "
             . . . . .
             . P . . .
@@ -118,7 +129,7 @@ fn test_done_state_all_unusable() {
     };
 
     for mp in [100, 1000] {
-        let (mut world, player_occupant, _) = build_world(
+        let (mut world, player_occupant, _) = build_warrior_world(
             "
             . . . . .
             . P . . .
@@ -304,7 +315,7 @@ fn test_skill_targetable_positions_various_ranges() {
     ];
 
     for (skill_name, ascii) in &test_data {
-        let (mut world, _, markers) = build_world(ascii, 100);
+        let (mut world, _, markers) = build_warrior_world(ascii, 100);
         let positions: HashSet<_> = board::ecs_logic::skill::get_skill_targetable_positions(
             &mut world,
             &skill_name.to_string(),
@@ -329,5 +340,87 @@ fn test_skill_targetable_positions_various_ranges() {
             expected_positions.len(),
             positions.len()
         );
+    }
+}
+
+// ============================================================================
+// 預覽 AOE 影響範圍
+// ============================================================================
+
+#[test]
+fn get_skill_affected_positions_diamond() {
+    /// 從 markers 收集預期影響格子（T + A）
+    fn collect_expected_affected(
+        markers: &HashMap<String, Vec<Position>>,
+    ) -> Result<HashSet<Position>, String> {
+        let set: HashSet<_> = ["T", "A"]
+            .iter()
+            .flat_map(|key| markers.get(*key).into_iter().flatten().copied())
+            .collect();
+        // 假設只有 T 代表超出施放範圍
+        if set.len() == 1 {
+            Err("只有 T 代表超出施放範圍".to_string())
+        } else {
+            Ok(set)
+        }
+    }
+
+    let test_data = [
+        "
+        . . . . .
+        . . T . .
+        . . . . .
+        . . . P .
+        . . . . .
+        ",
+        "
+        . . . . .
+        . . A . .
+        . A T A .
+        . P A . .
+        . . . . .
+        ",
+        "
+        . . . . .
+        . . . A .
+        . . A T A
+        . . . P .
+        . . . . .
+        ",
+        "
+        . . . . .
+        . . . . .
+        . . . . A
+        . . . P T
+        . . . . A
+        ",
+    ];
+
+    for ascii in &test_data {
+        let (mut world, markers) = build_mage_world(ascii);
+        let caster_pos = markers["P"][0];
+        let target_pos = markers["T"][0];
+        let expected = collect_expected_affected(&markers);
+
+        let result =
+            get_skill_affected_positions(&mut world, &SKILL_DIAMOND_AOE.to_string(), target_pos);
+        match expected {
+            Ok(mut expected) => {
+                let PreviewAffectedPositions {
+                    all_positions,
+                    filtered_positions,
+                } = result.expect(&format!("preview 應成功：{ascii}"));
+                let all_positions = all_positions.into_iter().collect::<HashSet<_>>();
+                let filtered_positions = filtered_positions.into_iter().collect::<HashSet<_>>();
+
+                assert_eq!(filtered_positions, expected, "預覽 AOE 不符：{ascii}");
+                // 本測試只有過濾 caster, 所以預期只要檢查是否差異在 caster
+                if all_positions.contains(&caster_pos) {
+                    expected.insert(caster_pos);
+                }
+                assert_eq!(all_positions, expected, "預覽 AOE 全部格子不符：{ascii}");
+            }
+            Err(msg) => assert!(result.is_err(), "預期失敗但成功了: {msg}\n佈局: {ascii}\n"),
+        }
     }
 }

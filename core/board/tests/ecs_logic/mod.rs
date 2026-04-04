@@ -12,9 +12,10 @@ use bevy_ecs::prelude::{Entity, World};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::loader::parse_and_insert_game_data;
 use board::ecs_logic::spawner::spawn_level;
-use board::ecs_types::components::{Initiative, Occupant, Position};
+use board::ecs_types::components::{CurrentMp, Initiative, Occupant, Position};
 use constants::{
-    OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML,
+    OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_MAGE,
+    UNIT_TYPE_WARRIOR, UNITS_TOML,
 };
 use std::collections::HashMap;
 
@@ -29,7 +30,7 @@ fn setup_world_with_level(level_toml: &str) -> World {
     world
 }
 
-fn build_world(ascii: &str) -> (World, Occupant, HashMap<String, Vec<Position>>) {
+fn build_warrior_world(ascii: &str) -> (World, Occupant, HashMap<String, Vec<Position>>) {
     let (_, markers) = load_from_ascii(ascii).expect("load_from_ascii 應成功");
 
     let level_toml = LevelBuilder::from_ascii(ascii)
@@ -54,5 +55,30 @@ fn build_world(ascii: &str) -> (World, Occupant, HashMap<String, Vec<Position>>)
     };
     // 覆蓋 init
     world.entity_mut(player_entity).insert(Initiative(100));
+    (world, occupant, markers)
+}
+
+/// 建立以 mage 為玩家單位的 World
+fn build_mage_world(ascii: &str) -> (World, Occupant, HashMap<String, Vec<Position>>) {
+    let (_, markers) = load_from_ascii(ascii).expect("load_from_ascii 應成功");
+
+    let level_toml = LevelBuilder::from_ascii(ascii)
+        .unit("P", UNIT_TYPE_MAGE, PLAYER_FACTION_ID)
+        .unit("E", UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID)
+        .to_toml()
+        .expect("LevelBuilder::to_toml 應成功");
+    let mut world = setup_world_with_level(&level_toml);
+
+    let player_pos = markers["P"][0];
+    let (player_entity, occupant) = {
+        let mut query = world.query::<(Entity, &Occupant, &Position)>();
+        query
+            .iter(&world)
+            .find(|(_, _, p)| **p == player_pos)
+            .map(|(entity, occ, _)| (entity, *occ))
+            .expect("應找到玩家單位")
+    };
+    world.entity_mut(player_entity).insert(Initiative(100));
+    world.entity_mut(player_entity).insert(CurrentMp(100));
     (world, occupant, markers)
 }

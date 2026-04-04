@@ -183,7 +183,7 @@ fn resolve_area_targets(
         .iter()
         .filter_map(|pos| {
             let unit = units_on_board.get(pos)?;
-            if is_in_filter(caster, unit, filter) {
+            if is_in_filter(&caster.unit_info, unit, filter) {
                 Some(unit.occupant)
             } else {
                 None
@@ -259,7 +259,7 @@ fn validate_filter(
     target_pos: Position,
     filter: &TargetFilter,
 ) -> Result<()> {
-    if is_in_filter(caster, target, filter) {
+    if is_in_filter(&caster.unit_info, target, filter) {
         Ok(())
     } else {
         Err(BoardError::TargetFilterMismatch {
@@ -272,9 +272,9 @@ fn validate_filter(
 }
 
 /// 檢查單位是否通過篩選條件
-fn is_in_filter(caster: &CasterInfo, target: &UnitInfo, filter: &TargetFilter) -> bool {
-    let is_caster = target.occupant == caster.unit_info.occupant;
-    let is_same_alliance = target.alliance_id == caster.unit_info.alliance_id;
+pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool {
+    let is_caster = target.occupant == caster.occupant;
+    let is_same_alliance = target.alliance_id == caster.alliance_id;
 
     match filter {
         TargetFilter::Any => true,

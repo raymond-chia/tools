@@ -1,8 +1,8 @@
 pub const SKILL_WARRIOR: &str = "warrior-passive";
 pub const SKILL_MELEE: &str = "melee-attack";
-pub const SKILL_WARRIOR_REACTION: &str = "warrior-reaction";
 pub const SKILL_WARRIOR_ACTIVE_2: &str = "warrior-active-2";
 pub const SKILL_WARRIOR_ACTIVE_4: &str = "warrior-active-4";
+pub const SKILL_DIAMOND_AOE: &str = "diamond-aoe-1";
 pub const UNIT_TYPE_WARRIOR: &str = "warrior";
 pub const UNIT_TYPE_MAGE: &str = "mage";
 pub const OBJECT_TYPE_WALL: &str = "wall";
@@ -142,6 +142,33 @@ who = "Target"
 source = "Caster"
 source_attribute = "PhysicalAttack"
 value_percent = 100
+
+[[skills]]
+
+[skills.Active]
+name = "diamond-aoe-1"
+tags = []
+cost = 0
+
+[skills.Active.target]
+range = [1, 2]
+selection = "Ground"
+selectable_filter = "AnyExceptCaster"
+count = 1
+allow_same_target = false
+
+[skills.Active.target.area.Diamond]
+radius = 1
+
+[[skills.Active.effects]]
+
+[skills.Active.effects.Leaf]
+who = "Target"
+
+[skills.Active.effects.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = 50
 "#;
 
 /// 最小單位 TOML：包含一個 warrior 單位類型
@@ -152,7 +179,7 @@ skills = ["warrior-passive", "melee-attack", "warrior-active-2", "warrior-active
 
 [[units]]
 name = "mage"
-skills = ["mage-passive", "melee-attack"]
+skills = ["mage-passive", "melee-attack", "diamond-aoe-1"]
 "#;
 
 /// 最小物件 TOML：包含一個 wall 物件類型

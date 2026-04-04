@@ -133,6 +133,7 @@ core/board/
 - `pub fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
 - `pub fn compute_range_positions(caster: Position, range: (Coord, Coord), board_size: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
+- `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
 
 ### logic/skill_check.rs
 
@@ -209,6 +210,7 @@ core/board/
 
 - `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
+- `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
 
 ### error.rs
 
