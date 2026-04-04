@@ -64,6 +64,7 @@ fn build_mage_world(ascii: &str) -> (World, Occupant, HashMap<String, Vec<Positi
 
     let level_toml = LevelBuilder::from_ascii(ascii)
         .unit("P", UNIT_TYPE_MAGE, PLAYER_FACTION_ID)
+        .unit("A", UNIT_TYPE_WARRIOR, ALLY_FACTION_ID)
         .unit("E", UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID)
         .to_toml()
         .expect("LevelBuilder::to_toml 應成功");

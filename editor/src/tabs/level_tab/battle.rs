@@ -295,15 +295,20 @@ fn render_battlefield(
     let board = snapshot.board;
 
     // 取得技能可攻擊位置（SkillPopup 且有選中技能時）
-    let skill_targetable: HashSet<Position> = if let BattleAction::SkillPopup {
-        selected_skill_name: Some(ref skill_name),
-    } = ui_state.battle_action
-    {
-        board::ecs_logic::skill::get_skill_targetable_positions(&mut ui_state.world, skill_name)?
-            .into_iter()
-            .collect()
-    } else {
-        HashSet::new()
+    let selected_skill_in_popup = match ui_state.battle_action {
+        BattleAction::SkillPopup {
+            selected_skill_name: Some(ref skill_name),
+        } => Some(skill_name.clone()),
+        _ => None,
+    };
+    let skill_targetable: HashSet<Position> = match &selected_skill_in_popup {
+        Some(skill_name) => board::ecs_logic::skill::get_skill_targetable_positions(
+            &mut ui_state.world,
+            skill_name,
+        )?
+        .into_iter()
+        .collect(),
+        None => HashSet::new(),
     };
 
     // 取得當前行動單位的可移動範圍
@@ -341,6 +346,30 @@ fn render_battlefield(
 
             let hovered_pos = battlefield::compute_hover_pos(&response, rect, board);
 
+            // 計算技能 AOE 預覽（懸停在可攻擊位置時）
+            let (skill_all_positions, skill_filtered_positions) =
+                match (&selected_skill_in_popup, hovered_pos) {
+                    (Some(skill_name), Some(hover)) if skill_targetable.contains(&hover) => {
+                        let preview = board::ecs_logic::skill::get_skill_affected_positions(
+                            &mut ui_state.world,
+                            skill_name,
+                            hover,
+                        );
+                        let preview = match preview {
+                            Ok(preview) => preview,
+                            Err(e) => {
+                                error = Err(e);
+                                return;
+                            }
+                        };
+                        let all: HashSet<Position> = preview.all_positions.into_iter().collect();
+                        let filtered: HashSet<Position> =
+                            preview.filtered_positions.into_iter().collect();
+                        (all, filtered)
+                    }
+                    _ => (HashSet::new(), HashSet::new()),
+                };
+
             // 計算路徑預覽（懸停時）
             let preview_path = preview_path(current_pos, hovered_pos, &reachable_positions);
 
@@ -353,6 +382,8 @@ fn render_battlefield(
                 &reachable_positions,
                 remaining_1mov,
                 &skill_targetable,
+                &skill_all_positions,
+                &skill_filtered_positions,
             );
 
             battlefield::render_grid(
@@ -478,8 +509,17 @@ fn get_bg_highlight<'a>(
     reachable_positions: &'a HashMap<Position, ReachableInfo>,
     remaining_1mov: i32,
     skill_targetable: &'a HashSet<Position>,
+    skill_all_positions: &'a HashSet<Position>,
+    skill_filtered_positions: &'a HashSet<Position>,
 ) -> impl Fn(Position) -> Option<egui::Color32> + 'a {
     move |pos: Position| -> Option<egui::Color32> {
+        // AOE 預覽優先：filtered 用紅色，all 用黃色
+        if skill_filtered_positions.contains(&pos) {
+            return Some(BATTLEFIELD_COLOR_SKILL_AFFECTED);
+        }
+        if skill_all_positions.contains(&pos) {
+            return Some(BATTLEFIELD_COLOR_HIGHLIGHT);
+        }
         if skill_targetable.contains(&pos) {
             return Some(BATTLEFIELD_COLOR_HIGHLIGHT);
         }

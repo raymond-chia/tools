@@ -153,7 +153,7 @@ cost = 0
 [skills.Active.target]
 range = [1, 2]
 selection = "Ground"
-selectable_filter = "AnyExceptCaster"
+selectable_filter = "AllyExceptCaster"
 count = 1
 allow_same_target = false
 

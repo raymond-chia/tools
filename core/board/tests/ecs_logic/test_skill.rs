@@ -349,11 +349,10 @@ fn test_skill_targetable_positions_various_ranges() {
 
 #[test]
 fn get_skill_affected_positions_diamond() {
-    /// 從 markers 收集預期影響格子（T + A）
     fn collect_expected_affected(
         markers: &HashMap<String, Vec<Position>>,
     ) -> Result<HashSet<Position>, String> {
-        let set: HashSet<_> = ["T", "A"]
+        let set: HashSet<_> = ["T", "+", "A"]
             .iter()
             .flat_map(|key| markers.get(*key).into_iter().flatten().copied())
             .collect();
@@ -375,22 +374,29 @@ fn get_skill_affected_positions_diamond() {
         ",
         "
         . . . . .
-        . . A . .
-        . A T A .
-        . P A . .
+        . . + . .
+        . + T + .
+        . P + . .
         . . . . .
         ",
         "
         . . . . .
-        . . . A .
-        . . A T A
+        . . . + .
+        . . + T +
         . . . P .
         . . . . .
         ",
         "
         . . . . .
         . . . . .
-        . . . . A
+        . . . . +
+        . . . P T
+        . . . . +
+        ",
+        "
+        . . . . .
+        . . . . .
+        . . . . E
         . . . P T
         . . . . A
         ",
@@ -414,9 +420,12 @@ fn get_skill_affected_positions_diamond() {
                 let filtered_positions = filtered_positions.into_iter().collect::<HashSet<_>>();
 
                 assert_eq!(filtered_positions, expected, "預覽 AOE 不符：{ascii}");
-                // 本測試只有過濾 caster, 所以預期只要檢查是否差異在 caster
+                // 本測試只有過濾 caster & enemy, 所以預期只要檢查是否差異在 caster & enemy
                 if all_positions.contains(&caster_pos) {
                     expected.insert(caster_pos);
+                }
+                if let Some(enemy_pos) = markers.get("E").and_then(|v| v.get(0)) {
+                    expected.insert(*enemy_pos);
                 }
                 assert_eq!(all_positions, expected, "預覽 AOE 全部格子不符：{ascii}");
             }
