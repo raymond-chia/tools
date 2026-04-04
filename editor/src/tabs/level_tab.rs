@@ -8,7 +8,7 @@ mod edit;
 use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::MessageState;
 use bevy_ecs::world::World;
-use board::domain::alias::TypeName;
+use board::domain::alias::{SkillName, TypeName};
 use board::domain::core_types::SkillType;
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
@@ -35,7 +35,9 @@ pub enum BattleAction {
     #[default]
     Normal,
     Delaying,
-    SkillPopup,
+    SkillPopup {
+        selected_skill_name: Option<SkillName>,
+    },
 }
 
 /// 關卡編輯器的模式

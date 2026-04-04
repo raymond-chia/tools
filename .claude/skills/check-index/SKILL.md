@@ -37,6 +37,7 @@ cd "$CLAUDE_PROJECT_DIR" && uv run scripts/collect_signatures.py
 注意：script 輸出包含所有 fn（含私有、trait impl），索引只需記錄：
 - `pub fn`、`pub(crate) fn`
 - `pub struct`、`pub enum`、`pub trait`
+- `pub use` （巨集）
 - **不記錄** `impl Trait for Type`（trait 實現）
 請自行過濾。
 

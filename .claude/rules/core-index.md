@@ -170,6 +170,11 @@ core/board/
 
 - `pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Result<()>` - 生成關卡的所有 Entity
 
+### ecs_logic/mod.rs
+
+- `pub(crate) use get_component;` (巨集) - 取得 Component 的便利巨集
+- `pub(crate) use get_component_mut;` (巨集) - 取得可變 Component 的便利巨集
+
 ### ecs_logic/deployment.rs
 
 - `pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Position) -> Result<()>` - 部署玩家單位到指定位置
@@ -178,9 +183,11 @@ core/board/
 
 ### ecs_logic/query.rs
 
+- `pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>` - 查詢所有單位及其位置
+- `pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQueryResult>>` - 查詢所有物件及其位置
 - `pub(crate) fn setup_occupant_index(world: &mut World)` - 初始化佔據者索引
 - `pub(crate) fn find_entity_by_occupant(world: &World, occupant: Occupant) -> Result<Entity>` - 根據佔據者查找實體
-- `pub(crate) fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
+- `pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
 - `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
 
 ### ecs_logic/movement.rs

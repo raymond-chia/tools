@@ -3,6 +3,7 @@
 use super::battlefield::{self, Snapshot};
 use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState};
 use crate::constants::*;
+use board::domain::alias::SkillName;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
@@ -251,11 +252,17 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
 
         ui.separator();
 
-        let (label, battle_action) = if ui_state.battle_action == BattleAction::SkillPopup {
-            ("關閉技能", BattleAction::Normal)
-        } else {
-            ("技能", BattleAction::SkillPopup)
-        };
+        let (label, battle_action) =
+            if matches!(ui_state.battle_action, BattleAction::SkillPopup { .. }) {
+                ("關閉技能", BattleAction::Normal)
+            } else {
+                (
+                    "技能",
+                    BattleAction::SkillPopup {
+                        selected_skill_name: None,
+                    },
+                )
+            };
         let skill_button_response = ui.add_sized(
             button_size,
             egui::Button::new(label).wrap_mode(egui::TextWrapMode::Wrap),
@@ -264,9 +271,13 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
             ui_state.battle_action = battle_action;
         }
         // 技能彈出面板
-        if ui_state.battle_action == BattleAction::SkillPopup {
+        if let BattleAction::SkillPopup {
+            ref selected_skill_name,
+        } = ui_state.battle_action
+        {
             let button_rect = skill_button_response.rect;
-            if let Err(e) = render_skill_popup(ui, ui_state, button_rect) {
+            let selected_skill_name = selected_skill_name.clone();
+            if let Err(e) = render_skill_popup(ui, ui_state, button_rect, &selected_skill_name) {
                 error = Err(e);
             }
         }
@@ -282,6 +293,18 @@ fn render_battlefield(
     ui_state: &mut LevelTabUIState,
 ) -> CResult<()> {
     let board = snapshot.board;
+
+    // 取得技能可攻擊位置（SkillPopup 且有選中技能時）
+    let skill_targetable: HashSet<Position> = if let BattleAction::SkillPopup {
+        selected_skill_name: Some(ref skill_name),
+    } = ui_state.battle_action
+    {
+        board::ecs_logic::skill::get_skill_targetable_positions(&mut ui_state.world, skill_name)?
+            .into_iter()
+            .collect()
+    } else {
+        HashSet::new()
+    };
 
     // 取得當前行動單位的可移動範圍
     let current_occupant = board::logic::turn_order::get_active_unit(&turn_order.entries);
@@ -325,8 +348,12 @@ fn render_battlefield(
             let get_cell_info_fn = battlefield::get_cell_info(snapshot);
             let is_border_highlight_fn =
                 battlefield::is_border_highlight(ui_state.selected_left_pos);
-            let get_bg_highlight_fn =
-                get_bg_highlight(preview_path, &reachable_positions, remaining_1mov);
+            let get_bg_highlight_fn = get_bg_highlight(
+                preview_path,
+                &reachable_positions,
+                remaining_1mov,
+                &skill_targetable,
+            );
 
             battlefield::render_grid(
                 ui,
@@ -375,12 +402,14 @@ fn render_skill_popup(
     ui: &mut egui::Ui,
     ui_state: &mut LevelTabUIState,
     button_rect: egui::Rect,
+    selected_skill_name: &Option<SkillName>,
 ) -> Result<(), String> {
     let skills = match board::ecs_logic::skill::get_available_skills(&mut ui_state.world) {
         Ok(s) => s,
         Err(e) => return Err(format!("取得技能列表失敗：{}", e)),
     };
 
+    let mut clicked_skill: Option<SkillName> = None;
     let popup_pos = egui::pos2(button_rect.left(), button_rect.top());
     egui::Area::new(egui::Id::new("skill_popup"))
         .fixed_pos(popup_pos)
@@ -390,7 +419,10 @@ fn render_skill_popup(
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 for skill in &skills {
                     if skill.usable {
-                        ui.label(&skill.name);
+                        let is_selected = selected_skill_name.as_ref() == Some(&skill.name);
+                        if ui.selectable_label(is_selected, &skill.name).clicked() {
+                            clicked_skill = Some(skill.name.clone());
+                        }
                     } else {
                         let label = egui::Label::new(
                             egui::RichText::new(&skill.name).color(egui::Color32::GRAY),
@@ -403,6 +435,12 @@ fn render_skill_popup(
                 }
             });
         });
+
+    if let Some(name) = clicked_skill {
+        ui_state.battle_action = BattleAction::SkillPopup {
+            selected_skill_name: Some(name),
+        };
+    }
 
     Ok(())
 }
@@ -435,12 +473,16 @@ fn preview_path(
         .collect()
 }
 
-fn get_bg_highlight(
+fn get_bg_highlight<'a>(
     preview_path: HashSet<Position>,
-    reachable_positions: &HashMap<Position, ReachableInfo>,
+    reachable_positions: &'a HashMap<Position, ReachableInfo>,
     remaining_1mov: i32,
-) -> impl Fn(Position) -> Option<egui::Color32> {
+    skill_targetable: &'a HashSet<Position>,
+) -> impl Fn(Position) -> Option<egui::Color32> + 'a {
     move |pos: Position| -> Option<egui::Color32> {
+        if skill_targetable.contains(&pos) {
+            return Some(BATTLEFIELD_COLOR_HIGHLIGHT);
+        }
         if preview_path.contains(&pos) {
             return Some(BATTLEFIELD_COLOR_MOVE_PATH);
         }
@@ -486,7 +528,7 @@ fn handle_mouse_click(
                 }
             }
             BattleAction::Delaying => {}
-            BattleAction::SkillPopup => {}
+            BattleAction::SkillPopup { .. } => {}
         }
     }
     if response.secondary_clicked() {
