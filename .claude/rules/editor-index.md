@@ -102,11 +102,13 @@ GenericEditorState 的方法：
 
 ### editor/editor_macros.rs
 
+- `pub fn new() -> Self` - 初始化編輯器應用程式（由 define_editors 巨集生成）
 - `pub macro define_editors` - 生成 EditorTab 枚舉、EditorApp 結構和 new() 方法（自動載入檔案）
 
 ### editor/utils/dnd.rs
 
 - `pub fn render_dnd_handle(ui: &mut egui::Ui, item_id: Id, index: usize, label: &str) -> Option<(usize, usize)>` - 渲染拖曳手柄，返回 (from_index, to_index)
+- `pub(crate) fn draw_dnd_indicator(ui: &egui::Ui, dragged_idx: usize, target_idx: usize)` - 繪製拖曳指示線
 
 ### editor/utils/search.rs
 

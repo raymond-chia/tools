@@ -1,12 +1,12 @@
 use crate::domain::alias::ID;
+use crate::ecs_logic::query::{get_resource, setup_occupant_index};
 use crate::ecs_types::components::{
-    ActionState, BlocksSight, BlocksSound, ContactEffects, Object, ObjectBundle, Occupant,
-    OccupantTypeName, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
+    ActionState, BlocksSight, BlocksSound, ContactEffects, Object, ObjectBundle,
+    ObjectMovementCost, Occupant, OccupantTypeName, Skills, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::LevelType;
-use crate::logic::debug::short_type_name;
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
 use bevy_ecs::prelude::World;
@@ -14,6 +14,9 @@ use std::collections::HashSet;
 
 /// 反序列化並生成關卡的所有 Entity（棋盤、單位、物件）
 pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Result<()> {
+    // 初始化 OccupantIndex（必須在 spawn 之前，observer 才能自動追蹤）
+    setup_occupant_index(world);
+
     let level: LevelType = toml::from_str(level_toml).map_err(|e| LoadError::DeserializeError {
         format: level_name.to_string(),
         reason: e.to_string(),
@@ -21,12 +24,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
 
     // 第一階段：借用 GameData，預先收集所有需要 spawn 的資料
     let (unit_bundles, object_spawn_data) = {
-        let game_data = world
-            .get_resource::<GameData>()
-            .ok_or(DataError::MissingResource {
-                name: short_type_name::<GameData>(),
-                note: "請先呼叫 parse_and_insert_game_data".to_string(),
-            })?;
+        let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
 
         let mut used_ids: HashSet<ID> = HashSet::new();
         let mut unit_bundles: Vec<UnitBundle> = Vec::new();
@@ -75,7 +73,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                     position: placement.position,
                     occupant: Occupant::Object(id),
                     occupant_type_name: OccupantTypeName(object_type.name.clone()),
-                    terrain_movement_cost: TerrainMovementCost(object_type.movement_cost),
+                    terrain_movement_cost: ObjectMovementCost(object_type.movement_cost),
                     contact_effects: ContactEffects(Vec::new()),
                 },
                 object_type.blocks_sight.then_some(BlocksSight),

@@ -14,15 +14,35 @@ FN_PATTERN = re.compile(
     r"^(\s*)pub(\([^)]*\))?\s+(async\s+)?(const\s+)?(unsafe\s+)?fn\s+\w+"
 )
 
+# 匹配 macro_rules! 的匯出行（如 pub(crate) use get_component;）
+MACRO_USE_PATTERN = re.compile(
+    r"^(\s*)pub(\([^)]*\))?\s+use\s+(\w+)\s*;"
+)
+
 
 def extract_signatures(filepath: Path) -> list[str]:
     """從單一檔案提取所有 fn 簽名。"""
     text = filepath.read_text(encoding="utf-8")
     lines = text.splitlines()
+
+    # 先收集檔案中所有 macro_rules! 定義的名稱
+    macro_names = set()
+    for line in lines:
+        m = re.match(r"^\s*macro_rules!\s+(\w+)", line)
+        if m:
+            macro_names.add(m.group(1))
+
     signatures = []
     i = 0
     while i < len(lines):
         line = lines[i]
+        # 匹配 macro_rules! 的匯出行
+        macro_match = MACRO_USE_PATTERN.match(line)
+        if macro_match and macro_match.group(3) in macro_names:
+            raw = line.strip()
+            signatures.append(f"{raw} (macro)")
+            i += 1
+            continue
         if FN_PATTERN.match(line):
             # 蒐集簽名直到遇到 { 或 ;
             sig_lines = []

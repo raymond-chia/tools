@@ -2,10 +2,15 @@
 
 use crate::domain::alias::{Coord, ID, SkillName, TypeName};
 use crate::domain::core_types::{SkillType, TurnEntry};
-use crate::ecs_types::components::Position;
+use crate::ecs_types::components::{Occupant, Position};
 use crate::loader_schema::{Faction, ObjectType, UnitType};
+use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
 use std::collections::{HashMap, HashSet};
+
+/// Occupant → Entity 的索引，由 observer 自動維護
+#[derive(Debug, Default, Resource)]
+pub struct OccupantIndex(pub HashMap<Occupant, Entity>);
 
 /// 解析後的靜態遊戲資料，作為 World Resource
 #[derive(Debug, Resource)]

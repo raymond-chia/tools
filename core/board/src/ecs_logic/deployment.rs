@@ -1,11 +1,11 @@
 use crate::domain::alias::{ID, TypeName};
 use crate::domain::constants::PLAYER_FACTION_ID;
+use crate::ecs_logic::query::get_resource;
 use crate::ecs_types::components::{
     ActionState, Occupant, OccupantTypeName, Position, Skills, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
-use crate::logic::debug::short_type_name;
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::unit_attributes;
 use bevy_ecs::entity::Entity;
@@ -19,51 +19,33 @@ use std::collections::{HashMap, HashSet};
 /// - 若無替換，已部署數量不得超過 max_player_units
 /// - 陣營固定為 PLAYER_FACTION_ID
 pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Position) -> Result<()> {
-    // 第一階段：借用 resources 並收集所有需要的資料
-    let (entity_to_remove, current_player_unit_count, deployment_config, game_data, mut used_ids) = {
-        let used_ids: HashSet<ID> = world
-            .query::<&Occupant>()
-            .iter(world)
-            .map(|occupant| match occupant {
-                Occupant::Unit(id) => *id,
-                Occupant::Object(id) => *id,
-            })
-            .collect();
+    // 第 1 階段：借用 resources 並收集所有需要的資料
 
-        let deployment_config = world
-            .get_resource::<DeploymentConfig>()
-            .ok_or(DataError::MissingResource {
-                name: short_type_name::<DeploymentConfig>(),
-                note: "請先呼叫 spawn_level".to_string(),
-            })?
-            .clone();
+    let mut used_ids: HashSet<ID> = world
+        .query::<&Occupant>()
+        .iter(world)
+        .map(|occupant| match occupant {
+            Occupant::Unit(id) => *id,
+            Occupant::Object(id) => *id,
+        })
+        .collect();
 
-        // resource 借用已結束，可再次查詢 world
-        // 計算站在部署點上的玩家單位數（即已部署的單位，不含關卡預設單位）
-        let deployed: HashMap<Position, Entity> = world
-            .query_filtered::<(Entity, &Position), With<Unit>>()
-            .iter(world)
-            .filter(|(_, pos)| deployment_config.deployment_positions.contains(pos))
-            .map(|(entity, pos)| (*pos, entity))
-            .collect();
-        let current_player_unit_count = deployed.len();
-        // 找出同格的玩家單位（準備替換）
-        let entity_to_remove = deployed.get(&position).copied();
+    let deployment_config =
+        get_resource::<DeploymentConfig>(world, "請先呼叫 spawn_level")?.clone();
 
-        let game_data = world
-            .get_resource::<GameData>()
-            .ok_or(DataError::MissingResource {
-                name: short_type_name::<GameData>(),
-                note: "請先呼叫 parse_and_insert_game_data".to_string(),
-            })?;
-        (
-            entity_to_remove,
-            current_player_unit_count,
-            deployment_config,
-            game_data,
-            used_ids,
-        )
-    };
+    // resource 借用已結束，可再次查詢 world
+    // 計算站在部署點上的玩家單位數（即已部署的單位，不含關卡預設單位）
+    let deployed: HashMap<Position, Entity> = world
+        .query_filtered::<(Entity, &Position), With<Unit>>()
+        .iter(world)
+        .filter(|(_, pos)| deployment_config.deployment_positions.contains(pos))
+        .map(|(entity, pos)| (*pos, entity))
+        .collect();
+    let current_player_unit_count = deployed.len();
+    // 找出同格的玩家單位（準備替換）
+    let entity_to_remove = deployed.get(&position).copied();
+
+    let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
 
     // Fail fast：驗證位置在合法部署區域內
     if !deployment_config.deployment_positions.contains(&position) {
@@ -73,6 +55,8 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
         }
         .into());
     }
+
+    // 第 2 階段：resource 借用已結束，可以可變借用 world
 
     let new_id = generate_unique_id(&mut used_ids)?;
     let unit_type =
@@ -100,7 +84,7 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
         action_state: ActionState::Moved { cost: 0 },
     };
 
-    // 第二階段：resource 借用已結束，可以可變借用 world
+    // 第 3 階段：resource 借用已結束，可以可變借用 world
 
     match entity_to_remove {
         Some(entity) => {
@@ -129,26 +113,15 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
 /// - 若位置上沒有玩家單位，回傳 NothingToUndeploy 錯誤
 pub fn undeploy_unit(world: &mut World, position: Position) -> Result<()> {
     // 第一階段：讀取所有需要的資料
-    let (deployment_positions, entity_to_remove) = {
-        let deployment_config = world
-            .get_resource::<DeploymentConfig>()
-            .ok_or(DataError::MissingResource {
-                name: short_type_name::<DeploymentConfig>(),
-                note: "請先呼叫 spawn_level".to_string(),
-            })?
-            .clone();
-
-        let entity_to_remove: Option<Entity> = world
-            .query_filtered::<(Entity, &Position), With<Unit>>()
-            .iter(world)
-            .find(|(_, pos)| **pos == position)
-            .map(|(entity, _)| entity);
-
-        (deployment_config.deployment_positions, entity_to_remove)
-    };
+    let entity_to_remove: Option<Entity> = world
+        .query_filtered::<(Entity, &Position), With<Unit>>()
+        .iter(world)
+        .find(|(_, pos)| **pos == position)
+        .map(|(entity, _)| entity);
+    let deployment_config = get_resource::<DeploymentConfig>(world, "請先呼叫 spawn_level")?;
 
     // Fail fast 驗證
-    if !deployment_positions.contains(&position) {
+    if !deployment_config.deployment_positions.contains(&position) {
         return Err(DeploymentError::PositionNotDeployable {
             x: position.x,
             y: position.y,

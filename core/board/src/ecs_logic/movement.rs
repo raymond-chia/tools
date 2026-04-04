@@ -1,15 +1,18 @@
 //! ECS 移動操作函數
 
+use super::{get_component, get_component_mut};
 use crate::domain::alias::{ID, MovementCost};
 use crate::domain::constants::BASIC_MOVEMENT_COST;
-use crate::ecs_logic::query::{get_all_objects, get_all_units, get_board, get_level_config};
-use crate::ecs_types::components::{ActionState, MovementPoint, Occupant, Position, UnitFaction};
-use crate::ecs_types::resources::TurnOrder;
+use crate::ecs_logic::query::{find_entity_by_occupant, get_resource};
+use crate::ecs_types::components::{
+    ActionState, MovementPoint, Object, ObjectMovementCost, Occupant, Position, Unit, UnitFaction,
+};
+use crate::ecs_types::resources::{Board, LevelConfig, TurnOrder};
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
 use crate::logic::turn_order::get_active_unit;
-use bevy_ecs::prelude::{Entity, World};
+use bevy_ecs::prelude::{With, World};
 use std::collections::HashMap;
 
 /// 移動結果，包含路徑與消耗
@@ -27,29 +30,20 @@ pub fn get_reachable_positions(
     occupant: Occupant,
 ) -> Result<HashMap<Position, ReachableInfo>> {
     // 查詢單位的位置、陣營與移動資訊
-    let (unit_pos, faction, movement_point, movement_used) = world
-        .query::<(
-            &Occupant,
-            &Position,
-            &UnitFaction,
-            &MovementPoint,
-            &ActionState,
-        )>()
-        .iter(world)
-        .find(|(occ, _, _, _, _)| **occ == occupant)
-        .map(|(_, pos, unit_faction, movement_point, action_state)| {
-            let used = match action_state {
-                ActionState::Moved { cost } => *cost,
-                ActionState::Done => movement_point.0 as MovementCost * 2, // 已結束，無剩餘預算
-            };
-            (*pos, unit_faction.0, movement_point.0 as MovementCost, used)
-        })
-        .ok_or_else(|| BoardError::OccupantNotFound { occupant })?;
+    let entity = find_entity_by_occupant(world, occupant)?;
+    let entity_ref = world.entity(entity);
+    let unit_pos = *get_component!(entity_ref, Position)?;
+    let faction = get_component!(entity_ref, UnitFaction)?.0;
+    let movement_point = get_component!(entity_ref, MovementPoint)?.0 as MovementCost;
+    let movement_used = match get_component!(entity_ref, ActionState)? {
+        ActionState::Moved { cost } => *cost,
+        ActionState::Done => movement_point * 2,
+    };
 
-    let board = get_board(world)?;
-    let units = get_all_units(world)?;
-    let objects = get_all_objects(world)?;
-    let level_config = get_level_config(world)?;
+    let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
+    let units_faction = get_units_faction_map(world)?;
+    let objects_movement_cost = get_objects_movement_cost_map(world)?;
+    let level_config = get_resource::<LevelConfig>(world, "請先呼叫 spawn_level")?;
 
     // 計算可用預算（2 倍移動力 - 已使用的）
     let budget = movement_point * 2 - movement_used;
@@ -63,30 +57,18 @@ pub fn get_reachable_positions(
 
     // 構建 occupant closure（查詢位置上的佔據者所屬的同盟）
     let get_occupant_alliance = |pos: Position| -> Option<ID> {
-        // 先查詢單位
-        if let Some(unit) = units.get(&pos) {
-            let faction_id = unit.unit_faction.0;
-            return Some(
-                faction_to_alliance
-                    .get(&faction_id)
-                    .copied()
-                    .unwrap_or_else(|| {
-                        unreachable!("faction_id {} 不存在於 faction_to_alliance", faction_id)
-                    }),
-            );
-        }
-        // 無單位，返回 None
-        None
+        units_faction.get(&pos).and_then(|faction_id| {
+            faction_to_alliance
+                .get(faction_id)
+                .copied()
+                .or_else(|| unreachable!("faction_id {} 不存在於 faction_to_alliance", faction_id))
+        })
     };
 
     // 構建 terrain_cost closure（物件消耗疊加在基礎消耗上）
     let get_terrain_cost = |pos: Position| -> MovementCost {
         let base_cost = BASIC_MOVEMENT_COST;
-        if let Some(obj) = objects.get(&pos) {
-            base_cost + obj.bundle.terrain_movement_cost.0
-        } else {
-            base_cost
-        }
+        base_cost + objects_movement_cost.get(&pos).copied().unwrap_or(0)
     };
 
     let mover_alliance =
@@ -126,22 +108,12 @@ pub fn get_reachable_positions(
 /// - 移動消耗不能超過可用預算
 pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
     // 從 TurnOrder 取得當前行動單位
-    let turn_order =
-        world
-            .get_resource::<TurnOrder>()
-            .ok_or_else(|| DataError::MissingResource {
-                name: short_type_name::<TurnOrder>(),
-                note: "請先呼叫 start_new_round".to_string(),
-            })?;
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
     let occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
 
     // 驗證佔據者存在並取得起點位置與 Entity
-    let (entity, start_pos) = world
-        .query::<(Entity, &Occupant, &Position)>()
-        .iter(world)
-        .find(|(_, occ, _)| **occ == occupant)
-        .map(|(entity, _, pos)| (entity, *pos))
-        .ok_or_else(|| BoardError::OccupantNotFound { occupant })?;
+    let entity = find_entity_by_occupant(world, occupant)?;
+    let start_pos = *get_component!(world.entity(entity), Position)?;
 
     // 計算可到達位置
     let reachable = get_reachable_positions(world, occupant)?;
@@ -171,21 +143,11 @@ pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
     // 更新位置和消耗
     let mut entity_mut = world.entity_mut(entity);
     {
-        let mut pos =
-            entity_mut
-                .get_mut::<Position>()
-                .ok_or_else(|| DataError::MissingComponent {
-                    name: short_type_name::<Position>(),
-                })?;
+        let mut pos = get_component_mut!(entity_mut, Position)?;
         *pos = target;
     }
     {
-        let mut action_state =
-            entity_mut
-                .get_mut::<ActionState>()
-                .ok_or_else(|| DataError::MissingComponent {
-                    name: short_type_name::<ActionState>(),
-                })?;
+        let mut action_state = get_component_mut!(entity_mut, ActionState)?;
         match action_state.as_ref() {
             ActionState::Moved { cost } => {
                 *action_state = ActionState::Moved {
@@ -203,4 +165,30 @@ pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
         path,
         cost: cost_to_target,
     })
+}
+
+// ============================================================================
+// 移動系統專用查詢函式（精簡快照，避免複製整份 bundle）
+// ============================================================================
+
+/// 取得單位 faction 對應，只複製必要的 faction_id 欄位
+fn get_units_faction_map(world: &mut World) -> Result<HashMap<Position, ID>> {
+    let mut result = HashMap::new();
+    let mut query = world.query_filtered::<(&Position, &UnitFaction), With<Unit>>();
+
+    for (position, unit_faction) in query.iter(world) {
+        result.insert(*position, unit_faction.0);
+    }
+    Ok(result)
+}
+
+/// 取得物件地形消耗對應，只複製必要的 terrain_movement_cost 欄位
+fn get_objects_movement_cost_map(world: &mut World) -> Result<HashMap<Position, MovementCost>> {
+    let mut result = HashMap::new();
+    let mut query = world.query_filtered::<(&Position, &ObjectMovementCost), With<Object>>();
+
+    for (position, movement_cost) in query.iter(world) {
+        result.insert(*position, movement_cost.0);
+    }
+    Ok(result)
 }

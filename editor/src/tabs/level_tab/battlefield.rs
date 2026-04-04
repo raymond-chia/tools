@@ -4,9 +4,9 @@ use crate::constants::*;
 use bevy_ecs::world::World;
 use board::domain::alias::{Coord, ID};
 use board::domain::constants::PLAYER_ALLIANCE_ID;
-use board::ecs_logic::query::ObjectQueryResult;
+use board::ecs_logic::query::{ObjectQueryResult, get_all_objects, get_all_units, get_resource};
 use board::ecs_types::components::{Position, UnitBundle};
-use board::ecs_types::resources::{Board, LevelConfig};
+use board::ecs_types::resources::{Board, DeploymentConfig, LevelConfig};
 use board::error::Result as CResult;
 use board::loader_schema::Faction;
 use std::collections::{HashMap, HashSet};
@@ -34,11 +34,11 @@ pub struct Snapshot {
 
 /// 一次查詢部署/戰鬥模式所需的所有關卡資料
 pub fn query_snapshot(world: &mut World) -> CResult<Snapshot> {
-    let unit_map = board::ecs_logic::query::get_all_units(world)?;
-    let object_map = board::ecs_logic::query::get_all_objects(world)?;
-    let board = board::ecs_logic::query::get_board(world)?;
-    let deployment_config = board::ecs_logic::query::get_deployment_config(world)?;
-    let level_config = board::ecs_logic::query::get_level_config(world)?;
+    let unit_map = get_all_units(world)?;
+    let object_map = get_all_objects(world)?;
+    let board = *get_resource::<Board>(world, "棋盤尺寸未初始化")?;
+    let deployment_config = get_resource::<DeploymentConfig>(world, "部署設定未初始化")?.clone();
+    let level_config = get_resource::<LevelConfig>(world, "關卡設定未初始化")?.clone();
     Ok(Snapshot {
         board,
         max_player_units: deployment_config.max_player_units,

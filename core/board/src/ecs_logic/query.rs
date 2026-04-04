@@ -1,52 +1,19 @@
-use super::clone_component;
+use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     Accuracy, ActionState, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
     ContactEffects, CurrentHp, CurrentMp, Evasion, Fortitude, Initiative, MagicalAttack, MagicalDc,
-    MaxHp, MaxMp, MovementPoint, Object, ObjectBundle, Occupant, OccupantTypeName, PhysicalAttack,
-    Position, ReactionPoint, Reflex, Skills, TerrainMovementCost, Unit, UnitBundle, UnitFaction,
-    Will,
+    MaxHp, MaxMp, MovementPoint, Object, ObjectBundle, ObjectMovementCost, Occupant,
+    OccupantTypeName, PhysicalAttack, Position, ReactionPoint, Reflex, Skills, Unit, UnitBundle,
+    UnitFaction, Will,
 };
-use crate::ecs_types::resources::{Board, DeploymentConfig, LevelConfig};
-use crate::error::{DataError, Result};
+use crate::ecs_types::resources::OccupantIndex;
+use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
-use bevy_ecs::prelude::{Entity, With, World};
+use bevy_ecs::change_detection::Mut;
+use bevy_ecs::event::EntityEvent;
+use bevy_ecs::lifecycle::{Add, Remove};
+use bevy_ecs::prelude::{Entity, On, Query, ResMut, Resource, With, World};
 use std::collections::HashMap;
-
-/// 取得棋盤尺寸
-pub fn get_board(world: &World) -> Result<Board> {
-    world.get_resource::<Board>().copied().ok_or_else(|| {
-        DataError::MissingResource {
-            name: short_type_name::<Board>(),
-            note: "請先呼叫 spawn_level".to_string(),
-        }
-        .into()
-    })
-}
-
-/// 取得部署設定
-pub fn get_deployment_config(world: &World) -> Result<DeploymentConfig> {
-    world
-        .get_resource::<DeploymentConfig>()
-        .cloned()
-        .ok_or_else(|| {
-            DataError::MissingResource {
-                name: short_type_name::<DeploymentConfig>(),
-                note: "請先呼叫 spawn_level".to_string(),
-            }
-            .into()
-        })
-}
-
-/// 取得關卡設定
-pub fn get_level_config(world: &World) -> Result<LevelConfig> {
-    world.get_resource::<LevelConfig>().cloned().ok_or_else(|| {
-        DataError::MissingResource {
-            name: short_type_name::<LevelConfig>(),
-            note: "請先呼叫 spawn_level".to_string(),
-        }
-        .into()
-    })
-}
 
 /// 查詢所有單位，以位置為 key
 pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>> {
@@ -62,30 +29,30 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
         let bundle = UnitBundle {
             unit: Unit,
             position,
-            occupant: clone_component!(entity_ref, Occupant),
-            occupant_type_name: clone_component!(entity_ref, OccupantTypeName),
-            unit_faction: clone_component!(entity_ref, UnitFaction),
-            skills: clone_component!(entity_ref, Skills),
+            occupant: *get_component!(entity_ref, Occupant)?,
+            occupant_type_name: get_component!(entity_ref, OccupantTypeName)?.clone(),
+            unit_faction: *get_component!(entity_ref, UnitFaction)?,
+            skills: get_component!(entity_ref, Skills)?.clone(),
             attributes: AttributeBundle {
-                max_hp: clone_component!(entity_ref, MaxHp),
-                current_hp: clone_component!(entity_ref, CurrentHp),
-                max_mp: clone_component!(entity_ref, MaxMp),
-                current_mp: clone_component!(entity_ref, CurrentMp),
-                initiative: clone_component!(entity_ref, Initiative),
-                accuracy: clone_component!(entity_ref, Accuracy),
-                evasion: clone_component!(entity_ref, Evasion),
-                block: clone_component!(entity_ref, Block),
-                block_protection: clone_component!(entity_ref, BlockProtection),
-                physical_attack: clone_component!(entity_ref, PhysicalAttack),
-                magical_attack: clone_component!(entity_ref, MagicalAttack),
-                magical_dc: clone_component!(entity_ref, MagicalDc),
-                fortitude: clone_component!(entity_ref, Fortitude),
-                reflex: clone_component!(entity_ref, Reflex),
-                will: clone_component!(entity_ref, Will),
-                movement_point: clone_component!(entity_ref, MovementPoint),
-                reaction_point: clone_component!(entity_ref, ReactionPoint),
+                max_hp: get_component!(entity_ref, MaxHp)?.clone(),
+                current_hp: get_component!(entity_ref, CurrentHp)?.clone(),
+                max_mp: get_component!(entity_ref, MaxMp)?.clone(),
+                current_mp: get_component!(entity_ref, CurrentMp)?.clone(),
+                initiative: get_component!(entity_ref, Initiative)?.clone(),
+                accuracy: get_component!(entity_ref, Accuracy)?.clone(),
+                evasion: get_component!(entity_ref, Evasion)?.clone(),
+                block: get_component!(entity_ref, Block)?.clone(),
+                block_protection: get_component!(entity_ref, BlockProtection)?.clone(),
+                physical_attack: get_component!(entity_ref, PhysicalAttack)?.clone(),
+                magical_attack: get_component!(entity_ref, MagicalAttack)?.clone(),
+                magical_dc: get_component!(entity_ref, MagicalDc)?.clone(),
+                fortitude: get_component!(entity_ref, Fortitude)?.clone(),
+                reflex: get_component!(entity_ref, Reflex)?.clone(),
+                will: get_component!(entity_ref, Will)?.clone(),
+                movement_point: get_component!(entity_ref, MovementPoint)?.clone(),
+                reaction_point: get_component!(entity_ref, ReactionPoint)?.clone(),
             },
-            action_state: clone_component!(entity_ref, ActionState),
+            action_state: get_component!(entity_ref, ActionState)?.clone(),
         };
         result.insert(position, bundle);
     }
@@ -114,10 +81,10 @@ pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQuer
         let bundle = ObjectBundle {
             object: Object,
             position,
-            occupant: clone_component!(entity_ref, Occupant),
-            occupant_type_name: clone_component!(entity_ref, OccupantTypeName),
-            terrain_movement_cost: clone_component!(entity_ref, TerrainMovementCost),
-            contact_effects: clone_component!(entity_ref, ContactEffects),
+            occupant: *get_component!(entity_ref, Occupant)?,
+            occupant_type_name: get_component!(entity_ref, OccupantTypeName)?.clone(),
+            terrain_movement_cost: get_component!(entity_ref, ObjectMovementCost)?.clone(),
+            contact_effects: get_component!(entity_ref, ContactEffects)?.clone(),
         };
         let blocks_sight = entity_ref.get::<BlocksSight>().is_some();
         let blocks_sound = entity_ref.get::<BlocksSound>().is_some();
@@ -131,4 +98,74 @@ pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQuer
         );
     }
     Ok(result)
+}
+
+// ============================================================================
+// ECS 查詢工具函式
+// ============================================================================
+
+/// 初始化 OccupantIndex resource 與 observer（spawn/despawn 時自動同步）
+pub(crate) fn setup_occupant_index(world: &mut World) {
+    if world.contains_resource::<OccupantIndex>() {
+        world.insert_resource(OccupantIndex::default());
+        return;
+    }
+    world.insert_resource(OccupantIndex::default());
+    world.add_observer(
+        |trigger: On<Add, Occupant>, query: Query<&Occupant>, mut index: ResMut<OccupantIndex>| {
+            let entity = trigger.event_target();
+            if let Ok(occupant) = query.get(entity) {
+                index.0.insert(*occupant, entity);
+            }
+        },
+    );
+    world.add_observer(
+        |trigger: On<Remove, Occupant>,
+         query: Query<&Occupant>,
+         mut index: ResMut<OccupantIndex>| {
+            let entity = trigger.event_target();
+            if let Ok(occupant) = query.get(entity) {
+                index.0.remove(occupant);
+            }
+        },
+    );
+}
+
+/// 透過 OccupantIndex 查詢 Occupant 對應的 Entity
+pub(crate) fn find_entity_by_occupant(world: &World, occupant: Occupant) -> Result<Entity> {
+    let index = get_resource::<OccupantIndex>(world, "請先呼叫 setup_occupant_index")?;
+    index
+        .0
+        .get(&occupant)
+        .copied()
+        .ok_or_else(|| BoardError::OccupantNotFound { occupant }.into())
+}
+
+// ============================================================================
+// 特定查詢函式（封裝常用查詢邏輯，提供更友善的錯誤訊息）
+// ============================================================================
+
+/// 取得資源，若不存在則回傳適當的錯誤訊息
+pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T> {
+    world.get_resource::<T>().ok_or_else(|| {
+        DataError::MissingResource {
+            name: short_type_name::<T>(),
+            note: note.to_string(),
+        }
+        .into()
+    })
+}
+
+/// 取得可變資源，若不存在則回傳適當的錯誤訊息
+pub(crate) fn get_resource_mut<'a, T: Resource>(
+    world: &'a mut World,
+    note: &str,
+) -> Result<Mut<'a, T>> {
+    world.get_resource_mut::<T>().ok_or_else(|| {
+        DataError::MissingResource {
+            name: short_type_name::<T>(),
+            note: note.to_string(),
+        }
+        .into()
+    })
 }

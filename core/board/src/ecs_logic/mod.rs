@@ -6,16 +6,27 @@ pub mod skill;
 pub mod spawner;
 pub mod turn;
 
-/// 從 EntityRef 取得 component，若缺少則回傳 DataError::MissingComponent
-macro_rules! clone_component {
+/// 從 EntityRef 取得 component 的不可變引用，若缺少則回傳 DataError::MissingComponent
+macro_rules! get_component {
     ($entity_ref:expr, $component:ty) => {
         $entity_ref
             .get::<$component>()
             .ok_or_else(|| crate::error::DataError::MissingComponent {
                 name: stringify!($component).to_string(),
-            })?
-            .clone()
+            })
     };
 }
 
-pub(super) use clone_component;
+/// 從 EntityMut 取得 component 的可變引用，若缺少則回傳 DataError::MissingComponent
+macro_rules! get_component_mut {
+    ($entity_mut:expr, $component:ty) => {
+        $entity_mut.get_mut::<$component>().ok_or_else(|| {
+            crate::error::DataError::MissingComponent {
+                name: stringify!($component).to_string(),
+            }
+        })
+    };
+}
+
+pub(crate) use get_component;
+pub(crate) use get_component_mut;

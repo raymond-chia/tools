@@ -128,7 +128,7 @@ pub enum ActionState {
 
 /// 地形移動花費
 #[derive(Debug, Clone, Component)]
-pub struct TerrainMovementCost(pub MovementCost);
+pub struct ObjectMovementCost(pub MovementCost);
 
 define_tag_components!(BlocksSight, BlocksSound);
 
@@ -175,7 +175,7 @@ pub struct ObjectBundle {
     pub position: Position,
     pub occupant: Occupant,
     pub occupant_type_name: OccupantTypeName,
-    pub terrain_movement_cost: TerrainMovementCost,
+    pub terrain_movement_cost: ObjectMovementCost,
     pub contact_effects: ContactEffects,
     // block sight
     // block sound

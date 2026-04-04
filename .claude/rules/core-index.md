@@ -131,6 +131,7 @@ core/board/
 
 - `pub fn select_skill_targets(caster: &CasterInfo, target_def: &Target, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
 - `pub fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
+- `pub fn compute_range_positions(caster: Position, range: (Coord, Coord), board_size: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
 
 ### logic/skill_check.rs
@@ -153,12 +154,13 @@ core/board/
 ### tests/helpers/level_builder.rs
 
 - `pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤
-- `LevelBuilder::from_ascii(ascii: &str) -> Self` - 以 ASCII art 初始化關卡建構器
-- `.unit(marker: &str, type_name: &str, faction_id: u32) -> Self` - 設定標記對應的單位類型與陣營
-- `.deploy(marker: &str) -> Self` - 設定標記為部署點
-- `.object(marker: &str, type_name: &str) -> Self` - 設定標記對應的物件類型
-- `.max_player_units(n: usize) -> Self` - 手動設定玩家單位上限
-- `.to_toml(self) -> Result<String>` - 組裝完整 TOML 字串
+- `pub fn from_ascii(ascii: &str) -> Self` - 以 ASCII art 初始化關卡建構器
+- `pub fn unit(mut self, marker: &str, type_name: &str, faction_id: u32) -> Self` - 設定標記對應的單位類型與陣營
+- `pub fn deploy(mut self, marker: &str) -> Self` - 設定標記為部署點
+- `pub fn object(mut self, marker: &str, type_name: &str) -> Self` - 設定標記對應的物件類型
+- `pub fn max_player_units(mut self, n: usize) -> Self` - 手動設定玩家單位上限
+- `pub fn to_unit_map(self) -> Result<(Board, HashMap<String, Vec<Position>>, HashMap<String, Vec<MarkerEntry>>)>` - 解析為棋盤、位置對應及 Marker 條目
+- `pub fn to_toml(self) -> Result<String>` - 組裝完整 TOML 字串
 
 ### ecs_logic/loader.rs
 
@@ -176,12 +178,10 @@ core/board/
 
 ### ecs_logic/query.rs
 
-- `pub fn get_board(world: &World) -> Result<Board>` - 取得棋盤尺寸
-- `pub fn get_deployment_config(world: &World) -> Result<DeploymentConfig>` - 取得部署設定
-- `pub fn get_level_config(world: &World) -> Result<LevelConfig>` - 取得關卡設定
-- `pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>` - 查詢所有單位
-- `pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQueryResult>>` - 查詢所有物件
-- `pub struct ObjectQueryResult` - 物件查詢結果（包含 Bundle 資料 + 可選 tag）
+- `pub(crate) fn setup_occupant_index(world: &mut World)` - 初始化佔據者索引
+- `pub(crate) fn find_entity_by_occupant(world: &World, occupant: Occupant) -> Result<Entity>` - 根據佔據者查找實體
+- `pub(crate) fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
+- `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
 
 ### ecs_logic/movement.rs
 
@@ -201,6 +201,7 @@ core/board/
 ### ecs_logic/skill.rs
 
 - `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
+- `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 
 ### error.rs
 

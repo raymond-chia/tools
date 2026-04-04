@@ -1,16 +1,15 @@
 //! 技能系統 ECS 操作函數
 
+use super::get_component;
 use crate::domain::alias::SkillName;
 use crate::domain::core_types::SkillType;
-use crate::ecs_types::components::{
-    ActionState, CurrentMp, MovementPoint, Occupant, Position, Skills, Unit,
-};
+use crate::ecs_logic::query::{find_entity_by_occupant, get_resource};
+use crate::ecs_types::components::{ActionState, CurrentMp, MovementPoint, Position, Skills};
 use crate::ecs_types::resources::{Board, GameData, TurnOrder};
-use crate::error::{BoardError, DataError, Result, UnitError};
-use crate::logic::debug::short_type_name;
+use crate::error::{BoardError, Result, UnitError};
 use crate::logic::skill as skill_logic;
 use crate::logic::turn_order::get_active_unit;
-use bevy_ecs::prelude::{With, World};
+use bevy_ecs::prelude::World;
 
 /// 可用技能資訊
 pub struct AvailableSkill {
@@ -21,52 +20,28 @@ pub struct AvailableSkill {
 /// 取得當前行動單位的所有主動技能及其可用狀態
 pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>> {
     // 讀取：TurnOrder → active unit
-    let turn_order =
-        world
-            .get_resource::<TurnOrder>()
-            .ok_or_else(|| DataError::MissingResource {
-                name: short_type_name::<TurnOrder>(),
-                note: "請先呼叫 start_new_round".to_string(),
-            })?;
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
     let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
 
     // 讀取：當前單位的 Skills、CurrentMp、ActionState、MovementPoint
-    let (skill_names, current_mp, action_state, movement_point) = {
-        let mut query = world.query_filtered::<(
-            &Occupant,
-            &Skills,
-            &CurrentMp,
-            &ActionState,
-            &MovementPoint,
-        ), With<Unit>>();
-        let (_, skills, mp, state, mv) = query
-            .iter(world)
-            .find(|(occ, _, _, _, _)| **occ == active_occupant)
-            .ok_or_else(|| DataError::MissingComponent {
-                name: format!(
-                    "Skills/CurrentMp/ActionState/MovementPoint for {:?}",
-                    active_occupant
-                ),
-            })?;
-        (skills.0.clone(), mp.0, state.clone(), mv.0)
-    };
+    let entity = find_entity_by_occupant(world, active_occupant)?;
+    let entity_ref = world.entity(entity);
+    let skills = get_component!(entity_ref, Skills)?;
+    let current_mp = get_component!(entity_ref, CurrentMp)?.0;
+    let action_state = get_component!(entity_ref, ActionState)?;
+    let movement_point = get_component!(entity_ref, MovementPoint)?.0;
 
     // 讀取：GameData
-    let game_data = world
-        .get_resource::<GameData>()
-        .ok_or_else(|| DataError::MissingResource {
-            name: short_type_name::<GameData>(),
-            note: "請先呼叫 parse_and_insert_game_data".to_string(),
-        })?;
+    let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
 
     // 純邏輯：篩選 Active 技能，判定 usable
-    let can_act = match &action_state {
+    let can_act = match action_state {
         ActionState::Done => false,
         ActionState::Moved { cost } => (*cost as i32) <= movement_point,
     };
 
     let mut result = Vec::new();
-    for skill_name in &skill_names {
+    for skill_name in &skills.0 {
         let skill_type =
             game_data
                 .skill_map
@@ -97,42 +72,20 @@ pub fn get_skill_targetable_positions(
     skill_name: &SkillName,
 ) -> Result<Vec<Position>> {
     // 讀取：TurnOrder → active unit
-    let turn_order =
-        world
-            .get_resource::<TurnOrder>()
-            .ok_or_else(|| DataError::MissingResource {
-                name: short_type_name::<TurnOrder>(),
-                note: "請先呼叫 start_new_round".to_string(),
-            })?;
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
     let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
 
     // 讀取：當前單位的位置
     let caster_pos = {
-        let mut query = world.query_filtered::<(&Occupant, &Position), With<Unit>>();
-        query
-            .iter(world)
-            .find(|(occ, _)| **occ == active_occupant)
-            .map(|(_, pos)| *pos)
-            .ok_or_else(|| DataError::MissingComponent {
-                name: format!("Position for {:?}", active_occupant),
-            })?
+        let entity = find_entity_by_occupant(world, active_occupant)?;
+        *get_component!(world.entity(entity), Position)?
     };
 
     // 讀取：GameData
-    let game_data = world
-        .get_resource::<GameData>()
-        .ok_or_else(|| DataError::MissingResource {
-            name: short_type_name::<GameData>(),
-            note: "請先呼叫 parse_and_insert_game_data".to_string(),
-        })?;
+    let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
 
     // 讀取：Board
-    let board = world
-        .get_resource::<Board>()
-        .ok_or_else(|| DataError::MissingResource {
-            name: short_type_name::<Board>(),
-            note: "請先呼叫 spawn_level".to_string(),
-        })?;
+    let board = get_resource::<Board>(world, "請先呼叫 spawn_level")?;
 
     // 純邏輯：取得技能的 range，計算射程內格子
     let skill_type =
