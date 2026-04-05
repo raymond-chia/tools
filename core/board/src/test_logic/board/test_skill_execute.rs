@@ -1,14 +1,14 @@
 //! 技能執行效果樹測試
 
-use crate::helpers::level_builder::load_from_ascii;
-use board::domain::alias::{Coord, ID};
-use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
-use board::domain::core_types::*;
-use board::ecs_types::components::*;
-use board::logic::skill::UnitInfo;
-use board::logic::skill_execute::{
+use crate::domain::alias::{Coord, ID};
+use crate::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
+use crate::domain::core_types::*;
+use crate::ecs_types::components::*;
+use crate::logic::skill::UnitInfo;
+use crate::logic::skill_execute::{
     CheckResult, CheckTarget, CombatStats, ResolvedEffect, resolve_effect_tree,
 };
+use crate::test_helpers::level_builder::load_from_ascii;
 use std::collections::{HashMap, HashSet};
 
 const ALLY_FACTION: u32 = 1;

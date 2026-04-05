@@ -23,7 +23,7 @@ pub enum HitResult {
 /// 6. 骰 < 格擋門檻 → Block
 /// 7. 否則 → Hit
 /// 8. Hit 或 Block 時，骰 ≥ 100 - crit_rate → crit
-pub fn resolve_hit(
+pub(crate) fn resolve_hit(
     attacker_hit: i32,
     defender_evasion: i32,
     defender_block: i32,
@@ -75,7 +75,7 @@ pub enum DcResult {
 /// 2. 強制成功（骰 96~100）
 /// 3. defender_save + roll ≥ attacker_dc → Saved
 /// 4. 否則 → Failed
-pub fn resolve_dc(
+pub(crate) fn resolve_dc(
     attacker_dc: i32,
     defender_save: i32,
     rng_int: &mut impl FnMut() -> i32,

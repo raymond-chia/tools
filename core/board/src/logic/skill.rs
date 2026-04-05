@@ -29,7 +29,7 @@ pub struct CasterInfo {
 ///   - count=1 + Single: 單一目標
 ///   - count>1 + Single: 多目標
 ///   - area != Single: AOE
-pub fn select_skill_targets(
+pub(crate) fn select_skill_targets(
     caster: &CasterInfo,
     target_def: &Target,
     targets: &[Position],
@@ -101,7 +101,7 @@ pub fn select_skill_targets(
 /// - Single: 回傳該格
 /// - Diamond/Cross: 以 target 為中心，忽略 caster
 /// - Line: 以 caster→target 方向延伸
-pub fn compute_affected_positions(
+pub(crate) fn compute_affected_positions(
     area: &Area,
     caster: Position,
     target: Position,

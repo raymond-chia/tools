@@ -7,12 +7,12 @@ mod test_skill;
 mod test_spawner;
 mod test_turn;
 
-use crate::helpers::level_builder::{LevelBuilder, load_from_ascii};
 use bevy_ecs::prelude::{Entity, World};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::loader::parse_and_insert_game_data;
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_types::components::{CurrentMp, Initiative, Occupant, Position};
+use board::test_helpers::level_builder::{LevelBuilder, load_from_ascii};
 use constants::{
     OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_MAGE,
     UNIT_TYPE_WARRIOR, UNITS_TOML,

@@ -1,4 +1,4 @@
-use board::logic::id_generator::generate_unique_id;
+use crate::logic::id_generator::generate_unique_id;
 use std::collections::HashSet;
 
 #[test]

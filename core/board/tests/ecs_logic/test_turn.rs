@@ -2,7 +2,6 @@
 
 use super::constants::{UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
-use crate::helpers::level_builder::LevelBuilder;
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::movement::execute_move;
 use board::ecs_logic::turn::{
@@ -10,6 +9,7 @@ use board::ecs_logic::turn::{
     remove_dead_unit, start_new_round,
 };
 use board::ecs_types::components::{Occupant, Position};
+use board::test_helpers::level_builder::LevelBuilder;
 
 // ============================================================================
 // start_new_round 測試

@@ -3,6 +3,10 @@ name = "board"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+# 啟用測試輔助模組（test_helpers），僅供 dev-dependencies 使用
+test-helpers = []
+
 [dependencies]
 bevy_ecs.workspace = true
 thiserror.workspace = true
@@ -11,3 +15,6 @@ toml.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 rand.workspace = true
+
+[dev-dependencies]
+board = { path = ".", features = ["test-helpers"] }

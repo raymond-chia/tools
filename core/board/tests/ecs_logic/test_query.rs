@@ -1,4 +1,3 @@
-use super::super::helpers::level_builder::LevelBuilder;
 use super::constants::{OBJECT_TYPE_PIT, OBJECT_TYPE_WALL, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use board::domain::alias::ID;
@@ -6,6 +5,7 @@ use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::deployment::deploy_unit;
 use board::ecs_logic::query::{get_all_objects, get_all_units};
 use board::ecs_types::components::{Occupant, Position, UnitBundle};
+use board::test_helpers::level_builder::LevelBuilder;
 use std::collections::HashMap;
 
 #[test]

@@ -22,7 +22,11 @@ pub enum Direction {
 /// 計算從當前位置往指定方向移動一格後的位置，檢查棋盤邊界
 ///
 /// 返回 `None` 當新位置超出棋盤邊界
-pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position> {
+pub(crate) fn step_in_direction(
+    board: Board,
+    pos: Position,
+    direction: Direction,
+) -> Option<Position> {
     let (x, y) = (pos.x as i32, pos.y as i32);
     match direction {
         Direction::Up => try_position(board, x, y - 1),
@@ -66,7 +70,7 @@ pub struct ReachableInfo {
 ///
 /// # 地形消耗：
 /// - `get_terrain_cost` 返回該位置的移動成本
-pub fn reachable_positions<F, G>(
+pub(crate) fn reachable_positions<F, G>(
     board: Board,
     mover: Mover,
     budget: MovementCost,

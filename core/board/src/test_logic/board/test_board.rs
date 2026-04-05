@@ -1,6 +1,6 @@
-use super::super::super::helpers::level_builder::load_from_ascii;
-use board::ecs_types::components::Position;
-use board::logic::board::is_valid_position;
+use crate::ecs_types::components::Position;
+use crate::logic::board::is_valid_position;
+use crate::test_helpers::level_builder::load_from_ascii;
 
 #[test]
 fn test_ascii_to_board_3x3() {

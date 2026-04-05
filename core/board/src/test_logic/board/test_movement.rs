@@ -1,12 +1,12 @@
 //! 可移動範圍測試
 
-use super::super::super::helpers::level_builder::load_from_ascii;
-use board::domain::alias::MovementCost;
-use board::domain::constants::{BASIC_MOVEMENT_COST, IMPASSABLE_MOVEMENT_COST, PLAYER_ALLIANCE_ID};
-use board::ecs_types::components::Position;
-use board::logic::movement::{
+use crate::domain::alias::MovementCost;
+use crate::domain::constants::{BASIC_MOVEMENT_COST, IMPASSABLE_MOVEMENT_COST, PLAYER_ALLIANCE_ID};
+use crate::ecs_types::components::Position;
+use crate::logic::movement::{
     Direction, Mover, ReachableInfo, reachable_positions, reconstruct_path, step_in_direction,
 };
+use crate::test_helpers::level_builder::load_from_ascii;
 use std::collections::HashSet;
 
 const NORMAL_COST: MovementCost = BASIC_MOVEMENT_COST;

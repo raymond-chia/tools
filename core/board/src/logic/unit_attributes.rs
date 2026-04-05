@@ -6,7 +6,7 @@ use crate::ecs_types::components::*;
 use crate::error::{Result, UnitError};
 use std::collections::HashMap;
 
-pub fn filter_continuous_effect<'a>(
+pub(crate) fn filter_continuous_effect<'a>(
     skill_names: &'a [SkillName],
     buffs: &'a [BuffType],
     skill_map: &'a HashMap<SkillName, SkillType>,
@@ -41,7 +41,7 @@ pub fn filter_continuous_effect<'a>(
 }
 
 /// 計算單位屬性
-pub fn calculate_attributes<'a>(
+pub(crate) fn calculate_attributes<'a>(
     effects: impl Iterator<Item = &'a ContinuousEffect>,
 ) -> AttributeBundle {
     let mut attributes = CalculatedAttributes::default();

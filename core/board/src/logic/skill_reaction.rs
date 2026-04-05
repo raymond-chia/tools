@@ -33,7 +33,7 @@ pub struct CollectMoveReactionsResult {
 ///
 /// 外層遍歷每個反應者，內層掃描路徑找到該反應者最早觸發的步驟。
 /// 維護 earliest_from_idx 逐步收縮搜尋範圍，後續 reactor 只需掃到該步驟為止。
-pub fn collect_move_reactions(
+pub(crate) fn collect_move_reactions(
     mover: &UnitInfo,
     path: &[Position],
     units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>,

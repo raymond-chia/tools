@@ -51,52 +51,39 @@ core/board/
 │   │   ├── movement.rs   - 單位移動 ECS 操作函數
 │   │   ├── turn.rs       - 回合順序 ECS 操作函數
 │   │   └── skill.rs      - 技能系統 ECS 操作函數
-│   └── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
-│       ├── mod.rs        - 邏輯模組定義
-│       ├── board.rs      - 棋盤驗證邏輯
-│       ├── id_generator.rs - ID 產生邏輯
-│       ├── movement.rs   - 移動邏輯
-│       ├── turn_order.rs - 回合順序計算邏輯
-│       ├── unit_attributes.rs - 單位屬性計算邏輯
-│       ├── skill.rs      - 技能效果計算邏輯
-│       ├── skill_check.rs - 技能命中與豁免判定邏輯
-│       ├── skill_execute.rs - 技能效果執行邏輯
-│       ├── skill_reaction.rs - 技能反應收集邏輯
-│       └── debug.rs      - 調試工具函數
-└── tests/
-    ├── test.rs           - 集成測試入口
-    ├── test_error.rs     - 錯誤型別測試
-    ├── helpers/          - 測試輔助工具
-    │   ├── mod.rs        - 測試輔助模組
-    │   └── level_builder.rs - 測試用 ASCII 關卡建構工具
-    ├── ecs_logic/        - ECS 操作與測試
-    │   ├── mod.rs        - 模組宣告
-    │   ├── constants.rs  - 測試常數定義
-    │   ├── test_loader.rs - 資料載入測試
-    │   ├── test_spawner.rs - 關卡生成測試
-    │   ├── test_deployment.rs - 單位部署測試
-    │   ├── test_movement.rs - 單位移動測試
-    │   ├── test_query.rs - World 查詢測試
-    │   ├── test_turn.rs  - 回合順序測試
-    │   └── test_skill.rs - 技能系統 ECS 操作測試
-    └── logic/            - 業務邏輯測試
-        ├── mod.rs        - 模組宣告
-        ├── board/        - 棋盤與移動測試
-        │   ├── mod.rs    - 模組宣告
-        │   ├── test_board.rs - 棋盤驗證測試
-        │   ├── test_movement.rs - 移動邏輯測試
-        │   ├── test_collect_move_reactions.rs - 移動反應收集測試
-        │   ├── test_compute_affected_positions.rs - AOE 計算測試
-        │   ├── test_select_skill_targets.rs - 技能目標選擇測試
-        │   └── test_skill_execute.rs - 技能效果執行測試
-        ├── turn/         - 回合順序測試
-        │   ├── mod.rs    - 模組宣告
-        │   └── test_turn_order.rs - 回合順序計算與管理測試
-        └── unit/         - 單位屬性與 ID 測試
-            ├── mod.rs    - 模組宣告
-            ├── test_attribute.rs - 屬性計算測試
-            ├── test_id.rs - ID 生成測試
-            └── test_skill_check.rs - 命中與豁免判定測試
+│   ├── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
+│   │   ├── mod.rs        - 邏輯模組定義
+│   │   ├── board.rs      - 棋盤驗證邏輯
+│   │   ├── id_generator.rs - ID 產生邏輯
+│   │   ├── movement.rs   - 移動邏輯
+│   │   ├── turn_order.rs - 回合順序計算邏輯
+│   │   ├── unit_attributes.rs - 單位屬性計算邏輯
+│   │   ├── skill.rs      - 技能效果計算邏輯
+│   │   ├── skill_check.rs - 技能命中與豁免判定邏輯
+│   │   ├── skill_execute.rs - 技能效果執行邏輯
+│   │   ├── skill_reaction.rs - 技能反應收集邏輯
+│   │   └── debug.rs      - 調試工具函數
+│   ├── test_helpers/     - 測試輔助工具
+│   │   ├── mod.rs        - 測試輔助模組
+│   │   └── level_builder.rs - 測試用 ASCII 關卡建構工具
+│   └── test_logic/       - 業務邏輯測試
+│       ├── mod.rs        - 模組宣告
+│       ├── board/        - 棋盤與移動測試
+│       │   ├── mod.rs    - 模組宣告
+│       │   ├── test_board.rs - 棋盤驗證測試
+│       │   ├── test_movement.rs - 移動邏輯測試
+│       │   ├── test_collect_move_reactions.rs - 移動反應收集測試
+│       │   ├── test_compute_affected_positions.rs - AOE 計算測試
+│       │   ├── test_select_skill_targets.rs - 技能目標選擇測試
+│       │   └── test_skill_execute.rs - 技能效果執行測試
+│       ├── turn/         - 回合順序測試
+│       │   ├── mod.rs    - 模組宣告
+│       │   └── test_turn_order.rs - 回合順序計算與管理測試
+│       └── unit/         - 單位屬性與 ID 測試
+│           ├── mod.rs    - 模組宣告
+│           ├── test_attribute.rs - 屬性計算測試
+│           ├── test_id.rs - ID 生成測試
+│           └── test_skill_check.rs - 命中與豁免判定測試
 ```
 
 ## Function 集
@@ -108,47 +95,47 @@ core/board/
 
 ### logic/id_generator.rs
 
-- `pub fn generate_unique_id(used_ids: &mut HashSet<ID>) -> Result<ID>` - 產生不重複的 ID
+- `pub(crate) fn generate_unique_id(used_ids: &mut HashSet<ID>) -> Result<ID>` - 產生不重複的 ID
 
 ### logic/movement.rs
 
-- `pub fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算移動一格後的位置
-- `pub fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_alliance: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 計算預算內可到達的所有位置
+- `pub(crate) fn step_in_direction(board: Board, pos: Position, direction: Direction) -> Option<Position>` - 計算移動一格後的位置
+- `pub(crate) fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_alliance: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 計算預算內可到達的所有位置
 - `pub fn reconstruct_path(reachable: &HashMap<Position, ReachableInfo>, start: Position, target: Position) -> Vec<Position>` - 回溯路徑從起點到目標
 
 ### logic/unit_attributes.rs
 
-- `pub fn filter_continuous_effect<'a>(skill_names: &'a [SkillName], buffs: &'a [BuffType], skill_map: &'a HashMap<SkillName, SkillType>) -> Result<impl Iterator<Item = &'a ContinuousEffect>>` - 從技能和狀態中篩選並合併持續性效果
-- `pub fn calculate_attributes<'a>(effects: impl Iterator<Item = &'a ContinuousEffect>) -> AttributeBundle` - 計算單位屬性
+- `pub(crate) fn filter_continuous_effect<'a>(skill_names: &'a [SkillName], buffs: &'a [BuffType], skill_map: &'a HashMap<SkillName, SkillType>) -> Result<impl Iterator<Item = &'a ContinuousEffect>>` - 從技能和狀態中篩選並合併持續性效果
+- `pub(crate) fn calculate_attributes<'a>(effects: impl Iterator<Item = &'a ContinuousEffect>) -> AttributeBundle` - 計算單位屬性
 
 ### logic/turn_order.rs
 
-- `pub fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
-- `pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
+- `pub(crate) fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
+- `pub(crate) fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
 - `pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
-- `pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
-- `pub fn get_active_index(entries: &[TurnEntry]) -> Option<usize>` - 取得下一個未行動的單位索引
+- `pub(crate) fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
+- `pub(crate) fn get_active_index(entries: &[TurnEntry]) -> Option<usize>` - 取得下一個未行動的單位索引
 
 ### logic/skill.rs
 
-- `pub fn select_skill_targets(caster: &CasterInfo, target_def: &Target, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
-- `pub fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
+- `pub(crate) fn select_skill_targets(caster: &CasterInfo, target_def: &Target, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
+- `pub(crate) fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
 - `pub(crate) fn compute_range_positions(caster: Position, range: (Coord, Coord), board_size: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
 - `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
 
 ### logic/skill_check.rs
 
-- `pub fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
-- `pub fn resolve_dc(attacker_dc: i32, defender_save: i32, rng_int: &mut impl FnMut() -> i32) -> DcResult` - 解析 DC 豁免判定結果
+- `pub(crate) fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
+- `pub(crate) fn resolve_dc(attacker_dc: i32, defender_save: i32, rng_int: &mut impl FnMut() -> i32) -> DcResult` - 解析 DC 豁免判定結果
 
 ### logic/skill_execute.rs
 
-- `pub fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board_size: Board, rng: &mut impl FnMut() -> i32) -> Vec<EffectEntry>` - 執行效果樹節點並產生效果條目
+- `pub(crate) fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board_size: Board, rng: &mut impl FnMut() -> i32) -> Vec<EffectEntry>` - 執行效果樹節點並產生效果條目
 
 ### logic/skill_reaction.rs
 
-- `pub fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
+- `pub(crate) fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
 
 ### logic/debug.rs
 
@@ -159,7 +146,7 @@ core/board/
 
 - `pub fn name(&self) -> &SkillName` (SkillType 方法) - 取得技能名稱
 
-### tests/helpers/level_builder.rs
+### test_helpers/level_builder.rs
 
 - `pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤
 - `pub fn from_ascii(ascii: &str) -> Self` - 以 ASCII art 初始化關卡建構器

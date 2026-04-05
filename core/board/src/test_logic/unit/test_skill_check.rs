@@ -1,4 +1,4 @@
-use board::logic::skill_check::{DcResult, HitResult, resolve_dc, resolve_hit};
+use crate::logic::skill_check::{DcResult, HitResult, resolve_dc, resolve_hit};
 
 // ============================================================================
 // 命中判定（一般、強制、暴擊）

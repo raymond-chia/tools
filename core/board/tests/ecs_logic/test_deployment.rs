@@ -1,10 +1,10 @@
-use super::super::helpers::level_builder::LevelBuilder;
 use super::constants::{UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::deployment::{deploy_unit, undeploy_unit};
 use board::ecs_types::components::{Occupant, OccupantTypeName, Position, Unit, UnitFaction};
 use board::error::{DeploymentError, ErrorKind};
+use board::test_helpers::level_builder::LevelBuilder;
 
 // ============================================================================
 // deploy_unit 測試

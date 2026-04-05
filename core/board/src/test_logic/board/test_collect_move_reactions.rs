@@ -1,12 +1,12 @@
 //! collect_move_reactions 測試
 
-use crate::helpers::level_builder::{LevelBuilder, MarkerEntry};
-use board::domain::alias::ID;
-use board::domain::constants::PLAYER_ALLIANCE_ID;
-use board::domain::core_types::{ReactionTrigger, SkillType, TargetFilter, TriggeringSource};
-use board::ecs_types::components::Position;
-use board::error::Result;
-use board::logic::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
+use crate::domain::alias::ID;
+use crate::domain::constants::PLAYER_ALLIANCE_ID;
+use crate::domain::core_types::{ReactionTrigger, SkillType, TargetFilter, TriggeringSource};
+use crate::ecs_types::components::Position;
+use crate::error::Result;
+use crate::logic::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
+use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry};
 use std::collections::HashMap;
 
 const ALLY_ALLIANCE: ID = 1;

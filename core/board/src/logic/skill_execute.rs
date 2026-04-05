@@ -44,7 +44,7 @@ pub struct EffectEntry {
 }
 
 /// 解析效果樹，產生效果條目列表
-pub fn resolve_effect_tree(
+pub(crate) fn resolve_effect_tree(
     nodes: &[EffectNode],
     caster: &CombatStats,
     caster_pos: Position,

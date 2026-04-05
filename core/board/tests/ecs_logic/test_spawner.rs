@@ -1,4 +1,3 @@
-use super::super::helpers::level_builder::LevelBuilder;
 use super::constants::{OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
 use bevy_ecs::prelude::{Without, World};
 use board::ecs_logic::loader::parse_and_insert_game_data;
@@ -8,6 +7,7 @@ use board::ecs_types::components::{
 };
 use board::ecs_types::resources::Board;
 use board::error::{DataError, ErrorKind, LoadError};
+use board::test_helpers::level_builder::LevelBuilder;
 
 // ============================================================================
 // 測試：主要

@@ -5,7 +5,6 @@ use super::constants::{
     UNIT_TYPE_WARRIOR,
 };
 use super::setup_world_with_level;
-use crate::helpers::level_builder::LevelBuilder;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use board::domain::constants::PLAYER_FACTION_ID;
@@ -14,6 +13,7 @@ use board::ecs_logic::skill::{
 };
 use board::ecs_logic::turn::start_new_round;
 use board::ecs_types::components::{ActionState, CurrentMp, Occupant, Position};
+use board::test_helpers::level_builder::LevelBuilder;
 use std::collections::{HashMap, HashSet};
 
 const ENEMY_FACTION_ID: u32 = 2;

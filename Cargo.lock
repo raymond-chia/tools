@@ -645,6 +645,7 @@ name = "board"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "board",
  "rand",
  "serde",
  "strum",

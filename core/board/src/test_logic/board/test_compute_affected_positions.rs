@@ -1,9 +1,9 @@
 //! compute_affected_positions 測試
 
-use crate::helpers::level_builder::load_from_ascii;
-use board::domain::core_types::Area;
-use board::ecs_types::components::Position;
-use board::logic::skill::compute_affected_positions;
+use crate::domain::core_types::Area;
+use crate::ecs_types::components::Position;
+use crate::logic::skill::compute_affected_positions;
+use crate::test_helpers::level_builder::load_from_ascii;
 use std::collections::{HashMap, HashSet};
 
 /// 從 markers 收集所有被影響的格子（C + T + A）

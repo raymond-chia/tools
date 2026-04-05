@@ -1,11 +1,11 @@
 //! execute_move 整合測試
 
-use super::super::helpers::level_builder::load_from_ascii;
 use bevy_ecs::world::World;
 use board::domain::constants::BASIC_MOVEMENT_COST;
 use board::ecs_logic::movement::execute_move;
 use board::ecs_logic::turn::{end_current_turn, start_new_round};
 use board::ecs_types::components::{Occupant, Position};
+use board::test_helpers::level_builder::load_from_ascii;
 
 /// 從 ASCII 建構 World 並回傳玩家單位 Occupant 與目的地座標
 ///

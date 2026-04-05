@@ -2,13 +2,13 @@
 //!
 //! 提供用 ASCII art 視覺化定義關卡的工具，取代手寫 TOML 字串。
 
-use board::domain::alias::ID;
-use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
-use board::ecs_types::components::{Occupant, Position};
-use board::ecs_types::resources::Board;
-use board::error::{LoadError, Result};
-use board::loader_schema::{Faction, LevelType, ObjectPlacement, UnitPlacement};
-use board::logic::skill::UnitInfo;
+use crate::domain::alias::ID;
+use crate::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
+use crate::ecs_types::components::{Occupant, Position};
+use crate::ecs_types::resources::Board;
+use crate::error::{LoadError, Result};
+use crate::loader_schema::{Faction, LevelType, ObjectPlacement, UnitPlacement};
+use crate::logic::skill::UnitInfo;
 use std::collections::HashMap;
 
 // ============================================================================
@@ -104,6 +104,7 @@ struct ObjectMarkerDef {
 /// # 使用範例
 ///
 /// ```
+/// use board::test_helpers::level_builder::LevelBuilder;
 /// let level_toml = LevelBuilder::from_ascii("
 ///   D . . . .
 ///   . . . . .

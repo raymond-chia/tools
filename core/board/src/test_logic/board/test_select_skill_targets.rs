@@ -1,13 +1,13 @@
 //! select_skill_targets 測試
 
-use crate::helpers::level_builder::{LevelBuilder, MarkerEntry};
-use board::domain::alias::Coord;
-use board::domain::alias::ID;
-use board::domain::core_types::{Area, Target, TargetFilter, TargetSelection};
-use board::ecs_types::components::{Occupant, Position};
-use board::ecs_types::resources::Board;
-use board::error::Result;
-use board::logic::skill::{CasterInfo, UnitInfo, select_skill_targets};
+use crate::domain::alias::Coord;
+use crate::domain::alias::ID;
+use crate::domain::core_types::{Area, Target, TargetFilter, TargetSelection};
+use crate::ecs_types::components::{Occupant, Position};
+use crate::ecs_types::resources::Board;
+use crate::error::Result;
+use crate::logic::skill::{CasterInfo, UnitInfo, select_skill_targets};
+use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry};
 use std::collections::{HashMap, HashSet};
 use strum::IntoEnumIterator;
 

@@ -1,9 +1,9 @@
-use board::domain::core_types::{
+use crate::domain::core_types::{
     Area, Attribute, BuffType, CasterOrTarget, ContinuousEffect, Effect, EffectNode, Scaling,
     SkillType, Target, TargetFilter, TargetSelection,
 };
-use board::ecs_types::components::*;
-use board::logic::unit_attributes::{calculate_attributes, filter_continuous_effect};
+use crate::ecs_types::components::*;
+use crate::logic::unit_attributes::{calculate_attributes, filter_continuous_effect};
 use std::collections::HashMap;
 
 // 技能名稱常數

@@ -24,7 +24,7 @@ pub struct TurnOrderInput {
 /// 2. 次排序：tiebreaker（降序）
 ///    - 玩家單位：INI * 10 + 1 + 隨機小數
 ///    - 敵方單位：INI * 10 + 隨機小數
-pub fn calculate_turn_order(
+pub(crate) fn calculate_turn_order(
     inputs: &[TurnOrderInput],
     rng_int: &mut impl FnMut() -> i32,
     rng_float: &mut impl FnMut() -> f64,
@@ -70,7 +70,7 @@ pub fn calculate_turn_order(
 /// # 錯誤
 /// - 若沒有未行動的單位則回傳錯誤
 /// - 若 target_index 小於等於當前單位索引則回傳錯誤
-pub fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()> {
+pub(crate) fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()> {
     let current_index = get_active_index(entries).ok_or(BoardError::NoActiveUnit)?;
 
     if target_index <= current_index {
@@ -107,7 +107,7 @@ pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant> {
 }
 
 /// 移除指定 Occupant 的單位
-pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry> {
+pub(crate) fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry> {
     entries
         .iter()
         .position(|entry| entry.occupant == occupant)
@@ -116,6 +116,6 @@ pub fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<T
 }
 
 /// 取得下一個未行動的單位索引
-pub fn get_active_index(entries: &[TurnEntry]) -> Option<usize> {
+pub(crate) fn get_active_index(entries: &[TurnEntry]) -> Option<usize> {
     entries.iter().position(|entry| !entry.has_acted)
 }
