@@ -23,6 +23,7 @@ pub struct CasterInfo {
     pub unit_info: UnitInfo,
 }
 
+// TODO 有用到嗎 ?
 /// 驗證並解析技能目標
 /// targets: 玩家在 UI 上選擇的目標位置
 ///   - count=1 + Single: 單一目標
@@ -115,7 +116,7 @@ pub fn compute_affected_positions(
 }
 
 /// 計算射程內所有格子（曼哈頓距離在 [min_range, max_range] 內）
-pub fn compute_range_positions(
+pub(crate) fn compute_range_positions(
     caster: Position,
     range: (Coord, Coord),
     board_size: Board,

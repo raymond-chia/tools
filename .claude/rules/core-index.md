@@ -60,6 +60,7 @@ core/board/
 │       ├── unit_attributes.rs - 單位屬性計算邏輯
 │       ├── skill.rs      - 技能效果計算邏輯
 │       ├── skill_check.rs - 技能命中與豁免判定邏輯
+│       ├── skill_execute.rs - 技能效果執行邏輯
 │       ├── skill_reaction.rs - 技能反應收集邏輯
 │       └── debug.rs      - 調試工具函數
 └── tests/
@@ -86,7 +87,8 @@ core/board/
         │   ├── test_movement.rs - 移動邏輯測試
         │   ├── test_collect_move_reactions.rs - 移動反應收集測試
         │   ├── test_compute_affected_positions.rs - AOE 計算測試
-        │   └── test_select_skill_targets.rs - 技能目標選擇測試
+        │   ├── test_select_skill_targets.rs - 技能目標選擇測試
+        │   └── test_skill_execute.rs - 技能效果執行測試
         ├── turn/         - 回合順序測試
         │   ├── mod.rs    - 模組宣告
         │   └── test_turn_order.rs - 回合順序計算與管理測試
@@ -102,7 +104,7 @@ core/board/
 ### logic/board.rs
 
 - `pub fn is_valid_position(board: Board, pos: Position) -> bool` - 驗證位置在棋盤邊界內
-- `pub fn try_position(board: Board, x: i32, y: i32) -> Option<Position>` - 嘗試將整數座標轉換為有效位置
+- `pub(crate) fn try_position(board: Board, x: i32, y: i32) -> Option<Position>` - 嘗試將整數座標轉換為有效位置
 
 ### logic/id_generator.rs
 
@@ -131,7 +133,7 @@ core/board/
 
 - `pub fn select_skill_targets(caster: &CasterInfo, target_def: &Target, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
 - `pub fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
-- `pub fn compute_range_positions(caster: Position, range: (Coord, Coord), board_size: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
+- `pub(crate) fn compute_range_positions(caster: Position, range: (Coord, Coord), board_size: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
 - `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
 
@@ -140,13 +142,18 @@ core/board/
 - `pub fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
 - `pub fn resolve_dc(attacker_dc: i32, defender_save: i32, rng_int: &mut impl FnMut() -> i32) -> DcResult` - 解析 DC 豁免判定結果
 
+### logic/skill_execute.rs
+
+- `pub fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board_size: Board, rng: &mut impl FnMut() -> i32) -> Vec<EffectEntry>` - 執行效果樹節點並產生效果條目
+
 ### logic/skill_reaction.rs
 
 - `pub fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
 
 ### logic/debug.rs
 
-- `pub fn short_type_name<T: ?Sized>() -> String` - 取得泛型型別的短名稱
+- `pub(crate) fn short_type_name<T: ?Sized>() -> String` - 取得泛型型別的短名稱
+
 
 ### domain/core_types.rs
 

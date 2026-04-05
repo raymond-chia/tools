@@ -8,7 +8,7 @@ pub fn is_valid_position(board: Board, pos: Position) -> bool {
     pos.x < board.width && pos.y < board.height
 }
 
-pub fn try_position(board: Board, x: i32, y: i32) -> Option<Position> {
+pub(crate) fn try_position(board: Board, x: i32, y: i32) -> Option<Position> {
     if x < 0 || y < 0 {
         return None;
     }

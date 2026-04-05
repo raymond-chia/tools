@@ -125,6 +125,7 @@ pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&Tur
     require_turn_order(world)
 }
 
+// TODO 有用到嗎 ?
 /// 移除死亡單位
 pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOrder> {
     // 讀取：找到對應的 Entity
@@ -157,6 +158,7 @@ pub fn get_turn_order(world: &World) -> Result<&TurnOrder> {
     require_turn_order(world)
 }
 
+// TODO 有用到嗎 ?
 /// 結束戰鬥，清理 TurnOrder Resource
 pub fn end_battle(world: &mut World) -> Result<()> {
     world.remove_resource::<TurnOrder>();
