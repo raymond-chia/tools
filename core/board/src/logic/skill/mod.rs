@@ -5,6 +5,7 @@ pub mod skill_execution;
 pub mod skill_range;
 pub mod skill_reaction;
 pub mod skill_target;
+pub mod unit_attributes;
 
 use crate::domain::alias::{Coord, ID};
 use crate::domain::core_types::TargetFilter;

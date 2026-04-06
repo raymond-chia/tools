@@ -3,7 +3,7 @@ use crate::domain::core_types::{
     SkillType, Target, TargetFilter, TargetSelection,
 };
 use crate::ecs_types::components::*;
-use crate::logic::unit_attributes::{calculate_attributes, filter_continuous_effect};
+use crate::logic::skill::unit_attributes::{calculate_attributes, filter_continuous_effect};
 use std::collections::HashMap;
 
 // 技能名稱常數

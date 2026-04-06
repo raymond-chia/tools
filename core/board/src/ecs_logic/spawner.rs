@@ -8,7 +8,7 @@ use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::LevelType;
 use crate::logic::id_generator::generate_unique_id;
-use crate::logic::unit_attributes;
+use crate::logic::skill::unit_attributes;
 use bevy_ecs::prelude::World;
 use std::collections::HashSet;
 

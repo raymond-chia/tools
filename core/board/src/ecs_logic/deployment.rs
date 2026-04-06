@@ -7,7 +7,7 @@ use crate::ecs_types::components::{
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
 use crate::logic::id_generator::generate_unique_id;
-use crate::logic::unit_attributes;
+use crate::logic::skill::unit_attributes;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{With, World};
 use std::collections::{HashMap, HashSet};
