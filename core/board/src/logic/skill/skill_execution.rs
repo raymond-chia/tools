@@ -20,6 +20,7 @@ pub struct CombatStats {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CheckTarget {
     Unit(ID),
+    TODO,
 }
 
 /// 判定結果
@@ -27,6 +28,7 @@ pub enum CheckTarget {
 pub enum CheckResult {
     /// 無判定，必定生效
     Auto,
+    TODO,
 }
 
 /// 解析後的效果
@@ -143,7 +145,7 @@ fn resolve_nodes_for_target(
     nodes: &[EffectNode],
     caster: &CombatStats,
     target: &CombatStats,
-    rng: &mut impl FnMut() -> i32,
+    _rng: &mut impl FnMut() -> i32,
     entries: &mut Vec<EffectEntry>,
 ) {
     for node in nodes {

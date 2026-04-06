@@ -23,23 +23,23 @@ fn standard_board(
     HashMap<String, Vec<Position>>,
     HashMap<String, Vec<MarkerEntry>>,
 )> {
-    let (_, marker_map, unit_map) = LevelBuilder::from_ascii(ascii)
+    let (_, markers, unit_markers) = LevelBuilder::from_ascii(ascii)
         .unit("S", "mover", PLAYER_ALLIANCE_ID)
         .unit("Ea", "enemy-reactor-a", ENEMY_ALLIANCE)
         .unit("Eb", "enemy-reactor-b", ENEMY_ALLIANCE)
         .unit("Ec", "enemy-reactor-c", ENEMY_ALLIANCE)
         .unit("Aa", "ally-reactor", ALLY_ALLIANCE)
         .to_unit_map()?;
-    Ok((marker_map, unit_map))
+    Ok((markers, unit_markers))
 }
 
-/// 從 unit_map 建立 HashMap<Position, ReactionUnitInfo>
+/// 從 unit_markers 建立 HashMap<Position, ReactionUnitInfo>
 /// 只包含 reaction_configs 中有設定的 marker
 fn to_reaction_map<'a>(
-    unit_map: &HashMap<String, Vec<MarkerEntry>>,
+    unit_markers: &HashMap<String, Vec<MarkerEntry>>,
     reaction_configs: &'a HashMap<&str, ReactionConfig>,
 ) -> HashMap<Position, ReactionUnitInfo<'a>> {
-    unit_map
+    unit_markers
         .iter()
         .filter(|(key, _)| reaction_configs.contains_key(key.as_str()))
         .flat_map(|(key, entries)| {
@@ -93,15 +93,15 @@ fn reaction_skill(
 }
 
 /// 從 marker 名稱列表解析出 Position 路徑
-fn resolve_path(marker_map: &HashMap<String, Vec<Position>>, names: &[&str]) -> Vec<Position> {
-    names.iter().map(|name| marker_map[*name][0]).collect()
+fn resolve_path(markers: &HashMap<String, Vec<Position>>, names: &[&str]) -> Vec<Position> {
+    names.iter().map(|name| markers[*name][0]).collect()
 }
 
 /// 驗證反應結果：不在意反應者順序，但每個反應者的技能列表需完全匹配
 fn assert_reactions(
     result_reactions: &[MoveReaction],
     expected: &[(&str, &[&str])],
-    unit_map: &HashMap<String, Vec<MarkerEntry>>,
+    unit_markers: &HashMap<String, Vec<MarkerEntry>>,
     ascii: &str,
 ) {
     assert_eq!(
@@ -114,7 +114,7 @@ fn assert_reactions(
     let expected_map: HashMap<_, Vec<&str>> = expected
         .iter()
         .map(|(marker, skill_names)| {
-            let occupant = unit_map[*marker][0].unit_info.occupant;
+            let occupant = unit_markers[*marker][0].unit_info.occupant;
             let mut names: Vec<&str> = skill_names.to_vec();
             names.sort();
             (occupant, names)
@@ -307,17 +307,17 @@ fn collect_move_reactions_cases() {
     ]);
 
     for (ascii, path_names, expected_stop, expected_reactions) in &test_data {
-        let (marker_map, unit_map) = standard_board(ascii).expect("建立棋盤失敗");
-        let mover = &unit_map["S"][0].unit_info;
-        let path = resolve_path(&marker_map, path_names);
-        let units_on_board = to_reaction_map(&unit_map, &reaction_configs);
+        let (markers, unit_markers) = standard_board(ascii).expect("建立棋盤失敗");
+        let mover = &unit_markers["S"][0].unit_info;
+        let path = resolve_path(&markers, path_names);
+        let units_on_board = to_reaction_map(&unit_markers, &reaction_configs);
 
         let result = collect_move_reactions(mover, &path, &units_on_board).expect("collect 失敗");
 
         assert_eq!(
-            result.stop_position, marker_map[*expected_stop][0],
+            result.stop_position, markers[*expected_stop][0],
             "stop_position 不符，棋盤：{ascii}"
         );
-        assert_reactions(&result.reactions, expected_reactions, &unit_map, ascii);
+        assert_reactions(&result.reactions, expected_reactions, &unit_markers, ascii);
     }
 }

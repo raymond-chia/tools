@@ -1,7 +1,7 @@
 //! validate_skill_targets 測試
 
 use crate::domain::alias::{Coord, ID};
-use crate::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
+use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::domain::core_types::*;
 use crate::ecs_types::components::*;
 use crate::ecs_types::resources::Board;
@@ -11,13 +11,12 @@ use crate::logic::skill::skill_execution::{
 };
 use crate::logic::skill::skill_target::validate_skill_targets;
 use crate::logic::skill::{CasterInfo, UnitInfo};
-use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry, load_from_ascii};
-use std::collections::{HashMap, HashSet};
+use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry};
+use std::collections::HashMap;
 use strum::IntoEnumIterator;
 
 const ALLY_FACTION_ID: ID = 1;
 const ENEMY_FACTION_ID: ID = 2;
-const ENEMY_ALLIANCE_ID: ID = 1;
 
 /// 標準棋盤建構：C=施放者(player), Pt/Pa/Pn=玩家, At/Aa/An=友軍, Et/Ea/En=敵軍
 fn standard_board(
@@ -93,8 +92,10 @@ fn target_with_ground_target(
 }
 
 /// 從 marker map 建立 validate_skill_targets 需要的 HashMap<Position, UnitInfo>
-fn to_position_map(marker_map: &HashMap<String, Vec<MarkerEntry>>) -> HashMap<Position, UnitInfo> {
-    marker_map
+fn to_position_map(
+    unit_markers: &HashMap<String, Vec<MarkerEntry>>,
+) -> HashMap<Position, UnitInfo> {
+    unit_markers
         .values()
         .flatten()
         .map(|entry| (entry.position, entry.unit_info.clone()))
@@ -102,23 +103,189 @@ fn to_position_map(marker_map: &HashMap<String, Vec<MarkerEntry>>) -> HashMap<Po
 }
 
 /// 從 marker map 取得指定 marker 的所有位置
-fn all_positions_of(marker_map: &HashMap<String, Vec<MarkerEntry>>, marker: &str) -> Vec<Position> {
-    marker_map[marker]
+fn all_positions_of(
+    unit_markers: &HashMap<String, Vec<MarkerEntry>>,
+    marker: &str,
+) -> Vec<Position> {
+    unit_markers[marker]
         .iter()
         .map(|entry| entry.position)
         .collect()
 }
 
 /// 從 marker map 取得指定 marker 的所有 Occupant
-fn all_occupants_of(marker_map: &HashMap<String, Vec<MarkerEntry>>, marker: &str) -> Vec<Occupant> {
-    marker_map[marker]
+fn all_occupants_of(
+    unit_markers: &HashMap<String, Vec<MarkerEntry>>,
+    marker: &str,
+) -> Vec<Occupant> {
+    unit_markers[marker]
         .iter()
         .map(|entry| entry.unit_info.occupant)
         .collect()
 }
 
+// ============================================================================
+// 套用技能相關工具
+// ============================================================================
+
+fn default_stats(unit_info: UnitInfo) -> CombatStats {
+    CombatStats {
+        unit_info,
+        attribute: AttributeBundle::default(),
+        crit_rate: 0,
+    }
+}
+
+fn hp_leaf(source_attribute: Attribute, value_percent: i32) -> EffectNode {
+    EffectNode::Leaf {
+        who: CasterOrTarget::Target,
+        effect: Effect::HpEffect {
+            scaling: Scaling {
+                source: CasterOrTarget::Caster,
+                source_attribute,
+                value_percent,
+            },
+        },
+    }
+}
+
+fn hit_branch(
+    accuracy_bonus: i32,
+    crit_bonus: i32,
+    on_success: Vec<EffectNode>,
+    on_failure: Vec<EffectNode>,
+) -> EffectNode {
+    EffectNode::Branch {
+        who: CasterOrTarget::Target,
+        condition: EffectCondition::HitCheck {
+            accuracy_bonus,
+            crit_bonus,
+        },
+        on_success,
+        on_failure,
+    }
+}
+
+fn dc_branch(
+    dc_type: DcType,
+    dc_bonus: i32,
+    on_success: Vec<EffectNode>,
+    on_failure: Vec<EffectNode>,
+) -> EffectNode {
+    EffectNode::Branch {
+        who: CasterOrTarget::Target,
+        condition: EffectCondition::DcCheck { dc_type, dc_bonus },
+        on_success,
+        on_failure,
+    }
+}
+
+/// 建立固定回傳值的 rng
+fn fixed_rng(values: &[i32]) -> impl FnMut() -> i32 + '_ {
+    let mut index = 0;
+    move || {
+        let value = values[index];
+        index += 1;
+        value
+    }
+}
+
+fn assert_hp(
+    caster_position: Position,
+    target_positions: &[Position],
+    skill_target: &Target,
+    board: Board,
+    unit_markers: &HashMap<String, Vec<MarkerEntry>>,
+    expected: Vec<Occupant>,
+    msg: String,
+) {
+    let skill_test_data = [
+        // (atk, value_percent, expected_amount)
+        (100, -100, -100),
+        (100, -50, -50),
+        (100, -120, -120),
+        (200, -75, -150),
+        (80, -100, -80),
+        (0, -100, 0),
+        (100, 0, 0),
+        (50, -200, -100),
+    ];
+
+    for stat_value in [1, 10, 100, 1000] {
+        for (atk, value_percent, expected_amount) in skill_test_data {
+            let mut caster_stats = default_stats(unit_markers["C"][0].unit_info.clone());
+            caster_stats.attribute.physical_attack = PhysicalAttack(atk);
+            caster_stats.attribute.magical_attack = MagicalAttack(atk);
+
+            let units_on_board = to_position_map(&unit_markers)
+                .into_iter()
+                .map(|(key, info)| {
+                    let mut stat = default_stats(info);
+                    stat.attribute.evasion = Evasion(stat_value);
+                    (key, stat)
+                })
+                .collect();
+
+            let leaf = hp_leaf(Attribute::PhysicalAttack, value_percent);
+            let nodes = match skill_target.area {
+                Area::Single => vec![leaf],
+                Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
+                    vec![EffectNode::Area {
+                        area: skill_target.area,
+                        filter: skill_target.selectable_filter.clone(),
+                        nodes: vec![leaf],
+                    }]
+                }
+            };
+            let mut rng = fixed_rng(&[]);
+
+            let mut all_entries = vec![];
+            for target_pos in target_positions {
+                let entries = resolve_effect_tree(
+                    &nodes,
+                    &caster_stats,
+                    caster_position,
+                    *target_pos,
+                    &units_on_board,
+                    board,
+                    &mut rng,
+                );
+                all_entries.extend(entries);
+            }
+            assert_eq!(
+                all_entries.len(),
+                expected.len(),
+                "atk={atk} percent={value_percent} 應產生 {} 個效果（{} 個目標）\nmsg: {msg}",
+                expected.len(),
+                expected.len(),
+            );
+            for expected in &expected {
+                let found = all_entries.iter().find(|entry| {
+                    if let CheckTarget::Unit(id) = entry.target {
+                        Occupant::Unit(id) == *expected
+                    } else {
+                        false
+                    }
+                }).expect("atk={atk} percent={value_percent} 應包含對 {expected:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}");
+                assert_eq!(found.check, CheckResult::Auto);
+                assert_eq!(
+                    found.effect,
+                    ResolvedEffect::HpChange {
+                        raw_amount: expected_amount,
+                        final_amount: expected_amount,
+                    }
+                );
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 實際測試
+// ============================================================================
+
 #[test]
-fn test_validate_skill_targets_normal_case() {
+fn test_normal_case() {
     let target_with_fixed_range =
         |filter: TargetFilter, area: Area| target_with_unit_target(filter, 1, false, area);
 
@@ -795,55 +962,59 @@ fn test_validate_skill_targets_normal_case() {
         ),
     ];
 
-    for (description, levels, skill_cases) in test_data.iter() {
+    for (description, levels, target_cases) in test_data.iter() {
         for level in levels.iter() {
-            let (board, _, marker_map) =
+            let (board, _, unit_markers) =
                 standard_board(level).expect(&format!("建立測試棋盤失敗：{}", description));
-            let position_map = to_position_map(&marker_map);
+            let position_map = to_position_map(&unit_markers);
             let caster = CasterInfo {
-                position: marker_map["C"][0].position,
-                unit_info: marker_map["C"][0].unit_info.clone(),
+                position: unit_markers["C"][0].position,
+                unit_info: unit_markers["C"][0].unit_info.clone(),
             };
 
-            for (skill, target_cases) in skill_cases.iter() {
+            for (skill_target, target_cases) in target_cases.iter() {
                 for (target_markers, expected_markers) in target_cases.iter() {
                     let targets: Vec<Position> = target_markers
                         .iter()
-                        .flat_map(|marker| all_positions_of(&marker_map, marker))
+                        .flat_map(|marker| all_positions_of(&unit_markers, marker))
                         .collect();
 
                     match expected_markers {
                         Some(expected_markers) => {
-                            let expected: HashSet<Occupant> = expected_markers
+                            let expected: Vec<Occupant> = expected_markers
                                 .iter()
-                                .flat_map(|marker| all_occupants_of(&marker_map, marker))
+                                .flat_map(|marker| all_occupants_of(&unit_markers, marker))
                                 .collect();
 
                             let result = validate_skill_targets(
                                 &caster,
-                                skill,
+                                skill_target,
                                 &targets,
                                 &position_map,
                                 board,
-                            )
-                            .expect(&format!("應成功：{}", description));
-                            // let result_set: HashSet<_> = result.into_iter().collect();
-                            // assert_eq!(
-                            //     result_set, expected,
-                            //     "測試失敗：{description}, targets={target_markers:?}, skill={skill:?}"
-                            // );
+                            );
+                            assert!(result.is_ok(), "應成功：{}", description);
+                            assert_hp(
+                                caster.position,
+                                &targets,
+                                skill_target,
+                                board,
+                                &unit_markers,
+                                expected,
+                                format!("level={}\nskill_target={:?}", level, skill_target),
+                            );
                         }
                         None => {
                             let result = validate_skill_targets(
                                 &caster,
-                                skill,
+                                skill_target,
                                 &targets,
                                 &position_map,
                                 board,
                             );
                             assert!(
                                 result.is_err(),
-                                "應失敗但成功了：{description}, targets={target_markers:?}, skill={skill:?}, result={result:?}"
+                                "應失敗但成功了：{description}, targets={target_markers:?}, skill_target={skill_target:?}, result={result:?}"
                             );
                         }
                     }
@@ -854,51 +1025,59 @@ fn test_validate_skill_targets_normal_case() {
 }
 
 #[test]
-fn test_select_skill_targets_singletarget() {
+fn test_singletarget() {
     let level = r#"
         C  Ea Eb
         Pa T .
         Aa . .
         "#;
-    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
-    let position_map = to_position_map(&marker_map);
+    let (board, markers, unit_markers) = standard_board(level).expect("建立測試棋盤失敗");
+    let position_map = to_position_map(&unit_markers);
     let caster = CasterInfo {
-        position: marker_map["C"][0].position,
-        unit_info: marker_map["C"][0].unit_info.clone(),
+        position: unit_markers["C"][0].position,
+        unit_info: unit_markers["C"][0].unit_info.clone(),
     };
 
     for filter in TargetFilter::iter() {
         let msg = format!("filter={filter:?} 不可以瞄準空地");
-        let skill = target_with_unit_target(filter, 1, false, Area::Single);
+        let skill_target = target_with_unit_target(filter, 1, false, Area::Single);
         let m = "T";
         let targets = vec![markers[m][0]];
-        let result = validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+        let result = validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
         assert!(result.is_err(), "{}", msg);
     }
 
     for filter in TargetFilter::iter() {
         let msg = format!("filter={filter:?} Ground 可以瞄準空地");
-        let skill = target_with_ground_target(filter, 1, false, Area::Single);
+        let skill_target = target_with_ground_target(filter, 1, false, Area::Single);
         let m = "T";
         let targets = vec![markers[m][0]];
-        let result = validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+        let result = validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
         assert!(result.is_ok(), "{}", msg);
-        // assert!(result.expect(&msg).is_empty(), "{}", msg);
+        assert_hp(
+            caster.position,
+            &targets,
+            &skill_target,
+            board,
+            &unit_markers,
+            vec![],
+            format!("level={}\nskill_target={:?}", level, skill_target),
+        );
     }
 }
 
 #[test]
-fn test_select_skill_targets_multitarget() {
+fn test_multitarget() {
     let level = r#"
         C  Ea Eb
         Pa T .
         Aa . .
         "#;
-    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
-    let position_map = to_position_map(&marker_map);
+    let (board, markers, unit_markers) = standard_board(level).expect("建立測試棋盤失敗");
+    let position_map = to_position_map(&unit_markers);
     let caster = CasterInfo {
-        position: marker_map["C"][0].position,
-        unit_info: marker_map["C"][0].unit_info.clone(),
+        position: unit_markers["C"][0].position,
+        unit_info: unit_markers["C"][0].unit_info.clone(),
     };
 
     for allow_duplicate in [false, true] {
@@ -906,43 +1085,58 @@ fn test_select_skill_targets_multitarget() {
             let msg = format!(
                 "filter={filter:?} 不可以瞄準空地 - 重複瞄準同一個目標 {allow_duplicate:?}"
             );
-            let skill = target_with_unit_target(filter, 2, allow_duplicate, Area::Single);
+            let skill_target = target_with_unit_target(filter, 2, allow_duplicate, Area::Single);
             let m = "T";
             let targets = vec![markers[m][0]];
-            let result = validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+            let result =
+                validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
             assert!(result.is_err(), "{}", msg);
         }
 
         for filter in TargetFilter::iter() {
             let msg =
                 format!("filter={filter:?} 可以瞄準空地 - 重複瞄準同一個目標 {allow_duplicate:?}");
-            let skill = target_with_ground_target(filter, 2, allow_duplicate, Area::Single);
+            let skill_target = target_with_ground_target(filter, 2, allow_duplicate, Area::Single);
             let m = "T";
             let targets = vec![markers[m][0]];
-            let result = validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+            let result =
+                validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
             assert!(result.is_ok(), "{}", msg);
-            // assert!(result.expect(&msg).is_empty(), "{}", msg);
+            assert_hp(
+                caster.position,
+                &targets,
+                &skill_target,
+                board,
+                &unit_markers,
+                vec![],
+                format!("level={}\nskill_target={:?}", level, skill_target),
+            );
         }
 
         for filter in TargetFilter::iter() {
             let msg = format!("filter={filter:?} 重複瞄準同一個目標 {allow_duplicate:?}");
-            let skill = target_with_unit_target(filter, 2, allow_duplicate, Area::Single);
+            let skill_target = target_with_unit_target(filter, 2, allow_duplicate, Area::Single);
             let m = match &filter {
                 TargetFilter::Any | TargetFilter::AnyExceptCaster | TargetFilter::Enemy => "Ea",
                 TargetFilter::Ally | TargetFilter::AllyExceptCaster => "Aa",
                 TargetFilter::CasterOnly => "C",
             };
             let targets = vec![markers[m][0], markers[m][0]];
-            let result = validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+            let result =
+                validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
             if allow_duplicate {
                 assert!(result.is_ok(), "{}", msg);
-                // let occupants = all_occupants_of(&marker_map, m);
-                // assert_eq!(
-                //     result.expect(&msg),
-                //     vec![occupants[0], occupants[0]],
-                //     "{}",
-                //     msg
-                // );
+                let expected = all_occupants_of(&unit_markers, m);
+                let expected = vec![expected[0], expected[0]];
+                assert_hp(
+                    caster.position,
+                    &targets,
+                    &skill_target,
+                    board,
+                    &unit_markers,
+                    expected,
+                    format!("level={}\nskill_target={:?}", level, skill_target),
+                );
             } else {
                 assert!(result.is_err(), "{}", msg);
             }
@@ -951,17 +1145,17 @@ fn test_select_skill_targets_multitarget() {
 }
 
 #[test]
-fn test_select_skill_targets_area_diamond_and_cross() {
+fn test_area_diamond_and_cross() {
     let level = r#"
         C  Ea Eb
         Pa T .
         Aa . .
         "#;
-    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
-    let position_map = to_position_map(&marker_map);
+    let (board, markers, unit_markers) = standard_board(level).expect("建立測試棋盤失敗");
+    let position_map = to_position_map(&unit_markers);
     let caster = CasterInfo {
-        position: marker_map["C"][0].position,
-        unit_info: marker_map["C"][0].unit_info.clone(),
+        position: unit_markers["C"][0].position,
+        unit_info: unit_markers["C"][0].unit_info.clone(),
     };
 
     for area in [Area::Diamond { radius: 1 }, Area::Cross { length: 1 }] {
@@ -1001,27 +1195,33 @@ fn test_select_skill_targets_area_diamond_and_cross() {
             };
             for (m, expected) in test_case {
                 let msg = format!("{area:?} - {filter:?} - 不用瞄準單位:{m}");
-                let skill = target_with_ground_target(filter, 1, false, area);
+                let skill_target = target_with_ground_target(filter, 1, false, area);
                 let targets = vec![markers[m][0]];
                 let result =
-                    validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+                    validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
                 assert!(result.is_ok(), "{}", msg);
-                // let result_set: HashSet<_> = result.expect(&msg).into_iter().collect();
-                // let occupants = HashSet::from_iter(
-                //     expected
-                //         .into_iter()
-                //         .map(|m| all_occupants_of(&marker_map, m)[0]),
-                // );
-                // assert_eq!(result_set, occupants, "{}", msg);
+                let expected: Vec<_> = expected
+                    .into_iter()
+                    .map(|m| all_occupants_of(&unit_markers, m)[0])
+                    .collect();
+                assert_hp(
+                    caster.position,
+                    &targets,
+                    &skill_target,
+                    board,
+                    &unit_markers,
+                    expected,
+                    format!("level={}\nskill_target={:?}", level, skill_target),
+                );
             }
 
             // Unit target：瞄準空地必須失敗
             {
                 let msg = format!("{area:?} - {filter:?} - 瞄準單位:空地必須失敗");
-                let skill = target_with_unit_target(filter, 1, false, area);
+                let skill_target = target_with_unit_target(filter, 1, false, area);
                 let targets = vec![markers["T"][0]];
                 let result =
-                    validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+                    validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
                 assert!(result.is_err(), "{}", msg);
             }
             // Unit target：瞄準有單位的位置
@@ -1042,20 +1242,26 @@ fn test_select_skill_targets_area_diamond_and_cross() {
             };
             for (m, expected) in unit_test_case {
                 let msg = format!("{area:?} - {filter:?} - 瞄準單位:{m}");
-                let skill = target_with_unit_target(filter, 1, false, area);
+                let skill_target = target_with_unit_target(filter, 1, false, area);
                 let targets = vec![markers[m][0]];
                 let result =
-                    validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+                    validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
                 match expected {
                     Ok(expected_markers) => {
                         assert!(result.is_ok(), "{}", msg);
-                        // let result_set: HashSet<_> = result.expect(&msg).into_iter().collect();
-                        // let occupants = HashSet::from_iter(
-                        //     expected_markers
-                        //         .into_iter()
-                        //         .map(|m| all_occupants_of(&marker_map, m)[0]),
-                        // );
-                        // assert_eq!(result_set, occupants, "{}", msg);
+                        let expected: Vec<_> = expected_markers
+                            .into_iter()
+                            .map(|m| all_occupants_of(&unit_markers, m)[0])
+                            .collect();
+                        assert_hp(
+                            caster.position,
+                            &targets,
+                            &skill_target,
+                            board,
+                            &unit_markers,
+                            expected,
+                            format!("level={}\nskill_target={:?}", level, skill_target),
+                        );
                     }
                     Err(()) => {
                         assert!(result.is_err(), "{}", msg);
@@ -1067,17 +1273,17 @@ fn test_select_skill_targets_area_diamond_and_cross() {
 }
 
 #[test]
-fn test_select_skill_targets_area_line() {
+fn test_area_line() {
     let level = r#"
         C  T Eb
         Pa . .
         Aa . .
         "#;
-    let (board, markers, marker_map) = standard_board(level).expect("建立測試棋盤失敗");
-    let position_map = to_position_map(&marker_map);
+    let (board, markers, unit_markers) = standard_board(level).expect("建立測試棋盤失敗");
+    let position_map = to_position_map(&unit_markers);
     let caster = CasterInfo {
-        position: marker_map["C"][0].position,
-        unit_info: marker_map["C"][0].unit_info.clone(),
+        position: unit_markers["C"][0].position,
+        unit_info: unit_markers["C"][0].unit_info.clone(),
     };
 
     for filter in TargetFilter::iter() {
@@ -1115,17 +1321,25 @@ fn test_select_skill_targets_area_line() {
         };
         for (m, expected) in test_case {
             let msg = format!("line - {filter:?} - 不用瞄準單位:{m}");
-            let skill = target_with_ground_target(filter, 1, false, Area::Line { length: 2 });
+            let skill_target =
+                target_with_ground_target(filter, 1, false, Area::Line { length: 2 });
             let targets = vec![markers[m][0]];
-            let result = validate_skill_targets(&caster, &skill, &targets, &position_map, board);
+            let result =
+                validate_skill_targets(&caster, &skill_target, &targets, &position_map, board);
             assert!(result.is_ok(), "{}", msg);
-            // let result_set: HashSet<_> = result.expect(&msg).into_iter().collect();
-            // let occupants = HashSet::from_iter(
-            //     expected
-            //         .into_iter()
-            //         .map(|m| all_occupants_of(&marker_map, m)[0]),
-            // );
-            // assert_eq!(result_set, occupants, "{}", msg);
+            let expected: Vec<_> = expected
+                .into_iter()
+                .map(|m| all_occupants_of(&unit_markers, m)[0])
+                .collect();
+            assert_hp(
+                caster.position,
+                &targets,
+                &skill_target,
+                board,
+                &unit_markers,
+                expected,
+                format!("level={}\nskill_target={:?}", level, skill_target),
+            );
         }
     }
 }
