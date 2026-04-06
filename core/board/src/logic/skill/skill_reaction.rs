@@ -1,10 +1,10 @@
 //! 移動反應收集邏輯
 
 use crate::domain::alias::SkillName;
-use crate::domain::core_types::{ReactionTrigger, SkillType, TargetFilter};
+use crate::domain::core_types::{ReactionTrigger, SkillType};
 use crate::ecs_types::components::{Occupant, Position};
 use crate::error::Result;
-use crate::logic::skill::{UnitInfo, manhattan_distance};
+use crate::logic::skill::{UnitInfo, is_in_filter, manhattan_distance};
 use std::collections::HashMap;
 
 /// 反應者的場上資訊
@@ -64,11 +64,8 @@ pub(crate) fn collect_move_reactions(
                     if matches!(
                         triggering_unit.trigger,
                         ReactionTrigger::AttackOfOpportunity
-                    ) && matches_filter(
-                        &reactor.unit_info,
-                        mover,
-                        &triggering_unit.source_filter,
-                    ) {
+                    ) && is_in_filter(&reactor.unit_info, mover, &triggering_unit.source_filter)
+                    {
                         Some((name, triggering_unit))
                     } else {
                         None
@@ -118,19 +115,4 @@ pub(crate) fn collect_move_reactions(
         stop_position: path[earliest_from_idx + 1],
         reactions,
     })
-}
-
-/// 檢查 mover 是否符合反應者的 unit_filter
-/// reactor 是技能持有者，mover 是被檢查的目標
-fn matches_filter(reactor: &UnitInfo, mover: &UnitInfo, filter: &TargetFilter) -> bool {
-    let is_same_alliance = reactor.alliance_id == mover.alliance_id;
-
-    match filter {
-        TargetFilter::Any => true,
-        TargetFilter::AnyExceptCaster => true, // mover 不是 reactor，一定通過
-        TargetFilter::Enemy => !is_same_alliance,
-        TargetFilter::Ally => is_same_alliance,
-        TargetFilter::AllyExceptCaster => is_same_alliance, // mover 不是 reactor
-        TargetFilter::CasterOnly => false,                  // mover 不是 reactor
-    }
 }

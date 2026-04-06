@@ -58,10 +58,12 @@ core/board/
 │   │   ├── movement.rs   - 移動邏輯
 │   │   ├── turn_order.rs - 回合順序計算邏輯
 │   │   ├── unit_attributes.rs - 單位屬性計算邏輯
-│   │   ├── skill.rs      - 技能效果計算邏輯
-│   │   ├── skill_check.rs - 技能命中與豁免判定邏輯
-│   │   ├── skill_execute.rs - 技能效果執行邏輯
-│   │   ├── skill_reaction.rs - 技能反應收集邏輯
+│   │   ├── skill/        - 技能系統邏輯
+│   │   │   ├── mod.rs    - 技能模組與 AOE 計算
+│   │   │   ├── skill_check.rs - 技能命中與豁免判定邏輯
+│   │   │   ├── skill_execution.rs - 技能效果執行邏輯
+│   │   │   ├── skill_reaction.rs - 技能反應收集邏輯
+│   │   │   └── skill_target.rs - 技能目標驗證邏輯
 │   │   └── debug.rs      - 調試工具函數
 │   ├── test_helpers/     - 測試輔助工具
 │   │   ├── mod.rs        - 測試輔助模組
@@ -74,8 +76,8 @@ core/board/
 │       │   ├── test_movement.rs - 移動邏輯測試
 │       │   ├── test_collect_move_reactions.rs - 移動反應收集測試
 │       │   ├── test_compute_affected_positions.rs - AOE 計算測試
-│       │   ├── test_select_skill_targets.rs - 技能目標選擇測試
-│       │   └── test_skill_execute.rs - 技能效果執行測試
+│       │   ├── test_validate_skill_targets.rs - 技能目標驗證測試
+│       │   ├── test_skill_execution.rs - 技能效果執行測試
 │       ├── turn/         - 回合順序測試
 │       │   ├── mod.rs    - 模組宣告
 │       │   └── test_turn_order.rs - 回合順序計算與管理測試
@@ -116,26 +118,29 @@ core/board/
 - `pub(crate) fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
 - `pub(crate) fn get_active_index(entries: &[TurnEntry]) -> Option<usize>` - 取得下一個未行動的單位索引
 
-### logic/skill.rs
+### logic/skill/mod.rs
 
-- `pub(crate) fn select_skill_targets(caster: &CasterInfo, target_def: &Target, targets: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board_size: Board) -> Result<Vec<Occupant>>` - 驗證並解析技能目標
-- `pub(crate) fn compute_affected_positions(area: &Area, caster: Position, target: Position, board_size: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
-- `pub(crate) fn compute_range_positions(caster: Position, range: (Coord, Coord), board_size: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
+- `pub(crate) fn compute_affected_positions(area: &Area, caster: Position, target: Position, board: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
+- `pub(crate) fn compute_range_positions(caster: Position, range: (Coord, Coord), board: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
 - `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
 
-### logic/skill_check.rs
+### logic/skill/skill_check.rs
 
 - `pub(crate) fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
 - `pub(crate) fn resolve_dc(attacker_dc: i32, defender_save: i32, rng_int: &mut impl FnMut() -> i32) -> DcResult` - 解析 DC 豁免判定結果
 
-### logic/skill_execute.rs
+### logic/skill/skill_execution.rs
 
-- `pub(crate) fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board_size: Board, rng: &mut impl FnMut() -> i32) -> Vec<EffectEntry>` - 執行效果樹節點並產生效果條目
+- `pub(crate) fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board: Board, rng: &mut impl FnMut() -> i32) -> Vec<EffectEntry>` - 執行效果樹節點並產生效果條目
 
-### logic/skill_reaction.rs
+### logic/skill/skill_reaction.rs
 
 - `pub(crate) fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
+
+### logic/skill/skill_target.rs
+
+- `pub(crate) fn validate_skill_targets(caster: &CasterInfo, target: &Target, target_positions: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board: Board) -> Result<()>` - 驗證技能目標的有效性
 
 ### logic/debug.rs
 

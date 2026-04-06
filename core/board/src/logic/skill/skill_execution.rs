@@ -4,7 +4,8 @@ use crate::domain::alias::ID;
 use crate::domain::core_types::{Attribute, CasterOrTarget, Effect, EffectNode, Scaling};
 use crate::ecs_types::components::{AttributeBundle, Occupant, Position};
 use crate::ecs_types::resources::Board;
-use crate::logic::skill::{UnitInfo, compute_affected_positions, is_in_filter};
+use crate::logic::skill::skill_range::compute_affected_positions;
+use crate::logic::skill::{UnitInfo, is_in_filter};
 use std::collections::HashMap;
 
 /// 戰鬥屬性（傳入 resolve_effect_tree 的單位資料）
@@ -50,7 +51,7 @@ pub(crate) fn resolve_effect_tree(
     caster_pos: Position,
     target_pos: Position,
     units_on_board: &HashMap<Position, CombatStats>,
-    board_size: Board,
+    board: Board,
     rng: &mut impl FnMut() -> i32,
 ) -> Vec<EffectEntry> {
     let mut entries = Vec::new();
@@ -62,7 +63,7 @@ pub(crate) fn resolve_effect_tree(
                 filter,
                 nodes: inner_nodes,
             } => {
-                let affected = compute_affected_positions(area, caster_pos, target_pos, board_size)
+                let affected = compute_affected_positions(area, caster_pos, target_pos, board)
                     .expect("compute_affected_positions 應成功計算 AOE 範圍");
 
                 for pos in affected {

@@ -2,7 +2,7 @@
 
 use crate::domain::core_types::Area;
 use crate::ecs_types::components::Position;
-use crate::logic::skill::compute_affected_positions;
+use crate::logic::skill::skill_range::compute_affected_positions;
 use crate::test_helpers::level_builder::load_from_ascii;
 use std::collections::{HashMap, HashSet};
 

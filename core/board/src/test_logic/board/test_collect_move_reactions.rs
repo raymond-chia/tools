@@ -5,7 +5,7 @@ use crate::domain::constants::PLAYER_ALLIANCE_ID;
 use crate::domain::core_types::{ReactionTrigger, SkillType, TargetFilter, TriggeringSource};
 use crate::ecs_types::components::Position;
 use crate::error::Result;
-use crate::logic::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
+use crate::logic::skill::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
 use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry};
 use std::collections::HashMap;
 

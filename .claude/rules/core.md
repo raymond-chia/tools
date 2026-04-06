@@ -33,7 +33,8 @@ World 操作集中原則（ecs_logic）
 
 - 禁止在測試中手寫單位擺放位置的座標，必須透過 `load_from_ascii` 或 `LevelBuilder` 從 ASCII art 取得位置
 - 多個測試案例必須使用 `let test_data = [...]` + 迴圈遍歷，禁止只寫單一案例
-- 測試集中在 core/board/tests/ 的子資料夾
+- 邏輯層單元測試：`core/board/src/test_logic/` 的子資料夾
+- ECS 操作集成測試：`core/board/tests/ecs_logic/` 的子資料夾
 
 不需要測試
 

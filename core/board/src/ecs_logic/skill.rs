@@ -10,7 +10,8 @@ use crate::ecs_types::components::{
 use crate::ecs_types::resources::{Board, GameData, LevelConfig, TurnOrder};
 use crate::error::{BoardError, DataError, Result, UnitError};
 use crate::logic::debug::short_type_name;
-use crate::logic::skill::{self as skill_logic, UnitInfo};
+use crate::logic::skill::skill_range::{compute_affected_positions, compute_range_positions};
+use crate::logic::skill::{UnitInfo, is_in_filter, manhattan_distance};
 use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{With, World};
 use std::collections::HashMap;
@@ -101,11 +102,9 @@ pub fn get_skill_targetable_positions(
             })?;
 
     match skill_type {
-        SkillType::Active { target, .. } => Ok(skill_logic::compute_range_positions(
-            caster_pos,
-            target.range,
-            *board,
-        )),
+        SkillType::Active { target, .. } => {
+            Ok(compute_range_positions(caster_pos, target.range, *board))
+        }
         SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
             skill_name: skill_name.clone(),
         }
@@ -224,7 +223,7 @@ pub fn get_skill_affected_positions(
 
     // 計算 AOE 範圍
     let (min_range, max_range) = target.range;
-    let distance = skill_logic::manhattan_distance(caster_pos, target_pos);
+    let distance = manhattan_distance(caster_pos, target_pos);
     if distance < min_range || distance > max_range {
         return Err(BoardError::OutOfRange {
             distance,
@@ -233,8 +232,7 @@ pub fn get_skill_affected_positions(
         }
         .into());
     }
-    let all_positions =
-        skill_logic::compute_affected_positions(&target.area, caster_pos, target_pos, board)?;
+    let all_positions = compute_affected_positions(&target.area, caster_pos, target_pos, board)?;
 
     let can_target_ground = matches!(target.selection, TargetSelection::Ground);
     let filter = &target.selectable_filter;
@@ -242,7 +240,7 @@ pub fn get_skill_affected_positions(
         .iter()
         .filter(|pos| match units_on_board.get(pos) {
             None => can_target_ground,
-            Some(unit) => skill_logic::is_in_filter(&caster_info, unit, filter),
+            Some(unit) => is_in_filter(&caster_info, unit, filter),
         })
         .copied()
         .collect();

@@ -5,8 +5,5 @@ pub mod debug;
 pub mod id_generator;
 pub mod movement;
 pub mod skill;
-pub mod skill_check;
-pub mod skill_execute;
-pub mod skill_reaction;
 pub mod turn_order;
 pub mod unit_attributes;
