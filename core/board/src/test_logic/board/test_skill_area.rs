@@ -181,13 +181,8 @@ fn dc_branch(
 }
 
 /// 建立固定回傳值的 rng
-fn fixed_rng(values: &[i32]) -> impl FnMut() -> i32 + '_ {
-    let mut index = 0;
-    move || {
-        let value = values[index];
-        index += 1;
-        value
-    }
+fn fixed_rng(value: i32) -> impl FnMut() -> i32 {
+    move || value
 }
 
 fn assert_hp(
@@ -211,70 +206,183 @@ fn assert_hp(
         (50, -200, -100),
     ];
 
-    for stat_value in [1, 10, 100, 1000] {
-        for (atk, value_percent, expected_amount) in skill_test_data {
+    for (atk, value_percent, expected_amount) in skill_test_data {
+        // (屬性, 亂數)
+        let stat_test_data = [
+            (1, 1, false),
+            (1, 5, false),
+            (1, 6, true),
+            (1, 9, true),
+            (1, 10, true),
+            (1, 90, true),
+            (1, 95, true),
+            (1, 96, true),
+            (1, 100, true),
+            (10, 1, false),
+            (10, 5, false),
+            (10, 6, false),
+            (10, 9, false),
+            (10, 10, true),
+            (10, 90, true),
+            (10, 95, true),
+            (10, 96, true),
+            (10, 100, true),
+            (100, 1, false),
+            (100, 5, false),
+            (100, 6, false),
+            (100, 9, false),
+            (100, 10, false),
+            (100, 90, false),
+            (100, 95, false),
+            (100, 96, true),
+            (100, 100, true),
+            (1000, 1, false),
+            (1000, 5, false),
+            (1000, 6, false),
+            (1000, 9, false),
+            (1000, 10, false),
+            (1000, 90, false),
+            (1000, 95, false),
+            (1000, 96, true),
+            (1000, 100, true),
+        ];
+        for (stat_value, random, expected_check) in stat_test_data {
+            let mut rng = fixed_rng(random);
+
             let mut caster_stats = default_stats(unit_markers["C"][0].unit_info.clone());
             caster_stats.attribute.physical_attack = PhysicalAttack(atk);
             caster_stats.attribute.magical_attack = MagicalAttack(atk);
+            caster_stats.attribute.evasion = Evasion(stat_value);
+            caster_stats.attribute.fortitude = Fortitude(stat_value);
+            caster_stats.attribute.reflex = Reflex(stat_value);
+            caster_stats.attribute.will = Will(stat_value);
 
             let units_on_board = to_position_map(&unit_markers)
                 .into_iter()
                 .map(|(key, info)| {
                     let mut stat = default_stats(info);
                     stat.attribute.evasion = Evasion(stat_value);
+                    stat.attribute.fortitude = Fortitude(stat_value);
+                    stat.attribute.reflex = Reflex(stat_value);
+                    stat.attribute.will = Will(stat_value);
                     (key, stat)
                 })
                 .collect();
 
-            let leaf = hp_leaf(Attribute::PhysicalAttack, value_percent);
-            let nodes = match skill_target.area {
-                Area::Single => vec![leaf],
-                Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
-                    vec![EffectNode::Area {
-                        area: skill_target.area,
-                        filter: skill_target.selectable_filter.clone(),
-                        nodes: vec![leaf],
-                    }]
-                }
-            };
-            let mut rng = fixed_rng(&[]);
+            {
+                // guarantee hit
+                let node = hp_leaf(Attribute::PhysicalAttack, value_percent);
+                let nodes = match skill_target.area {
+                    Area::Single => vec![node],
+                    Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
+                        vec![EffectNode::Area {
+                            area: skill_target.area,
+                            filter: skill_target.selectable_filter.clone(),
+                            nodes: vec![node],
+                        }]
+                    }
+                };
 
-            let mut all_entries = vec![];
-            for target_pos in target_positions {
-                let entries = resolve_effect_tree(
-                    &nodes,
-                    &caster_stats,
-                    caster_position,
-                    *target_pos,
-                    &units_on_board,
-                    board,
-                    &mut rng,
-                );
-                all_entries.extend(entries);
-            }
-            assert_eq!(
-                all_entries.len(),
-                expected.len(),
-                "atk={atk} percent={value_percent} 應產生 {} 個效果（{} 個目標）\nmsg: {msg}",
-                expected.len(),
-                expected.len(),
-            );
-            for expected in &expected {
-                let found = all_entries.iter().find(|entry| {
-                    if let CheckTarget::Unit(id) = entry.target {
-                        Occupant::Unit(id) == *expected
-                    } else {
-                        false
-                    }
-                }).expect("atk={atk} percent={value_percent} 應包含對 {expected:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}");
-                assert_eq!(found.check, CheckResult::Auto);
+                let mut all_entries = vec![];
+                for target_pos in target_positions {
+                    let entries = resolve_effect_tree(
+                        &nodes,
+                        &caster_stats,
+                        caster_position,
+                        *target_pos,
+                        &units_on_board,
+                        board,
+                        &mut rng,
+                    );
+                    all_entries.extend(entries);
+                }
                 assert_eq!(
-                    found.effect,
-                    ResolvedEffect::HpChange {
-                        raw_amount: expected_amount,
-                        final_amount: expected_amount,
-                    }
+                    all_entries.len(),
+                    expected.len(),
+                    "atk={atk} percent={value_percent} 應產生 {} 個效果（{} 個目標）\nmsg: {msg}",
+                    expected.len(),
+                    expected.len(),
                 );
+                for expected in &expected {
+                    let found = all_entries.iter().find(|entry| {
+                        if let CheckTarget::Unit(id) = entry.target {
+                            Occupant::Unit(id) == *expected
+                        } else {
+                            false
+                        }
+                    }).expect("atk={atk} percent={value_percent} 應包含對 {expected:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}");
+                    assert_eq!(found.check, CheckResult::Auto);
+                    assert_eq!(
+                        found.effect,
+                        ResolvedEffect::HpChange {
+                            raw_amount: expected_amount,
+                            final_amount: expected_amount,
+                        }
+                    );
+                }
+            }
+
+            // hit based
+            {
+                let node = hp_leaf(Attribute::PhysicalAttack, value_percent);
+                let node = hit_branch(caster_stats.attribute.accuracy.0, 0, vec![node], vec![]);
+                let nodes = match skill_target.area {
+                    Area::Single => vec![node],
+                    Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
+                        vec![EffectNode::Area {
+                            area: skill_target.area,
+                            filter: skill_target.selectable_filter.clone(),
+                            nodes: vec![node],
+                        }]
+                    }
+                };
+
+                let mut all_entries = vec![];
+                for target_pos in target_positions {
+                    let entries = resolve_effect_tree(
+                        &nodes,
+                        &caster_stats,
+                        caster_position,
+                        *target_pos,
+                        &units_on_board,
+                        board,
+                        &mut rng,
+                    );
+                    all_entries.extend(entries);
+                }
+                assert_eq!(
+                    all_entries.len(),
+                    expected.len(),
+                    "atk={atk} percent={value_percent} 應產生 {} 個效果（{} 個目標）\nmsg: {msg}",
+                    expected.len(),
+                    expected.len(),
+                );
+                for expected in &expected {
+                    let found = all_entries.iter().find(|entry| {
+                        if let CheckTarget::Unit(id) = entry.target {
+                            Occupant::Unit(id) == *expected
+                        } else {
+                            false
+                        }
+                    }).expect("atk={atk} percent={value_percent} 應包含對 {expected:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}");
+                    if expected_check {
+                        assert!(
+                            matches!(found.check, CheckResult::Hit { .. }),
+                            "atk={atk} percent={value_percent} stat={stat_value} roll={random} 預期命中, 實際 {:?}\nmsg: {msg}",
+                            found.check,
+                        );
+                        assert_eq!(
+                            found.effect,
+                            ResolvedEffect::HpChange {
+                                raw_amount: expected_amount,
+                                final_amount: expected_amount,
+                            }
+                        );
+                    } else {
+                        assert_eq!(found.check, CheckResult::Evade);
+                        assert_eq!(found.effect, ResolvedEffect::NoEffect);
+                    }
+                }
             }
         }
     }

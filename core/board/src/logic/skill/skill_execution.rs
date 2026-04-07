@@ -1,9 +1,12 @@
 //! 技能效果樹執行邏輯
 
 use crate::domain::alias::ID;
-use crate::domain::core_types::{Attribute, CasterOrTarget, Effect, EffectNode, Scaling};
+use crate::domain::core_types::{
+    Attribute, CasterOrTarget, Effect, EffectCondition, EffectNode, Scaling,
+};
 use crate::ecs_types::components::{AttributeBundle, Occupant, Position};
 use crate::ecs_types::resources::Board;
+use crate::logic::skill::skill_check::{HitResult, resolve_hit};
 use crate::logic::skill::skill_range::compute_affected_positions;
 use crate::logic::skill::{UnitInfo, is_in_filter};
 use std::collections::HashMap;
@@ -28,14 +31,20 @@ pub enum CheckTarget {
 pub enum CheckResult {
     /// 無判定，必定生效
     Auto,
-    TODO,
+    Hit {
+        crit: bool,
+    },
+    Block {
+        crit: bool,
+    },
+    Evade,
 }
 
 /// 解析後的效果
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedEffect {
+    NoEffect,
     HpChange { raw_amount: i32, final_amount: i32 },
-    TODO,
 }
 
 /// 單筆效果條目
@@ -71,6 +80,7 @@ pub(crate) fn resolve_effect_tree(
                 for pos in affected {
                     let target_stats = match units_on_board.get(&pos) {
                         Some(stats) => stats,
+                        // TODO
                         None => continue,
                     };
                     if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
@@ -82,6 +92,7 @@ pub(crate) fn resolve_effect_tree(
             EffectNode::Leaf { .. } => {
                 let target_stats = match units_on_board.get(&target_pos) {
                     Some(stats) => stats,
+                    // TODO
                     None => continue,
                 };
                 resolve_nodes_for_target(
@@ -93,12 +104,32 @@ pub(crate) fn resolve_effect_tree(
                 );
             }
             EffectNode::Branch { .. } => {
-                // 禁止處理 hit based & dc based，暫不實作
+                let target_stats = match units_on_board.get(&target_pos) {
+                    Some(stats) => stats,
+                    // TODO
+                    None => continue,
+                };
+                resolve_nodes_for_target(
+                    std::slice::from_ref(node),
+                    caster,
+                    target_stats,
+                    rng,
+                    &mut entries,
+                );
             }
         }
     }
 
     entries
+}
+
+/// 將 HitResult 轉換為 CheckResult
+fn hit_result_to_check(hit: HitResult) -> CheckResult {
+    match hit {
+        HitResult::Hit { crit } => CheckResult::Hit { crit },
+        HitResult::Block { crit } => CheckResult::Block { crit },
+        HitResult::Evade => CheckResult::Evade,
+    }
 }
 
 /// 從 Attribute enum 取得 AttributeBundle 中對應的值
@@ -136,6 +167,7 @@ fn compute_scaling(scaling: &Scaling, caster: &CombatStats, target: &CombatStats
 fn occupant_to_check_target(occupant: Occupant) -> CheckTarget {
     match occupant {
         Occupant::Unit(id) => CheckTarget::Unit(id),
+        // TODO
         Occupant::Object(id) => CheckTarget::Unit(id),
     }
 }
@@ -145,7 +177,7 @@ fn resolve_nodes_for_target(
     nodes: &[EffectNode],
     caster: &CombatStats,
     target: &CombatStats,
-    _rng: &mut impl FnMut() -> i32,
+    rng: &mut impl FnMut() -> i32,
     entries: &mut Vec<EffectEntry>,
 ) {
     for node in nodes {
@@ -171,8 +203,57 @@ fn resolve_nodes_for_target(
                     _ => {}
                 }
             }
-            EffectNode::Branch { .. } => {
-                // 禁止處理 hit based & dc based，暫不實作
+            EffectNode::Branch {
+                who: _,
+                condition,
+                on_success,
+                on_failure,
+            } => {
+                let check = match condition {
+                    EffectCondition::HitCheck {
+                        accuracy_bonus,
+                        crit_bonus,
+                    } => {
+                        let attacker_hit = caster.attribute.accuracy.0 + accuracy_bonus;
+                        let defender_evasion = target.attribute.evasion.0;
+                        let defender_block = target.attribute.block.0;
+                        let crit_rate = caster.crit_rate + crit_bonus;
+                        let hit = resolve_hit(
+                            attacker_hit,
+                            defender_evasion,
+                            defender_block,
+                            crit_rate,
+                            rng,
+                        );
+                        hit_result_to_check(hit)
+                    }
+                    EffectCondition::DcCheck { .. } => {
+                        // DC 判定暫不實作
+                        CheckResult::Auto
+                    }
+                };
+
+                let branch_nodes = match check {
+                    CheckResult::Auto | CheckResult::Hit { .. } | CheckResult::Block { .. } => {
+                        on_success
+                    }
+                    CheckResult::Evade => on_failure,
+                };
+
+                if branch_nodes.is_empty() {
+                    let check_target = occupant_to_check_target(target.unit_info.occupant);
+                    entries.push(EffectEntry {
+                        target: check_target,
+                        check,
+                        effect: ResolvedEffect::NoEffect,
+                    });
+                } else {
+                    let start = entries.len();
+                    resolve_nodes_for_target(branch_nodes, caster, target, rng, entries);
+                    for entry in &mut entries[start..] {
+                        entry.check = check.clone();
+                    }
+                }
             }
             EffectNode::Area { .. } => {
                 // Area 在頂層處理，巢狀 Area 不支援
