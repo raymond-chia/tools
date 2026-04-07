@@ -7,7 +7,7 @@ use crate::ecs_types::components::*;
 use crate::ecs_types::resources::Board;
 use crate::error::Result;
 use crate::logic::skill::skill_execution::{
-    CheckResult, CheckTarget, CombatStats, ResolvedEffect, resolve_effect_tree,
+    CheckResult, CheckTarget, CombatStats, EffectEntry, ResolvedEffect, resolve_effect_tree,
 };
 use crate::logic::skill::skill_target::validate_skill_targets;
 use crate::logic::skill::{CasterInfo, UnitInfo};
@@ -128,14 +128,6 @@ fn all_occupants_of(
 // 套用技能相關工具
 // ============================================================================
 
-fn default_stats(unit_info: UnitInfo) -> CombatStats {
-    CombatStats {
-        unit_info,
-        attribute: AttributeBundle::default(),
-        crit_rate: 0,
-    }
-}
-
 fn hp_leaf(source_attribute: Attribute, value_percent: i32) -> EffectNode {
     EffectNode::Leaf {
         who: CasterOrTarget::Target,
@@ -146,6 +138,20 @@ fn hp_leaf(source_attribute: Attribute, value_percent: i32) -> EffectNode {
                 value_percent,
             },
         },
+    }
+}
+
+/// 將節點包入 Area，若技能為 Single 則直接使用
+fn wrap_area(node: EffectNode, skill_target: &Target) -> Vec<EffectNode> {
+    match skill_target.area {
+        Area::Single => vec![node],
+        Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
+            vec![EffectNode::Area {
+                area: skill_target.area,
+                filter: skill_target.selectable_filter.clone(),
+                nodes: vec![node],
+            }]
+        }
     }
 }
 
@@ -185,6 +191,53 @@ fn fixed_rng(value: i32) -> impl FnMut() -> i32 {
     move || value
 }
 
+/// 對所有目標位置執行效果樹並收集所有條目
+fn run_for_targets(
+    nodes: &[EffectNode],
+    caster_stats: &CombatStats,
+    caster_position: Position,
+    target_positions: &[Position],
+    units_on_board: &HashMap<Position, CombatStats>,
+    board: Board,
+    rng: &mut impl FnMut() -> i32,
+) -> Vec<EffectEntry> {
+    target_positions
+        .iter()
+        .flat_map(|pos| {
+            resolve_effect_tree(
+                nodes,
+                caster_stats,
+                caster_position,
+                *pos,
+                units_on_board,
+                board,
+                rng,
+            )
+        })
+        .collect()
+}
+
+/// 在條目中尋找對應 Occupant 的效果條目
+fn find_entry_for<'a>(entries: &'a [EffectEntry], expected: &Occupant) -> Option<&'a EffectEntry> {
+    entries.iter().find(
+        |entry| matches!(entry.target, CheckTarget::Unit(id) if Occupant::Unit(id) == *expected),
+    )
+}
+
+/// 建立帶有指定屬性的 CombatStats
+fn build_stats_with_defenses(unit_info: UnitInfo, stat_value: i32) -> CombatStats {
+    let mut stats = CombatStats {
+        unit_info,
+        attribute: AttributeBundle::default(),
+        crit_rate: 0,
+    };
+    stats.attribute.evasion = Evasion(stat_value);
+    stats.attribute.fortitude = Fortitude(stat_value);
+    stats.attribute.reflex = Reflex(stat_value);
+    stats.attribute.will = Will(stat_value);
+    stats
+}
+
 fn assert_hp(
     caster_position: Position,
     target_positions: &[Position],
@@ -194,8 +247,8 @@ fn assert_hp(
     expected: Vec<Occupant>,
     msg: String,
 ) {
-    let skill_test_data = [
-        // (atk, value_percent, expected_amount)
+    /// (atk, value_percent, expected_amount)
+    const SKILL_TEST_DATA: &[(i32, i32, i32)] = &[
         (100, -100, -100),
         (100, -50, -50),
         (100, -120, -120),
@@ -206,181 +259,121 @@ fn assert_hp(
         (50, -200, -100),
     ];
 
-    for (atk, value_percent, expected_amount) in skill_test_data {
-        // (屬性, 亂數)
-        let stat_test_data = [
-            (1, 1, false),
-            (1, 5, false),
-            (1, 6, true),
-            (1, 9, true),
-            (1, 10, true),
-            (1, 90, true),
-            (1, 95, true),
-            (1, 96, true),
-            (1, 100, true),
-            (10, 1, false),
-            (10, 5, false),
-            (10, 6, false),
-            (10, 9, false),
-            (10, 10, true),
-            (10, 90, true),
-            (10, 95, true),
-            (10, 96, true),
-            (10, 100, true),
-            (100, 1, false),
-            (100, 5, false),
-            (100, 6, false),
-            (100, 9, false),
-            (100, 10, false),
-            (100, 90, false),
-            (100, 95, false),
-            (100, 96, true),
-            (100, 100, true),
-            (1000, 1, false),
-            (1000, 5, false),
-            (1000, 6, false),
-            (1000, 9, false),
-            (1000, 10, false),
-            (1000, 90, false),
-            (1000, 95, false),
-            (1000, 96, true),
-            (1000, 100, true),
-        ];
-        for (stat_value, random, expected_check) in stat_test_data {
-            let mut rng = fixed_rng(random);
+    /// (stat_value, rng_roll, expected_hit)
+    const STAT_TEST_DATA: &[(i32, i32, bool)] = &[
+        (1, 1, false),
+        (1, 5, false),
+        (1, 6, true),
+        (1, 9, true),
+        (1, 10, true),
+        (1, 90, true),
+        (1, 95, true),
+        (1, 96, true),
+        (1, 100, true),
+        (10, 1, false),
+        (10, 5, false),
+        (10, 6, false),
+        (10, 9, false),
+        (10, 10, true),
+        (10, 90, true),
+        (10, 95, true),
+        (10, 96, true),
+        (10, 100, true),
+        (100, 1, false),
+        (100, 5, false),
+        (100, 6, false),
+        (100, 9, false),
+        (100, 10, false),
+        (100, 90, false),
+        (100, 95, false),
+        (100, 96, true),
+        (100, 100, true),
+        (1000, 1, false),
+        (1000, 5, false),
+        (1000, 6, false),
+        (1000, 9, false),
+        (1000, 10, false),
+        (1000, 90, false),
+        (1000, 95, false),
+        (1000, 96, true),
+        (1000, 100, true),
+    ];
 
-            let mut caster_stats = default_stats(unit_markers["C"][0].unit_info.clone());
+    let expected_count = expected.len();
+
+    for &(atk, value_percent, expected_amount) in SKILL_TEST_DATA {
+        for &(stat_value, random, expected_hit) in STAT_TEST_DATA {
+            let mut caster_stats =
+                build_stats_with_defenses(unit_markers["C"][0].unit_info.clone(), stat_value);
             caster_stats.attribute.physical_attack = PhysicalAttack(atk);
             caster_stats.attribute.magical_attack = MagicalAttack(atk);
-            caster_stats.attribute.evasion = Evasion(stat_value);
-            caster_stats.attribute.fortitude = Fortitude(stat_value);
-            caster_stats.attribute.reflex = Reflex(stat_value);
-            caster_stats.attribute.will = Will(stat_value);
 
-            let units_on_board = to_position_map(&unit_markers)
+            let units_on_board: HashMap<Position, CombatStats> = to_position_map(unit_markers)
                 .into_iter()
-                .map(|(key, info)| {
-                    let mut stat = default_stats(info);
-                    stat.attribute.evasion = Evasion(stat_value);
-                    stat.attribute.fortitude = Fortitude(stat_value);
-                    stat.attribute.reflex = Reflex(stat_value);
-                    stat.attribute.will = Will(stat_value);
-                    (key, stat)
-                })
+                .map(|(pos, info)| (pos, build_stats_with_defenses(info, stat_value)))
                 .collect();
 
-            {
-                // guarantee hit
-                let node = hp_leaf(Attribute::PhysicalAttack, value_percent);
-                let nodes = match skill_target.area {
-                    Area::Single => vec![node],
-                    Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
-                        vec![EffectNode::Area {
-                            area: skill_target.area,
-                            filter: skill_target.selectable_filter.clone(),
-                            nodes: vec![node],
-                        }]
-                    }
-                };
-
-                let mut all_entries = vec![];
-                for target_pos in target_positions {
-                    let entries = resolve_effect_tree(
-                        &nodes,
-                        &caster_stats,
-                        caster_position,
-                        *target_pos,
-                        &units_on_board,
-                        board,
-                        &mut rng,
-                    );
-                    all_entries.extend(entries);
-                }
-                assert_eq!(
-                    all_entries.len(),
-                    expected.len(),
-                    "atk={atk} percent={value_percent} 應產生 {} 個效果（{} 個目標）\nmsg: {msg}",
-                    expected.len(),
-                    expected.len(),
-                );
-                for expected in &expected {
-                    let found = all_entries.iter().find(|entry| {
-                        if let CheckTarget::Unit(id) = entry.target {
-                            Occupant::Unit(id) == *expected
-                        } else {
-                            false
-                        }
-                    }).expect("atk={atk} percent={value_percent} 應包含對 {expected:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}");
-                    assert_eq!(found.check, CheckResult::Auto);
-                    assert_eq!(
-                        found.effect,
-                        ResolvedEffect::HpChange {
-                            raw_amount: expected_amount,
-                            final_amount: expected_amount,
-                        }
-                    );
-                }
+            #[derive(Clone, Copy)]
+            enum CheckMode {
+                Auto,
+                HitBased,
             }
 
-            // hit based
-            {
-                let node = hp_leaf(Attribute::PhysicalAttack, value_percent);
-                let node = hit_branch(caster_stats.attribute.accuracy.0, 0, vec![node], vec![]);
-                let nodes = match skill_target.area {
-                    Area::Single => vec![node],
-                    Area::Diamond { .. } | Area::Cross { .. } | Area::Line { .. } => {
-                        vec![EffectNode::Area {
-                            area: skill_target.area,
-                            filter: skill_target.selectable_filter.clone(),
-                            nodes: vec![node],
-                        }]
+            for mode in [CheckMode::Auto, CheckMode::HitBased] {
+                let leaf = hp_leaf(Attribute::PhysicalAttack, value_percent);
+                let node = match mode {
+                    CheckMode::Auto => leaf,
+                    CheckMode::HitBased => {
+                        hit_branch(caster_stats.attribute.accuracy.0, 0, vec![leaf], vec![])
                     }
                 };
+                let nodes = wrap_area(node, skill_target);
 
-                let mut all_entries = vec![];
-                for target_pos in target_positions {
-                    let entries = resolve_effect_tree(
-                        &nodes,
-                        &caster_stats,
-                        caster_position,
-                        *target_pos,
-                        &units_on_board,
-                        board,
-                        &mut rng,
-                    );
-                    all_entries.extend(entries);
-                }
+                let mut rng = fixed_rng(random);
+                let all_entries = run_for_targets(
+                    &nodes,
+                    &caster_stats,
+                    caster_position,
+                    target_positions,
+                    &units_on_board,
+                    board,
+                    &mut rng,
+                );
+
                 assert_eq!(
                     all_entries.len(),
-                    expected.len(),
-                    "atk={atk} percent={value_percent} 應產生 {} 個效果（{} 個目標）\nmsg: {msg}",
-                    expected.len(),
-                    expected.len(),
+                    expected_count,
+                    "atk={atk} percent={value_percent} 應產生 {expected_count} 個效果\nmsg: {msg}",
                 );
-                for expected in &expected {
-                    let found = all_entries.iter().find(|entry| {
-                        if let CheckTarget::Unit(id) = entry.target {
-                            Occupant::Unit(id) == *expected
-                        } else {
-                            false
+
+                for expected_occupant in &expected {
+                    let found = find_entry_for(&all_entries, expected_occupant)
+                        .unwrap_or_else(|| panic!(
+                            "atk={atk} percent={value_percent} 應包含對 {expected_occupant:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}"
+                        ));
+
+                    let hp_effect = ResolvedEffect::HpChange {
+                        raw_amount: expected_amount,
+                        final_amount: expected_amount,
+                    };
+
+                    match mode {
+                        CheckMode::Auto => {
+                            assert_eq!(found.check, CheckResult::Auto);
+                            assert_eq!(found.effect, hp_effect);
                         }
-                    }).expect("atk={atk} percent={value_percent} 應包含對 {expected:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}");
-                    if expected_check {
-                        assert!(
-                            matches!(found.check, CheckResult::Hit { .. }),
-                            "atk={atk} percent={value_percent} stat={stat_value} roll={random} 預期命中, 實際 {:?}\nmsg: {msg}",
-                            found.check,
-                        );
-                        assert_eq!(
-                            found.effect,
-                            ResolvedEffect::HpChange {
-                                raw_amount: expected_amount,
-                                final_amount: expected_amount,
-                            }
-                        );
-                    } else {
-                        assert_eq!(found.check, CheckResult::Evade);
-                        assert_eq!(found.effect, ResolvedEffect::NoEffect);
+                        CheckMode::HitBased if expected_hit => {
+                            assert!(
+                                matches!(found.check, CheckResult::Hit { .. }),
+                                "atk={atk} percent={value_percent} stat={stat_value} roll={random} 預期命中, 實際 {:?}\nmsg: {msg}",
+                                found.check,
+                            );
+                            assert_eq!(found.effect, hp_effect);
+                        }
+                        CheckMode::HitBased => {
+                            assert_eq!(found.check, CheckResult::Evade);
+                            assert_eq!(found.effect, ResolvedEffect::NoEffect);
+                        }
                     }
                 }
             }
