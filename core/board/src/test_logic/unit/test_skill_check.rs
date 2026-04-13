@@ -1,4 +1,4 @@
-use crate::logic::skill::skill_check::{DcResult, HitResult, resolve_dc, resolve_hit};
+use crate::logic::skill::skill_check::{HitResult, resolve_hit};
 
 // ============================================================================
 // 命中判定（一般、強制、暴擊）
@@ -130,65 +130,6 @@ fn test_resolve_hit() {
             result, expected,
             "hit={attacker_hit}, eva={defender_evasion}, blk={defender_block}, crit_rate={crit_rate}, hit_roll={hit_roll}\n \
                 search: {attacker_hit}, {defender_evasion}, {defender_block}, {crit_rate}, {hit_roll}"
-        );
-    }
-}
-
-// ============================================================================
-// DC 豁免判定
-// ============================================================================
-
-#[test]
-fn test_resolve_dc() {
-    // 防禦端 = defender_save + save_roll
-    // 防禦端 ≥ 攻擊端 → 豁免成功（效果減半）
-    // 防禦端 < 攻擊端 → 豁免失敗（全額效果）
-    let test_data = [
-        // (attacker_dc, defender_save, save_roll, 預期)
-        // 失敗
-        (80, 30, 30, DcResult::Failed),
-        (80, 30, 40, DcResult::Failed),
-        (80, 30, 49, DcResult::Failed),
-        // 成功（邊界）
-        (80, 30, 50, DcResult::Saved),
-        (80, 30, 60, DcResult::Saved),
-        (80, 30, 70, DcResult::Saved),
-        // 更換數值
-        // 失敗
-        (60, 40, 10, DcResult::Failed),
-        (60, 40, 15, DcResult::Failed),
-        (60, 40, 19, DcResult::Failed),
-        // 成功（邊界）
-        (60, 40, 20, DcResult::Saved),
-        (60, 40, 21, DcResult::Saved),
-        (60, 40, 30, DcResult::Saved),
-        //
-        // --- 強制成功（骰子 96~100）---
-        (999, 10, 100, DcResult::Saved),
-        (999, 10, 99, DcResult::Saved),
-        (999, 10, 98, DcResult::Saved),
-        (999, 10, 97, DcResult::Saved),
-        (999, 10, 96, DcResult::Saved),
-        // 骰子 95 不觸發強制成功，正常判定
-        (999, 10, 95, DcResult::Failed),
-        //
-        // --- 強制失敗（骰子 1~5）---
-        (10, 999, 1, DcResult::Failed),
-        (10, 999, 2, DcResult::Failed),
-        (10, 999, 3, DcResult::Failed),
-        (10, 999, 4, DcResult::Failed),
-        (10, 999, 5, DcResult::Failed),
-        // 骰子 6 不觸發強制失敗，正常判定
-        (10, 999, 6, DcResult::Saved),
-    ];
-
-    for (attacker_dc, defender_save, save_roll, expected) in test_data {
-        let mut save_roll_fn = || save_roll;
-        let result = resolve_dc(attacker_dc, defender_save, &mut save_roll_fn);
-        assert_eq!(
-            result, expected,
-            "dc={attacker_dc}, save={defender_save}, roll={save_roll} \n \
-                search: {attacker_dc}, {defender_save}, {save_roll}"
         );
     }
 }

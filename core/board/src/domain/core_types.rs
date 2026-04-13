@@ -43,15 +43,14 @@ define_attributes!(
     (hp, Hp),
     (mp, Mp),
     (initiative, Initiative),
-    (accuracy, Accuracy),
-    (evasion, Evasion),
-    (block, Block),
-    (block_protection, BlockProtection),
     (physical_attack, PhysicalAttack),
     (magical_attack, MagicalAttack),
-    (magical_dc, MagicalDc),
+    (physical_accuracy, PhysicalAccuracy),
+    (magical_accuracy, MagicalAccuracy),
     (fortitude, Fortitude),
-    (reflex, Reflex),
+    (agility, Agility),
+    (block, Block),
+    (block_protection, BlockProtection),
     (will, Will),
     (movement_point, MovementPoint),
     (reaction_point, ReactionPoint),
@@ -69,13 +68,21 @@ pub enum SkillTag {
     AllowedDuringGrabbing,
 }
 
-/// DC 檢定類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
-pub enum DcType {
-    #[default]
+/// 檢定類型
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Display, EnumIter)]
+pub enum DefenseType {
     Fortitude,
-    Reflex,
+    Agility,
+    #[default]
+    AgilityAndBlock,
     Will,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
+pub enum AccuracySource {
+    #[default]
+    Physical,
+    Magical,
 }
 
 /// 效果目標
@@ -141,23 +148,19 @@ pub enum ReactionTrigger {
 }
 
 /// 效果條件
-#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
-pub enum EffectCondition {
-    HitCheck {
-        accuracy_bonus: i32,
-        crit_bonus: i32,
-    },
-    DcCheck {
-        dc_type: DcType,
-        dc_bonus: i32,
-    },
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EffectCondition {
+    pub defense_type: DefenseType,
+    pub accuracy_source: AccuracySource,
+    pub accuracy_bonus: i32,
+    pub crit_bonus: i32,
 }
 
 /// Buff 結束條件（多個條件之間為 OR 關係）
 #[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
 pub enum EndCondition {
     Duration(u32),
-    TargetSavesPerTurn,
+    TargetResistsPerTurn,
     CasterUsesSkillWithoutTag(SkillTag),
     EitherDies,
     EitherMoves,
@@ -224,8 +227,6 @@ pub enum EffectNode {
         nodes: Vec<EffectNode>,
     },
     Branch {
-        // 檢查誰的屬性
-        who: CasterOrTarget,
         condition: EffectCondition,
         on_success: Vec<EffectNode>,
         on_failure: Vec<EffectNode>,
@@ -337,6 +338,7 @@ pub enum SkillType {
 /// Buff 定義（內嵌在技能 TOML 中）
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BuffType {
+    pub name: String,
     pub stackable: bool,
     pub while_active: Vec<ContinuousEffect>,
     pub per_turn_effects: Vec<EffectNode>,
@@ -346,15 +348,6 @@ pub struct BuffType {
 // ============================================================================
 // 手動實作 Default（EnumIter 需要 Default，但 #[default] 只能用在 unit variant）
 // ============================================================================
-
-impl Default for EffectCondition {
-    fn default() -> Self {
-        Self::HitCheck {
-            accuracy_bonus: 0,
-            crit_bonus: 0,
-        }
-    }
-}
 
 impl Default for EffectNode {
     fn default() -> Self {

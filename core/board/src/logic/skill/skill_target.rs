@@ -20,7 +20,7 @@ pub(crate) fn validate_skill_targets(
     board: Board,
 ) -> Result<()> {
     let (min_range, max_range) = target.range;
-    let filter = &target.selectable_filter;
+    let filter = target.selectable_filter;
     let is_targeting_unit = match target.selection {
         TargetSelection::Unit => true,
         TargetSelection::Ground => false,
@@ -107,7 +107,7 @@ fn validate_filter(
     caster: &CasterInfo,
     target: &UnitInfo,
     target_pos: Position,
-    filter: &TargetFilter,
+    filter: TargetFilter,
 ) -> Result<()> {
     if is_in_filter(&caster.unit_info, target, filter) {
         Ok(())

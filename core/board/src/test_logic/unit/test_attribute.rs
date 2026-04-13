@@ -7,9 +7,9 @@ use crate::logic::skill::unit_attributes::{calculate_attributes, filter_continuo
 use std::collections::HashMap;
 
 // 技能名稱常數
-const SKILL_ACCURACY: &str = "accuracy";
-const SKILL_ACCURACY_2: &str = "accuracy_2";
-const SKILL_EVASION: &str = "evasion";
+const SKILL_PHYSICAL_ACCURACY: &str = "physical_accuracy";
+const SKILL_PHYSICAL_ACCURACY_2: &str = "physical_accuracy_2";
+const SKILL_AGILITY: &str = "agility";
 const SKILL_BASIC_ATTACK: &str = "basic_attack";
 const SKILL_NONEXISTENT: &str = "nonexistent";
 
@@ -73,15 +73,18 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 10)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 10)],
+                    ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string()],
+            vec![SKILL_PHYSICAL_ACCURACY.to_string()],
             vec![],
             AttributeBundle {
-                accuracy: Accuracy(10),
+                physical_accuracy: PhysicalAccuracy(10),
                 ..Default::default()
             },
         ),
@@ -90,19 +93,22 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 10)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 10)],
+                    ),
                 );
                 map.insert(
-                    SKILL_EVASION.to_string(),
-                    create_passive_skill(SKILL_EVASION, vec![flat(Attribute::Evasion, 10)]),
+                    SKILL_AGILITY.to_string(),
+                    create_passive_skill(SKILL_AGILITY, vec![flat(Attribute::Agility, 10)]),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string()],
+            vec![SKILL_PHYSICAL_ACCURACY.to_string()],
             vec![],
             AttributeBundle {
-                accuracy: Accuracy(10),
+                physical_accuracy: PhysicalAccuracy(10),
                 ..Default::default()
             },
         ),
@@ -111,27 +117,30 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
                     create_passive_skill(
-                        SKILL_ACCURACY,
+                        SKILL_PHYSICAL_ACCURACY,
                         vec![
-                            flat(Attribute::Accuracy, 10),
-                            flat(Attribute::Evasion, 20),
-                            flat(Attribute::Accuracy, 40),
+                            flat(Attribute::PhysicalAccuracy, 10),
+                            flat(Attribute::Agility, 20),
+                            flat(Attribute::PhysicalAccuracy, 40),
                         ],
                     ),
                 );
                 map.insert(
-                    SKILL_EVASION.to_string(),
-                    create_passive_skill(SKILL_EVASION, vec![flat(Attribute::Evasion, 100)]),
+                    SKILL_AGILITY.to_string(),
+                    create_passive_skill(SKILL_AGILITY, vec![flat(Attribute::Agility, 100)]),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string(), SKILL_EVASION.to_string()],
+            vec![
+                SKILL_PHYSICAL_ACCURACY.to_string(),
+                SKILL_AGILITY.to_string(),
+            ],
             vec![],
             AttributeBundle {
-                accuracy: Accuracy(50),
-                evasion: Evasion(120),
+                physical_accuracy: PhysicalAccuracy(50),
+                agility: Agility(120),
                 ..Default::default()
             },
         ),
@@ -140,16 +149,22 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 10)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 10)],
+                    ),
                 );
                 map.insert(SKILL_BASIC_ATTACK.to_string(), create_active_skill());
                 map
             },
-            vec![SKILL_ACCURACY.to_string(), SKILL_BASIC_ATTACK.to_string()],
+            vec![
+                SKILL_PHYSICAL_ACCURACY.to_string(),
+                SKILL_BASIC_ATTACK.to_string(),
+            ],
             vec![],
             AttributeBundle {
-                accuracy: Accuracy(10),
+                physical_accuracy: PhysicalAccuracy(10),
                 ..Default::default()
             },
         ),
@@ -158,15 +173,18 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 10)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 10)],
+                    ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string()],
-            vec![flat(Attribute::Accuracy, 20)],
+            vec![SKILL_PHYSICAL_ACCURACY.to_string()],
+            vec![flat(Attribute::PhysicalAccuracy, 20)],
             AttributeBundle {
-                accuracy: Accuracy(30),
+                physical_accuracy: PhysicalAccuracy(30),
                 ..Default::default()
             },
         ),
@@ -175,15 +193,18 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 10)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 10)],
+                    ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string()],
-            vec![scaling(Attribute::Accuracy, 200)],
+            vec![SKILL_PHYSICAL_ACCURACY.to_string()],
+            vec![scaling(Attribute::PhysicalAccuracy, 200)],
             AttributeBundle {
-                accuracy: Accuracy(20),
+                physical_accuracy: PhysicalAccuracy(20),
                 ..Default::default()
             },
         ),
@@ -192,15 +213,18 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 20)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 20)],
+                    ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string()],
-            vec![flat(Attribute::Accuracy, -15)],
+            vec![SKILL_PHYSICAL_ACCURACY.to_string()],
+            vec![flat(Attribute::PhysicalAccuracy, -15)],
             AttributeBundle {
-                accuracy: Accuracy(5),
+                physical_accuracy: PhysicalAccuracy(5),
                 ..Default::default()
             },
         ),
@@ -209,15 +233,18 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 20)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 20)],
+                    ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string()],
-            vec![flat(Attribute::Accuracy, -25)],
+            vec![SKILL_PHYSICAL_ACCURACY.to_string()],
+            vec![flat(Attribute::PhysicalAccuracy, -25)],
             AttributeBundle {
-                accuracy: Accuracy(-5),
+                physical_accuracy: PhysicalAccuracy(-5),
                 ..Default::default()
             },
         ),
@@ -226,25 +253,31 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
-                    create_passive_skill(SKILL_ACCURACY, vec![flat(Attribute::Accuracy, 10)]),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
+                    create_passive_skill(
+                        SKILL_PHYSICAL_ACCURACY,
+                        vec![flat(Attribute::PhysicalAccuracy, 10)],
+                    ),
                 );
                 map.insert(
-                    SKILL_ACCURACY_2.to_string(),
+                    SKILL_PHYSICAL_ACCURACY_2.to_string(),
                     create_passive_skill(
-                        SKILL_ACCURACY_2,
+                        SKILL_PHYSICAL_ACCURACY_2,
                         vec![
-                            scaling(Attribute::Accuracy, 200),
-                            flat(Attribute::Accuracy, 10),
+                            scaling(Attribute::PhysicalAccuracy, 200),
+                            flat(Attribute::PhysicalAccuracy, 10),
                         ],
                     ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string(), SKILL_ACCURACY_2.to_string()],
+            vec![
+                SKILL_PHYSICAL_ACCURACY.to_string(),
+                SKILL_PHYSICAL_ACCURACY_2.to_string(),
+            ],
             vec![],
             AttributeBundle {
-                accuracy: Accuracy(40),
+                physical_accuracy: PhysicalAccuracy(40),
                 ..Default::default()
             },
         ),
@@ -253,31 +286,34 @@ fn test_calculate_attributes() {
             {
                 let mut map = HashMap::new();
                 map.insert(
-                    SKILL_ACCURACY.to_string(),
+                    SKILL_PHYSICAL_ACCURACY.to_string(),
                     create_passive_skill(
-                        SKILL_ACCURACY,
+                        SKILL_PHYSICAL_ACCURACY,
                         vec![
-                            flat(Attribute::Accuracy, 10),
-                            scaling(Attribute::Accuracy, 200),
+                            flat(Attribute::PhysicalAccuracy, 10),
+                            scaling(Attribute::PhysicalAccuracy, 200),
                         ],
                     ),
                 );
                 map.insert(
-                    SKILL_ACCURACY_2.to_string(),
+                    SKILL_PHYSICAL_ACCURACY_2.to_string(),
                     create_passive_skill(
-                        SKILL_ACCURACY_2,
+                        SKILL_PHYSICAL_ACCURACY_2,
                         vec![
-                            scaling(Attribute::Accuracy, 200),
-                            flat(Attribute::Accuracy, 10),
+                            scaling(Attribute::PhysicalAccuracy, 200),
+                            flat(Attribute::PhysicalAccuracy, 10),
                         ],
                     ),
                 );
                 map
             },
-            vec![SKILL_ACCURACY.to_string(), SKILL_ACCURACY_2.to_string()],
-            vec![flat(Attribute::Accuracy, 5)],
+            vec![
+                SKILL_PHYSICAL_ACCURACY.to_string(),
+                SKILL_PHYSICAL_ACCURACY_2.to_string(),
+            ],
+            vec![flat(Attribute::PhysicalAccuracy, 5)],
             AttributeBundle {
-                accuracy: Accuracy(100),
+                physical_accuracy: PhysicalAccuracy(100),
                 ..Default::default()
             },
         ),
@@ -287,6 +323,7 @@ fn test_calculate_attributes() {
         let buffs = buffs
             .into_iter()
             .map(|e| BuffType {
+                name: String::new(),
                 stackable: false,
                 while_active: vec![e],
                 per_turn_effects: vec![],
@@ -297,12 +334,12 @@ fn test_calculate_attributes() {
         let effects = result.expect(&format!("測試 '{}' 應該成功", desc));
         let attrs = calculate_attributes(effects);
         assert_eq!(
-            attrs.accuracy.0, expected.accuracy.0,
+            attrs.physical_accuracy.0, expected.physical_accuracy.0,
             "測試 '{}' - 命中不符",
             desc
         );
         assert_eq!(
-            attrs.evasion.0, expected.evasion.0,
+            attrs.agility.0, expected.agility.0,
             "測試 '{}' - 迴避不符",
             desc
         );

@@ -64,7 +64,7 @@ pub(crate) fn collect_move_reactions(
                     if matches!(
                         triggering_unit.trigger,
                         ReactionTrigger::AttackOfOpportunity
-                    ) && is_in_filter(&reactor.unit_info, mover, &triggering_unit.source_filter)
+                    ) && is_in_filter(&reactor.unit_info, mover, triggering_unit.source_filter)
                     {
                         Some((name, triggering_unit))
                     } else {

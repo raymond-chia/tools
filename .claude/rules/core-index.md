@@ -36,10 +36,12 @@ core/board/
 │   ├── error.rs          - 錯誤型別定義
 │   ├── loader_schema.rs  - 載入相關資料結構定義
 │   ├── domain/           - 遊戲領域模型
+│   │   ├── mod.rs        - 領域模型模組定義
 │   │   ├── alias.rs      - 類型別名定義
 │   │   ├── constants.rs  - 遊戲常數定義
 │   │   └── core_types.rs - 遊戲核心資料型別定義
 │   ├── ecs_types/        - ECS 型別定義
+│   │   ├── mod.rs        - ECS 型別模組定義
 │   │   ├── components.rs - ECS Component 定義（只存資料，derive Component 和 Debug，禁止 impl）
 │   │   └── resources.rs  - ECS World Resource 定義
 │   ├── ecs_logic/        - ECS 操作函數（讀寫 World，整合 logic）
@@ -52,18 +54,19 @@ core/board/
 │   │   ├── turn.rs       - 回合順序 ECS 操作函數
 │   │   └── skill.rs      - 技能系統 ECS 操作函數
 │   ├── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
-│   │   ├── mod.rs        - 邏輯模組定義
+│   │   ├── mod.rs        - 業務邏輯模組定義
 │   │   ├── board.rs      - 棋盤驗證邏輯
 │   │   ├── id_generator.rs - ID 產生邏輯
 │   │   ├── movement.rs   - 移動邏輯
 │   │   ├── turn_order.rs - 回合順序計算邏輯
-│   │   ├── unit_attributes.rs - 單位屬性計算邏輯
 │   │   ├── skill/        - 技能系統邏輯
-│   │   │   ├── mod.rs    - 技能模組與 AOE 計算
+│   │   │   ├── mod.rs    - 技能模組、範圍計算與篩選邏輯
 │   │   │   ├── skill_check.rs - 技能命中與豁免判定邏輯
 │   │   │   ├── skill_execution.rs - 技能效果執行邏輯
+│   │   │   ├── skill_range.rs - 攻擊範圍與 AOE 計算邏輯
 │   │   │   ├── skill_reaction.rs - 技能反應收集邏輯
-│   │   │   └── skill_target.rs - 技能目標驗證邏輯
+│   │   │   ├── skill_target.rs - 技能目標驗證邏輯
+│   │   │   └── unit_attributes.rs - 單位屬性計算邏輯
 │   │   └── debug.rs      - 調試工具函數
 │   ├── test_helpers/     - 測試輔助工具
 │   │   ├── mod.rs        - 測試輔助模組
@@ -72,12 +75,13 @@ core/board/
 │       ├── mod.rs        - 模組宣告
 │       ├── board/        - 棋盤與移動測試
 │       │   ├── mod.rs    - 模組宣告
-│       │   ├── test_board.rs - 棋盤驗證測試
+│       │   ├── test_is_valid_position.rs - 位置驗證測試
 │       │   ├── test_movement.rs - 移動邏輯測試
 │       │   ├── test_collect_move_reactions.rs - 移動反應收集測試
 │       │   ├── test_compute_affected_positions.rs - AOE 計算測試
-│       │   ├── test_validate_skill_targets.rs - 技能目標驗證測試
-│       │   ├── test_skill_execution.rs - 技能效果執行測試
+│       │   ├── test_compute_range_positions.rs - 攻擊範圍計算測試
+│       │   ├── test_skill_area.rs - 技能範圍計算測試
+│       │   └── test_skill_single_execution.rs - 單一技能效果執行測試
 │       ├── turn/         - 回合順序測試
 │       │   ├── mod.rs    - 模組宣告
 │       │   └── test_turn_order.rs - 回合順序計算與管理測試
@@ -105,11 +109,6 @@ core/board/
 - `pub(crate) fn reachable_positions<F, G>(board: Board, mover: Mover, budget: MovementCost, get_occupant_alliance: F, get_terrain_cost: G) -> Result<HashMap<Position, ReachableInfo>>` - 計算預算內可到達的所有位置
 - `pub fn reconstruct_path(reachable: &HashMap<Position, ReachableInfo>, start: Position, target: Position) -> Vec<Position>` - 回溯路徑從起點到目標
 
-### logic/unit_attributes.rs
-
-- `pub(crate) fn filter_continuous_effect<'a>(skill_names: &'a [SkillName], buffs: &'a [BuffType], skill_map: &'a HashMap<SkillName, SkillType>) -> Result<impl Iterator<Item = &'a ContinuousEffect>>` - 從技能和狀態中篩選並合併持續性效果
-- `pub(crate) fn calculate_attributes<'a>(effects: impl Iterator<Item = &'a ContinuousEffect>) -> AttributeBundle` - 計算單位屬性
-
 ### logic/turn_order.rs
 
 - `pub(crate) fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
@@ -120,15 +119,18 @@ core/board/
 
 ### logic/skill/mod.rs
 
-- `pub(crate) fn compute_affected_positions(area: &Area, caster: Position, target: Position, board: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
-- `pub(crate) fn compute_range_positions(caster: Position, range: (Coord, Coord), board: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
 - `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
+- `pub(crate) fn normalize_direction(caster: Position, target: Position) -> Result<(i32, i32)>` - 將兩位置的距離向量正規化為方向
 
 ### logic/skill/skill_check.rs
 
 - `pub(crate) fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
-- `pub(crate) fn resolve_dc(attacker_dc: i32, defender_save: i32, rng_int: &mut impl FnMut() -> i32) -> DcResult` - 解析 DC 豁免判定結果
+
+### logic/skill/skill_range.rs
+
+- `pub(crate) fn compute_range_positions(caster: Position, range: (Coord, Coord), board: Board) -> Vec<Position>` - 計算攻擊距離內的所有位置
+- `pub(crate) fn compute_affected_positions(area: &Area, caster: Position, target: Position, board: Board) -> Result<Vec<Position>>` - 計算 AOE 影響的所有位置
 
 ### logic/skill/skill_execution.rs
 
@@ -142,10 +144,14 @@ core/board/
 
 - `pub(crate) fn validate_skill_targets(caster: &CasterInfo, target: &Target, target_positions: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board: Board) -> Result<()>` - 驗證技能目標的有效性
 
+### logic/skill/unit_attributes.rs
+
+- `pub(crate) fn filter_continuous_effect<'a>(skill_names: &'a [SkillName], buffs: &'a [BuffType], skill_map: &'a HashMap<SkillName, SkillType>) -> Result<impl Iterator<Item = &'a ContinuousEffect>>` - 從技能和狀態中篩選並合併持續性效果
+- `pub(crate) fn calculate_attributes<'a>(effects: impl Iterator<Item = &'a ContinuousEffect>) -> AttributeBundle` - 計算單位屬性
+
 ### logic/debug.rs
 
 - `pub(crate) fn short_type_name<T: ?Sized>() -> String` - 取得泛型型別的短名稱
-
 
 ### domain/core_types.rs
 

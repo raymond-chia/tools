@@ -1,11 +1,13 @@
 //! 技能效果樹執行邏輯
 
-use crate::domain::alias::ID;
+use crate::domain::alias::{ID, TypeName};
 use crate::domain::core_types::{
-    Attribute, CasterOrTarget, Effect, EffectCondition, EffectNode, Scaling,
+    AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
+    Scaling, TargetFilter,
 };
 use crate::ecs_types::components::{AttributeBundle, Occupant, Position};
 use crate::ecs_types::resources::Board;
+use crate::error::Result;
 use crate::logic::skill::skill_check::{HitResult, resolve_hit};
 use crate::logic::skill::skill_range::compute_affected_positions;
 use crate::logic::skill::{UnitInfo, is_in_filter};
@@ -19,15 +21,22 @@ pub struct CombatStats {
     pub crit_rate: i32,
 }
 
+/// 棋盤上的物件資訊
+#[derive(Debug, Clone)]
+pub struct ObjectOnBoard {
+    pub occupant: Occupant,
+    pub occupies_tile: bool,
+}
+
 /// 效果作用目標
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CheckTarget {
     Unit(ID),
-    TODO,
+    Position(Position),
 }
 
 /// 判定結果
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CheckResult {
     /// 無判定，必定生效
     Auto,
@@ -38,6 +47,8 @@ pub enum CheckResult {
         crit: bool,
     },
     Evade,
+    Resisted, // 對應 evade
+    Affected, // 對應 hit
 }
 
 /// 解析後的效果
@@ -45,10 +56,12 @@ pub enum CheckResult {
 pub enum ResolvedEffect {
     NoEffect,
     HpChange { raw_amount: i32, final_amount: i32 },
+    SpawnObject { object_type: TypeName },
+    ApplyBuff(String),
 }
 
 /// 單筆效果條目
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EffectEntry {
     pub target: CheckTarget,
     pub check: CheckResult,
@@ -62,9 +75,10 @@ pub(crate) fn resolve_effect_tree(
     caster_pos: Position,
     target_pos: Position,
     units_on_board: &HashMap<Position, CombatStats>,
+    objects_on_board: &HashMap<Position, ObjectOnBoard>,
     board: Board,
     rng: &mut impl FnMut() -> i32,
-) -> Vec<EffectEntry> {
+) -> Result<Vec<EffectEntry>> {
     let mut entries = Vec::new();
 
     for node in nodes {
@@ -74,45 +88,30 @@ pub(crate) fn resolve_effect_tree(
                 filter,
                 nodes: inner_nodes,
             } => {
-                let affected = compute_affected_positions(area, caster_pos, target_pos, board)
-                    .expect("compute_affected_positions 應成功計算 AOE 範圍");
+                let affected_positions =
+                    compute_affected_positions(area, caster_pos, target_pos, board)?;
 
-                for pos in affected {
-                    let target_stats = match units_on_board.get(&pos) {
-                        Some(stats) => stats,
-                        // TODO
-                        None => continue,
-                    };
-                    if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
-                        continue;
-                    }
-                    resolve_nodes_for_target(inner_nodes, caster, target_stats, rng, &mut entries);
+                for target_pos in affected_positions {
+                    resolve_at_position(
+                        inner_nodes,
+                        caster,
+                        target_pos,
+                        *filter,
+                        units_on_board,
+                        objects_on_board,
+                        rng,
+                        &mut entries,
+                    );
                 }
             }
-            EffectNode::Leaf { .. } => {
-                let target_stats = match units_on_board.get(&target_pos) {
-                    Some(stats) => stats,
-                    // TODO
-                    None => continue,
-                };
-                resolve_nodes_for_target(
+            EffectNode::Branch { .. } | EffectNode::Leaf { .. } => {
+                resolve_at_position(
                     std::slice::from_ref(node),
                     caster,
-                    target_stats,
-                    rng,
-                    &mut entries,
-                );
-            }
-            EffectNode::Branch { .. } => {
-                let target_stats = match units_on_board.get(&target_pos) {
-                    Some(stats) => stats,
-                    // TODO
-                    None => continue,
-                };
-                resolve_nodes_for_target(
-                    std::slice::from_ref(node),
-                    caster,
-                    target_stats,
+                    target_pos,
+                    TargetFilter::Any,
+                    units_on_board,
+                    objects_on_board,
                     rng,
                     &mut entries,
                 );
@@ -120,63 +119,46 @@ pub(crate) fn resolve_effect_tree(
         }
     }
 
-    entries
+    Ok(entries)
 }
 
-/// 將 HitResult 轉換為 CheckResult
-fn hit_result_to_check(hit: HitResult) -> CheckResult {
-    match hit {
-        HitResult::Hit { crit } => CheckResult::Hit { crit },
-        HitResult::Block { crit } => CheckResult::Block { crit },
-        HitResult::Evade => CheckResult::Evade,
+/// 在指定位置解析效果節點
+fn resolve_at_position(
+    nodes: &[EffectNode],
+    caster: &CombatStats,
+    target_pos: Position,
+    filter: TargetFilter,
+    units_on_board: &HashMap<Position, CombatStats>,
+    objects_on_board: &HashMap<Position, ObjectOnBoard>,
+    rng: &mut impl FnMut() -> i32,
+    entries: &mut Vec<EffectEntry>,
+) {
+    match units_on_board.get(&target_pos) {
+        Some(target_stats) => {
+            if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
+                return;
+            }
+            // TODO CheckResult::Auto ?
+            resolve_nodes_for_unit(nodes, caster, target_stats, CheckResult::Auto, rng, entries);
+        }
+        None => {
+            resolve_nodes_for_position(
+                nodes,
+                target_pos,
+                units_on_board,
+                objects_on_board,
+                entries,
+            );
+        }
     }
 }
 
-/// 從 Attribute enum 取得 AttributeBundle 中對應的值
-fn get_attribute_value(bundle: &AttributeBundle, attr: Attribute) -> i32 {
-    match attr {
-        Attribute::Hp => bundle.current_hp.0,
-        Attribute::Mp => bundle.current_mp.0,
-        Attribute::Initiative => bundle.initiative.0,
-        Attribute::Accuracy => bundle.accuracy.0,
-        Attribute::Evasion => bundle.evasion.0,
-        Attribute::Block => bundle.block.0,
-        Attribute::BlockProtection => bundle.block_protection.0,
-        Attribute::PhysicalAttack => bundle.physical_attack.0,
-        Attribute::MagicalAttack => bundle.magical_attack.0,
-        Attribute::MagicalDc => bundle.magical_dc.0,
-        Attribute::Fortitude => bundle.fortitude.0,
-        Attribute::Reflex => bundle.reflex.0,
-        Attribute::Will => bundle.will.0,
-        Attribute::MovementPoint => bundle.movement_point.0,
-        Attribute::ReactionPoint => bundle.reaction_point.0,
-    }
-}
-
-/// 計算 Scaling 的數值
-fn compute_scaling(scaling: &Scaling, caster: &CombatStats, target: &CombatStats) -> i32 {
-    let source_stats = match scaling.source {
-        CasterOrTarget::Caster => caster,
-        CasterOrTarget::Target => target,
-    };
-    let base = get_attribute_value(&source_stats.attribute, scaling.source_attribute.clone());
-    base * scaling.value_percent / 100
-}
-
-/// 將 Occupant 轉換為 CheckTarget
-fn occupant_to_check_target(occupant: Occupant) -> CheckTarget {
-    match occupant {
-        Occupant::Unit(id) => CheckTarget::Unit(id),
-        // TODO
-        Occupant::Object(id) => CheckTarget::Unit(id),
-    }
-}
-
-/// 對單一目標解析效果節點列表
-fn resolve_nodes_for_target(
+/// 帶判定結果的效果節點解析
+fn resolve_nodes_for_unit(
     nodes: &[EffectNode],
     caster: &CombatStats,
     target: &CombatStats,
+    parent_check: CheckResult,
     rng: &mut impl FnMut() -> i32,
     entries: &mut Vec<EffectEntry>,
 ) {
@@ -184,60 +166,59 @@ fn resolve_nodes_for_target(
         match node {
             EffectNode::Leaf { who, effect } => {
                 let resolved_target = match who {
-                    CasterOrTarget::Caster => &caster,
-                    CasterOrTarget::Target => &target,
+                    CasterOrTarget::Caster => caster,
+                    CasterOrTarget::Target => target,
                 };
                 let check_target = occupant_to_check_target(resolved_target.unit_info.occupant);
                 match effect {
                     Effect::HpEffect { scaling } => {
                         let raw_amount = compute_scaling(scaling, caster, target);
+                        let final_amount = match parent_check {
+                            CheckResult::Block { .. } => apply_block_protection(
+                                raw_amount,
+                                target.attribute.block_protection.0,
+                            ),
+                            CheckResult::Auto
+                            | CheckResult::Hit { .. }
+                            | CheckResult::Evade
+                            | CheckResult::Resisted
+                            | CheckResult::Affected => raw_amount,
+                        };
                         entries.push(EffectEntry {
                             target: check_target,
-                            check: CheckResult::Auto,
+                            check: parent_check,
                             effect: ResolvedEffect::HpChange {
                                 raw_amount,
-                                final_amount: raw_amount,
+                                final_amount,
                             },
                         });
                     }
-                    _ => {}
+                    Effect::ApplyBuff { buff } => {
+                        entries.push(EffectEntry {
+                            target: check_target,
+                            check: parent_check,
+                            effect: ResolvedEffect::ApplyBuff(buff.name.clone()),
+                        });
+                    }
+                    Effect::SpawnObject { .. } => {
+                        // TODO 新增格子著火的測試
+                    }
+                    _ => unimplemented!("Effect type not supported yet: {:?}", effect),
                 }
             }
             EffectNode::Branch {
-                who: _,
                 condition,
                 on_success,
                 on_failure,
             } => {
-                let check = match condition {
-                    EffectCondition::HitCheck {
-                        accuracy_bonus,
-                        crit_bonus,
-                    } => {
-                        let attacker_hit = caster.attribute.accuracy.0 + accuracy_bonus;
-                        let defender_evasion = target.attribute.evasion.0;
-                        let defender_block = target.attribute.block.0;
-                        let crit_rate = caster.crit_rate + crit_bonus;
-                        let hit = resolve_hit(
-                            attacker_hit,
-                            defender_evasion,
-                            defender_block,
-                            crit_rate,
-                            rng,
-                        );
-                        hit_result_to_check(hit)
-                    }
-                    EffectCondition::DcCheck { .. } => {
-                        // DC 判定暫不實作
-                        CheckResult::Auto
-                    }
-                };
+                let check = resolve_branch_check(caster, target, condition, rng);
 
                 let branch_nodes = match check {
-                    CheckResult::Auto | CheckResult::Hit { .. } | CheckResult::Block { .. } => {
-                        on_success
-                    }
-                    CheckResult::Evade => on_failure,
+                    CheckResult::Auto
+                    | CheckResult::Hit { .. }
+                    | CheckResult::Block { .. }
+                    | CheckResult::Affected => on_success,
+                    CheckResult::Evade | CheckResult::Resisted => on_failure,
                 };
 
                 if branch_nodes.is_empty() {
@@ -248,16 +229,159 @@ fn resolve_nodes_for_target(
                         effect: ResolvedEffect::NoEffect,
                     });
                 } else {
-                    let start = entries.len();
-                    resolve_nodes_for_target(branch_nodes, caster, target, rng, entries);
-                    for entry in &mut entries[start..] {
-                        entry.check = check.clone();
-                    }
+                    resolve_nodes_for_unit(branch_nodes, caster, target, check, rng, entries);
                 }
             }
             EffectNode::Area { .. } => {
-                // Area 在頂層處理，巢狀 Area 不支援
+                unreachable!("Nested Area nodes are not supported");
             }
         }
+    }
+}
+
+/// 對無單位位置解析效果節點（僅處理 SpawnObject 等位置效果）
+fn resolve_nodes_for_position(
+    nodes: &[EffectNode],
+    pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    objects_on_board: &HashMap<Position, ObjectOnBoard>,
+    entries: &mut Vec<EffectEntry>,
+) {
+    for node in nodes {
+        if let EffectNode::Leaf { effect, who: _who } = node {
+            match effect {
+                Effect::SpawnObject { object_type, .. } => {
+                    if !is_tile_occupied(pos, units_on_board, objects_on_board) {
+                        entries.push(EffectEntry {
+                            target: CheckTarget::Position(pos),
+                            check: CheckResult::Auto,
+                            effect: ResolvedEffect::SpawnObject {
+                                object_type: object_type.clone(),
+                            },
+                        });
+                    }
+                }
+                Effect::HpEffect { .. } | Effect::ApplyBuff { .. } => {}
+                _ => unimplemented!(
+                    "Effect type not supported for position target yet: {:?}",
+                    effect
+                ),
+            }
+        }
+    }
+}
+
+/// 解析 Branch 節點的判定結果
+fn resolve_branch_check(
+    caster: &CombatStats,
+    target: &CombatStats,
+    condition: &EffectCondition,
+    rng: &mut impl FnMut() -> i32,
+) -> CheckResult {
+    let attacker_acc = match condition.accuracy_source {
+        AccuracySource::Physical => caster.attribute.physical_accuracy.0,
+        AccuracySource::Magical => caster.attribute.magical_accuracy.0,
+    } + condition.accuracy_bonus;
+
+    let (defender_evasion, defender_block) =
+        get_defense_values(&target.attribute, condition.defense_type);
+    let crit_rate = caster.crit_rate + condition.crit_bonus;
+
+    let hit = resolve_hit(
+        attacker_acc,
+        defender_evasion,
+        defender_block,
+        crit_rate,
+        rng,
+    );
+    hit_to_check(hit, condition.defense_type)
+}
+
+/// 取得防禦值（閃避值、格擋值）
+fn get_defense_values(target: &AttributeBundle, defense_type: DefenseType) -> (i32, i32) {
+    match defense_type {
+        DefenseType::Fortitude => (target.fortitude.0, 0),
+        DefenseType::Agility => (target.agility.0, 0),
+        DefenseType::AgilityAndBlock => (target.agility.0, target.block.0),
+        DefenseType::Will => (target.will.0, 0),
+    }
+}
+
+/// 將 HitResult 轉換為 CheckResult
+fn hit_to_check(hit: HitResult, defense_type: DefenseType) -> CheckResult {
+    match defense_type {
+        DefenseType::AgilityAndBlock => match hit {
+            HitResult::Hit { crit } => CheckResult::Hit { crit },
+            HitResult::Block { crit } => CheckResult::Block { crit },
+            HitResult::Evade => CheckResult::Evade,
+        },
+        DefenseType::Fortitude | DefenseType::Agility | DefenseType::Will => match hit {
+            HitResult::Hit { .. } | HitResult::Block { .. } => CheckResult::Affected,
+            HitResult::Evade => CheckResult::Resisted,
+        },
+    }
+}
+
+/// 計算 Scaling 的數值
+fn compute_scaling(scaling: &Scaling, caster: &CombatStats, target: &CombatStats) -> i32 {
+    let source_stats = match scaling.source {
+        CasterOrTarget::Caster => caster,
+        CasterOrTarget::Target => target,
+    };
+    let base = get_attribute_value(&source_stats.attribute, scaling.source_attribute);
+    base * scaling.value_percent / 100
+}
+
+/// 從 Attribute enum 取得 AttributeBundle 中對應的值
+fn get_attribute_value(bundle: &AttributeBundle, attr: Attribute) -> i32 {
+    match attr {
+        Attribute::Hp => bundle.current_hp.0,
+        Attribute::Mp => bundle.current_mp.0,
+        Attribute::Initiative => bundle.initiative.0,
+        Attribute::PhysicalAttack => bundle.physical_attack.0,
+        Attribute::MagicalAttack => bundle.magical_attack.0,
+        Attribute::PhysicalAccuracy => bundle.physical_accuracy.0,
+        Attribute::MagicalAccuracy => bundle.magical_accuracy.0,
+        Attribute::Fortitude => bundle.fortitude.0,
+        Attribute::Agility => bundle.agility.0,
+        Attribute::Block => bundle.block.0,
+        Attribute::BlockProtection => bundle.block_protection.0,
+        Attribute::Will => bundle.will.0,
+        Attribute::MovementPoint => bundle.movement_point.0,
+        Attribute::ReactionPoint => bundle.reaction_point.0,
+    }
+}
+
+/// 將 Occupant 轉換為 CheckTarget
+fn occupant_to_check_target(occupant: Occupant) -> CheckTarget {
+    match occupant {
+        Occupant::Unit(id) => CheckTarget::Unit(id),
+        Occupant::Object(id) => {
+            unimplemented!("Object occupant not supported yet: {}", id)
+        }
+    }
+}
+
+/// 計算格擋後的最終傷害
+fn apply_block_protection(raw_amount: i32, block_protection: i32) -> i32 {
+    // block_protection 為減傷百分比，只對負數（傷害）生效
+    if raw_amount >= 0 {
+        return raw_amount;
+    }
+    raw_amount * (100 - block_protection) / 100
+}
+
+/// 判斷位置是否被佔據（有單位或不可通過物件）
+fn is_tile_occupied(
+    pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    objects_on_board: &HashMap<Position, ObjectOnBoard>,
+) -> bool {
+    if units_on_board.contains_key(&pos) {
+        return true;
+    }
+    match objects_on_board.get(&pos) {
+        Some(obj) => obj.occupies_tile,
+        None => false,
     }
 }

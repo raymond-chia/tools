@@ -155,34 +155,76 @@ fn wrap_area(node: EffectNode, skill_target: &Target) -> Vec<EffectNode> {
     }
 }
 
-fn hit_branch(
-    accuracy_bonus: i32,
-    crit_bonus: i32,
-    on_success: Vec<EffectNode>,
-    on_failure: Vec<EffectNode>,
-) -> EffectNode {
-    EffectNode::Branch {
-        who: CasterOrTarget::Target,
-        condition: EffectCondition::HitCheck {
-            accuracy_bonus,
-            crit_bonus,
+/// 判定模式：Auto（無判定）或 (命中來源 × 防禦類型) 組合
+#[derive(Debug, Clone)]
+enum CheckMode {
+    Auto,
+    Check {
+        defense_type: DefenseType,
+        accuracy_source: AccuracySource,
+    },
+}
+
+/// 產生此專案所有需要測試的判定模式
+fn all_check_modes() -> Vec<CheckMode> {
+    let mut modes = vec![CheckMode::Auto];
+    for accuracy_source in AccuracySource::iter() {
+        for defense_type in DefenseType::iter() {
+            modes.push(CheckMode::Check {
+                defense_type: defense_type.clone(),
+                accuracy_source: accuracy_source.clone(),
+            });
+        }
+    }
+    modes
+}
+
+/// 依判定模式將葉節點包裝成對應的 EffectNode
+fn build_check_node(mode: &CheckMode, leaf: EffectNode) -> EffectNode {
+    match mode {
+        CheckMode::Auto => leaf,
+        CheckMode::Check {
+            defense_type,
+            accuracy_source,
+        } => EffectNode::Branch {
+            condition: EffectCondition {
+                defense_type: defense_type.clone(),
+                accuracy_source: accuracy_source.clone(),
+                accuracy_bonus: 0,
+                crit_bonus: 0,
+            },
+            on_success: vec![leaf],
+            on_failure: vec![],
         },
-        on_success,
-        on_failure,
     }
 }
 
-fn dc_branch(
-    dc_type: DcType,
-    dc_bonus: i32,
-    on_success: Vec<EffectNode>,
-    on_failure: Vec<EffectNode>,
-) -> EffectNode {
-    EffectNode::Branch {
-        who: CasterOrTarget::Target,
-        condition: EffectCondition::DcCheck { dc_type, dc_bonus },
-        on_success,
-        on_failure,
+/// 預期的判定結果（依 resolve_hit 與 skill_execution 的對應規則）
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ExpectedCheck {
+    Auto,
+    Hit,
+    Evade,
+    Affected,
+    Resisted,
+}
+
+/// 依據 mode 與投骰結果預測 CheckResult
+///
+/// 測試前提：attacker accuracy = 0、block = 0，defender 防禦屬性 = stat_value
+fn expected_check(mode: &CheckMode, pass: bool) -> ExpectedCheck {
+    match mode {
+        CheckMode::Auto => ExpectedCheck::Auto,
+        CheckMode::Check {
+            defense_type: DefenseType::AgilityAndBlock,
+            ..
+        } if pass => ExpectedCheck::Hit,
+        CheckMode::Check {
+            defense_type: DefenseType::AgilityAndBlock,
+            ..
+        } => ExpectedCheck::Evade,
+        CheckMode::Check { .. } if pass => ExpectedCheck::Affected,
+        CheckMode::Check { .. } => ExpectedCheck::Resisted,
     }
 }
 
@@ -210,9 +252,11 @@ fn run_for_targets(
                 caster_position,
                 *pos,
                 units_on_board,
+                &HashMap::new(),
                 board,
                 rng,
             )
+            .expect("resolve_effect_tree 應成功執行")
         })
         .collect()
 }
@@ -225,16 +269,35 @@ fn find_entry_for<'a>(entries: &'a [EffectEntry], expected: &Occupant) -> Option
 }
 
 /// 建立帶有指定屬性的 CombatStats
-fn build_stats_with_defenses(unit_info: UnitInfo, stat_value: i32) -> CombatStats {
-    let mut stats = CombatStats {
+fn build_stats(unit_info: UnitInfo) -> CombatStats {
+    CombatStats {
         unit_info,
         attribute: AttributeBundle::default(),
         crit_rate: 0,
-    };
-    stats.attribute.evasion = Evasion(stat_value);
-    stats.attribute.fortitude = Fortitude(stat_value);
-    stats.attribute.reflex = Reflex(stat_value);
-    stats.attribute.will = Will(stat_value);
+    }
+}
+
+fn build_stats_with_defenses(
+    unit_info: UnitInfo,
+    mode: &CheckMode,
+    stat_value: i32,
+) -> CombatStats {
+    let mut stats = build_stats(unit_info);
+    match mode {
+        CheckMode::Auto => {
+            stats.attribute.fortitude = Fortitude(stat_value);
+            stats.attribute.agility = Agility(stat_value);
+            stats.attribute.will = Will(stat_value);
+        }
+        CheckMode::Check { defense_type, .. } => match defense_type {
+            DefenseType::Fortitude => stats.attribute.fortitude = Fortitude(stat_value),
+            DefenseType::Agility => stats.attribute.agility = Agility(stat_value),
+            DefenseType::AgilityAndBlock => {
+                stats.attribute.agility = Agility(stat_value);
+            }
+            DefenseType::Will => stats.attribute.will = Will(stat_value),
+        },
+    }
     stats
 }
 
@@ -300,34 +363,26 @@ fn assert_hp(
     ];
 
     let expected_count = expected.len();
+    let modes = all_check_modes();
 
     for &(atk, value_percent, expected_amount) in SKILL_TEST_DATA {
         for &(stat_value, random, expected_hit) in STAT_TEST_DATA {
-            let mut caster_stats =
-                build_stats_with_defenses(unit_markers["C"][0].unit_info.clone(), stat_value);
+            let mut caster_stats = build_stats(unit_markers["C"][0].unit_info.clone());
             caster_stats.attribute.physical_attack = PhysicalAttack(atk);
             caster_stats.attribute.magical_attack = MagicalAttack(atk);
 
-            let units_on_board: HashMap<Position, CombatStats> = to_position_map(unit_markers)
-                .into_iter()
-                .map(|(pos, info)| (pos, build_stats_with_defenses(info, stat_value)))
-                .collect();
-
-            #[derive(Clone, Copy)]
-            enum CheckMode {
-                Auto,
-                HitBased,
-            }
-
-            for mode in [CheckMode::Auto, CheckMode::HitBased] {
+            for mode in &modes {
                 let leaf = hp_leaf(Attribute::PhysicalAttack, value_percent);
-                let node = match mode {
-                    CheckMode::Auto => leaf,
-                    CheckMode::HitBased => {
-                        hit_branch(caster_stats.attribute.accuracy.0, 0, vec![leaf], vec![])
-                    }
-                };
+                let node = build_check_node(mode, leaf);
                 let nodes = wrap_area(node, skill_target);
+
+                let units_on_board: HashMap<Position, CombatStats> = to_position_map(unit_markers)
+                    .into_iter()
+                    .map(|(pos, info)| {
+                        let stat = build_stats_with_defenses(info, mode, stat_value);
+                        (pos, stat)
+                    })
+                    .collect();
 
                 let mut rng = fixed_rng(random);
                 let all_entries = run_for_targets(
@@ -343,36 +398,49 @@ fn assert_hp(
                 assert_eq!(
                     all_entries.len(),
                     expected_count,
-                    "atk={atk} percent={value_percent} 應產生 {expected_count} 個效果\nmsg: {msg}",
+                    "mode={mode:?} atk={atk} percent={value_percent} 應產生 {expected_count} 個效果\nmsg: {msg}",
                 );
+
+                let expected_result = expected_check(mode, expected_hit);
+                let hp_effect = ResolvedEffect::HpChange {
+                    raw_amount: expected_amount,
+                    final_amount: expected_amount,
+                };
 
                 for expected_occupant in &expected {
                     let found = find_entry_for(&all_entries, expected_occupant)
                         .unwrap_or_else(|| panic!(
-                            "atk={atk} percent={value_percent} 應包含對 {expected_occupant:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}"
+                            "mode={mode:?} atk={atk} percent={value_percent} 應包含對 {expected_occupant:?} 的效果\nmsg: {msg}\nall_entries: {all_entries:#?}"
                         ));
 
-                    let hp_effect = ResolvedEffect::HpChange {
-                        raw_amount: expected_amount,
-                        final_amount: expected_amount,
-                    };
+                    let ctx = format!(
+                        "mode={mode:?} atk={atk} percent={value_percent} stat={stat_value} roll={random}\nmsg: {msg}"
+                    );
 
-                    match mode {
-                        CheckMode::Auto => {
-                            assert_eq!(found.check, CheckResult::Auto);
-                            assert_eq!(found.effect, hp_effect);
+                    match expected_result {
+                        ExpectedCheck::Auto => {
+                            assert_eq!(found.check, CheckResult::Auto, "{ctx}");
+                            assert_eq!(found.effect, hp_effect, "{ctx}");
                         }
-                        CheckMode::HitBased if expected_hit => {
+                        ExpectedCheck::Hit => {
                             assert!(
                                 matches!(found.check, CheckResult::Hit { .. }),
-                                "atk={atk} percent={value_percent} stat={stat_value} roll={random} 預期命中, 實際 {:?}\nmsg: {msg}",
+                                "預期命中, 實際 {:?}\n{ctx}",
                                 found.check,
                             );
-                            assert_eq!(found.effect, hp_effect);
+                            assert_eq!(found.effect, hp_effect, "{ctx}");
                         }
-                        CheckMode::HitBased => {
-                            assert_eq!(found.check, CheckResult::Evade);
-                            assert_eq!(found.effect, ResolvedEffect::NoEffect);
+                        ExpectedCheck::Evade => {
+                            assert_eq!(found.check, CheckResult::Evade, "{ctx}");
+                            assert_eq!(found.effect, ResolvedEffect::NoEffect, "{ctx}");
+                        }
+                        ExpectedCheck::Affected => {
+                            assert_eq!(found.check, CheckResult::Affected, "預期魔法命中\n{ctx}",);
+                            assert_eq!(found.effect, hp_effect, "{ctx}");
+                        }
+                        ExpectedCheck::Resisted => {
+                            assert_eq!(found.check, CheckResult::Resisted, "預期魔法被抗\n{ctx}",);
+                            assert_eq!(found.effect, ResolvedEffect::NoEffect, "{ctx}");
                         }
                     }
                 }

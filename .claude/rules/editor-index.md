@@ -35,14 +35,14 @@ editor/
 │   ├── main.rs              - 程式進入點和初始化
 │   ├── app.rs               - 主應用程式 UI 渲染
 │   ├── constants.rs         - UI 與編輯器常數定義
-│   ├── editor_item.rs       - EditorItem trait 定義
+│   ├── editor_item.rs       - EditorItem trait 定義和驗證函數
 │   ├── editor_macros.rs     - 編輯器結構自動生成巨集
 │   ├── generic_editor.rs    - 泛型編輯器狀態管理
 │   ├── generic_io.rs        - 泛型 TOML 檔案載入與儲存
 │   ├── utils/               - 通用工具模組
 │   │   ├── mod.rs           - 工具模組定義和導出
 │   │   ├── dnd.rs           - 拖放功能
-│   │   └── search.rs        - 搜尋功能
+│   │   └── search.rs        - 搜尋和過濾功能
 │   └── tabs/
 │       ├── mod.rs           - 標籤頁模組定義
 │       ├── object_tab.rs    - 物件編輯器

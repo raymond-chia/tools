@@ -35,7 +35,7 @@ pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord {
 }
 
 /// 檢查單位是否通過篩選條件
-pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool {
+pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: TargetFilter) -> bool {
     let is_caster = target.occupant == caster.occupant;
     let is_same_alliance = target.alliance_id == caster.alliance_id;
 

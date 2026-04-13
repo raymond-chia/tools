@@ -23,6 +23,9 @@ pub enum HitResult {
 /// 6. 骰 < 格擋門檻 → Block
 /// 7. 否則 → Hit
 /// 8. Hit 或 Block 時，骰 ≥ 100 - crit_rate → crit
+///
+/// 魔法命中判定可透過 resolve_hit(magical_accuracy, resistance, 0, 0, rng) 實現，
+/// 其中 Evade 對應 Resisted，Hit { crit: false } 對應 Affected。
 pub(crate) fn resolve_hit(
     attacker_hit: i32,
     defender_evasion: i32,
@@ -55,46 +58,6 @@ pub(crate) fn resolve_hit(
         return HitResult::Block { crit };
     }
     HitResult::Hit { crit }
-}
-
-// ============================================================================
-// DC 豁免判定
-// ============================================================================
-
-/// DC 豁免結果
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DcResult {
-    Saved,
-    Failed,
-}
-
-/// 解析 DC 豁免判定
-///
-/// 判定流程：
-/// 1. 強制失敗（骰 1~5）
-/// 2. 強制成功（骰 96~100）
-/// 3. defender_save + roll ≥ attacker_dc → Saved
-/// 4. 否則 → Failed
-pub(crate) fn resolve_dc(
-    attacker_dc: i32,
-    defender_save: i32,
-    rng_int: &mut impl FnMut() -> i32,
-) -> DcResult {
-    let roll = rng_int();
-
-    if roll <= FORCED_FAILURE_UPPER {
-        return DcResult::Failed;
-    }
-
-    if roll >= FORCED_SUCCESS_LOWER {
-        return DcResult::Saved;
-    }
-
-    if defender_save + roll >= attacker_dc {
-        DcResult::Saved
-    } else {
-        DcResult::Failed
-    }
 }
 
 fn is_crit(roll: i32, crit_rate: i32) -> bool {

@@ -166,13 +166,9 @@ fn validate_continuous_effects(effects: &[ContinuousEffect]) -> Result<(), Strin
 }
 
 fn validate_effect_condition(condition: &EffectCondition) -> Result<(), String> {
-    match condition {
-        EffectCondition::HitCheck { crit_bonus, .. } => {
-            if *crit_bonus < 0 || *crit_bonus > 100 {
-                return Err(format!("暴擊加成必須介於 0 到 100，目前為 {crit_bonus}"));
-            }
-        }
-        EffectCondition::DcCheck { .. } => {}
+    let crit_bonus = condition.crit_bonus;
+    if crit_bonus < 0 || crit_bonus > 100 {
+        return Err(format!("暴擊加成必須介於 0 到 100，目前為 {crit_bonus}"));
     }
     Ok(())
 }
@@ -657,12 +653,10 @@ fn render_effect_node(
             });
         }
         EffectNode::Branch {
-            who,
             condition,
             on_success,
             on_failure,
         } => {
-            enum_combo_box(ui, "判定對象：", who, &format!("{id_salt}_who"));
             render_effect_condition(ui, condition, &format!("{id_salt}_cond"));
             ui.add_space(SPACING_SMALL);
             ui.label("成功時：");
@@ -867,7 +861,7 @@ fn render_end_condition(ui: &mut egui::Ui, condition: &mut EndCondition, id_salt
             ui.label("CasterUsesSkillWithoutTag：");
             enum_combo_box(ui, "", tag, &format!("{id_salt}_tag"));
         }
-        EndCondition::TargetSavesPerTurn
+        EndCondition::TargetResistsPerTurn
         | EndCondition::EitherDies
         | EndCondition::EitherMoves
         | EndCondition::TargetMoves => {
@@ -879,19 +873,18 @@ fn render_end_condition(ui: &mut egui::Ui, condition: &mut EndCondition, id_salt
 // ==================== 步驟 10：EffectCondition ====================
 
 fn render_effect_condition(ui: &mut egui::Ui, condition: &mut EffectCondition, id_salt: &str) {
-    enum_combo_box(ui, "判定類型：", condition, &format!("{id_salt}_type"));
-
-    match condition {
-        EffectCondition::HitCheck {
-            accuracy_bonus,
-            crit_bonus,
-        } => {
-            drag_value(ui, "命中加成：", accuracy_bonus);
-            drag_value(ui, "暴擊加成：", crit_bonus);
-        }
-        EffectCondition::DcCheck { dc_type, dc_bonus } => {
-            enum_combo_box(ui, "DC 類型：", dc_type, &format!("{id_salt}_dctype"));
-            drag_value(ui, "DC 加成：", dc_bonus);
-        }
-    }
+    enum_combo_box(
+        ui,
+        "命中來源：",
+        &mut condition.accuracy_source,
+        &format!("{id_salt}_source"),
+    );
+    enum_combo_box(
+        ui,
+        "命中類型：",
+        &mut condition.defense_type,
+        &format!("{id_salt}_dctype"),
+    );
+    drag_value(ui, "命中加成：", &mut condition.accuracy_bonus);
+    drag_value(ui, "暴擊加成：", &mut condition.crit_bonus);
 }

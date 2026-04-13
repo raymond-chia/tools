@@ -1,7 +1,7 @@
 //! ECS Component 定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
-use crate::domain::core_types::{BuffType, DcType, EffectNode};
+use crate::domain::core_types::{BuffType, DefenseType, EffectNode};
 use bevy_ecs::bundle::Bundle;
 use bevy_ecs::component::Component;
 use serde::{Deserialize, Serialize};
@@ -97,15 +97,14 @@ define_attribute_components!(
     (max_mp, MaxMp),
     (current_mp, CurrentMp),
     (initiative, Initiative),
-    (accuracy, Accuracy),
-    (evasion, Evasion),
-    (block, Block),
-    (block_protection, BlockProtection),
     (physical_attack, PhysicalAttack),
     (magical_attack, MagicalAttack),
-    (magical_dc, MagicalDc),
+    (physical_accuracy, PhysicalAccuracy),
+    (magical_accuracy, MagicalAccuracy),
     (fortitude, Fortitude),
-    (reflex, Reflex),
+    (agility, Agility),
+    (block, Block),
+    (block_protection, BlockProtection),
     (will, Will),
     (movement_point, MovementPoint),
     (reaction_point, ReactionPoint),
@@ -148,7 +147,7 @@ pub struct AppliedBuff {
     pub caster: Occupant,
     pub target: Occupant,
     pub remaining_duration: Option<u32>,
-    pub inherited_dc: Option<DcType>,
+    pub inherited_defense: Option<DefenseType>,
 }
 
 // ============================================================================

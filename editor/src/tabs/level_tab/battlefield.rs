@@ -322,14 +322,13 @@ fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &HashMa
     ui.label(format!("移動：{}", attrs.movement_point.0));
     ui.label(format!("物攻：{}", attrs.physical_attack.0));
     ui.label(format!("魔攻：{}", attrs.magical_attack.0));
-    ui.label(format!("命中：{}", attrs.accuracy.0));
-    ui.label(format!("迴避：{}", attrs.evasion.0));
+    ui.label(format!("物理命中：{}", attrs.physical_accuracy.0));
+    ui.label(format!("魔法命中：{}", attrs.magical_accuracy.0));
+    ui.label(format!("剛毅：{}", attrs.fortitude.0));
+    ui.label(format!("敏捷：{}", attrs.agility.0));
+    ui.label(format!("意志：{}", attrs.will.0));
     ui.label(format!("格擋：{}", attrs.block.0));
     ui.label(format!("格擋減傷：{}", attrs.block_protection.0));
-    ui.label(format!("魔法DC：{}", attrs.magical_dc.0));
-    ui.label(format!("剛毅：{}", attrs.fortitude.0));
-    ui.label(format!("反射：{}", attrs.reflex.0));
-    ui.label(format!("意志：{}", attrs.will.0));
     ui.label(format!("反應：{}", attrs.reaction_point.0));
 
     if !bundle.skills.0.is_empty() {

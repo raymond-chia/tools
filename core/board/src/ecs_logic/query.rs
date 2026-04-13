@@ -1,10 +1,10 @@
 use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
-    Accuracy, ActionState, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
-    ContactEffects, CurrentHp, CurrentMp, Evasion, Fortitude, Initiative, MagicalAttack, MagicalDc,
+    ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
+    ContactEffects, CurrentHp, CurrentMp, Fortitude, Initiative, MagicalAccuracy, MagicalAttack,
     MaxHp, MaxMp, MovementPoint, Object, ObjectBundle, ObjectMovementCost, Occupant,
-    OccupantTypeName, PhysicalAttack, Position, ReactionPoint, Reflex, Skills, Unit, UnitBundle,
-    UnitFaction, Will,
+    OccupantTypeName, PhysicalAccuracy, PhysicalAttack, Position, ReactionPoint, Skills, Unit,
+    UnitBundle, UnitFaction, Will,
 };
 use crate::ecs_types::resources::OccupantIndex;
 use crate::error::{BoardError, DataError, Result};
@@ -39,15 +39,14 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
                 max_mp: get_component!(entity_ref, MaxMp)?.clone(),
                 current_mp: get_component!(entity_ref, CurrentMp)?.clone(),
                 initiative: get_component!(entity_ref, Initiative)?.clone(),
-                accuracy: get_component!(entity_ref, Accuracy)?.clone(),
-                evasion: get_component!(entity_ref, Evasion)?.clone(),
-                block: get_component!(entity_ref, Block)?.clone(),
-                block_protection: get_component!(entity_ref, BlockProtection)?.clone(),
                 physical_attack: get_component!(entity_ref, PhysicalAttack)?.clone(),
                 magical_attack: get_component!(entity_ref, MagicalAttack)?.clone(),
-                magical_dc: get_component!(entity_ref, MagicalDc)?.clone(),
+                physical_accuracy: get_component!(entity_ref, PhysicalAccuracy)?.clone(),
+                magical_accuracy: get_component!(entity_ref, MagicalAccuracy)?.clone(),
                 fortitude: get_component!(entity_ref, Fortitude)?.clone(),
-                reflex: get_component!(entity_ref, Reflex)?.clone(),
+                agility: get_component!(entity_ref, Agility)?.clone(),
+                block: get_component!(entity_ref, Block)?.clone(),
+                block_protection: get_component!(entity_ref, BlockProtection)?.clone(),
                 will: get_component!(entity_ref, Will)?.clone(),
                 movement_point: get_component!(entity_ref, MovementPoint)?.clone(),
                 reaction_point: get_component!(entity_ref, ReactionPoint)?.clone(),
