@@ -273,7 +273,6 @@ fn build_stats(unit_info: UnitInfo) -> CombatStats {
     CombatStats {
         unit_info,
         attribute: AttributeBundle::default(),
-        crit_rate: 0,
     }
 }
 
@@ -365,32 +364,64 @@ fn assert_hp(
     let expected_count = expected.len();
     let modes = all_check_modes();
 
-    for &(atk, value_percent, expected_amount) in SKILL_TEST_DATA {
-        for &(stat_value, random, expected_hit) in STAT_TEST_DATA {
-            let mut caster_stats = build_stats(unit_markers["C"][0].unit_info.clone());
-            caster_stats.attribute.physical_attack = PhysicalAttack(atk);
-            caster_stats.attribute.magical_attack = MagicalAttack(atk);
-
-            for mode in &modes {
-                let leaf = hp_leaf(Attribute::PhysicalAttack, value_percent);
+    // Precompute：nodes 只依賴 (mode, value_percent)
+    let unique_value_percents: Vec<i32> = {
+        let mut v: Vec<i32> = SKILL_TEST_DATA.iter().map(|&(_, vp, _)| vp).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    let nodes_cache: HashMap<(usize, i32), Vec<EffectNode>> = modes
+        .iter()
+        .enumerate()
+        .flat_map(|(mi, mode)| {
+            unique_value_percents.iter().map(move |&vp| {
+                let leaf = hp_leaf(Attribute::PhysicalAttack, vp);
                 let node = build_check_node(mode, leaf);
-                let nodes = wrap_area(node, skill_target);
+                ((mi, vp), wrap_area(node, skill_target))
+            })
+        })
+        .collect();
 
-                let units_on_board: HashMap<Position, CombatStats> = to_position_map(unit_markers)
-                    .into_iter()
-                    .map(|(pos, info)| {
-                        let stat = build_stats_with_defenses(info, mode, stat_value);
-                        (pos, stat)
-                    })
-                    .collect();
+    // Precompute：units_on_board 只依賴 (mode, stat_value)
+    let unique_stat_values: Vec<i32> = {
+        let mut v: Vec<i32> = STAT_TEST_DATA.iter().map(|&(sv, _, _)| sv).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    let position_map_template = to_position_map(unit_markers);
+    let mut units_cache: HashMap<(usize, i32), HashMap<Position, CombatStats>> = HashMap::new();
+    for (mi, mode) in modes.iter().enumerate() {
+        for &sv in &unique_stat_values {
+            let units: HashMap<Position, CombatStats> = position_map_template
+                .iter()
+                .map(|(pos, info)| {
+                    let stat = build_stats_with_defenses(info.clone(), mode, sv);
+                    (*pos, stat)
+                })
+                .collect();
+            units_cache.insert((mi, sv), units);
+        }
+    }
+
+    for &(atk, value_percent, expected_amount) in SKILL_TEST_DATA {
+        let mut caster_stats = build_stats(unit_markers["C"][0].unit_info.clone());
+        caster_stats.attribute.physical_attack = PhysicalAttack(atk);
+        caster_stats.attribute.magical_attack = MagicalAttack(atk);
+
+        for &(stat_value, random, expected_hit) in STAT_TEST_DATA {
+            for (mode_idx, mode) in modes.iter().enumerate() {
+                let nodes = &nodes_cache[&(mode_idx, value_percent)];
+                let units_on_board = &units_cache[&(mode_idx, stat_value)];
 
                 let mut rng = fixed_rng(random);
                 let all_entries = run_for_targets(
-                    &nodes,
+                    nodes,
                     &caster_stats,
                     caster_position,
                     target_positions,
-                    &units_on_board,
+                    units_on_board,
                     board,
                     &mut rng,
                 );

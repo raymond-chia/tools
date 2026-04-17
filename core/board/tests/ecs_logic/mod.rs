@@ -4,6 +4,7 @@ mod test_loader;
 mod test_movement;
 mod test_query;
 mod test_skill;
+mod test_skill_list;
 mod test_spawner;
 mod test_turn;
 
@@ -66,6 +67,8 @@ fn build_mage_world(ascii: &str) -> (World, Occupant, HashMap<String, Vec<Positi
         .unit("P", UNIT_TYPE_MAGE, PLAYER_FACTION_ID)
         .unit("A", UNIT_TYPE_WARRIOR, ALLY_FACTION_ID)
         .unit("E", UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID)
+        .object("w", OBJECT_TYPE_WALL)
+        .object("p", OBJECT_TYPE_SWAMP)
         .to_toml()
         .expect("LevelBuilder::to_toml 應成功");
     let mut world = setup_world_with_level(&level_toml);

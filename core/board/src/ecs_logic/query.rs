@@ -1,3 +1,5 @@
+use crate::domain::alias::{ID, SkillName};
+use crate::domain::core_types::{EffectNode, SkillType, Target};
 use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
@@ -6,13 +8,14 @@ use crate::ecs_types::components::{
     OccupantTypeName, PhysicalAccuracy, PhysicalAttack, Position, ReactionPoint, Skills, Unit,
     UnitBundle, UnitFaction, Will,
 };
-use crate::ecs_types::resources::OccupantIndex;
-use crate::error::{BoardError, DataError, Result};
+use crate::ecs_types::resources::{GameData, LevelConfig, OccupantIndex};
+use crate::error::{BoardError, DataError, Result, UnitError};
 use crate::logic::debug::short_type_name;
 use bevy_ecs::change_detection::Mut;
 use bevy_ecs::event::EntityEvent;
 use bevy_ecs::lifecycle::{Add, Remove};
 use bevy_ecs::prelude::{Entity, On, Query, ResMut, Resource, With, World};
+use bevy_ecs::world::EntityRef;
 use std::collections::HashMap;
 
 /// 查詢所有單位，以位置為 key
@@ -33,24 +36,7 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
             occupant_type_name: get_component!(entity_ref, OccupantTypeName)?.clone(),
             unit_faction: *get_component!(entity_ref, UnitFaction)?,
             skills: get_component!(entity_ref, Skills)?.clone(),
-            attributes: AttributeBundle {
-                max_hp: get_component!(entity_ref, MaxHp)?.clone(),
-                current_hp: get_component!(entity_ref, CurrentHp)?.clone(),
-                max_mp: get_component!(entity_ref, MaxMp)?.clone(),
-                current_mp: get_component!(entity_ref, CurrentMp)?.clone(),
-                initiative: get_component!(entity_ref, Initiative)?.clone(),
-                physical_attack: get_component!(entity_ref, PhysicalAttack)?.clone(),
-                magical_attack: get_component!(entity_ref, MagicalAttack)?.clone(),
-                physical_accuracy: get_component!(entity_ref, PhysicalAccuracy)?.clone(),
-                magical_accuracy: get_component!(entity_ref, MagicalAccuracy)?.clone(),
-                fortitude: get_component!(entity_ref, Fortitude)?.clone(),
-                agility: get_component!(entity_ref, Agility)?.clone(),
-                block: get_component!(entity_ref, Block)?.clone(),
-                block_protection: get_component!(entity_ref, BlockProtection)?.clone(),
-                will: get_component!(entity_ref, Will)?.clone(),
-                movement_point: get_component!(entity_ref, MovementPoint)?.clone(),
-                reaction_point: get_component!(entity_ref, ReactionPoint)?.clone(),
-            },
+            attributes: read_attribute_bundle(&entity_ref)?,
             action_state: get_component!(entity_ref, ActionState)?.clone(),
         };
         result.insert(position, bundle);
@@ -152,6 +138,79 @@ pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a
             note: note.to_string(),
         }
         .into()
+    })
+}
+
+/// 建立 faction_id → alliance_id 的對應表
+pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>> {
+    let level_config = get_resource::<LevelConfig>(world, "請先呼叫 spawn_level")?;
+    Ok(level_config
+        .factions
+        .iter()
+        .map(|(id, f)| (*id, f.alliance))
+        .collect())
+}
+
+/// 從 faction_alliance_map 查詢 alliance_id，找不到時回傳豐富錯誤訊息
+pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<ID> {
+    map.get(&faction_id).copied().ok_or_else(|| {
+        DataError::InvalidComponent {
+            name: short_type_name::<UnitFaction>(),
+            note: format!(
+                "faction_id {} 在 faction_to_alliance 中找不到對應",
+                faction_id
+            ),
+        }
+        .into()
+    })
+}
+
+/// 取得指定技能名稱對應的 Active 技能欄位；若非 Active 則視為 SkillNotFound
+pub(crate) fn get_active_skill_data<'a>(
+    game_data: &'a GameData,
+    skill_name: &SkillName,
+) -> Result<(&'a Target, &'a [EffectNode], u32)> {
+    let skill_type =
+        game_data
+            .skill_map
+            .get(skill_name)
+            .ok_or_else(|| UnitError::SkillNotFound {
+                skill_name: skill_name.clone(),
+            })?;
+    match skill_type {
+        SkillType::Active {
+            target,
+            effects,
+            cost,
+            tags: _,
+            name: _,
+        } => Ok((target, effects, *cost)),
+        SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
+            skill_name: skill_name.clone(),
+        }
+        .into()),
+    }
+}
+
+/// 從 EntityRef 逐一讀取屬性 component，組裝成 AttributeBundle
+pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeBundle> {
+    Ok(AttributeBundle {
+        max_hp: get_component!(entity_ref, MaxHp)?.clone(),
+        current_hp: get_component!(entity_ref, CurrentHp)?.clone(),
+        max_mp: get_component!(entity_ref, MaxMp)?.clone(),
+        current_mp: get_component!(entity_ref, CurrentMp)?.clone(),
+        initiative: get_component!(entity_ref, Initiative)?.clone(),
+        physical_attack: get_component!(entity_ref, PhysicalAttack)?.clone(),
+        magical_attack: get_component!(entity_ref, MagicalAttack)?.clone(),
+        physical_accuracy: get_component!(entity_ref, PhysicalAccuracy)?.clone(),
+        magical_accuracy: get_component!(entity_ref, MagicalAccuracy)?.clone(),
+        fortitude: get_component!(entity_ref, Fortitude)?.clone(),
+        agility: get_component!(entity_ref, Agility)?.clone(),
+        block: get_component!(entity_ref, Block)?.clone(),
+        block_protection: get_component!(entity_ref, BlockProtection)?.clone(),
+        will: get_component!(entity_ref, Will)?.clone(),
+        movement_point: get_component!(entity_ref, MovementPoint)?.clone(),
+        reaction_point: get_component!(entity_ref, ReactionPoint)?.clone(),
     })
 }
 

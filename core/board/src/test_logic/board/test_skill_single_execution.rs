@@ -118,7 +118,6 @@ fn build_stats(unit_info: UnitInfo) -> CombatStats {
     CombatStats {
         unit_info,
         attribute: AttributeBundle::default(),
-        crit_rate: 0,
     }
 }
 

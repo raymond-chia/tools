@@ -3,13 +3,14 @@
 use super::{get_component, get_component_mut};
 use crate::domain::alias::{ID, MovementCost};
 use crate::domain::constants::BASIC_MOVEMENT_COST;
-use crate::ecs_logic::query::{find_entity_by_occupant, get_resource};
+use crate::ecs_logic::query::{
+    build_faction_alliance_map, find_entity_by_occupant, get_resource, resolve_alliance,
+};
 use crate::ecs_types::components::{
     ActionState, MovementPoint, Object, ObjectMovementCost, Occupant, Position, Unit, UnitFaction,
 };
-use crate::ecs_types::resources::{Board, LevelConfig, TurnOrder};
-use crate::error::{BoardError, DataError, Result};
-use crate::logic::debug::short_type_name;
+use crate::ecs_types::resources::{Board, TurnOrder};
+use crate::error::{BoardError, Result};
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
 use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{With, World};
@@ -43,17 +44,10 @@ pub fn get_reachable_positions(
     let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
     let units_faction = get_units_faction_map(world)?;
     let objects_movement_cost = get_objects_movement_cost_map(world)?;
-    let level_config = get_resource::<LevelConfig>(world, "請先呼叫 spawn_level")?;
+    let faction_to_alliance = build_faction_alliance_map(world)?;
 
     // 計算可用預算（2 倍移動力 - 已使用的）
     let budget = movement_point * 2 - movement_used;
-
-    // 構建陣營 ID -> alliance ID 的對應表
-    let faction_to_alliance: HashMap<ID, ID> = level_config
-        .factions
-        .iter()
-        .map(|(id, f)| (*id, f.alliance))
-        .collect();
 
     // 構建 occupant closure（查詢位置上的佔據者所屬的同盟）
     let get_occupant_alliance = |pos: Position| -> Option<ID> {
@@ -71,14 +65,7 @@ pub fn get_reachable_positions(
         base_cost + objects_movement_cost.get(&pos).copied().unwrap_or(0)
     };
 
-    let mover_alliance =
-        faction_to_alliance
-            .get(&faction)
-            .copied()
-            .ok_or_else(|| DataError::InvalidComponent {
-                name: short_type_name::<UnitFaction>(),
-                note: format!("faction_id {} 在 faction_to_alliance 中找不到對應", faction),
-            })?;
+    let mover_alliance = resolve_alliance(&faction_to_alliance, faction)?;
 
     let mover = Mover {
         pos: unit_pos,

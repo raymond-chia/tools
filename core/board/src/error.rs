@@ -128,6 +128,10 @@ pub enum DeploymentError {
 pub enum UnitError {
     #[error("技能未找到: {skill_name}")]
     SkillNotFound { skill_name: SkillName },
+    #[error("行動點不足: 已消耗 {used}，上限 {max}")]
+    InsufficientActionPoint { used: i32, max: i32 },
+    #[error("MP 不足: 需要 {cost}，目前 {current}")]
+    InsufficientMp { cost: u32, current: i32 },
     #[error("技能 '{skill_name}' 必須至少有一個 effect")]
     EmptySkillEffects { skill_name: SkillName },
 }

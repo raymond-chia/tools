@@ -54,14 +54,14 @@ editor/
 │           ├── edit.rs      - 編輯模式 UI
 │           ├── deployment.rs - 部署模式 UI
 │           ├── battle.rs    - 戰鬥模式 UI
-│           └── battlefield.rs - 戰場共用邏輯（網格、快照、詳情面板）
+│           └── battlefield.rs - 戰場網格與詳情面板渲染
 ```
 
 ## Function 集
 
 ### editor/main.rs
 
-- `pub fn main() -> Result<(), eframe::Error>` - 程式進入點，初始化字體和視覺主題
+- `pub fn main() -> Result<(), eframe::Error>` - 程式進入點，初始化字體和視覺主題和編輯器
 
 ### editor/app.rs
 

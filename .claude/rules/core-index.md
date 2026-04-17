@@ -120,7 +120,7 @@ core/board/
 ### logic/skill/mod.rs
 
 - `pub(crate) fn manhattan_distance(a: Position, b: Position) -> Coord` - 計算兩位置的曼哈頓距離
-- `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: &TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
+- `pub(crate) fn is_in_filter(caster: &UnitInfo, target: &UnitInfo, filter: TargetFilter) -> bool` - 判斷目標是否符合技能篩選條件
 - `pub(crate) fn normalize_direction(caster: Position, target: Position) -> Result<(i32, i32)>` - 將兩位置的距離向量正規化為方向
 
 ### logic/skill/skill_check.rs
@@ -134,7 +134,7 @@ core/board/
 
 ### logic/skill/skill_execution.rs
 
-- `pub(crate) fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board: Board, rng: &mut impl FnMut() -> i32) -> Vec<EffectEntry>` - 執行效果樹節點並產生效果條目
+- `pub(crate) fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
 
 ### logic/skill/skill_reaction.rs
 
@@ -194,6 +194,10 @@ core/board/
 - `pub(crate) fn setup_occupant_index(world: &mut World)` - 初始化佔據者索引
 - `pub(crate) fn find_entity_by_occupant(world: &World, occupant: Occupant) -> Result<Entity>` - 根據佔據者查找實體
 - `pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
+- `pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>>` - 建構陣營聯盟對應表
+- `pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<ID>` - 解析陣營聯盟關係
+- `pub(crate) fn get_active_skill_data<'a>(game_data: &'a GameData, skill_name: &SkillName) -> Result<(&'a Target, &'a [EffectNode], u32)>` - 查詢技能的目標與效果資料
+- `pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeBundle>` - 讀取實體的屬性集合
 - `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
 
 ### ecs_logic/movement.rs
@@ -216,6 +220,7 @@ core/board/
 - `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 - `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
+- `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
 
 ### error.rs
 

@@ -18,7 +18,6 @@ use std::collections::HashMap;
 pub struct CombatStats {
     pub unit_info: UnitInfo,
     pub attribute: AttributeBundle,
-    pub crit_rate: i32,
 }
 
 /// 棋盤上的物件資訊
@@ -138,7 +137,6 @@ fn resolve_at_position(
             if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
                 return;
             }
-            // TODO CheckResult::Auto ?
             resolve_nodes_for_unit(nodes, caster, target_stats, CheckResult::Auto, rng, entries);
         }
         None => {
@@ -285,7 +283,7 @@ fn resolve_branch_check(
 
     let (defender_evasion, defender_block) =
         get_defense_values(&target.attribute, condition.defense_type);
-    let crit_rate = caster.crit_rate + condition.crit_bonus;
+    let crit_rate = condition.crit_bonus;
 
     let hit = resolve_hit(
         attacker_acc,

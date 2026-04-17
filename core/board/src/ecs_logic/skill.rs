@@ -1,20 +1,30 @@
 //! 技能系統 ECS 操作函數
 
-use super::get_component;
+use super::{get_component, get_component_mut};
 use crate::domain::alias::{ID, SkillName};
+use crate::domain::constants::IMPASSABLE_MOVEMENT_COST;
 use crate::domain::core_types::{SkillType, TargetSelection};
-use crate::ecs_logic::query::{find_entity_by_occupant, get_resource};
-use crate::ecs_types::components::{
-    ActionState, CurrentMp, MovementPoint, Occupant, Position, Skills, Unit, UnitFaction,
+use crate::ecs_logic::query::{
+    build_faction_alliance_map, find_entity_by_occupant, get_active_skill_data, get_resource,
+    read_attribute_bundle, resolve_alliance,
 };
-use crate::ecs_types::resources::{Board, GameData, LevelConfig, TurnOrder};
-use crate::error::{BoardError, DataError, Result, UnitError};
-use crate::logic::debug::short_type_name;
+use crate::ecs_types::components::{
+    ActionState, ContactEffects, CurrentHp, CurrentMp, MovementPoint, Object, ObjectBundle,
+    ObjectMovementCost, Occupant, OccupantTypeName, Position, Skills, Unit, UnitFaction,
+};
+use crate::ecs_types::resources::{Board, GameData, TurnOrder};
+use crate::error::{BoardError, Result, UnitError};
+use crate::logic::id_generator::generate_unique_id;
+use crate::logic::skill::skill_execution::{
+    CheckTarget, CombatStats, EffectEntry, ObjectOnBoard, ResolvedEffect, resolve_effect_tree,
+};
 use crate::logic::skill::skill_range::{compute_affected_positions, compute_range_positions};
-use crate::logic::skill::{UnitInfo, is_in_filter, manhattan_distance};
+use crate::logic::skill::skill_target::validate_skill_targets;
+use crate::logic::skill::{CasterInfo, UnitInfo, is_in_filter, manhattan_distance};
 use crate::logic::turn_order::get_active_unit;
-use bevy_ecs::prelude::{With, World};
-use std::collections::HashMap;
+use bevy_ecs::prelude::{Entity, With, World};
+use rand::RngExt;
+use std::collections::{HashMap, HashSet};
 
 /// 可用技能資訊
 pub struct AvailableSkill {
@@ -93,23 +103,8 @@ pub fn get_skill_targetable_positions(
     let board = get_resource::<Board>(world, "請先呼叫 spawn_level")?;
 
     // 純邏輯：取得技能的 range，計算射程內格子
-    let skill_type =
-        game_data
-            .skill_map
-            .get(skill_name)
-            .ok_or_else(|| UnitError::SkillNotFound {
-                skill_name: skill_name.clone(),
-            })?;
-
-    match skill_type {
-        SkillType::Active { target, .. } => {
-            Ok(compute_range_positions(caster_pos, target.range, *board))
-        }
-        SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
-            skill_name: skill_name.clone(),
-        }
-        .into()),
-    }
+    let (target, _, _) = get_active_skill_data(game_data, skill_name)?;
+    Ok(compute_range_positions(caster_pos, target.range, *board))
 }
 
 /// 預覽技能 AOE 影響範圍結果
@@ -135,32 +130,11 @@ pub fn get_skill_affected_positions(
 
     let target = {
         let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
-        let skill_type =
-            game_data
-                .skill_map
-                .get(skill_name)
-                .ok_or_else(|| UnitError::SkillNotFound {
-                    skill_name: skill_name.clone(),
-                })?;
-        match skill_type {
-            SkillType::Active { target, .. } => target.clone(),
-            SkillType::Reaction { .. } | SkillType::Passive { .. } => {
-                return Err(UnitError::SkillNotFound {
-                    skill_name: skill_name.clone(),
-                }
-                .into());
-            }
-        }
+        let (target, _, _) = get_active_skill_data(game_data, skill_name)?;
+        target.clone()
     };
 
-    let faction_to_alliance: HashMap<ID, ID> = {
-        let level_config = get_resource::<LevelConfig>(world, "請先呼叫 spawn_level")?;
-        level_config
-            .factions
-            .iter()
-            .map(|(id, f)| (*id, f.alliance))
-            .collect()
-    };
+    let faction_to_alliance = build_faction_alliance_map(world)?;
 
     // 建立 caster unit info
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
@@ -173,16 +147,7 @@ pub fn get_skill_affected_positions(
         let faction = get_component!(entity_ref, UnitFaction)?.0;
         (pos, occupant, faction)
     };
-    let caster_alliance = faction_to_alliance
-        .get(&caster_faction)
-        .copied()
-        .ok_or_else(|| DataError::InvalidComponent {
-            name: short_type_name::<UnitFaction>(),
-            note: format!(
-                "faction_id {} 在 faction_to_alliance 中找不到對應",
-                caster_faction
-            ),
-        })?;
+    let caster_alliance = resolve_alliance(&faction_to_alliance, caster_faction)?;
     let caster_info = UnitInfo {
         occupant: caster_occupant,
         faction_id: caster_faction,
@@ -197,16 +162,7 @@ pub fn get_skill_affected_positions(
             .iter(world)
             .map(|(pos, occ, fac)| (*pos, *occ, fac.0))
         {
-            let alliance_id = faction_to_alliance
-                .get(&faction_id)
-                .copied()
-                .ok_or_else(|| DataError::InvalidComponent {
-                    name: short_type_name::<UnitFaction>(),
-                    note: format!(
-                        "faction_id {} 在 faction_to_alliance 中找不到對應",
-                        faction_id
-                    ),
-                })?;
+            let alliance_id = resolve_alliance(&faction_to_alliance, faction_id)?;
             units_on_board.insert(
                 pos,
                 UnitInfo {
@@ -235,7 +191,7 @@ pub fn get_skill_affected_positions(
     let all_positions = compute_affected_positions(&target.area, caster_pos, target_pos, board)?;
 
     let can_target_ground = matches!(target.selection, TargetSelection::Ground);
-    let filter = &target.selectable_filter;
+    let filter = target.selectable_filter;
     let filtered_positions = all_positions
         .iter()
         .filter(|pos| match units_on_board.get(pos) {
@@ -249,4 +205,228 @@ pub fn get_skill_affected_positions(
         all_positions,
         filtered_positions,
     })
+}
+
+/// 執行技能，回傳效果條目供演出
+pub fn execute_skill(
+    world: &mut World,
+    skill_name: &SkillName,
+    target_positions: &[Position],
+) -> Result<Vec<EffectEntry>> {
+    let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
+
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+
+    let caster_entity = find_entity_by_occupant(world, active_occupant)?;
+    let (
+        caster_pos,
+        caster_occupant,
+        caster_faction,
+        caster_mp,
+        caster_action_state,
+        caster_movement_point,
+        caster_attributes,
+    ) = {
+        let entity_ref = world.entity(caster_entity);
+        let pos = *get_component!(entity_ref, Position)?;
+        let occupant = *get_component!(entity_ref, Occupant)?;
+        let faction = get_component!(entity_ref, UnitFaction)?.0;
+        let mp = get_component!(entity_ref, CurrentMp)?.0;
+        let action_state = get_component!(entity_ref, ActionState)?.clone();
+        let movement_point = get_component!(entity_ref, MovementPoint)?.0;
+        let attributes = read_attribute_bundle(&entity_ref)?;
+        (
+            pos,
+            occupant,
+            faction,
+            mp,
+            action_state,
+            movement_point,
+            attributes,
+        )
+    };
+
+    check_action_point(&caster_action_state, caster_movement_point)?;
+
+    let caster_alliance = resolve_alliance(&faction_to_alliance, caster_faction)?;
+    let caster_info = UnitInfo {
+        occupant: caster_occupant,
+        faction_id: caster_faction,
+        alliance_id: caster_alliance,
+    };
+
+    let (target, effects, cost) = {
+        let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
+        let (target, effects, cost) = get_active_skill_data(game_data, skill_name)?;
+        (target.clone(), effects.to_vec(), cost)
+    };
+
+    if caster_mp < cost as i32 {
+        return Err(UnitError::InsufficientMp {
+            cost,
+            current: caster_mp,
+        }
+        .into());
+    }
+
+    let unit_entities: Vec<Entity> = world
+        .query_filtered::<Entity, With<Unit>>()
+        .iter(world)
+        .collect();
+    let mut unit_stats_on_board: HashMap<Position, CombatStats> = HashMap::new();
+    for unit_entity in unit_entities {
+        let entity_ref = world.entity(unit_entity);
+        let pos = *get_component!(entity_ref, Position)?;
+        let occupant = *get_component!(entity_ref, Occupant)?;
+        let faction_id = get_component!(entity_ref, UnitFaction)?.0;
+        let attributes = read_attribute_bundle(&entity_ref)?;
+
+        let alliance_id = resolve_alliance(&faction_to_alliance, faction_id)?;
+        unit_stats_on_board.insert(
+            pos,
+            CombatStats {
+                unit_info: UnitInfo {
+                    occupant,
+                    faction_id,
+                    alliance_id,
+                },
+                attribute: attributes,
+            },
+        );
+    }
+
+    let objects_on_board: HashMap<Position, ObjectOnBoard> = world
+        .query_filtered::<(&Position, &Occupant, &ObjectMovementCost), With<Object>>()
+        .iter(world)
+        .map(|(pos, occ, mc)| {
+            (
+                *pos,
+                ObjectOnBoard {
+                    occupant: *occ,
+                    occupies_tile: mc.0 >= IMPASSABLE_MOVEMENT_COST,
+                },
+            )
+        })
+        .collect();
+
+    let mut used_ids: HashSet<ID> = world
+        .query::<&Occupant>()
+        .iter(world)
+        .map(|occ| match occ {
+            Occupant::Unit(id) | Occupant::Object(id) => *id,
+        })
+        .collect();
+
+    // ========================================================================
+    // 純邏輯階段
+    // ========================================================================
+
+    let unit_infos_on_board: HashMap<Position, UnitInfo> = unit_stats_on_board
+        .iter()
+        .map(|(pos, stats)| (*pos, stats.unit_info.clone()))
+        .collect();
+    validate_skill_targets(
+        &CasterInfo {
+            position: caster_pos,
+            unit_info: caster_info.clone(),
+        },
+        &target,
+        target_positions,
+        &unit_infos_on_board,
+        board,
+    )?;
+
+    let caster_stats = CombatStats {
+        unit_info: caster_info,
+        attribute: caster_attributes,
+    };
+
+    let mut rng = rand::rng();
+    let mut all_entries = Vec::new();
+    for target_pos in target_positions {
+        let entries = resolve_effect_tree(
+            &effects,
+            &caster_stats,
+            caster_pos,
+            *target_pos,
+            &unit_stats_on_board,
+            &objects_on_board,
+            board,
+            &mut || rng.random_range(1..=100),
+        )?;
+        all_entries.extend(entries);
+    }
+
+    // ========================================================================
+    // 寫入階段
+    // ========================================================================
+
+    {
+        let mut entity_mut = world.entity_mut(caster_entity);
+        {
+            let mut mp = get_component_mut!(entity_mut, CurrentMp)?;
+            mp.0 -= cost as i32;
+        }
+        {
+            let mut action_state = get_component_mut!(entity_mut, ActionState)?;
+            *action_state = ActionState::Done;
+        }
+    }
+
+    for entry in &all_entries {
+        match &entry.effect {
+            ResolvedEffect::HpChange { final_amount, .. } => {
+                let entity = match entry.target {
+                    CheckTarget::Unit(id) => find_entity_by_occupant(world, Occupant::Unit(id))?,
+                    CheckTarget::Position(_) => unreachable!("HpChange 不應該有 Position 目標"),
+                };
+                let mut entity_mut = world.entity_mut(entity);
+                let mut hp = get_component_mut!(entity_mut, CurrentHp)?;
+                hp.0 += final_amount;
+            }
+            ResolvedEffect::SpawnObject { object_type } => {
+                let pos = match entry.target {
+                    CheckTarget::Position(pos) => pos,
+                    CheckTarget::Unit(_) => unreachable!("SpawnObject 不應該有 Unit 目標"),
+                };
+                let id = generate_unique_id(&mut used_ids)?;
+                // TODO 物件的其他屬性（例如 contact_effects）應該從技能效果定義中讀取，而不是寫死
+                world.spawn(ObjectBundle {
+                    object: Object,
+                    position: pos,
+                    occupant: Occupant::Object(id),
+                    occupant_type_name: OccupantTypeName(object_type.clone()),
+                    terrain_movement_cost: ObjectMovementCost(0),
+                    contact_effects: ContactEffects(Vec::new()),
+                });
+            }
+            // TODO 其他效果類型的寫入邏輯
+            ResolvedEffect::ApplyBuff(_) | ResolvedEffect::NoEffect => {}
+        }
+    }
+
+    Ok(all_entries)
+}
+
+/// 檢查施放者的行動點是否足夠發動技能
+fn check_action_point(action_state: &ActionState, movement_point: i32) -> Result<()> {
+    let action_point_max = movement_point * 2;
+    match action_state {
+        ActionState::Done => Err(UnitError::InsufficientActionPoint {
+            used: action_point_max,
+            max: action_point_max,
+        }
+        .into()),
+        ActionState::Moved { cost } if (*cost as i32) > movement_point => {
+            Err(UnitError::InsufficientActionPoint {
+                used: *cost as i32,
+                max: action_point_max,
+            }
+            .into())
+        }
+        ActionState::Moved { .. } => Ok(()),
+    }
 }
