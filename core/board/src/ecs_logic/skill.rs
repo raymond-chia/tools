@@ -6,20 +6,20 @@ use crate::domain::constants::IMPASSABLE_MOVEMENT_COST;
 use crate::domain::core_types::{SkillType, TargetSelection};
 use crate::ecs_logic::query::{
     build_faction_alliance_map, find_entity_by_occupant, get_active_skill_data, get_resource,
-    read_attribute_bundle, resolve_alliance,
+    get_resource_mut, read_attribute_bundle, resolve_alliance,
 };
 use crate::ecs_types::components::{
     ActionState, ContactEffects, CurrentHp, CurrentMp, MovementPoint, Object, ObjectBundle,
     ObjectMovementCost, Occupant, OccupantTypeName, Position, Skills, Unit, UnitFaction,
 };
-use crate::ecs_types::resources::{Board, GameData, TurnOrder};
+use crate::ecs_types::resources::{Board, GameData, SkillTargeting, TurnOrder};
 use crate::error::{BoardError, Result, UnitError};
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::skill::skill_execution::{
     CheckTarget, CombatStats, EffectEntry, ObjectOnBoard, ResolvedEffect, resolve_effect_tree,
 };
 use crate::logic::skill::skill_range::{compute_affected_positions, compute_range_positions};
-use crate::logic::skill::skill_target::validate_skill_targets;
+use crate::logic::skill::skill_target::{validate_filter, validate_skill_targets};
 use crate::logic::skill::{CasterInfo, UnitInfo, is_in_filter, manhattan_distance};
 use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{Entity, With, World};
@@ -205,6 +205,158 @@ pub fn get_skill_affected_positions(
         all_positions,
         filtered_positions,
     })
+}
+
+/// 開始技能選目標流程：驗證技能存在且當前單位可用，建立空的 SkillTargeting resource
+pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Result<()> {
+    // 讀取：TurnOrder → active unit
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+
+    // 讀取：當前單位的 Skills、CurrentMp、ActionState、MovementPoint
+    let entity = find_entity_by_occupant(world, active_occupant)?;
+    let entity_ref = world.entity(entity);
+    let has_skill = get_component!(entity_ref, Skills)?.0.contains(skill_name);
+    let current_mp = get_component!(entity_ref, CurrentMp)?.0;
+    let action_state = get_component!(entity_ref, ActionState)?.clone();
+    let movement_point = get_component!(entity_ref, MovementPoint)?.0;
+
+    // 讀取：GameData → 取得 Active 技能資料（不存在或非 Active 皆回 SkillNotFound）
+    let cost = {
+        let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
+        if !has_skill {
+            return Err(UnitError::SkillNotFound {
+                skill_name: skill_name.clone(),
+            }
+            .into());
+        }
+        let (_, _, cost) = get_active_skill_data(game_data, skill_name)?;
+        cost
+    };
+
+    // 檢查行動點與 MP
+    check_action_point(&action_state, movement_point)?;
+    if current_mp < cost as i32 {
+        return Err(UnitError::InsufficientMp {
+            cost,
+            current: current_mp,
+        }
+        .into());
+    }
+
+    world.insert_resource(SkillTargeting {
+        skill_name: skill_name.clone(),
+        picked: Vec::new(),
+    });
+    Ok(())
+}
+
+/// 新增一個目標位置到 SkillTargeting
+///
+/// - 驗證位置在當前技能的 targetable 範圍內
+/// - `allow_same_target=false` 且位置已存在 → 忽略（回 Ok，不 push）
+/// - 已滿 count → 回 `TargetCountFull` 錯誤
+/// - 其餘情況 push
+pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()> {
+    let skill_name = get_resource::<SkillTargeting>(world, "請先呼叫 start_skill_targeting")?
+        .skill_name
+        .clone();
+
+    let targetable = get_skill_targetable_positions(world, &skill_name)?;
+
+    let (count, allow_same_target, min_range, max_range, selection, filter) = {
+        let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
+        let (target, _, _) = get_active_skill_data(game_data, &skill_name)?;
+        (
+            target.count,
+            target.allow_same_target,
+            target.range.0,
+            target.range.1,
+            target.selection.clone(),
+            target.selectable_filter,
+        )
+    };
+
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+
+    let mut units_on_board: HashMap<Position, UnitInfo> = HashMap::new();
+    for (unit_pos, occupant, faction_id) in world
+        .query_filtered::<(&Position, &Occupant, &UnitFaction), With<Unit>>()
+        .iter(world)
+        .map(|(p, occ, fac)| (*p, *occ, fac.0))
+    {
+        let alliance_id = resolve_alliance(&faction_to_alliance, faction_id)?;
+        units_on_board.insert(
+            unit_pos,
+            UnitInfo {
+                occupant,
+                faction_id,
+                alliance_id,
+            },
+        );
+    }
+
+    let caster_entity = find_entity_by_occupant(world, active_occupant)?;
+    let caster_pos = {
+        let entity_ref = world.entity(caster_entity);
+        *get_component!(entity_ref, Position)?
+    };
+    let caster_info = units_on_board
+        .get(&caster_pos)
+        .ok_or(BoardError::NoActiveUnit)?
+        .clone();
+
+    // ========================================================================
+    // 純邏輯階段
+    // ========================================================================
+
+    if !targetable.contains(&pos) {
+        let distance = manhattan_distance(caster_pos, pos);
+        return Err(BoardError::OutOfRange {
+            distance,
+            min_range,
+            max_range,
+        }
+        .into());
+    }
+
+    if matches!(selection, TargetSelection::Unit) {
+        match units_on_board.get(&pos) {
+            None => {
+                return Err(BoardError::NoUnitAtTarget { x: pos.x, y: pos.y }.into());
+            }
+            Some(target_unit) => {
+                let caster = CasterInfo {
+                    position: caster_pos,
+                    unit_info: caster_info,
+                };
+                validate_filter(&caster, target_unit, pos, filter)?;
+            }
+        }
+    }
+
+    // ========================================================================
+    // 寫入階段
+    // ========================================================================
+
+    let mut targeting =
+        get_resource_mut::<SkillTargeting>(world, "請先呼叫 start_skill_targeting")?;
+    if !allow_same_target && targeting.picked.contains(&pos) {
+        return Ok(());
+    }
+    if targeting.picked.len() >= count {
+        return Err(BoardError::TargetCountFull { max: count }.into());
+    }
+    targeting.picked.push(pos);
+    Ok(())
+}
+
+/// 取消技能選目標流程，移除 SkillTargeting resource
+pub fn cancel_skill_targeting(world: &mut World) {
+    world.remove_resource::<SkillTargeting>();
 }
 
 /// 執行技能，回傳效果條目供演出

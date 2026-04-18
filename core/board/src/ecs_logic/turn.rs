@@ -46,8 +46,7 @@ fn require_turn_order(world: &World) -> Result<&TurnOrder> {
 /// 開始新的一輪（擲骰、排序、存入 TurnOrder Resource）並回傳
 pub fn start_new_round(world: &mut World) -> Result<&TurnOrder> {
     // 讀取：檢查是否已存在 TurnOrder
-    let existing = world.get_resource::<TurnOrder>();
-    if existing.is_some() {
+    if world.contains_resource::<TurnOrder>() {
         return Err(DataError::ResourceAlreadyExists {
             name: short_type_name::<TurnOrder>(),
             note: "請先呼叫 end_battle 結束上一場戰鬥".to_string(),

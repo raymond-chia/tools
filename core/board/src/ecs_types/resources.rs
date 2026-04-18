@@ -52,3 +52,10 @@ pub struct TurnOrder {
     pub entries: Vec<TurnEntry>,
     pub current_index: usize,
 }
+
+/// 技能目標選取狀態（玩家逐次累積選目標時的暫存）
+#[derive(Debug, Clone, Resource)]
+pub struct SkillTargeting {
+    pub skill_name: SkillName,
+    pub picked: Vec<Position>,
+}

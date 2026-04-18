@@ -5,6 +5,7 @@ mod test_movement;
 mod test_query;
 mod test_skill;
 mod test_skill_list;
+mod test_skill_targeting;
 mod test_spawner;
 mod test_turn;
 

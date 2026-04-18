@@ -52,6 +52,25 @@ pub(crate) fn validate_skill_targets(
     Ok(())
 }
 
+/// 驗證篩選條件（回傳 Result）
+pub(crate) fn validate_filter(
+    caster: &CasterInfo,
+    target: &UnitInfo,
+    target_pos: Position,
+    filter: TargetFilter,
+) -> Result<()> {
+    if is_in_filter(&caster.unit_info, target, filter) {
+        Ok(())
+    } else {
+        Err(BoardError::TargetFilterMismatch {
+            x: target_pos.x,
+            y: target_pos.y,
+            filter: format!("{:?}", filter),
+        }
+        .into())
+    }
+}
+
 /// 檢查目標位置無重複
 fn validate_no_duplicates(targets: &[Position]) -> Result<()> {
     let mut seen = HashSet::new();
@@ -100,23 +119,4 @@ fn get_unit_at<'a>(
     units_on_board
         .get(&pos)
         .ok_or_else(|| BoardError::NoUnitAtTarget { x: pos.x, y: pos.y }.into())
-}
-
-/// 驗證篩選條件（回傳 Result）
-fn validate_filter(
-    caster: &CasterInfo,
-    target: &UnitInfo,
-    target_pos: Position,
-    filter: TargetFilter,
-) -> Result<()> {
-    if is_in_filter(&caster.unit_info, target, filter) {
-        Ok(())
-    } else {
-        Err(BoardError::TargetFilterMismatch {
-            x: target_pos.x,
-            y: target_pos.y,
-            filter: format!("{:?}", filter),
-        }
-        .into())
-    }
 }

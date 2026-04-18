@@ -110,6 +110,8 @@ pub enum BoardError {
     NoUnitAtTarget { x: Coord, y: Coord },
     #[error("不允許重複選擇目標位置，所有目標：{targets:?}")]
     DuplicateTarget { targets: Vec<(Coord, Coord)> },
+    #[error("已達技能目標數量上限: {max}")]
+    TargetCountFull { max: usize },
 }
 
 /// 部署相關錯誤

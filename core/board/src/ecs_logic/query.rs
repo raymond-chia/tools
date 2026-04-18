@@ -8,7 +8,7 @@ use crate::ecs_types::components::{
     OccupantTypeName, PhysicalAccuracy, PhysicalAttack, Position, ReactionPoint, Skills, Unit,
     UnitBundle, UnitFaction, Will,
 };
-use crate::ecs_types::resources::{GameData, LevelConfig, OccupantIndex};
+use crate::ecs_types::resources::{GameData, LevelConfig, OccupantIndex, SkillTargeting};
 use crate::error::{BoardError, DataError, Result, UnitError};
 use crate::logic::debug::short_type_name;
 use bevy_ecs::change_detection::Mut;
@@ -141,6 +141,20 @@ pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a
     })
 }
 
+/// 取得可變資源，若不存在則回傳適當的錯誤訊息
+pub(crate) fn get_resource_mut<'a, T: Resource>(
+    world: &'a mut World,
+    note: &str,
+) -> Result<Mut<'a, T>> {
+    world.get_resource_mut::<T>().ok_or_else(|| {
+        DataError::MissingResource {
+            name: short_type_name::<T>(),
+            note: note.to_string(),
+        }
+        .into()
+    })
+}
+
 /// 建立 faction_id → alliance_id 的對應表
 pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>> {
     let level_config = get_resource::<LevelConfig>(world, "請先呼叫 spawn_level")?;
@@ -214,16 +228,7 @@ pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeB
     })
 }
 
-/// 取得可變資源，若不存在則回傳適當的錯誤訊息
-pub(crate) fn get_resource_mut<'a, T: Resource>(
-    world: &'a mut World,
-    note: &str,
-) -> Result<Mut<'a, T>> {
-    world.get_resource_mut::<T>().ok_or_else(|| {
-        DataError::MissingResource {
-            name: short_type_name::<T>(),
-            note: note.to_string(),
-        }
-        .into()
-    })
+/// 查詢當前技能選目標狀態供 UI 渲染與確認施放
+pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting> {
+    get_resource::<SkillTargeting>(world, "請先呼叫 start_skill_targeting")
 }

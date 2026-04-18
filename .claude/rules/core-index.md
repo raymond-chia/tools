@@ -143,6 +143,7 @@ core/board/
 ### logic/skill/skill_target.rs
 
 - `pub(crate) fn validate_skill_targets(caster: &CasterInfo, target: &Target, target_positions: &[Position], units_on_board: &HashMap<Position, UnitInfo>, board: Board) -> Result<()>` - 驗證技能目標的有效性
+- `pub(crate) fn validate_filter(caster: &CasterInfo, target: &UnitInfo, target_pos: Position, filter: TargetFilter) -> Result<()>` - 驗證目標是否符合技能篩選條件
 
 ### logic/skill/unit_attributes.rs
 
@@ -194,6 +195,7 @@ core/board/
 - `pub(crate) fn setup_occupant_index(world: &mut World)` - 初始化佔據者索引
 - `pub(crate) fn find_entity_by_occupant(world: &World, occupant: Occupant) -> Result<Entity>` - 根據佔據者查找實體
 - `pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
+- `pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting>` - 查詢當前技能選目標狀態
 - `pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>>` - 建構陣營聯盟對應表
 - `pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<ID>` - 解析陣營聯盟關係
 - `pub(crate) fn get_active_skill_data<'a>(game_data: &'a GameData, skill_name: &SkillName) -> Result<(&'a Target, &'a [EffectNode], u32)>` - 查詢技能的目標與效果資料
@@ -221,6 +223,9 @@ core/board/
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 - `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
 - `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
+- `pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Result<()>` - 開始技能選目標流程並建立暫存
+- `pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()>` - 新增一個目標位置到選取暫存
+- `pub fn cancel_skill_targeting(world: &mut World)` - 取消技能選目標流程
 
 ### error.rs
 
