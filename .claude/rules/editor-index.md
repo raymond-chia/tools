@@ -150,9 +150,9 @@ GenericEditorState 的方法：
 - `pub fn screen_to_board_pos(screen_pos: egui::Pos2, rect: egui::Rect, board: Board) -> Option<Position>` - 將螢幕座標轉換為棋盤座標
 - `pub fn compute_hover_pos(response: &egui::Response, rect: egui::Rect, board: Board) -> Option<Position>` - 計算滑鼠懸停時的棋盤座標
 - `pub fn get_cell_info(snapshot: &Snapshot) -> impl Fn(Position) -> (String, egui::Color32, egui::Color32)` - 取得格子顯示資訊
-- `pub fn is_border_highlight(highlight_pos: Option<Position>) -> impl Fn(Position) -> bool` - 判斷是否高亮
+- `pub struct CellHighlight { pub border: Option<egui::Color32>, pub bg: Option<egui::Color32> }` - 單一格子的邊框與背景高亮
 - `pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String` - 取得懸停提示資訊
-- `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, board: Board, scroll_offset: egui::Vec2, get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32), is_border_highlight: impl Fn(Position) -> bool, get_bg_highlight: impl Fn(Position) -> Option<egui::Color32>)` - 繪製棋盤格子
+- `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, board: Board, scroll_offset: egui::Vec2, get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32), get_cell_highlight: impl Fn(Position) -> CellHighlight)` - 繪製棋盤格子
 - `pub fn render_hover_tooltip(ui: &mut egui::Ui, rect: egui::Rect, hovered_pos: Position, get_tooltip_info: impl Fn(Position) -> String)` - 渲染懸停提示
 - `pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapshot)` - 渲染詳情面板
 - `pub fn render_battlefield_legend(ui: &mut egui::Ui)` - 渲染戰場圖例

@@ -20,6 +20,13 @@ pub struct VisibleGridRange {
     pub max: Position,
 }
 
+/// 單一格子的高亮資訊
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CellHighlight {
+    pub border: Option<egui::Color32>,
+    pub bg: Option<egui::Color32>,
+}
+
 /// 戰場模式所需的所有關卡查詢結果
 pub struct Snapshot {
     pub board: Board,
@@ -149,10 +156,6 @@ pub fn get_cell_info(
     }
 }
 
-pub fn is_border_highlight(highlight_pos: Option<Position>) -> impl Fn(Position) -> bool {
-    move |pos: Position| highlight_pos == Some(pos)
-}
-
 pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String {
     |pos| -> String {
         if snapshot.deployment_positions.contains(&pos) {
@@ -189,8 +192,7 @@ pub fn render_grid(
     board: Board,
     scroll_offset: egui::Vec2,
     get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32),
-    is_border_highlight: impl Fn(Position) -> bool,
-    get_bg_highlight: impl Fn(Position) -> Option<egui::Color32>,
+    get_cell_highlight: impl Fn(Position) -> CellHighlight,
 ) {
     let cell_stride = BATTLEFIELD_CELL_SIZE + BATTLEFIELD_GRID_SPACING;
 
@@ -213,13 +215,10 @@ pub fn render_grid(
 
             // 決定格子內容與背景顏色
             let (cell_text, font_color, bg_color) = get_cell_info(pos);
+            let highlight = get_cell_highlight(pos);
 
             // 背景高亮覆蓋層
-            let bg_color = if let Some(highlight_color) = get_bg_highlight(pos) {
-                highlight_color
-            } else {
-                bg_color
-            };
+            let bg_color = highlight.bg.unwrap_or(bg_color);
             // 格子背景
             painter.rect_filled(cell_rect, 0.0, bg_color);
 
@@ -232,12 +231,12 @@ pub fn render_grid(
                 font_color,
             );
 
-            if is_border_highlight(pos) {
+            if let Some(border_color) = highlight.border {
                 painter.rect_stroke(
                     cell_rect,
                     0.0,
-                    egui::Stroke::new(STROKE_WIDTH, BATTLEFIELD_COLOR_HIGHLIGHT),
-                    egui::epaint::StrokeKind::Outside,
+                    egui::Stroke::new(STROKE_WIDTH, border_color),
+                    egui::epaint::StrokeKind::Inside,
                 );
             }
         }

@@ -1,13 +1,13 @@
 //! 關卡編輯器的戰鬥模式邏輯
 
-use super::battlefield::{self, Snapshot};
-use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState};
+use super::battlefield::{self, CellHighlight, Snapshot};
+use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState, RightPanelView};
 use crate::constants::*;
-use board::domain::alias::SkillName;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
 use board::logic::movement::ReachableInfo;
+use board::logic::skill::skill_execution::{CheckResult, CheckTarget, EffectEntry, ResolvedEffect};
 use std::collections::{HashMap, HashSet};
 
 /// 渲染戰鬥模式表單
@@ -62,11 +62,7 @@ pub fn render_form(
         ui.separator();
 
         // 預先計算右側面板寬度
-        let right_panel_width = if ui_state.selected_right_pos.is_some() {
-            LIST_PANEL_WIDTH + SPACING_SMALL // 面板寬度 + scroll bar
-        } else {
-            0.0
-        };
+        let right_panel_width = LIST_PANEL_WIDTH + SPACING_SMALL; // 面板寬度 + scroll bar
         let center_panel_width = ui.available_width() - right_panel_width;
 
         // 中間：戰場預覽
@@ -78,18 +74,28 @@ pub fn render_form(
             }
         });
 
-        // 右側：單位詳情面板（條件顯示）
-        if let Some(pos) = ui_state.selected_right_pos {
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .id_salt("battle_details_panel")
-                .show(ui, |ui| {
-                    ui.vertical(|ui| {
-                        ui.set_width(LIST_PANEL_WIDTH);
-                        battlefield::render_details_panel(ui, pos, &snapshot);
-                    });
+        // 右側面板：依 RightPanelView 切換詳情 / log
+        ui.separator();
+        egui::ScrollArea::vertical()
+            .id_salt("battle_right_panel")
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.set_width(LIST_PANEL_WIDTH);
+                    render_right_panel_toggle(ui, &mut ui_state.right_panel_view);
+                    ui.separator();
+                    match ui_state.right_panel_view {
+                        RightPanelView::Details => match ui_state.selected_right_pos {
+                            Some(pos) => battlefield::render_details_panel(ui, pos, &snapshot),
+                            None => {
+                                ui.label("（右鍵點擊單位或物件以顯示詳情）");
+                            }
+                        },
+                        RightPanelView::Log => {
+                            render_battle_log(ui, &ui_state.battle_log, &snapshot);
+                        }
+                    }
                 });
-        }
+            });
     });
 
     ui.separator();
@@ -204,13 +210,22 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
         let height = height - SPACING_SMALL * 2.0;
         let button_size = egui::vec2(BOTTOM_PANEL_BUTTON_WIDTH, height);
 
-        if ui
-            .add_sized(
-                button_size,
-                egui::Button::new("結束回合").wrap_mode(egui::TextWrapMode::Wrap),
-            )
-            .clicked()
-        {
+        let is_skill_mode = ui_state.battle_action == BattleAction::SkillMode;
+
+        // 第一顆：結束回合（SkillMode 下 disabled）
+        let mut end_turn_clicked = false;
+        ui.add_enabled_ui(!is_skill_mode, |ui| {
+            if ui
+                .add_sized(
+                    button_size,
+                    egui::Button::new("結束回合").wrap_mode(egui::TextWrapMode::Wrap),
+                )
+                .clicked()
+            {
+                end_turn_clicked = true;
+            }
+        });
+        if end_turn_clicked {
             if let Err(e) = board::ecs_logic::turn::end_current_turn(&mut ui_state.world) {
                 error = Err(format!("結束回合失敗：{}", e));
                 return;
@@ -221,6 +236,7 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
 
         ui.separator();
 
+        // 第二顆：延遲（SkillMode 下點擊會先 cancel targeting 再進入 Delaying）
         let can_delay = match board::ecs_logic::turn::can_delay_current_unit(&mut ui_state.world) {
             Ok(v) => v,
             Err(e) => {
@@ -228,7 +244,7 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
                 return;
             }
         };
-        let (label, battle_action) = if ui_state.battle_action == BattleAction::Delaying {
+        let (label, next_action) = if ui_state.battle_action == BattleAction::Delaying {
             ("取消延遲", BattleAction::Normal)
         } else {
             ("延遲", BattleAction::Delaying)
@@ -246,39 +262,51 @@ fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Res
             }
         });
         if delay_clicked {
-            ui_state.battle_action = battle_action;
+            board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
+            ui_state.battle_action = next_action;
             return;
         }
 
         ui.separator();
 
-        let (label, battle_action) =
-            if matches!(ui_state.battle_action, BattleAction::SkillPopup { .. }) {
-                ("關閉技能", BattleAction::Normal)
-            } else {
-                (
-                    "技能",
-                    BattleAction::SkillPopup {
-                        selected_skill_name: None,
-                    },
-                )
+        // 第三顆：技能 / 取消（就地切換，寬度相同）
+        let can_use_skill =
+            match board::ecs_logic::skill::can_use_skill_current_unit(&mut ui_state.world) {
+                Ok(v) => v,
+                Err(e) => {
+                    error = Err(format!("查詢可否使用技能失敗：{}", e));
+                    return;
+                }
             };
-        let skill_button_response = ui.add_sized(
-            button_size,
-            egui::Button::new(label).wrap_mode(egui::TextWrapMode::Wrap),
-        );
-        if skill_button_response.clicked() {
-            ui_state.battle_action = battle_action;
+        let (label, next_action) = if is_skill_mode {
+            ("取消", BattleAction::Normal)
+        } else {
+            ("技能", BattleAction::SkillMode)
+        };
+        let mut skill_clicked = false;
+        let mut skill_response = None;
+        ui.add_enabled_ui(can_use_skill || is_skill_mode, |ui| {
+            let response = ui.add_sized(
+                button_size,
+                egui::Button::new(label).wrap_mode(egui::TextWrapMode::Wrap),
+            );
+            if response.clicked() {
+                skill_clicked = true;
+            }
+            skill_response = Some(response);
+        });
+        if skill_clicked {
+            board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
+            ui_state.battle_action = next_action;
+            return;
         }
-        // 技能彈出面板
-        if let BattleAction::SkillPopup {
-            ref selected_skill_name,
-        } = ui_state.battle_action
-        {
-            let button_rect = skill_button_response.rect;
-            let selected_skill_name = selected_skill_name.clone();
-            if let Err(e) = render_skill_popup(ui, ui_state, button_rect, &selected_skill_name) {
-                error = Err(e);
+
+        // SkillMode 下常駐技能 popup，錨定在第三顆按鈕上方
+        if is_skill_mode {
+            if let Some(response) = skill_response {
+                if let Err(e) = render_skill_popup(ui, ui_state, response.rect) {
+                    error = Err(e);
+                }
             }
         }
     });
@@ -294,14 +322,17 @@ fn render_battlefield(
 ) -> CResult<()> {
     let board = snapshot.board;
 
-    // 取得技能可攻擊位置（SkillPopup 且有選中技能時）
-    let selected_skill_in_popup = match ui_state.battle_action {
-        BattleAction::SkillPopup {
-            selected_skill_name: Some(ref skill_name),
-        } => Some(skill_name.clone()),
-        _ => None,
+    // SkillMode 下從 world 讀取當前選中技能與 picked（resource 不存在代表尚未選技能）
+    let (selected_skill, picked_positions) = match ui_state.battle_action {
+        BattleAction::SkillMode => {
+            match board::ecs_logic::query::get_skill_targeting(&ui_state.world) {
+                Ok(t) => (Some(t.skill_name.clone()), t.picked.clone()),
+                Err(_) => (None, Vec::new()),
+            }
+        }
+        _ => (None, Vec::new()),
     };
-    let skill_targetable: HashSet<Position> = match &selected_skill_in_popup {
+    let skill_targetable: HashSet<Position> = match &selected_skill {
         Some(skill_name) => board::ecs_logic::skill::get_skill_targetable_positions(
             &mut ui_state.world,
             skill_name,
@@ -310,6 +341,7 @@ fn render_battlefield(
         .collect(),
         None => HashSet::new(),
     };
+    let picked_set: HashSet<Position> = picked_positions.into_iter().collect();
 
     // 取得當前行動單位的可移動範圍
     let current_occupant = board::logic::turn_order::get_active_unit(&turn_order.entries);
@@ -347,43 +379,38 @@ fn render_battlefield(
             let hovered_pos = battlefield::compute_hover_pos(&response, rect, board);
 
             // 計算技能 AOE 預覽（懸停在可攻擊位置時）
-            let (skill_all_positions, skill_filtered_positions) =
-                match (&selected_skill_in_popup, hovered_pos) {
-                    (Some(skill_name), Some(hover)) if skill_targetable.contains(&hover) => {
-                        let preview = board::ecs_logic::skill::get_skill_affected_positions(
-                            &mut ui_state.world,
-                            skill_name,
-                            hover,
-                        );
-                        let preview = match preview {
-                            Ok(preview) => preview,
-                            Err(e) => {
-                                error = Err(e);
-                                return;
-                            }
-                        };
-                        let all: HashSet<Position> = preview.all_positions.into_iter().collect();
-                        let filtered: HashSet<Position> =
-                            preview.filtered_positions.into_iter().collect();
-                        (all, filtered)
-                    }
-                    _ => (HashSet::new(), HashSet::new()),
-                };
+            let skill_all_filtered_positions = match (&selected_skill, hovered_pos) {
+                (Some(skill_name), Some(hover)) if skill_targetable.contains(&hover) => {
+                    let preview = board::ecs_logic::skill::get_skill_affected_positions(
+                        &mut ui_state.world,
+                        skill_name,
+                        hover,
+                    );
+                    let preview = match preview {
+                        Ok(preview) => preview,
+                        Err(e) => {
+                            error = Err(e);
+                            return;
+                        }
+                    };
+                    preview.filtered_positions.into_iter().collect()
+                }
+                _ => HashSet::new(),
+            };
 
             // 計算路徑預覽（懸停時）
             let preview_path = preview_path(current_pos, hovered_pos, &reachable_positions);
 
             // 渲染網格（加上可移動範圍高亮）
             let get_cell_info_fn = battlefield::get_cell_info(snapshot);
-            let is_border_highlight_fn =
-                battlefield::is_border_highlight(ui_state.selected_left_pos);
-            let get_bg_highlight_fn = get_bg_highlight(
+            let get_cell_highlight_fn = get_cell_highlight(
+                ui_state.selected_right_pos,
                 preview_path,
                 &reachable_positions,
                 remaining_1mov,
                 &skill_targetable,
-                &skill_all_positions,
-                &skill_filtered_positions,
+                &skill_all_filtered_positions,
+                &picked_set,
             );
 
             battlefield::render_grid(
@@ -392,8 +419,7 @@ fn render_battlefield(
                 board,
                 ui_state.scroll_offset,
                 get_cell_info_fn,
-                is_border_highlight_fn,
-                get_bg_highlight_fn,
+                get_cell_highlight_fn,
             );
             if let Some(hovered_pos) = hovered_pos {
                 error = handle_mouse_click(
@@ -433,14 +459,25 @@ fn render_skill_popup(
     ui: &mut egui::Ui,
     ui_state: &mut LevelTabUIState,
     button_rect: egui::Rect,
-    selected_skill_name: &Option<SkillName>,
 ) -> Result<(), String> {
     let skills = match board::ecs_logic::skill::get_available_skills(&mut ui_state.world) {
         Ok(s) => s,
         Err(e) => return Err(format!("取得技能列表失敗：{}", e)),
     };
+    let targeting = board::ecs_logic::query::get_skill_targeting(&ui_state.world)
+        .ok()
+        .cloned();
+    let current_skill = targeting.as_ref().map(|t| t.skill_name.clone());
+    // 只有多目標技能才顯示「確認施放」按鈕
+    let confirm_info = match targeting {
+        Some(t) if t.max_count != SINGLE_TARGET_COUNT => {
+            Some((t.skill_name.clone(), t.picked.clone(), !t.picked.is_empty()))
+        }
+        _ => None,
+    };
 
-    let mut clicked_skill: Option<SkillName> = None;
+    let mut clicked_skill = None;
+    let mut confirm_clicked_payload = None;
     let popup_pos = egui::pos2(button_rect.left(), button_rect.top());
     egui::Area::new(egui::Id::new("skill_popup"))
         .fixed_pos(popup_pos)
@@ -448,29 +485,58 @@ fn render_skill_popup(
         .order(egui::Order::Foreground)
         .show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                for skill in &skills {
-                    if skill.usable {
-                        let is_selected = selected_skill_name.as_ref() == Some(&skill.name);
-                        if ui.selectable_label(is_selected, &skill.name).clicked() {
-                            clicked_skill = Some(skill.name.clone());
+                ui.set_width(button_rect.width());
+                if let Some((skill_name, picked, enabled)) = &confirm_info {
+                    let label = format!("確認施放\n（已選 {}）", picked.len());
+                    ui.add_enabled_ui(*enabled, |ui| {
+                        if ui.button(label).clicked() {
+                            confirm_clicked_payload = Some((skill_name.clone(), picked.clone()));
                         }
-                    } else {
-                        let label = egui::Label::new(
-                            egui::RichText::new(&skill.name).color(egui::Color32::GRAY),
-                        );
-                        ui.add(label).on_hover_text("缺乏魔力");
+                    });
+                    ui.separator();
+                }
+                ui.horizontal_top(|ui| {
+                    let item_size = egui::vec2(BOTTOM_PANEL_BUTTON_WIDTH, 0.0);
+                    for skill in &skills {
+                        if skill.usable {
+                            let is_selected = current_skill.as_ref() == Some(&skill.name);
+                            if ui
+                                .add_sized(
+                                    item_size,
+                                    egui::Button::selectable(is_selected, &skill.name),
+                                )
+                                .clicked()
+                            {
+                                clicked_skill = Some(skill.name.clone());
+                            }
+                        } else {
+                            let label = egui::Label::new(
+                                egui::RichText::new(&skill.name).color(egui::Color32::GRAY),
+                            );
+                            ui.add_sized(item_size, label).on_hover_text("缺乏魔力");
+                        }
                     }
-                }
-                if skills.is_empty() {
-                    ui.label("無可用技能");
-                }
+                    if skills.is_empty() {
+                        ui.label("無可用技能");
+                    }
+                });
             });
         });
 
+    if let Some((skill_name, picked)) = confirm_clicked_payload {
+        let entries =
+            board::ecs_logic::skill::execute_skill(&mut ui_state.world, &skill_name, &picked)
+                .map_err(|e| format!("施放技能失敗：{}", e))?;
+        ui_state.battle_log.extend(entries);
+        ui_state.right_panel_view = RightPanelView::Log;
+        board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
+        ui_state.battle_action = BattleAction::Normal;
+        return Ok(());
+    }
+
     if let Some(name) = clicked_skill {
-        ui_state.battle_action = BattleAction::SkillPopup {
-            selected_skill_name: Some(name),
-        };
+        board::ecs_logic::skill::start_skill_targeting(&mut ui_state.world, &name)
+            .map_err(|e| format!("開始技能選目標失敗：{}", e))?;
     }
 
     Ok(())
@@ -504,39 +570,43 @@ fn preview_path(
         .collect()
 }
 
-fn get_bg_highlight<'a>(
+fn get_cell_highlight<'a>(
+    selected_pos: Option<Position>,
     preview_path: HashSet<Position>,
     reachable_positions: &'a HashMap<Position, ReachableInfo>,
     remaining_1mov: i32,
     skill_targetable: &'a HashSet<Position>,
-    skill_all_positions: &'a HashSet<Position>,
-    skill_filtered_positions: &'a HashSet<Position>,
-) -> impl Fn(Position) -> Option<egui::Color32> + 'a {
-    move |pos: Position| -> Option<egui::Color32> {
-        // AOE 預覽優先：filtered 用紅色，all 用黃色
-        if skill_filtered_positions.contains(&pos) {
-            return Some(BATTLEFIELD_COLOR_SKILL_AFFECTED);
-        }
-        if skill_all_positions.contains(&pos) {
-            return Some(BATTLEFIELD_COLOR_HIGHLIGHT);
-        }
-        if skill_targetable.contains(&pos) {
-            return Some(BATTLEFIELD_COLOR_HIGHLIGHT);
-        }
-        if preview_path.contains(&pos) {
-            return Some(BATTLEFIELD_COLOR_MOVE_PATH);
-        }
-        if let Some(info) = reachable_positions.get(&pos) {
-            if !info.passthrough_only {
-                let cost = info.cost as i32;
-                if cost <= remaining_1mov {
-                    return Some(BATTLEFIELD_COLOR_MOVE_1MOV);
-                } else {
-                    return Some(BATTLEFIELD_COLOR_MOVE_2MOV);
-                }
+    skill_all_filtered_positions: &'a HashSet<Position>,
+    picked_set: &'a HashSet<Position>,
+) -> impl Fn(Position) -> CellHighlight + 'a {
+    move |pos: Position| -> CellHighlight {
+        let border = if skill_targetable.contains(&pos) {
+            Some(BATTLEFIELD_COLOR_SKILL_RED)
+        } else if selected_pos == Some(pos) {
+            Some(BATTLEFIELD_COLOR_HIGHLIGHT)
+        } else {
+            None
+        };
+
+        let bg = if picked_set.contains(&pos) {
+            Some(BATTLEFIELD_COLOR_SKILL_PICKED)
+        } else if skill_all_filtered_positions.contains(&pos) {
+            Some(BATTLEFIELD_COLOR_SKILL_RED)
+        } else if preview_path.contains(&pos) {
+            Some(BATTLEFIELD_COLOR_MOVE_PATH)
+        } else if let Some(info) = reachable_positions.get(&pos) {
+            if info.passthrough_only {
+                None
+            } else if (info.cost as i32) <= remaining_1mov {
+                Some(BATTLEFIELD_COLOR_MOVE_1MOV)
+            } else {
+                Some(BATTLEFIELD_COLOR_MOVE_2MOV)
             }
-        }
-        None
+        } else {
+            None
+        };
+
+        CellHighlight { border, bg }
     }
 }
 
@@ -568,10 +638,50 @@ fn handle_mouse_click(
                 }
             }
             BattleAction::Delaying => {}
-            BattleAction::SkillPopup { .. } => {}
+            BattleAction::SkillMode => {
+                // 左鍵：若已選技能，嘗試新增目標（editor 先判斷在可攻擊範圍內）
+                let (skill_name, max_count) =
+                    match board::ecs_logic::query::get_skill_targeting(&ui_state.world) {
+                        Ok(t) => (t.skill_name.clone(), t.max_count),
+                        Err(_) => return Ok(()),
+                    };
+                let targetable: HashSet<Position> =
+                    board::ecs_logic::skill::get_skill_targetable_positions(
+                        &mut ui_state.world,
+                        &skill_name,
+                    )?
+                    .into_iter()
+                    .collect();
+                if targetable.contains(&clicked_pos) {
+                    board::ecs_logic::skill::add_skill_target(&mut ui_state.world, clicked_pos)?;
+                    if max_count == SINGLE_TARGET_COUNT {
+                        let picked = board::ecs_logic::query::get_skill_targeting(&ui_state.world)?
+                            .picked
+                            .clone();
+                        let entries = board::ecs_logic::skill::execute_skill(
+                            &mut ui_state.world,
+                            &skill_name,
+                            &picked,
+                        )?;
+                        ui_state.battle_log.extend(entries);
+                        ui_state.right_panel_view = RightPanelView::Log;
+                        board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
+                        ui_state.battle_action = BattleAction::Normal;
+                    }
+                }
+            }
         }
     }
     if response.secondary_clicked() {
+        match ui_state.battle_action {
+            BattleAction::SkillMode => {
+                // 右鍵：取消技能模式
+                board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
+                ui_state.battle_action = BattleAction::Normal;
+            }
+            _ => {}
+        }
+
         // 右鍵：選擇詳情
         if snapshot.unit_map.contains_key(&clicked_pos)
             || snapshot.object_map.contains_key(&clicked_pos)
@@ -634,4 +744,77 @@ fn get_tooltip_info_with_movement<'a>(
 
         base_info
     }
+}
+
+/// 渲染右側面板切換鈕（詳情 / log）
+fn render_right_panel_toggle(ui: &mut egui::Ui, view: &mut RightPanelView) {
+    ui.horizontal(|ui| {
+        ui.selectable_value(view, RightPanelView::Details, "詳情");
+        ui.selectable_value(view, RightPanelView::Log, "Log");
+    });
+}
+
+/// 渲染戰鬥 log 面板
+fn render_battle_log(ui: &mut egui::Ui, log: &[EffectEntry], snapshot: &Snapshot) {
+    ui.heading("戰鬥 Log");
+    ui.add_space(SPACING_SMALL);
+    if log.is_empty() {
+        ui.label("（尚無紀錄）");
+        return;
+    }
+    for entry in log {
+        ui.label(format_effect_entry(entry, snapshot));
+    }
+}
+
+/// 格式化單筆效果條目
+fn format_effect_entry(entry: &EffectEntry, snapshot: &Snapshot) -> String {
+    let target_str = match entry.target {
+        CheckTarget::Unit(id) => match find_unit_name_by_id(id, snapshot) {
+            Some(name) => format!("單位 {}", name),
+            None => format!("單位#{}", id),
+        },
+        CheckTarget::Position(pos) => format!("位置({}, {})", pos.x, pos.y),
+    };
+    let check_str = match entry.check {
+        CheckResult::Auto => "自動命中".to_string(),
+        CheckResult::Hit { crit } => {
+            if crit {
+                "爆擊命中".to_string()
+            } else {
+                "命中".to_string()
+            }
+        }
+        CheckResult::Block { crit } => {
+            if crit {
+                "爆擊被格擋".to_string()
+            } else {
+                "被格擋".to_string()
+            }
+        }
+        CheckResult::Evade => "閃避".to_string(),
+        CheckResult::Resisted => "抵抗".to_string(),
+        CheckResult::Affected => "生效".to_string(),
+    };
+    let effect_str = match &entry.effect {
+        ResolvedEffect::NoEffect => "無效果".to_string(),
+        ResolvedEffect::HpChange {
+            raw_amount,
+            final_amount,
+        } => format!("HP 變化 {} (原始 {})", final_amount, raw_amount),
+        ResolvedEffect::SpawnObject { object_type } => format!("產生物件 {}", object_type),
+        ResolvedEffect::ApplyBuff(name) => format!("施加狀態 {}", name),
+    };
+    format!("{} → {} / {}", target_str, check_str, effect_str)
+}
+
+fn find_unit_name_by_id(id: board::domain::alias::ID, snapshot: &Snapshot) -> Option<String> {
+    for bundle in snapshot.unit_map.values() {
+        if let Occupant::Unit(unit_id) = bundle.occupant {
+            if unit_id == id {
+                return Some(bundle.occupant_type_name.0.clone());
+            }
+        }
+    }
+    None
 }

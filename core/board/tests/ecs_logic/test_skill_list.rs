@@ -9,7 +9,8 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::skill::{
-    AvailableSkill, PreviewAffectedPositions, get_available_skills, get_skill_affected_positions,
+    AvailableSkill, PreviewAffectedPositions, can_use_skill_current_unit, get_available_skills,
+    get_skill_affected_positions,
 };
 use board::ecs_logic::turn::start_new_round;
 use board::ecs_types::components::{ActionState, CurrentMp, Occupant, Position};
@@ -431,5 +432,47 @@ fn get_skill_affected_positions_diamond() {
             }
             Err(msg) => assert!(result.is_err(), "預期失敗但成功了: {msg}\n佈局: {ascii}\n"),
         }
+    }
+}
+
+// ============================================================================
+// can_use_skill_current_unit 測試
+// ============================================================================
+
+/// 驗證 can_use_skill_current_unit 根據行動狀態回傳正確結果
+#[test]
+fn test_can_use_skill_current_unit_based_on_action_state() {
+    let (mut world, player_occupant, _) = super::build_warrior_world(
+        "
+        . . . . .
+        . P . . .
+        . . . . .
+        . . . . .
+        ",
+    );
+
+    // 無 TurnOrder 時應回傳錯誤
+    let result = can_use_skill_current_unit(&mut world);
+    assert!(result.is_err(), "無 TurnOrder 時應回傳錯誤");
+
+    start_new_round(&mut world).expect("start_new_round 應成功");
+
+    // ActionState::Done → 不可使用技能
+    set_active_action_state(&mut world, player_occupant, ActionState::Done);
+    let can = can_use_skill_current_unit(&mut world).expect("查詢應成功");
+    assert!(!can, "Done 狀態不可使用技能");
+
+    // Moved cost <= movement_point (warrior movement_point=50) → 可使用
+    for cost in [0usize, 20, 49, 50] {
+        set_active_action_state(&mut world, player_occupant, ActionState::Moved { cost });
+        let can = can_use_skill_current_unit(&mut world).expect("查詢應成功");
+        assert!(can, "Moved cost={cost} 應可使用技能");
+    }
+
+    // Moved cost > movement_point → 不可使用
+    for cost in [51usize, 60] {
+        set_active_action_state(&mut world, player_occupant, ActionState::Moved { cost });
+        let can = can_use_skill_current_unit(&mut world).expect("查詢應成功");
+        assert!(!can, "Moved cost={cost} 超過 movement_point 應不可使用技能");
     }
 }

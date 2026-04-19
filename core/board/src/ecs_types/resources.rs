@@ -58,4 +58,5 @@ pub struct TurnOrder {
 pub struct SkillTargeting {
     pub skill_name: SkillName,
     pub picked: Vec<Position>,
+    pub max_count: usize,
 }

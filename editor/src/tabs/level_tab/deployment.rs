@@ -301,16 +301,18 @@ fn render_battlefield(
 
             // 渲染網格
             let get_cell_info_fn = battlefield::get_cell_info(snapshot);
-            let is_border_highlight_fn =
-                battlefield::is_border_highlight(ui_state.selected_left_pos);
+            let selected = ui_state.selected_left_pos;
+            let get_cell_highlight_fn = move |pos: Position| battlefield::CellHighlight {
+                border: (selected == Some(pos)).then_some(BATTLEFIELD_COLOR_HIGHLIGHT),
+                bg: None,
+            };
             battlefield::render_grid(
                 ui,
                 rect,
                 board,
                 ui_state.scroll_offset,
                 get_cell_info_fn,
-                is_border_highlight_fn,
-                |_| None,
+                get_cell_highlight_fn,
             );
             if let Some(hovered_pos) = hovered_pos {
                 handle_mouse_click(&response, hovered_pos, snapshot, ui_state);

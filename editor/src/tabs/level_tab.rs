@@ -8,11 +8,12 @@ mod edit;
 use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::MessageState;
 use bevy_ecs::world::World;
-use board::domain::alias::{SkillName, TypeName};
+use board::domain::alias::TypeName;
 use board::domain::core_types::SkillType;
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
 use board::loader_schema::{LevelType, ObjectType, UnitType};
+use board::logic::skill::skill_execution::EffectEntry;
 use std::collections::HashSet;
 
 /// 拖曳物體的類型和索引
@@ -35,9 +36,17 @@ pub enum BattleAction {
     #[default]
     Normal,
     Delaying,
-    SkillPopup {
-        selected_skill_name: Option<SkillName>,
-    },
+    /// 技能模式：彈窗一直開著、戰場可互動預覽 targetable/AOE/picked
+    /// 實際選中的技能與 picked 由 core 的 SkillTargeting resource 持有（未選技能時 resource 不存在）
+    SkillMode,
+}
+
+/// 右側面板顯示模式
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub enum RightPanelView {
+    #[default]
+    Details,
+    Log,
 }
 
 /// 關卡編輯器的模式
@@ -78,6 +87,11 @@ pub struct LevelTabUIState {
     pub battle_action: BattleAction,
     /// 延遲置中：下一幀 render_battlefield 時消費
     pub pending_center_pos: Option<Position>,
+
+    /// 戰鬥演出 log
+    pub battle_log: Vec<EffectEntry>,
+    /// 右側面板顯示模式（單位詳情 / 戰鬥 log）
+    pub right_panel_view: RightPanelView,
 
     /// 當前標籤頁的模式
     pub mode: LevelTabMode,

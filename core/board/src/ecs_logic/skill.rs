@@ -32,6 +32,19 @@ pub struct AvailableSkill {
     pub usable: bool,
 }
 
+/// 查詢當前單位是否可使用技能（行動點足夠才可使用）
+pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool> {
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+
+    let entity = find_entity_by_occupant(world, active_occupant)?;
+    let entity_ref = world.entity(entity);
+    let action_state = get_component!(entity_ref, ActionState)?;
+    let movement_point = get_component!(entity_ref, MovementPoint)?.0;
+
+    Ok(check_action_point(action_state, movement_point).is_ok())
+}
+
 /// 取得當前行動單位的所有主動技能及其可用狀態
 pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>> {
     // 讀取：TurnOrder → active unit
@@ -222,7 +235,7 @@ pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Resul
     let movement_point = get_component!(entity_ref, MovementPoint)?.0;
 
     // 讀取：GameData → 取得 Active 技能資料（不存在或非 Active 皆回 SkillNotFound）
-    let cost = {
+    let (cost, max_count) = {
         let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
         if !has_skill {
             return Err(UnitError::SkillNotFound {
@@ -230,8 +243,8 @@ pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Resul
             }
             .into());
         }
-        let (_, _, cost) = get_active_skill_data(game_data, skill_name)?;
-        cost
+        let (target, _, cost) = get_active_skill_data(game_data, skill_name)?;
+        (cost, target.count)
     };
 
     // 檢查行動點與 MP
@@ -247,6 +260,7 @@ pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Resul
     world.insert_resource(SkillTargeting {
         skill_name: skill_name.clone(),
         picked: Vec::new(),
+        max_count,
     });
     Ok(())
 }

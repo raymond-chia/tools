@@ -433,15 +433,14 @@ fn render_battlefield(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut L
             // 渲染網格
             let get_cell_info_fn =
                 get_cell_info(&level.factions, &deployment_set, &unit_map, &object_map);
-            let is_border_highlight_fn = is_cell_highlight(drag_state, dragged_pos);
+            let get_cell_highlight_fn = get_cell_highlight(drag_state, dragged_pos);
             battlefield::render_grid(
                 ui,
                 rect,
                 board,
                 ui_state.scroll_offset,
                 get_cell_info_fn,
-                is_border_highlight_fn,
-                |_| None,
+                get_cell_highlight_fn,
             );
             if let Some(hovered_pos) = hovered_pos {
                 let get_tooltip_info_fn = get_tooltip_info(&deployment_set, &unit_map, &object_map);
@@ -623,11 +622,15 @@ fn get_cell_info(
     }
 }
 
-fn is_cell_highlight(
+fn get_cell_highlight(
     drag_state: Option<DragState>,
     hovered_in_bounds: Option<Position>,
-) -> impl Fn(Position) -> bool {
-    move |pos: Position| drag_state.is_some() && hovered_in_bounds == Some(pos)
+) -> impl Fn(Position) -> battlefield::CellHighlight {
+    move |pos: Position| battlefield::CellHighlight {
+        border: (drag_state.is_some() && hovered_in_bounds == Some(pos))
+            .then_some(BATTLEFIELD_COLOR_HIGHLIGHT),
+        bg: None,
+    }
 }
 
 fn get_tooltip_info(

@@ -195,12 +195,12 @@ core/board/
 - `pub(crate) fn setup_occupant_index(world: &mut World)` - 初始化佔據者索引
 - `pub(crate) fn find_entity_by_occupant(world: &World, occupant: Occupant) -> Result<Entity>` - 根據佔據者查找實體
 - `pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
-- `pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting>` - 查詢當前技能選目標狀態
 - `pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>>` - 建構陣營聯盟對應表
 - `pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<ID>` - 解析陣營聯盟關係
 - `pub(crate) fn get_active_skill_data<'a>(game_data: &'a GameData, skill_name: &SkillName) -> Result<(&'a Target, &'a [EffectNode], u32)>` - 查詢技能的目標與效果資料
 - `pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeBundle>` - 讀取實體的屬性集合
 - `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
+- `pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting>` - 查詢當前技能選目標狀態供 UI 渲染與確認施放
 
 ### ecs_logic/movement.rs
 
@@ -219,6 +219,7 @@ core/board/
 
 ### ecs_logic/skill.rs
 
+- `pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool>` - 查詢當前單位是否可使用技能
 - `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 - `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
