@@ -344,7 +344,7 @@ fn render_battlefield(
     let picked_set: HashSet<Position> = picked_positions.into_iter().collect();
 
     // 取得當前行動單位的可移動範圍
-    let current_occupant = board::logic::turn_order::get_active_unit(&turn_order.entries);
+    let current_occupant = board::ecs_logic::turn::get_current_unit(turn_order).ok();
     let (reachable_positions, remaining_1mov, current_pos) = match current_occupant {
         Some(occupant) if ui_state.battle_action == BattleAction::Normal => {
             let reachable =

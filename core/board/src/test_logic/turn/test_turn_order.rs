@@ -3,8 +3,13 @@
 use crate::domain::core_types::TurnEntry;
 use crate::ecs_types::components::Occupant;
 use crate::logic::turn_order::{
-    TurnOrderInput, calculate_turn_order, delay_unit, get_active_unit, remove_unit,
+    TurnOrderInput, calculate_turn_order, delay_unit, get_active_index, remove_unit,
 };
+
+/// 取出當前未行動單位的 Occupant，方便斷言
+fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant> {
+    get_active_index(entries).map(|idx| entries[idx].occupant)
+}
 
 fn input(id: u32, initiative: i32, is_player: bool) -> TurnOrderInput {
     TurnOrderInput {

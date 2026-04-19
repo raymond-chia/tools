@@ -6,13 +6,13 @@ use crate::domain::constants::BASIC_MOVEMENT_COST;
 use crate::ecs_logic::query::{
     build_faction_alliance_map, find_entity_by_occupant, get_resource, resolve_alliance,
 };
+use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
     ActionState, MovementPoint, Object, ObjectMovementCost, Occupant, Position, Unit, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, TurnOrder};
 use crate::error::{BoardError, Result};
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
-use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{With, World};
 use std::collections::HashMap;
 
@@ -96,7 +96,7 @@ pub fn get_reachable_positions(
 pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
     // 從 TurnOrder 取得當前行動單位
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let occupant = get_current_unit(turn_order)?;
 
     // 驗證佔據者存在並取得起點位置與 Entity
     let entity = find_entity_by_occupant(world, occupant)?;

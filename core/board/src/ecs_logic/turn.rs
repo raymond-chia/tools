@@ -43,6 +43,19 @@ fn require_turn_order(world: &World) -> Result<&TurnOrder> {
     get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")
 }
 
+/// 取得 TurnOrder 當前行動單位
+///
+/// `current_index` 是行動單位的單一真相，由 `start_new_round`、
+/// `end_current_turn`、`delay_current_unit`、`remove_dead_unit` 維護
+/// 永遠指向有效的未行動者。
+pub fn get_current_unit(turn_order: &TurnOrder) -> Result<Occupant> {
+    turn_order
+        .entries
+        .get(turn_order.current_index)
+        .map(|entry| entry.occupant)
+        .ok_or_else(|| BoardError::NoActiveUnit.into())
+}
+
 /// 開始新的一輪（擲骰、排序、存入 TurnOrder Resource）並回傳
 pub fn start_new_round(world: &mut World) -> Result<&TurnOrder> {
     // 讀取：檢查是否已存在 TurnOrder
@@ -94,7 +107,7 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
 /// 查詢當前單位是否可延遲（未移動才可延遲）
 pub fn can_delay_current_unit(world: &mut World) -> Result<bool> {
     let turn_order = require_turn_order(world)?;
-    let current_occupant = turn_order.entries[turn_order.current_index].occupant;
+    let current_occupant = get_current_unit(turn_order)?;
 
     let entity = find_entity_by_occupant(world, current_occupant)?;
     let action_state = get_component!(world.entity(entity), ActionState)?;
@@ -107,7 +120,7 @@ pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&Tur
     // 檢查當前單位是否已行動（移動過就不能延遲）
     if !can_delay_current_unit(world)? {
         let turn_order = require_turn_order(world)?;
-        let current_occupant = turn_order.entries[turn_order.current_index].occupant;
+        let current_occupant = get_current_unit(turn_order)?;
         return Err(BoardError::InvalidDelay {
             occupant: current_occupant,
             reason: "已移動的單位無法延遲".to_string(),

@@ -8,6 +8,7 @@ use crate::ecs_logic::query::{
     build_faction_alliance_map, find_entity_by_occupant, get_active_skill_data, get_resource,
     get_resource_mut, read_attribute_bundle, resolve_alliance,
 };
+use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
     ActionState, ContactEffects, CurrentHp, CurrentMp, MovementPoint, Object, ObjectBundle,
     ObjectMovementCost, Occupant, OccupantTypeName, Position, Skills, Unit, UnitFaction,
@@ -21,7 +22,6 @@ use crate::logic::skill::skill_execution::{
 use crate::logic::skill::skill_range::{compute_affected_positions, compute_range_positions};
 use crate::logic::skill::skill_target::{validate_filter, validate_skill_targets};
 use crate::logic::skill::{CasterInfo, UnitInfo, is_in_filter, manhattan_distance};
-use crate::logic::turn_order::get_active_unit;
 use bevy_ecs::prelude::{Entity, With, World};
 use rand::RngExt;
 use std::collections::{HashMap, HashSet};
@@ -35,7 +35,7 @@ pub struct AvailableSkill {
 /// 查詢當前單位是否可使用技能（行動點足夠才可使用）
 pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool> {
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
 
     let entity = find_entity_by_occupant(world, active_occupant)?;
     let entity_ref = world.entity(entity);
@@ -49,7 +49,7 @@ pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool> {
 pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>> {
     // 讀取：TurnOrder → active unit
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
 
     // 讀取：當前單位的 Skills、CurrentMp、ActionState、MovementPoint
     let entity = find_entity_by_occupant(world, active_occupant)?;
@@ -101,7 +101,7 @@ pub fn get_skill_targetable_positions(
 ) -> Result<Vec<Position>> {
     // 讀取：TurnOrder → active unit
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
 
     // 讀取：當前單位的位置
     let caster_pos = {
@@ -151,7 +151,7 @@ pub fn get_skill_affected_positions(
 
     // 建立 caster unit info
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
     let (caster_pos, caster_occupant, caster_faction) = {
         let entity = find_entity_by_occupant(world, active_occupant)?;
         let entity_ref = world.entity(entity);
@@ -224,7 +224,7 @@ pub fn get_skill_affected_positions(
 pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Result<()> {
     // 讀取：TurnOrder → active unit
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
 
     // 讀取：當前單位的 Skills、CurrentMp、ActionState、MovementPoint
     let entity = find_entity_by_occupant(world, active_occupant)?;
@@ -292,7 +292,7 @@ pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()> {
     };
 
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
 
     let faction_to_alliance = build_faction_alliance_map(world)?;
 
@@ -382,7 +382,7 @@ pub fn execute_skill(
     let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
 
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
-    let active_occupant = get_active_unit(&turn_order.entries).ok_or(BoardError::NoActiveUnit)?;
+    let active_occupant = get_current_unit(turn_order)?;
 
     let faction_to_alliance = build_faction_alliance_map(world)?;
 

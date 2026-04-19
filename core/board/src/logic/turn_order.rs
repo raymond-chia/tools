@@ -101,11 +101,6 @@ pub(crate) fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> R
     Ok(())
 }
 
-/// 取得下一個未行動的單位
-pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant> {
-    get_active_index(entries).and_then(|idx| entries.get(idx).map(|e| e.occupant))
-}
-
 /// 移除指定 Occupant 的單位
 pub(crate) fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry> {
     entries
