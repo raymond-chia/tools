@@ -7,7 +7,7 @@ use crate::utils::dnd::render_dnd_handle;
 use crate::utils::search::{
     combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
 };
-use board::domain::alias::TypeName;
+use board::domain::alias::{Coord, TypeName};
 use board::domain::core_types::{
     Area, Attribute, BuffType, ContinuousEffect, Effect, EffectCondition, EffectNode, EndCondition,
     Scaling, SkillTag, SkillType, Target, TriggeringSource,
@@ -84,6 +84,45 @@ impl EditorItem for SkillType {
 
         Ok(())
     }
+
+    fn after_confirm(&mut self) {
+        if let Self::Active {
+            target, effects, ..
+        } = self
+        {
+            target.area = derive_target_area(effects);
+        }
+    }
+}
+
+/// 從 effects 頂層挑出最大的 Area 寫回 target.area
+fn derive_target_area(effects: &[EffectNode]) -> Area {
+    effects
+        .iter()
+        .filter_map(|node| match node {
+            EffectNode::Area { area, .. } => Some(area.clone()),
+            _ => None,
+        })
+        .max_by_key(|area| (area_size(area), area_variant_rank(area)))
+        .unwrap_or(Area::Single)
+}
+
+fn area_size(area: &Area) -> Coord {
+    match area {
+        Area::Single => 1,
+        Area::Diamond { radius } => *radius,
+        Area::Cross { length } => *length,
+        Area::Line { length } => *length,
+    }
+}
+
+fn area_variant_rank(area: &Area) -> u8 {
+    match area {
+        Area::Diamond { .. } => 3,
+        Area::Cross { .. } => 2,
+        Area::Line { .. } => 1,
+        Area::Single => 0,
+    }
 }
 
 // ==================== 驗證函數 ====================
@@ -118,6 +157,9 @@ fn validate_target(target: &Target) -> Result<(), String> {
             "射程下限 {} 不能大於上限 {}",
             target.range.0, target.range.1
         ));
+    }
+    if target.count < 1 {
+        return Err(format!("目標數量必須 >= 1，目前為 {}", target.count));
     }
     validate_area(&target.area)
 }
@@ -180,11 +222,18 @@ fn validate_buff(buff: &BuffType) -> Result<(), String> {
 }
 
 fn validate_effect_nodes(nodes: &[EffectNode]) -> Result<(), String> {
+    validate_effect_nodes_at_depth(nodes, 0)
+}
+
+fn validate_effect_nodes_at_depth(nodes: &[EffectNode], depth: usize) -> Result<(), String> {
     for node in nodes {
         match node {
             EffectNode::Area { area, nodes, .. } => {
+                if depth > 0 {
+                    return Err("Area 節點只能出現在頂層，不可巢狀".to_string());
+                }
                 validate_area(area)?;
-                validate_effect_nodes(nodes)?;
+                validate_effect_nodes_at_depth(nodes, depth + 1)?;
             }
             EffectNode::Branch {
                 condition,
@@ -193,8 +242,8 @@ fn validate_effect_nodes(nodes: &[EffectNode]) -> Result<(), String> {
                 ..
             } => {
                 validate_effect_condition(condition)?;
-                validate_effect_nodes(on_success)?;
-                validate_effect_nodes(on_failure)?;
+                validate_effect_nodes_at_depth(on_success, depth + 1)?;
+                validate_effect_nodes_at_depth(on_failure, depth + 1)?;
             }
             EffectNode::Leaf { effect, .. } => {
                 validate_effect(effect)?;
@@ -208,12 +257,35 @@ fn validate_effect(effect: &Effect) -> Result<(), String> {
     match effect {
         Effect::ApplyBuff { buff } => validate_buff(buff),
         Effect::SpawnObject {
-            contact_effects, ..
-        } => validate_effect_nodes(contact_effects),
-        Effect::Trample { .. } => Ok(()),
+            object_type,
+            duration,
+            contact_effects,
+        } => {
+            if object_type.is_empty() {
+                return Err("SpawnObject 必須選擇物件類型".to_string());
+            }
+            match duration {
+                Some(0) => {
+                    return Err("SpawnObject 持續時間必須 >= 1".to_string());
+                }
+                Some(_) | None => {}
+            }
+            validate_effect_nodes(contact_effects)
+        }
+        Effect::Trample { distance, .. } => {
+            if *distance < 1 {
+                return Err(format!("Trample 距離必須 >= 1，目前為 {distance}"));
+            }
+            Ok(())
+        }
+        Effect::ForcedMove { distance, .. } => {
+            if *distance < 1 {
+                return Err(format!("ForcedMove 距離必須 >= 1，目前為 {distance}"));
+            }
+            Ok(())
+        }
         Effect::HpEffect { .. }
         | Effect::MpEffect { .. }
-        | Effect::ForcedMove { .. }
         | Effect::AllowRemainingMovement
         | Effect::SwapPosition => Ok(()),
     }
@@ -438,7 +510,10 @@ fn render_target(ui: &mut egui::Ui, target: &mut Target) {
         ui.checkbox(&mut target.allow_same_target, "");
     });
 
-    render_area(ui, &mut target.area, "target_area");
+    ui.horizontal(|ui| {
+        ui.label("範圍（由效果頂層 Area 自動決定）：");
+        ui.label(target.area.to_string());
+    });
 }
 
 /// 渲染 Area enum（有額外欄位的下拉）
