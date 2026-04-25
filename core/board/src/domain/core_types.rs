@@ -29,12 +29,14 @@ pub struct TurnEntry {
 /// 格式：(欄位名, Attribute enum variant)
 /// - `Attribute` enum
 macro_rules! define_attributes {
-    ($(($field:ident, $variant:ident)),* $(,)?) => {
+    ($( $(#[$attr:ident])? ($field:ident, $variant:ident) ),* $(,)?) => {
         /// 角色屬性類型
         #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display, EnumIter)]
         pub enum Attribute {
-            #[default]
-            $($variant,)*
+            $(
+                $(#[$attr])?
+                $variant,
+            )*
         }
     };
 }
@@ -43,6 +45,7 @@ define_attributes!(
     (hp, Hp),
     (mp, Mp),
     (initiative, Initiative),
+    #[default]
     (physical_attack, PhysicalAttack),
     (magical_attack, MagicalAttack),
     (physical_accuracy, PhysicalAccuracy),
