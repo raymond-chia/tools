@@ -1,6 +1,7 @@
 //! 技能效果樹執行邏輯
 
 use crate::domain::alias::{ID, SkillName, TypeName};
+use crate::domain::constants::CRIT_DAMAGE_MULTIPLIER;
 use crate::domain::core_types::{
     AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
     Scaling, TargetFilter,
@@ -209,16 +210,23 @@ fn resolve_nodes_for_unit(
                 match effect {
                     Effect::HpEffect { scaling } => {
                         let raw_amount = compute_scaling(scaling, caster, target);
+                        let crit_multiplier = match parent_check {
+                            CheckResult::Hit { crit: true } | CheckResult::Block { crit: true } => {
+                                CRIT_DAMAGE_MULTIPLIER
+                            }
+                            _ => 1,
+                        };
+                        let final_amount = raw_amount * crit_multiplier;
                         let final_amount = match parent_check {
                             CheckResult::Block { .. } => apply_block_protection(
-                                raw_amount,
+                                final_amount,
                                 target.attribute.block_protection.0,
                             ),
                             CheckResult::Auto
                             | CheckResult::Hit { .. }
                             | CheckResult::Evade
                             | CheckResult::Resisted
-                            | CheckResult::Affected => raw_amount,
+                            | CheckResult::Affected => final_amount,
                         };
                         entries.push(EffectEntry {
                             caster: caster_id,

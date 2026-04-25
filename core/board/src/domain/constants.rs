@@ -21,3 +21,6 @@ pub const HP_MODIFY_DAMAGE: i32 = -10000;
 pub const FORCED_FAILURE_UPPER: i32 = 5;
 /// 強制成功下界（骰 96~100 強制成功）
 pub const FORCED_SUCCESS_LOWER: i32 = 96;
+
+/// 暴擊傷害倍率
+pub const CRIT_DAMAGE_MULTIPLIER: i32 = 2;
