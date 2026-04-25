@@ -682,11 +682,12 @@ fn handle_mouse_click(
             _ => {}
         }
 
-        // 右鍵：選擇詳情
+        // 右鍵：選擇詳情並切換到詳情面板
         if snapshot.unit_map.contains_key(&clicked_pos)
             || snapshot.object_map.contains_key(&clicked_pos)
         {
             ui_state.selected_right_pos = Some(clicked_pos);
+            ui_state.right_panel_view = RightPanelView::Details;
         } else {
             ui_state.selected_right_pos = None;
         }
