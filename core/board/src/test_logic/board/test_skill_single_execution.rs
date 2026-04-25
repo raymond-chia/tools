@@ -7,7 +7,7 @@ use crate::ecs_types::components::*;
 use crate::ecs_types::resources::Board;
 use crate::logic::skill::UnitInfo;
 use crate::logic::skill::skill_execution::{
-    CheckResult, CheckTarget, CombatStats, EffectEntry, ObjectOnBoard, ResolvedEffect,
+    CheckDetail, CheckResult, CheckTarget, CombatStats, EffectEntry, ObjectOnBoard, ResolvedEffect,
     resolve_effect_tree,
 };
 use crate::test_helpers::level_builder::LevelBuilder;
@@ -15,6 +15,8 @@ use std::collections::HashMap;
 
 const ALLY_FACTION_ID: ID = 1;
 const ENEMY_FACTION_ID: ID = 2;
+const TEST_CASTER_ID: ID = 9999;
+const TEST_SKILL_NAME: &str = "test_skill";
 
 // ============================================================================
 // 建構工具
@@ -279,6 +281,8 @@ fn test_multi_leaf_ally_and_enemy() {
     for (label, target_pos, target_occupant, expected_hp) in test_data {
         let mut rng = always_hit_rng();
         let entries = resolve_effect_tree(
+            TEST_CASTER_ID,
+            TEST_SKILL_NAME,
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -296,8 +300,11 @@ fn test_multi_leaf_ally_and_enemy() {
         assert_eq!(
             target_entries[0],
             &EffectEntry {
+                caster: TEST_CASTER_ID,
+                skill_name: TEST_SKILL_NAME.to_string(),
                 target: occupant_to_check_target(target_occupant),
                 check: CheckResult::Auto,
+                check_detail: None,
                 effect: ResolvedEffect::HpChange {
                     raw_amount: expected_hp,
                     final_amount: expected_hp,
@@ -312,8 +319,11 @@ fn test_multi_leaf_ally_and_enemy() {
         assert_eq!(
             caster_entries[0],
             &EffectEntry {
+                caster: TEST_CASTER_ID,
+                skill_name: TEST_SKILL_NAME.to_string(),
                 target: occupant_to_check_target(sb.caster_occupant),
                 check: CheckResult::Auto,
+                check_detail: None,
                 effect: ResolvedEffect::HpChange {
                     raw_amount: 300,
                     final_amount: 300,
@@ -348,6 +358,8 @@ fn test_spawn_object_on_empty_and_occupied() {
     for (label, target_pos, should_spawn) in test_data {
         let mut rng = always_hit_rng();
         let entries = resolve_effect_tree(
+            TEST_CASTER_ID,
+            TEST_SKILL_NAME,
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -365,8 +377,11 @@ fn test_spawn_object_on_empty_and_occupied() {
             assert_eq!(
                 pos_entries[0],
                 &EffectEntry {
+                    caster: TEST_CASTER_ID,
+                    skill_name: TEST_SKILL_NAME.to_string(),
                     target: CheckTarget::Position(target_pos),
                     check: CheckResult::Auto,
+                    check_detail: None,
                     effect: ResolvedEffect::SpawnObject {
                         object_type: wall.to_string(),
                     },
@@ -410,6 +425,8 @@ fn test_area_spawn_object() {
 
         let mut rng = always_hit_rng();
         let entries = resolve_effect_tree(
+            TEST_CASTER_ID,
+            TEST_SKILL_NAME,
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -452,8 +469,11 @@ fn test_area_spawn_object() {
         assert_eq!(
             trap_entries[0],
             &EffectEntry {
+                caster: TEST_CASTER_ID,
+                skill_name: TEST_SKILL_NAME.to_string(),
                 target: CheckTarget::Position(sb.trap_pos),
                 check: CheckResult::Auto,
+                check_detail: None,
                 effect: ResolvedEffect::SpawnObject {
                     object_type: wall.to_string(),
                 },
@@ -469,8 +489,11 @@ fn test_area_spawn_object() {
                 assert_eq!(
                     target_entries[0],
                     &EffectEntry {
+                        caster: TEST_CASTER_ID,
+                        skill_name: TEST_SKILL_NAME.to_string(),
                         target: CheckTarget::Position(*target_pos),
                         check: CheckResult::Auto,
+                        check_detail: None,
                         effect: ResolvedEffect::SpawnObject {
                             object_type: wall.to_string(),
                         },
@@ -570,6 +593,8 @@ fn test_nested_branch_hit_then_fort() {
 
         let mut rng = fixed_rng(50);
         let entries = resolve_effect_tree(
+            TEST_CASTER_ID,
+            TEST_SKILL_NAME,
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -592,8 +617,19 @@ fn test_nested_branch_hit_then_fort() {
                 assert_eq!(
                     enemy_entries[0],
                     &EffectEntry {
+                        caster: TEST_CASTER_ID,
+                        skill_name: TEST_SKILL_NAME.to_string(),
                         target: occupant_to_check_target(sb.enemy_occupant),
                         check: CheckResult::Evade,
+                        check_detail: Some(CheckDetail {
+                            accuracy_source: AccuracySource::Physical,
+                            defense_type: DefenseType::AgilityAndBlock,
+                            attacker_accuracy: 0,
+                            defender_evasion: enemy_agility_high,
+                            defender_block: 1000000,
+                            crit_rate: 0,
+                            roll: 50,
+                        }),
                         effect: ResolvedEffect::NoEffect,
                     },
                     "{label}"
@@ -609,8 +645,19 @@ fn test_nested_branch_hit_then_fort() {
                 assert_eq!(
                     enemy_entries[0],
                     &EffectEntry {
+                        caster: TEST_CASTER_ID,
+                        skill_name: TEST_SKILL_NAME.to_string(),
                         target: occupant_to_check_target(sb.enemy_occupant),
                         check: CheckResult::Block { crit: false },
+                        check_detail: Some(CheckDetail {
+                            accuracy_source: AccuracySource::Physical,
+                            defense_type: DefenseType::AgilityAndBlock,
+                            attacker_accuracy: 0,
+                            defender_evasion: enemy_agility_low,
+                            defender_block: 1000000,
+                            crit_rate: 0,
+                            roll: 50,
+                        }),
                         effect: ResolvedEffect::HpChange {
                             raw_amount: -1000,
                             final_amount: -750
@@ -622,8 +669,19 @@ fn test_nested_branch_hit_then_fort() {
                 assert_eq!(
                     enemy_entries[1],
                     &EffectEntry {
+                        caster: TEST_CASTER_ID,
+                        skill_name: TEST_SKILL_NAME.to_string(),
                         target: occupant_to_check_target(sb.enemy_occupant),
                         check: CheckResult::Affected,
+                        check_detail: Some(CheckDetail {
+                            accuracy_source: AccuracySource::Physical,
+                            defense_type: DefenseType::Fortitude,
+                            attacker_accuracy: 0,
+                            defender_evasion: enemy_fortitude_low,
+                            defender_block: 0,
+                            crit_rate: 0,
+                            roll: 50,
+                        }),
                         effect: ResolvedEffect::ApplyBuff("poison".to_string()),
                     },
                     "{label}: 上毒條目應該生效（物理 fort 判定成功）"
@@ -640,8 +698,19 @@ fn test_nested_branch_hit_then_fort() {
                 assert_eq!(
                     enemy_entries[0],
                     &EffectEntry {
+                        caster: TEST_CASTER_ID,
+                        skill_name: TEST_SKILL_NAME.to_string(),
                         target: occupant_to_check_target(sb.enemy_occupant),
                         check: CheckResult::Block { crit: false },
+                        check_detail: Some(CheckDetail {
+                            accuracy_source: AccuracySource::Physical,
+                            defense_type: DefenseType::AgilityAndBlock,
+                            attacker_accuracy: 0,
+                            defender_evasion: enemy_agility_low,
+                            defender_block: 1000000,
+                            crit_rate: 0,
+                            roll: 50,
+                        }),
                         effect: ResolvedEffect::HpChange {
                             raw_amount: -1000,
                             final_amount: -750
@@ -653,8 +722,19 @@ fn test_nested_branch_hit_then_fort() {
                 assert_eq!(
                     enemy_entries[1],
                     &EffectEntry {
+                        caster: TEST_CASTER_ID,
+                        skill_name: TEST_SKILL_NAME.to_string(),
                         target: occupant_to_check_target(sb.enemy_occupant),
                         check: CheckResult::Resisted,
+                        check_detail: Some(CheckDetail {
+                            accuracy_source: AccuracySource::Physical,
+                            defense_type: DefenseType::Fortitude,
+                            attacker_accuracy: 0,
+                            defender_evasion: enemy_fortitude_high,
+                            defender_block: 0,
+                            crit_rate: 0,
+                            roll: 50,
+                        }),
                         effect: ResolvedEffect::HpChange {
                             raw_amount: -500,
                             final_amount: -500

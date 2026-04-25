@@ -6,10 +6,20 @@ use crate::domain::constants::{FORCED_FAILURE_UPPER, FORCED_SUCCESS_LOWER};
 
 /// 命中骰結果
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HitResult {
+pub enum HitCheckResult {
     Hit { crit: bool },
     Block { crit: bool },
     Evade,
+}
+
+/// 命中判定的完整輸出，附帶骰值與門檻供 log 顯示
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HitResult {
+    pub check: HitCheckResult,
+    pub roll: i32,
+    pub evasion_threshold: i32,
+    pub block_threshold: i32,
+    pub crit_rate: i32,
 }
 
 /// 解析命中判定
@@ -34,30 +44,41 @@ pub(crate) fn resolve_hit(
     rng_int: &mut impl FnMut() -> i32,
 ) -> HitResult {
     let roll = rng_int();
-
-    // 強制閃避
-    if roll <= FORCED_FAILURE_UPPER {
-        return HitResult::Evade;
-    }
-
-    // 強制命中
-    if roll >= FORCED_SUCCESS_LOWER {
-        let crit = is_crit(roll, crit_rate);
-        return HitResult::Hit { crit };
-    }
-
     let evasion_threshold = defender_evasion - attacker_hit;
     let block_threshold = evasion_threshold + defender_block;
 
-    if roll < evasion_threshold {
-        return HitResult::Evade;
-    }
+    let check = compute_hit_result(roll, evasion_threshold, block_threshold, crit_rate);
 
+    HitResult {
+        check,
+        roll,
+        evasion_threshold,
+        block_threshold,
+        crit_rate,
+    }
+}
+
+fn compute_hit_result(
+    roll: i32,
+    evasion_threshold: i32,
+    block_threshold: i32,
+    crit_rate: i32,
+) -> HitCheckResult {
+    if roll <= FORCED_FAILURE_UPPER {
+        return HitCheckResult::Evade;
+    }
+    if roll >= FORCED_SUCCESS_LOWER {
+        let crit = is_crit(roll, crit_rate);
+        return HitCheckResult::Hit { crit };
+    }
+    if roll < evasion_threshold {
+        return HitCheckResult::Evade;
+    }
     let crit = is_crit(roll, crit_rate);
     if roll < block_threshold {
-        return HitResult::Block { crit };
+        return HitCheckResult::Block { crit };
     }
-    HitResult::Hit { crit }
+    HitCheckResult::Hit { crit }
 }
 
 fn is_crit(roll: i32, crit_rate: i32) -> bool {
