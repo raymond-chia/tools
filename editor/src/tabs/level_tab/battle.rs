@@ -7,7 +7,9 @@ use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
 use board::logic::movement::ReachableInfo;
-use board::logic::skill::skill_execution::{CheckResult, CheckTarget, EffectEntry, ResolvedEffect};
+use board::logic::skill::skill_execution::{
+    CheckDetail, CheckResult, CheckTarget, EffectEntry, ResolvedEffect,
+};
 use std::collections::{HashMap, HashSet};
 
 /// 渲染戰鬥模式表單
@@ -62,7 +64,7 @@ pub fn render_form(
         ui.separator();
 
         // 預先計算右側面板寬度
-        let right_panel_width = LIST_PANEL_WIDTH + SPACING_SMALL; // 面板寬度 + scroll bar
+        let right_panel_width = LIST_PANEL_WIDTH + SPACING_SMALL * 5.0; // 面板寬度 + scroll bar
         let center_panel_width = ui.available_width() - right_panel_width;
 
         // 中間：戰場預覽
@@ -80,7 +82,7 @@ pub fn render_form(
             .id_salt("battle_right_panel")
             .show(ui, |ui| {
                 ui.vertical(|ui| {
-                    ui.set_width(LIST_PANEL_WIDTH);
+                    ui.set_width(LIST_PANEL_WIDTH - SPACING_SMALL * 5.0);
                     render_right_panel_toggle(ui, &mut ui_state.right_panel_view);
                     ui.separator();
                     match ui_state.right_panel_view {
@@ -763,31 +765,63 @@ fn render_battle_log(ui: &mut egui::Ui, log: &[EffectEntry], snapshot: &Snapshot
         ui.label("（尚無紀錄）");
         return;
     }
-    for entry in log {
-        ui.label(format_effect_entry(entry, snapshot));
-    }
+    egui::ScrollArea::vertical()
+        .id_salt("battle_log_scroll")
+        .auto_shrink([false; 2])
+        .show(ui, |ui| {
+            for entry in log {
+                render_effect_entry(ui, entry, snapshot);
+                ui.separator();
+            }
+        });
 }
 
-/// 格式化單筆效果條目
-fn format_effect_entry(entry: &EffectEntry, snapshot: &Snapshot) -> String {
-    let target_str = match entry.target {
-        CheckTarget::Unit(id) => match find_unit_name_by_id(id, snapshot) {
+/// 渲染單筆效果條目（多行）
+fn render_effect_entry(ui: &mut egui::Ui, entry: &EffectEntry, snapshot: &Snapshot) {
+    let caster_str = match find_unit_name_by_id(entry.caster, snapshot) {
+        Some(name) => name,
+        None => format!("單位#{}", entry.caster),
+    };
+    let target_str = format_check_target(&entry.target, snapshot);
+    ui.add(
+        egui::Label::new(format!(
+            "{} 對 {} 使用 {}",
+            caster_str, target_str, entry.skill_name
+        ))
+        .wrap(),
+    );
+    ui.add(
+        egui::Label::new(format!(
+            "判定：{}",
+            format_check(&entry.check, entry.check_detail.as_ref())
+        ))
+        .wrap(),
+    );
+    ui.add(egui::Label::new(format!("效果：{}", format_effect(&entry.effect))).wrap());
+}
+
+fn format_check_target(target: &CheckTarget, snapshot: &Snapshot) -> String {
+    match target {
+        CheckTarget::Unit(id) => match find_unit_name_by_id(*id, snapshot) {
             Some(name) => format!("單位 {}", name),
             None => format!("單位#{}", id),
         },
         CheckTarget::Position(pos) => format!("位置({}, {})", pos.x, pos.y),
-    };
-    let check_str = match entry.check {
+    }
+}
+
+fn format_check(check: &CheckResult, detail: Option<&CheckDetail>) -> String {
+    let result_str = match check {
         CheckResult::Auto => "自動命中".to_string(),
         CheckResult::Hit { crit } => {
-            if crit {
+            if *crit {
                 "爆擊命中".to_string()
             } else {
                 "命中".to_string()
             }
         }
         CheckResult::Block { crit } => {
-            if crit {
+            if *crit {
                 "爆擊被格擋".to_string()
             } else {
                 "被格擋".to_string()
@@ -797,16 +831,31 @@ fn format_effect_entry(entry: &EffectEntry, snapshot: &Snapshot) -> String {
         CheckResult::Resisted => "抵抗".to_string(),
         CheckResult::Affected => "生效".to_string(),
     };
-    let effect_str = match &entry.effect {
+    match detail {
+        None => result_str,
+        Some(d) => format!(
+            "{} [{} 命中 {} + 骰 {} = {} vs {} 閃避 {} / 格擋 {} (閃+格 {}), 爆 {}%]",
+            result_str,
+            d.accuracy_source,
+            d.attacker_accuracy,
+            d.roll,
+            d.attacker_accuracy + d.roll,
+            d.defense_type,
+            d.defender_evasion,
+            d.defender_block,
+            d.defender_evasion + d.defender_block,
+            d.crit_rate,
+        ),
+    }
+}
+
+fn format_effect(effect: &ResolvedEffect) -> String {
+    match effect {
         ResolvedEffect::NoEffect => "無效果".to_string(),
-        ResolvedEffect::HpChange {
-            raw_amount,
-            final_amount,
-        } => format!("HP 變化 {} (原始 {})", final_amount, raw_amount),
+        ResolvedEffect::HpChange { final_amount, .. } => format!("HP 變化 {}", final_amount),
         ResolvedEffect::SpawnObject { object_type } => format!("產生物件 {}", object_type),
         ResolvedEffect::ApplyBuff(name) => format!("施加狀態 {}", name),
-    };
-    format!("{} → {} / {}", target_str, check_str, effect_str)
+    }
 }
 
 fn find_unit_name_by_id(id: board::domain::alias::ID, snapshot: &Snapshot) -> Option<String> {

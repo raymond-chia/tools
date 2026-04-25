@@ -72,7 +72,7 @@ pub enum SkillTag {
 }
 
 /// 檢定類型
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, Display, EnumIter)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display, EnumIter)]
 pub enum DefenseType {
     Fortitude,
     Agility,
@@ -81,7 +81,7 @@ pub enum DefenseType {
     Will,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Display, EnumIter)]
 pub enum AccuracySource {
     #[default]
     Physical,

@@ -1,6 +1,6 @@
 //! 技能效果樹執行邏輯
 
-use crate::domain::alias::{ID, TypeName};
+use crate::domain::alias::{ID, SkillName, TypeName};
 use crate::domain::core_types::{
     AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
     Scaling, TargetFilter,
@@ -8,7 +8,7 @@ use crate::domain::core_types::{
 use crate::ecs_types::components::{AttributeBundle, Occupant, Position};
 use crate::ecs_types::resources::Board;
 use crate::error::Result;
-use crate::logic::skill::skill_check::{HitResult, resolve_hit};
+use crate::logic::skill::skill_check::{HitCheckResult, resolve_hit};
 use crate::logic::skill::skill_range::compute_affected_positions;
 use crate::logic::skill::{UnitInfo, is_in_filter};
 use std::collections::HashMap;
@@ -59,16 +59,33 @@ pub enum ResolvedEffect {
     ApplyBuff(String),
 }
 
+/// 命中判定的詳細數值（用於 log 顯示）
+#[derive(Debug, Clone, PartialEq)]
+pub struct CheckDetail {
+    pub accuracy_source: AccuracySource,
+    pub defense_type: DefenseType,
+    pub attacker_accuracy: i32,
+    pub defender_evasion: i32,
+    pub defender_block: i32,
+    pub crit_rate: i32,
+    pub roll: i32,
+}
+
 /// 單筆效果條目
 #[derive(Debug, Clone, PartialEq)]
 pub struct EffectEntry {
+    pub caster: ID,
+    pub skill_name: SkillName,
     pub target: CheckTarget,
     pub check: CheckResult,
+    pub check_detail: Option<CheckDetail>,
     pub effect: ResolvedEffect,
 }
 
 /// 解析效果樹，產生效果條目列表
 pub(crate) fn resolve_effect_tree(
+    caster_id: ID,
+    skill_name: &str,
     nodes: &[EffectNode],
     caster: &CombatStats,
     caster_pos: Position,
@@ -92,6 +109,8 @@ pub(crate) fn resolve_effect_tree(
 
                 for target_pos in affected_positions {
                     resolve_at_position(
+                        caster_id,
+                        skill_name,
                         inner_nodes,
                         caster,
                         target_pos,
@@ -105,6 +124,8 @@ pub(crate) fn resolve_effect_tree(
             }
             EffectNode::Branch { .. } | EffectNode::Leaf { .. } => {
                 resolve_at_position(
+                    caster_id,
+                    skill_name,
                     std::slice::from_ref(node),
                     caster,
                     target_pos,
@@ -123,6 +144,8 @@ pub(crate) fn resolve_effect_tree(
 
 /// 在指定位置解析效果節點
 fn resolve_at_position(
+    caster_id: ID,
+    skill_name: &str,
     nodes: &[EffectNode],
     caster: &CombatStats,
     target_pos: Position,
@@ -137,10 +160,22 @@ fn resolve_at_position(
             if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
                 return;
             }
-            resolve_nodes_for_unit(nodes, caster, target_stats, CheckResult::Auto, rng, entries);
+            resolve_nodes_for_unit(
+                caster_id,
+                skill_name,
+                nodes,
+                caster,
+                target_stats,
+                CheckResult::Auto,
+                None,
+                rng,
+                entries,
+            );
         }
         None => {
             resolve_nodes_for_position(
+                caster_id,
+                skill_name,
                 nodes,
                 target_pos,
                 units_on_board,
@@ -153,10 +188,13 @@ fn resolve_at_position(
 
 /// 帶判定結果的效果節點解析
 fn resolve_nodes_for_unit(
+    caster_id: ID,
+    skill_name: &str,
     nodes: &[EffectNode],
     caster: &CombatStats,
     target: &CombatStats,
     parent_check: CheckResult,
+    parent_check_detail: Option<CheckDetail>,
     rng: &mut impl FnMut() -> i32,
     entries: &mut Vec<EffectEntry>,
 ) {
@@ -183,8 +221,11 @@ fn resolve_nodes_for_unit(
                             | CheckResult::Affected => raw_amount,
                         };
                         entries.push(EffectEntry {
+                            caster: caster_id,
+                            skill_name: skill_name.to_string(),
                             target: check_target,
                             check: parent_check,
+                            check_detail: parent_check_detail.clone(),
                             effect: ResolvedEffect::HpChange {
                                 raw_amount,
                                 final_amount,
@@ -193,8 +234,11 @@ fn resolve_nodes_for_unit(
                     }
                     Effect::ApplyBuff { buff } => {
                         entries.push(EffectEntry {
+                            caster: caster_id,
+                            skill_name: skill_name.to_string(),
                             target: check_target,
                             check: parent_check,
+                            check_detail: parent_check_detail.clone(),
                             effect: ResolvedEffect::ApplyBuff(buff.name.clone()),
                         });
                     }
@@ -209,7 +253,7 @@ fn resolve_nodes_for_unit(
                 on_success,
                 on_failure,
             } => {
-                let check = resolve_branch_check(caster, target, condition, rng);
+                let (check, detail) = resolve_branch_check(caster, target, condition, rng);
 
                 let branch_nodes = match check {
                     CheckResult::Auto
@@ -222,12 +266,25 @@ fn resolve_nodes_for_unit(
                 if branch_nodes.is_empty() {
                     let check_target = occupant_to_check_target(target.unit_info.occupant);
                     entries.push(EffectEntry {
+                        caster: caster_id,
+                        skill_name: skill_name.to_string(),
                         target: check_target,
                         check,
+                        check_detail: Some(detail),
                         effect: ResolvedEffect::NoEffect,
                     });
                 } else {
-                    resolve_nodes_for_unit(branch_nodes, caster, target, check, rng, entries);
+                    resolve_nodes_for_unit(
+                        caster_id,
+                        skill_name,
+                        branch_nodes,
+                        caster,
+                        target,
+                        check,
+                        Some(detail),
+                        rng,
+                        entries,
+                    );
                 }
             }
             EffectNode::Area { .. } => {
@@ -239,6 +296,8 @@ fn resolve_nodes_for_unit(
 
 /// 對無單位位置解析效果節點（僅處理 SpawnObject 等位置效果）
 fn resolve_nodes_for_position(
+    caster_id: ID,
+    skill_name: &str,
     nodes: &[EffectNode],
     pos: Position,
     units_on_board: &HashMap<Position, CombatStats>,
@@ -251,8 +310,11 @@ fn resolve_nodes_for_position(
                 Effect::SpawnObject { object_type, .. } => {
                     if !is_tile_occupied(pos, units_on_board, objects_on_board) {
                         entries.push(EffectEntry {
+                            caster: caster_id,
+                            skill_name: skill_name.to_string(),
                             target: CheckTarget::Position(pos),
                             check: CheckResult::Auto,
+                            check_detail: None,
                             effect: ResolvedEffect::SpawnObject {
                                 object_type: object_type.clone(),
                             },
@@ -275,7 +337,7 @@ fn resolve_branch_check(
     target: &CombatStats,
     condition: &EffectCondition,
     rng: &mut impl FnMut() -> i32,
-) -> CheckResult {
+) -> (CheckResult, CheckDetail) {
     let attacker_acc = match condition.accuracy_source {
         AccuracySource::Physical => caster.attribute.physical_accuracy.0,
         AccuracySource::Magical => caster.attribute.magical_accuracy.0,
@@ -285,14 +347,24 @@ fn resolve_branch_check(
         get_defense_values(&target.attribute, condition.defense_type);
     let crit_rate = condition.crit_bonus;
 
-    let hit = resolve_hit(
+    let outcome = resolve_hit(
         attacker_acc,
         defender_evasion,
         defender_block,
         crit_rate,
         rng,
     );
-    hit_to_check(hit, condition.defense_type)
+    let check = hit_to_check(outcome.check, condition.defense_type);
+    let detail = CheckDetail {
+        accuracy_source: condition.accuracy_source.clone(),
+        defense_type: condition.defense_type,
+        attacker_accuracy: attacker_acc,
+        defender_evasion,
+        defender_block,
+        crit_rate,
+        roll: outcome.roll,
+    };
+    (check, detail)
 }
 
 /// 取得防禦值（閃避值、格擋值）
@@ -305,17 +377,17 @@ fn get_defense_values(target: &AttributeBundle, defense_type: DefenseType) -> (i
     }
 }
 
-/// 將 HitResult 轉換為 CheckResult
-fn hit_to_check(hit: HitResult, defense_type: DefenseType) -> CheckResult {
+/// 將 HitCheckResult 轉換為 CheckResult
+fn hit_to_check(hit: HitCheckResult, defense_type: DefenseType) -> CheckResult {
     match defense_type {
         DefenseType::AgilityAndBlock => match hit {
-            HitResult::Hit { crit } => CheckResult::Hit { crit },
-            HitResult::Block { crit } => CheckResult::Block { crit },
-            HitResult::Evade => CheckResult::Evade,
+            HitCheckResult::Hit { crit } => CheckResult::Hit { crit },
+            HitCheckResult::Block { crit } => CheckResult::Block { crit },
+            HitCheckResult::Evade => CheckResult::Evade,
         },
         DefenseType::Fortitude | DefenseType::Agility | DefenseType::Will => match hit {
-            HitResult::Hit { .. } | HitResult::Block { .. } => CheckResult::Affected,
-            HitResult::Evade => CheckResult::Resisted,
+            HitCheckResult::Hit { .. } | HitCheckResult::Block { .. } => CheckResult::Affected,
+            HitCheckResult::Evade => CheckResult::Resisted,
         },
     }
 }

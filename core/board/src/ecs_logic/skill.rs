@@ -510,10 +510,17 @@ pub fn execute_skill(
         attribute: caster_attributes,
     };
 
+    let caster_id = match caster_occupant {
+        Occupant::Unit(id) => id,
+        Occupant::Object(_) => return Err(BoardError::NoActiveUnit.into()),
+    };
+
     let mut rng = rand::rng();
     let mut all_entries = Vec::new();
     for target_pos in target_positions {
         let entries = resolve_effect_tree(
+            caster_id,
+            skill_name,
             &effects,
             &caster_stats,
             caster_pos,

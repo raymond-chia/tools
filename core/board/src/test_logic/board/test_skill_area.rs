@@ -17,6 +17,8 @@ use strum::IntoEnumIterator;
 
 const ALLY_FACTION_ID: ID = 1;
 const ENEMY_FACTION_ID: ID = 2;
+const TEST_CASTER_ID: ID = 9999;
+const TEST_SKILL_NAME: &str = "test_skill";
 
 /// 標準棋盤建構：C=施放者(player), Pt/Pa/Pn=玩家, At/Aa/An=友軍, Et/Ea/En=敵軍
 fn standard_board(
@@ -247,6 +249,8 @@ fn run_for_targets(
         .iter()
         .flat_map(|pos| {
             resolve_effect_tree(
+                TEST_CASTER_ID,
+                TEST_SKILL_NAME,
                 nodes,
                 caster_stats,
                 caster_position,
