@@ -107,7 +107,6 @@ GenericEditorState 的方法：
 ### editor/editor_macros.rs
 
 - `pub fn new() -> Self` - 初始化編輯器應用程式（由 define_editors 巨集生成）
-- `pub macro define_editors` - 生成 EditorTab 枚舉、EditorApp 結構和 new() 方法（自動載入檔案）
 
 ### editor/utils/dnd.rs
 

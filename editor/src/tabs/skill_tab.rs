@@ -9,8 +9,8 @@ use crate::utils::search::{
 };
 use board::domain::alias::{Coord, TypeName};
 use board::domain::core_types::{
-    Area, Attribute, BuffType, ContinuousEffect, Effect, EffectCondition, EffectNode, EndCondition,
-    Scaling, SkillTag, SkillType, Target, TriggeringSource,
+    Area, Attribute, BuffType, ContinuousEffect, DefenseType, Effect, EffectCondition, EffectNode,
+    EndCondition, Scaling, SkillTag, SkillType, Target, TriggeringSource,
 };
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -212,7 +212,20 @@ fn validate_effect_condition(condition: &EffectCondition) -> Result<(), String> 
     if crit_bonus < 0 || crit_bonus > 100 {
         return Err(format!("暴擊加成必須介於 0 到 100，目前為 {crit_bonus}"));
     }
+    if !defense_type_supports_crit(condition.defense_type) && crit_bonus != 0 {
+        return Err(format!(
+            "命中類型 {:?} 不支援暴擊，暴擊加成必須為 0，目前為 {crit_bonus}",
+            condition.defense_type
+        ));
+    }
     Ok(())
+}
+
+fn defense_type_supports_crit(defense_type: DefenseType) -> bool {
+    match defense_type {
+        DefenseType::AgilityAndBlock => true,
+        DefenseType::Fortitude | DefenseType::Agility | DefenseType::Will => false,
+    }
 }
 
 fn validate_buff(buff: &BuffType) -> Result<(), String> {
@@ -961,5 +974,13 @@ fn render_effect_condition(ui: &mut egui::Ui, condition: &mut EffectCondition, i
         &format!("{id_salt}_dctype"),
     );
     drag_value(ui, "命中加成：", &mut condition.accuracy_bonus);
-    drag_value(ui, "暴擊加成：", &mut condition.crit_bonus);
+    if defense_type_supports_crit(condition.defense_type) {
+        drag_value(ui, "暴擊加成：", &mut condition.crit_bonus);
+    } else {
+        condition.crit_bonus = 0;
+        ui.add_enabled_ui(false, |ui| {
+            let mut zero = 0_i32;
+            drag_value(ui, "暴擊加成（僅 AgilityAndBlock 可用）：", &mut zero);
+        });
+    }
 }

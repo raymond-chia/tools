@@ -113,7 +113,6 @@ core/board/
 
 - `pub(crate) fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
 - `pub(crate) fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
-- `pub fn get_active_unit(entries: &[TurnEntry]) -> Option<Occupant>` - 取得下一個未行動的單位
 - `pub(crate) fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
 - `pub(crate) fn get_active_index(entries: &[TurnEntry]) -> Option<usize>` - 取得下一個未行動的單位索引
 
@@ -134,7 +133,7 @@ core/board/
 
 ### logic/skill/skill_execution.rs
 
-- `pub(crate) fn resolve_effect_tree(nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
+- `pub(crate) fn resolve_effect_tree(caster_id: ID, skill_name: &str, nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
 
 ### logic/skill/skill_reaction.rs
 
@@ -209,6 +208,7 @@ core/board/
 
 ### ecs_logic/turn.rs
 
+- `pub fn get_current_unit(turn_order: &TurnOrder) -> Result<Occupant>` - 取得目前行動單位
 - `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪並回傳
 - `pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder>` - 結束當前單位的回合，推進到下一個
 - `pub fn can_delay_current_unit(world: &mut World) -> Result<bool>` - 檢查當前單位是否可被延遲
