@@ -1,4 +1,4 @@
-- 重要元素: 位置（光、掩體、高地命中、夾擊、line of sight）、位移（製造地形、利用地形、元素反應）、反應動作、壓力機制、fog of war
+- 重要元素: 位置（光、高地命中、夾擊、掩體、line of sight）、位移（製造地形、利用地形、元素反應）、反應動作、壓力機制、fog of war
 
 # Game Design Document (GDD)
 

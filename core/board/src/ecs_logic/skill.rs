@@ -424,10 +424,14 @@ pub fn execute_skill(
         alliance_id: caster_alliance,
     };
 
-    let (target, effects, cost) = {
+    let (target, effects, cost, skill_tags) = {
         let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
         let (target, effects, cost) = get_active_skill_data(game_data, skill_name)?;
-        (target.clone(), effects.to_vec(), cost)
+        let skill_tags = match game_data.skill_map.get(skill_name) {
+            Some(SkillType::Active { tags, .. }) => tags.clone(),
+            _ => Vec::new(),
+        };
+        (target.clone(), effects.to_vec(), cost, skill_tags)
     };
 
     if caster_mp < cost as i32 {
@@ -521,6 +525,7 @@ pub fn execute_skill(
         let entries = resolve_effect_tree(
             caster_id,
             skill_name,
+            &skill_tags,
             &effects,
             &caster_stats,
             caster_pos,

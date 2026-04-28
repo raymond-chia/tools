@@ -141,6 +141,7 @@ define_attribute_accessors!(
     (will, Will),
     (movement_point, MovementPoint),
     (reaction_point, ReactionPoint),
+    (flanking_accuracy_bonus, FlankingAccuracyBonus),
 );
 
 impl From<CalculatedAttributes> for AttributeBundle {
@@ -162,6 +163,7 @@ impl From<CalculatedAttributes> for AttributeBundle {
             will: Will(attributes.will),
             movement_point: MovementPoint(attributes.movement_point),
             reaction_point: ReactionPoint(attributes.reaction_point),
+            flanking_accuracy_bonus: FlankingAccuracyBonus(attributes.flanking_accuracy_bonus),
         }
     }
 }

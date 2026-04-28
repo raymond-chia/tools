@@ -283,6 +283,7 @@ fn test_multi_leaf_ally_and_enemy() {
         let entries = resolve_effect_tree(
             TEST_CASTER_ID,
             TEST_SKILL_NAME,
+            &[],
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -360,6 +361,7 @@ fn test_spawn_object_on_empty_and_occupied() {
         let entries = resolve_effect_tree(
             TEST_CASTER_ID,
             TEST_SKILL_NAME,
+            &[],
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -427,6 +429,7 @@ fn test_area_spawn_object() {
         let entries = resolve_effect_tree(
             TEST_CASTER_ID,
             TEST_SKILL_NAME,
+            &[],
             &nodes,
             &caster_stats,
             sb.caster_pos,
@@ -595,6 +598,7 @@ fn test_nested_branch_hit_then_fort() {
         let entries = resolve_effect_tree(
             TEST_CASTER_ID,
             TEST_SKILL_NAME,
+            &[],
             &nodes,
             &caster_stats,
             sb.caster_pos,

@@ -108,6 +108,7 @@ define_attribute_components!(
     (will, Will),
     (movement_point, MovementPoint),
     (reaction_point, ReactionPoint),
+    (flanking_accuracy_bonus, FlankingAccuracyBonus),
 );
 
 /// 單位的行動狀態

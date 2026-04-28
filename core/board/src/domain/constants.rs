@@ -24,3 +24,6 @@ pub const FORCED_SUCCESS_LOWER: i32 = 96;
 
 /// 暴擊傷害倍率
 pub const CRIT_DAMAGE_MULTIPLIER: i32 = 2;
+
+/// 夾擊判定所需的最少相鄰己方數量（含 caster 本人若相鄰）
+pub const FLANKING_REQUIRED_ALLIES: usize = 2;

@@ -57,6 +57,7 @@ define_attributes!(
     (will, Will),
     (movement_point, MovementPoint),
     (reaction_point, ReactionPoint),
+    (flanking_accuracy_bonus, FlankingAccuracyBonus),
 );
 
 // ============================================================================
@@ -66,6 +67,7 @@ define_attributes!(
 /// 技能標籤
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum SkillTag {
+    Flankable,
     #[default]
     UsableAfterDoubleMove,
     AllowedDuringGrabbing,

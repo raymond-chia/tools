@@ -251,6 +251,7 @@ fn run_for_targets(
             resolve_effect_tree(
                 TEST_CASTER_ID,
                 TEST_SKILL_NAME,
+                &[],
                 nodes,
                 caster_stats,
                 caster_position,

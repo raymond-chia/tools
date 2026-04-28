@@ -1,14 +1,15 @@
 //! 技能效果樹執行邏輯
 
 use crate::domain::alias::{ID, SkillName, TypeName};
-use crate::domain::constants::CRIT_DAMAGE_MULTIPLIER;
+use crate::domain::constants::{CRIT_DAMAGE_MULTIPLIER, FLANKING_REQUIRED_ALLIES};
 use crate::domain::core_types::{
     AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
-    Scaling, TargetFilter,
+    Scaling, SkillTag, TargetFilter,
 };
 use crate::ecs_types::components::{AttributeBundle, Occupant, Position};
 use crate::ecs_types::resources::Board;
 use crate::error::Result;
+use crate::logic::board::try_position;
 use crate::logic::skill::skill_check::{HitCheckResult, resolve_hit};
 use crate::logic::skill::skill_range::compute_affected_positions;
 use crate::logic::skill::{UnitInfo, is_in_filter};
@@ -87,6 +88,7 @@ pub struct EffectEntry {
 pub(crate) fn resolve_effect_tree(
     caster_id: ID,
     skill_name: &str,
+    skill_tags: &[SkillTag],
     nodes: &[EffectNode],
     caster: &CombatStats,
     caster_pos: Position,
@@ -112,12 +114,14 @@ pub(crate) fn resolve_effect_tree(
                     resolve_at_position(
                         caster_id,
                         skill_name,
+                        skill_tags,
                         inner_nodes,
                         caster,
                         target_pos,
                         *filter,
                         units_on_board,
                         objects_on_board,
+                        board,
                         rng,
                         &mut entries,
                     );
@@ -127,12 +131,14 @@ pub(crate) fn resolve_effect_tree(
                 resolve_at_position(
                     caster_id,
                     skill_name,
+                    skill_tags,
                     std::slice::from_ref(node),
                     caster,
                     target_pos,
                     TargetFilter::Any,
                     units_on_board,
                     objects_on_board,
+                    board,
                     rng,
                     &mut entries,
                 );
@@ -147,12 +153,14 @@ pub(crate) fn resolve_effect_tree(
 fn resolve_at_position(
     caster_id: ID,
     skill_name: &str,
+    skill_tags: &[SkillTag],
     nodes: &[EffectNode],
     caster: &CombatStats,
     target_pos: Position,
     filter: TargetFilter,
     units_on_board: &HashMap<Position, CombatStats>,
     objects_on_board: &HashMap<Position, ObjectOnBoard>,
+    board: Board,
     rng: &mut impl FnMut() -> i32,
     entries: &mut Vec<EffectEntry>,
 ) {
@@ -161,12 +169,15 @@ fn resolve_at_position(
             if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
                 return;
             }
+            let flanking_bonus =
+                compute_flanking_bonus(skill_tags, caster, target_pos, units_on_board, board);
             resolve_nodes_for_unit(
                 caster_id,
                 skill_name,
                 nodes,
                 caster,
                 target_stats,
+                flanking_bonus,
                 CheckResult::Auto,
                 None,
                 rng,
@@ -187,6 +198,21 @@ fn resolve_at_position(
     }
 }
 
+/// 根據技能 Flankable tag、夾擊狀態與 caster 屬性計算命中加成
+fn compute_flanking_bonus(
+    skill_tags: &[SkillTag],
+    caster: &CombatStats,
+    target_pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    board: Board,
+) -> i32 {
+    let is_flankable = skill_tags.iter().any(|t| matches!(t, SkillTag::Flankable));
+    if !is_flankable || !is_flanked(&caster.unit_info, target_pos, units_on_board, board) {
+        return 0;
+    }
+    caster.attribute.flanking_accuracy_bonus.0
+}
+
 /// 帶判定結果的效果節點解析
 fn resolve_nodes_for_unit(
     caster_id: ID,
@@ -194,6 +220,7 @@ fn resolve_nodes_for_unit(
     nodes: &[EffectNode],
     caster: &CombatStats,
     target: &CombatStats,
+    flanking_bonus: i32,
     parent_check: CheckResult,
     parent_check_detail: Option<CheckDetail>,
     rng: &mut impl FnMut() -> i32,
@@ -261,7 +288,8 @@ fn resolve_nodes_for_unit(
                 on_success,
                 on_failure,
             } => {
-                let (check, detail) = resolve_branch_check(caster, target, condition, rng);
+                let (check, detail) =
+                    resolve_branch_check(caster, target, condition, flanking_bonus, rng);
 
                 let branch_nodes = match check {
                     CheckResult::Auto
@@ -288,6 +316,7 @@ fn resolve_nodes_for_unit(
                         branch_nodes,
                         caster,
                         target,
+                        flanking_bonus,
                         check,
                         Some(detail),
                         rng,
@@ -344,12 +373,14 @@ fn resolve_branch_check(
     caster: &CombatStats,
     target: &CombatStats,
     condition: &EffectCondition,
+    flanking_bonus: i32,
     rng: &mut impl FnMut() -> i32,
 ) -> (CheckResult, CheckDetail) {
     let attacker_acc = match condition.accuracy_source {
         AccuracySource::Physical => caster.attribute.physical_accuracy.0,
         AccuracySource::Magical => caster.attribute.magical_accuracy.0,
-    } + condition.accuracy_bonus;
+    } + condition.accuracy_bonus
+        + flanking_bonus;
 
     let (defender_evasion, defender_block) =
         get_defense_values(&target.attribute, condition.defense_type);
@@ -427,6 +458,7 @@ fn get_attribute_value(bundle: &AttributeBundle, attr: Attribute) -> i32 {
         Attribute::Will => bundle.will.0,
         Attribute::MovementPoint => bundle.movement_point.0,
         Attribute::ReactionPoint => bundle.reaction_point.0,
+        Attribute::FlankingAccuracyBonus => bundle.flanking_accuracy_bonus.0,
     }
 }
 
@@ -447,6 +479,31 @@ fn apply_block_protection(raw_amount: i32, block_protection: i32) -> i32 {
         return raw_amount;
     }
     raw_amount * (100 - block_protection) / 100
+}
+
+/// 判定 target 是否被 caster alliance 夾擊
+///
+/// 條件：target 的 4 個曼哈頓相鄰格中，被 caster alliance 友軍佔據的格子數
+/// 達到 FLANKING_REQUIRED_ALLIES。units_on_board 須包含 caster 本身。
+fn is_flanked(
+    caster: &UnitInfo,
+    target_pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    board: Board,
+) -> bool {
+    let neighbors = [(1_i32, 0_i32), (-1, 0), (0, 1), (0, -1)];
+    let ally_count = neighbors
+        .iter()
+        .filter_map(|(dx, dy)| {
+            try_position(board, target_pos.x as i32 + dx, target_pos.y as i32 + dy)
+        })
+        .filter(|neighbor| {
+            units_on_board
+                .get(neighbor)
+                .is_some_and(|stats| stats.unit_info.alliance_id == caster.alliance_id)
+        })
+        .count();
+    ally_count >= FLANKING_REQUIRED_ALLIES
 }
 
 /// 判斷位置是否被佔據（有單位或不可通過物件）
