@@ -94,7 +94,7 @@ pub(crate) fn resolve_effect_tree(
     caster_pos: Position,
     target_pos: Position,
     units_on_board: &HashMap<Position, CombatStats>,
-    objects_on_board: &HashMap<Position, ObjectOnBoard>,
+    objects_on_board: &HashMap<Position, ObjectOnBoard>, // 暫時只有傳入阻止通行的物件
     board: Board,
     rng: &mut impl FnMut() -> i32,
 ) -> Result<Vec<EffectEntry>> {

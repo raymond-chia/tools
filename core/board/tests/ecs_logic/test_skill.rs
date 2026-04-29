@@ -8,7 +8,7 @@ use board::ecs_logic::turn::start_new_round;
 use board::ecs_types::components::{
     ActionState, CurrentMp, MovementPoint, Object, Occupant, OccupantTypeName, Position,
 };
-use board::error::{ErrorKind, UnitError};
+use board::error::{BoardError, ErrorKind, UnitError};
 use board::logic::skill::skill_execution::{CheckTarget, EffectEntry, ResolvedEffect};
 use std::collections::{HashMap, HashSet};
 
@@ -328,5 +328,44 @@ fn test_execute_skill_summon_wall_aoe() {
         wall_count,
         expected_spawn_positions.len(),
         "World 中應在預期位置新增對應數量的 wall 物件"
+    );
+}
+
+/// 目標被牆擋住視線時，execute_skill 應回傳 NoLineOfSight 錯誤
+///
+/// 佈局（P=player，w=牆壁，E=敵人）：
+/// ```text
+/// . . . . .
+/// . P w E .
+/// . . . . .
+/// ```
+/// warrior-active-2 射程 [1, 2]，E 在距離 2 但被 w 擋住視線，施放應失敗
+#[test]
+fn test_execute_skill_blocked_by_wall() {
+    let (mut world, player_occupant, markers) = build_warrior_world(
+        "
+        . . . . .
+        . P w E .
+        . . . . .
+        ",
+        10,
+    );
+    let enemy_pos = markers["E"][0];
+    set_active_action_state(&mut world, player_occupant, ActionState::Moved { cost: 0 });
+
+    let err = execute_skill(
+        &mut world,
+        &SKILL_WARRIOR_ACTIVE_2.to_string(),
+        &[enemy_pos],
+    )
+    .expect_err("被牆擋住視線的目標應施放失敗");
+
+    assert!(
+        matches!(
+            err.kind(),
+            ErrorKind::Board(BoardError::NoLineOfSight { .. })
+        ),
+        "錯誤應為 NoLineOfSight，實際: {:?}",
+        err.kind()
     );
 }

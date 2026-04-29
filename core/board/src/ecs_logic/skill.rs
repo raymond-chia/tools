@@ -10,12 +10,14 @@ use crate::ecs_logic::query::{
 };
 use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
-    ActionState, ContactEffects, CurrentHp, CurrentMp, MovementPoint, Object, ObjectBundle,
-    ObjectMovementCost, Occupant, OccupantTypeName, Position, Skills, Unit, UnitFaction,
+    ActionState, BlocksSight, ContactEffects, CurrentHp, CurrentMp, MovementPoint, Object,
+    ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName, Position, Skills, Unit,
+    UnitFaction,
 };
 use crate::ecs_types::resources::{Board, GameData, SkillTargeting, TurnOrder};
 use crate::error::{BoardError, Result, UnitError};
 use crate::logic::id_generator::generate_unique_id;
+use crate::logic::skill::line_of_sight::has_line_of_sight;
 use crate::logic::skill::skill_execution::{
     CheckTarget, CombatStats, EffectEntry, ObjectOnBoard, ResolvedEffect, resolve_effect_tree,
 };
@@ -113,11 +115,25 @@ pub fn get_skill_targetable_positions(
     let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
 
     // 讀取：Board
-    let board = get_resource::<Board>(world, "請先呼叫 spawn_level")?;
+    let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
 
-    // 純邏輯：取得技能的 range，計算射程內格子
+    // 讀取：技能 range
     let (target, _, _) = get_active_skill_data(game_data, skill_name)?;
-    Ok(compute_range_positions(caster_pos, target.range, *board))
+    let range = target.range;
+
+    // 讀取：視線阻擋格子集合
+    let blocks_sight: HashSet<Position> = world
+        .query_filtered::<&Position, With<BlocksSight>>()
+        .iter(world)
+        .copied()
+        .collect();
+
+    // 純邏輯：計算射程內格子，並過濾無視線的格子
+    let range_positions = compute_range_positions(caster_pos, range, board);
+    Ok(range_positions
+        .into_iter()
+        .filter(|pos| has_line_of_sight(caster_pos, *pos, &blocks_sight))
+        .collect::<Vec<_>>())
 }
 
 /// 預覽技能 AOE 影響範圍結果
@@ -482,6 +498,12 @@ pub fn execute_skill(
         })
         .collect();
 
+    let blocks_sight: HashSet<Position> = world
+        .query_filtered::<&Position, With<BlocksSight>>()
+        .iter(world)
+        .copied()
+        .collect();
+
     let mut used_ids: HashSet<ID> = world
         .query::<&Occupant>()
         .iter(world)
@@ -508,6 +530,16 @@ pub fn execute_skill(
         &unit_infos_on_board,
         board,
     )?;
+
+    for target_pos in target_positions {
+        if !has_line_of_sight(caster_pos, *target_pos, &blocks_sight) {
+            return Err(BoardError::NoLineOfSight {
+                x: target_pos.x,
+                y: target_pos.y,
+            }
+            .into());
+        }
+    }
 
     let caster_stats = CombatStats {
         unit_info: caster_info,

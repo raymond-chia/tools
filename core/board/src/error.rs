@@ -104,6 +104,8 @@ pub enum BoardError {
         min_range: Coord,
         max_range: Coord,
     },
+    #[error("目標位置 ({x}, {y}) 無視線")]
+    NoLineOfSight { x: Coord, y: Coord },
     #[error("目標位置 ({x}, {y}) 不符合篩選條件: {filter}")]
     TargetFilterMismatch { x: Coord, y: Coord, filter: String },
     #[error("目標位置 ({x}, {y}) 無單位")]

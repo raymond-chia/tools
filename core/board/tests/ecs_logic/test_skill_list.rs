@@ -436,6 +436,48 @@ fn get_skill_affected_positions_diamond() {
 }
 
 // ============================================================================
+// get_skill_targetable_positions 視線測試
+// ============================================================================
+
+/// 牆壁擋住視線時，被遮擋的格子不應出現在可攻擊位置中
+///
+/// 佈局（P=player，E=敵人，w=牆壁）：
+/// ```text
+/// . . . . .
+/// . P w E .
+/// . . . . .
+/// ```
+/// warrior-active-2 射程 [1, 2]，E 在距離 2 但被 w 擋住視線，不應可攻擊
+#[test]
+fn test_get_skill_targetable_positions_blocked_by_wall() {
+    let ascii = "
+    . . . . .
+    . P w E .
+    . . . . .
+    ";
+    let (mut world, _, markers) = build_warrior_world(ascii, 10);
+    let enemy_pos = markers["E"][0];
+    let wall_pos = markers["w"][0];
+
+    let positions: HashSet<_> = board::ecs_logic::skill::get_skill_targetable_positions(
+        &mut world,
+        &SKILL_WARRIOR_ACTIVE_2.to_string(),
+    )
+    .expect("get_skill_targetable_positions 應成功")
+    .into_iter()
+    .collect();
+
+    assert!(
+        !positions.contains(&enemy_pos),
+        "被牆擋住視線的敵人位置不應出現在可攻擊位置中"
+    );
+    assert!(
+        !positions.contains(&wall_pos),
+        "牆壁本身（有 BlocksSight）不應出現在可攻擊位置中"
+    );
+}
+
+// ============================================================================
 // can_use_skill_current_unit 測試
 // ============================================================================
 
