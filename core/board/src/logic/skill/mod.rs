@@ -1,5 +1,6 @@
 //! 技能邏輯
 
+pub mod line_of_sight;
 pub mod skill_check;
 pub mod skill_execution;
 pub mod skill_range;

@@ -66,7 +66,8 @@ core/board/
 │   │   │   ├── skill_range.rs - 攻擊範圍與 AOE 計算邏輯
 │   │   │   ├── skill_reaction.rs - 技能反應收集邏輯
 │   │   │   ├── skill_target.rs - 技能目標驗證邏輯
-│   │   │   └── unit_attributes.rs - 單位屬性計算邏輯
+│   │   │   ├── unit_attributes.rs - 單位屬性計算邏輯
+│   │   │   └── line_of_sight.rs - 視線判定邏輯
 │   │   └── debug.rs      - 調試工具函數
 │   ├── test_helpers/     - 測試輔助工具
 │   │   ├── mod.rs        - 測試輔助模組
@@ -81,7 +82,9 @@ core/board/
 │       │   ├── test_compute_affected_positions.rs - AOE 計算測試
 │       │   ├── test_compute_range_positions.rs - 攻擊範圍計算測試
 │       │   ├── test_skill_area.rs - 技能範圍計算測試
-│       │   └── test_skill_single_execution.rs - 單一技能效果執行測試
+│       │   ├── test_skill_single_execution.rs - 單一技能效果執行測試
+│       │   ├── test_line_of_sight.rs - 視線判定測試
+│       │   └── test_flanking.rs - 側翼攻擊測試
 │       ├── turn/         - 回合順序測試
 │       │   ├── mod.rs    - 模組宣告
 │       │   └── test_turn_order.rs - 回合順序計算與管理測試
@@ -133,7 +136,7 @@ core/board/
 
 ### logic/skill/skill_execution.rs
 
-- `pub(crate) fn resolve_effect_tree(caster_id: ID, skill_name: &str, nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
+- `pub(crate) fn resolve_effect_tree(caster_id: ID, skill_name: &str, skill_tags: &[SkillTag], nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
 
 ### logic/skill/skill_reaction.rs
 
@@ -148,6 +151,10 @@ core/board/
 
 - `pub(crate) fn filter_continuous_effect<'a>(skill_names: &'a [SkillName], buffs: &'a [BuffType], skill_map: &'a HashMap<SkillName, SkillType>) -> Result<impl Iterator<Item = &'a ContinuousEffect>>` - 從技能和狀態中篩選並合併持續性效果
 - `pub(crate) fn calculate_attributes<'a>(effects: impl Iterator<Item = &'a ContinuousEffect>) -> AttributeBundle` - 計算單位屬性
+
+### logic/skill/line_of_sight.rs
+
+- `pub(crate) fn has_line_of_sight(from: Position, to: Position, blocks_sight: &HashSet<Position>) -> bool` - 判定兩位置之間是否有視線
 
 ### logic/debug.rs
 

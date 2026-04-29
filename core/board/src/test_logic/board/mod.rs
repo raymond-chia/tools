@@ -3,6 +3,7 @@ mod test_compute_affected_positions;
 mod test_compute_range_positions;
 mod test_flanking;
 mod test_is_valid_position;
+mod test_line_of_sight;
 mod test_movement;
 mod test_skill_area;
 mod test_skill_single_execution;
