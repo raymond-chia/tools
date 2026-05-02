@@ -21,7 +21,7 @@ fn test_parse_and_insert_game_data_sets_resource() {
     assert!(game_data.is_some(), "GameData resource 應已存入 World");
 
     let game_data = game_data.expect("GameData resource 應已存入 World");
-    assert_eq!(game_data.skill_map.len(), 8, "skill_map 應包含 8 個技能");
+    assert_eq!(game_data.skill_map.len(), 10, "skill_map 應包含 10 個技能");
     assert!(
         game_data.skill_map.contains_key(SKILL_WARRIOR),
         "skill_map 應包含 {SKILL_WARRIOR}"
@@ -32,8 +32,8 @@ fn test_parse_and_insert_game_data_sets_resource() {
     );
     assert_eq!(
         game_data.unit_type_map.len(),
-        2,
-        "unit_type_map 應包含 2 個單位類型"
+        3,
+        "unit_type_map 應包含 3 個單位類型"
     );
     assert!(
         game_data.unit_type_map.contains_key(UNIT_TYPE_WARRIOR),

@@ -3,6 +3,7 @@ mod test_deployment;
 mod test_loader;
 mod test_movement;
 mod test_query;
+mod test_reaction;
 mod test_skill;
 mod test_skill_list;
 mod test_skill_targeting;

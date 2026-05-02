@@ -34,6 +34,8 @@ pub enum ErrorKind {
     Deployment(#[from] DeploymentError),
     #[error(transparent)]
     Unit(#[from] UnitError),
+    #[error(transparent)]
+    Reaction(#[from] ReactionError),
 }
 
 /// 格式載入錯誤
@@ -125,6 +127,15 @@ pub enum DeploymentError {
     MaxPlayerUnitsReached { max: usize },
     #[error("位置 ({x}, {y}) 沒有已部署的玩家單位可以取消")]
     NothingToUndeploy { x: Coord, y: Coord },
+}
+
+/// 反應系統錯誤
+#[derive(Debug, ThisError)]
+pub enum ReactionError {
+    #[error("沒有待處理的反應，請先呼叫 execute_move 或 set_reactions")]
+    NoPendingReactions,
+    #[error("佔據者 {occupant:?} 不在待反應清單中")]
+    ReactorNotFound { occupant: Occupant },
 }
 
 /// 單位相關錯誤

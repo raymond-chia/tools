@@ -40,7 +40,7 @@ fn test_execute_move_success() {
 . . T . .
 . . P . .
 . . . . ."#,
-            vec![(2, 0)],
+            vec![(2, 1), (2, 0)],
             BASIC_MOVEMENT_COST * 1,
         ),
         (
@@ -49,7 +49,7 @@ fn test_execute_move_success() {
 . . . . .
 . . P . .
 . . T . ."#,
-            vec![(2, 2)],
+            vec![(2, 1), (2, 2)],
             BASIC_MOVEMENT_COST * 1,
         ),
         (
@@ -58,7 +58,7 @@ fn test_execute_move_success() {
 . . . . .
 . T P . .
 . . . . ."#,
-            vec![(1, 1)],
+            vec![(2, 1), (1, 1)],
             BASIC_MOVEMENT_COST * 1,
         ),
         (
@@ -67,7 +67,7 @@ fn test_execute_move_success() {
 . . . . .
 T . P . .
 . . . . ."#,
-            vec![(1, 1), (0, 1)],
+            vec![(2, 1), (1, 1), (0, 1)],
             BASIC_MOVEMENT_COST * 2,
         ),
         (
@@ -76,7 +76,7 @@ T . P . .
 . . . . .
 . . P T .
 . . . . ."#,
-            vec![(3, 1)],
+            vec![(2, 1), (3, 1)],
             BASIC_MOVEMENT_COST * 1,
         ),
         (
@@ -85,7 +85,7 @@ T . P . .
 . . . . .
 . . P . T
 . . . . ."#,
-            vec![(3, 1), (4, 1)],
+            vec![(2, 1), (3, 1), (4, 1)],
             BASIC_MOVEMENT_COST * 2,
         ),
         (
@@ -94,7 +94,7 @@ T . P . .
 P A T . .
 . . . . .
 . . . . ."#,
-            vec![(1, 0), (2, 0)],
+            vec![(0, 0), (1, 0), (2, 0)],
             BASIC_MOVEMENT_COST * 2,
         ),
         (
@@ -103,7 +103,7 @@ P A T . .
 . P . . .
 . A . . .
 . T . . ."#,
-            vec![(1, 1), (1, 2)],
+            vec![(1, 0), (1, 1), (1, 2)],
             BASIC_MOVEMENT_COST * 2,
         ),
         (
@@ -112,7 +112,7 @@ P A T . .
 P p T . .
 . . . . .
 . . . . ."#,
-            vec![(1, 0), (2, 0)],
+            vec![(0, 0), (1, 0), (2, 0)],
             BASIC_MOVEMENT_COST * 2 + 10,
         ),
         (
@@ -121,7 +121,7 @@ P p T . .
 . . P . .
 . . p . .
 . . T . ."#,
-            vec![(2, 1), (2, 2)],
+            vec![(2, 0), (2, 1), (2, 2)],
             BASIC_MOVEMENT_COST * 2 + 10,
         ),
         (
@@ -130,7 +130,7 @@ P p T . .
 . p p p .
 P p p p T
 . . . . ."#,
-            vec![(0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (4, 1)],
+            vec![(0, 1), (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (4, 1)],
             BASIC_MOVEMENT_COST * 6,
         ),
     ];

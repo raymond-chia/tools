@@ -1,7 +1,7 @@
 //! ECS World Resource 定義
 
 use crate::domain::alias::{Coord, ID, SkillName, TypeName};
-use crate::domain::core_types::{SkillType, TurnEntry};
+use crate::domain::core_types::{PendingReaction, SkillType, TurnEntry};
 use crate::ecs_types::components::{Occupant, Position};
 use crate::loader_schema::{Faction, ObjectType, UnitType};
 use bevy_ecs::entity::Entity;
@@ -59,4 +59,14 @@ pub struct SkillTargeting {
     pub skill_name: SkillName,
     pub picked: Vec<Position>,
     pub max_count: usize,
+}
+
+/// 反應狀態 Resource
+///
+/// - `pending`：等待玩家決定的反應清單（`set_reactions` 前存在）
+/// - `queue`：已決定待執行的反應序列，tuple 為 `(reactor, skill_name, trigger)`
+#[derive(Debug, Clone, Resource)]
+pub struct ReactionState {
+    pub pending: Vec<PendingReaction>,
+    pub queue: Vec<(Occupant, SkillName, Occupant)>,
 }

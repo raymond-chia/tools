@@ -4,7 +4,11 @@ pub const SKILL_WARRIOR_ACTIVE_2: &str = "warrior-active-2";
 pub const SKILL_WARRIOR_ACTIVE_4: &str = "warrior-active-4";
 pub const SKILL_DIAMOND_AOE: &str = "diamond-aoe-1";
 pub const SKILL_SUMMON_WALL_AOE: &str = "summon-wall-aoe";
+pub const SKILL_WARRIOR_REACTION: &str = "warrior-reaction";
+pub const SKILL_WARRIOR_REACTION_2: &str = "warrior-reaction-2";
+pub const SKILL_WARRIOR_COUNTER: &str = "warrior-counter";
 pub const UNIT_TYPE_WARRIOR: &str = "warrior";
+pub const UNIT_TYPE_WARRIOR_B: &str = "warrior-b";
 pub const UNIT_TYPE_MAGE: &str = "mage";
 pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_PIT: &str = "pit";
@@ -28,6 +32,12 @@ value = 100
 [skills.Passive.effects.AttributeFlat]
 attribute = "MovementPoint"
 value = 50
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 10
 
 [[skills]]
 
@@ -70,7 +80,7 @@ who = "Target"
 [skills.Active.effects.Leaf.effect.HpEffect.scaling]
 source = "Caster"
 source_attribute = "PhysicalAttack"
-value_percent = 100
+value_percent = -100
 
 [[skills]]
 
@@ -95,7 +105,7 @@ who = "Target"
 [skills.Active.effects.Leaf.effect.HpEffect.scaling]
 source = "Caster"
 source_attribute = "PhysicalAttack"
-value_percent = 120
+value_percent = -120
 
 [[skills]]
 
@@ -120,7 +130,7 @@ who = "Target"
 [skills.Active.effects.Leaf.effect.HpEffect.scaling]
 source = "Caster"
 source_attribute = "PhysicalAttack"
-value_percent = 60
+value_percent = -60
 
 [[skills]]
 
@@ -142,7 +152,7 @@ who = "Target"
 [skills.Reaction.effects.Leaf.effect.HpEffect.scaling]
 source = "Caster"
 source_attribute = "PhysicalAttack"
-value_percent = 100
+value_percent = -100
 
 [[skills]]
 
@@ -204,13 +214,61 @@ who = "Target"
 [skills.Active.effects.Area.nodes.Leaf.effect.SpawnObject]
 object_type = "wall"
 contact_effects = []
+
+[[skills]]
+
+[skills.Reaction]
+name = "warrior-reaction-2"
+tags = []
+cost = 1
+
+[skills.Reaction.triggering_unit]
+source_range = [1, 1]
+source_filter = "Enemy"
+trigger = "AttackOfOpportunity"
+
+[[skills.Reaction.effects]]
+
+[skills.Reaction.effects.Leaf]
+who = "Target"
+
+[skills.Reaction.effects.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = -50
+
+[[skills]]
+
+[skills.Reaction]
+name = "warrior-counter"
+tags = []
+cost = 1
+
+[skills.Reaction.triggering_unit]
+source_range = [1, 1]
+source_filter = "Enemy"
+trigger = "TakesDamage"
+
+[[skills.Reaction.effects]]
+
+[skills.Reaction.effects.Leaf]
+who = "Target"
+
+[skills.Reaction.effects.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = -100
 "#;
 
 /// 最小單位 TOML：包含一個 warrior 單位類型
 pub const UNITS_TOML: &str = r#"
 [[units]]
 name = "warrior"
-skills = ["warrior-passive", "melee-attack", "warrior-active-2", "warrior-active-4", "warrior-reaction"]
+skills = ["warrior-passive", "melee-attack", "warrior-active-2", "warrior-active-4", "warrior-reaction", "warrior-counter"]
+
+[[units]]
+name = "warrior-b"
+skills = ["warrior-passive", "melee-attack", "warrior-reaction", "warrior-reaction-2"]
 
 [[units]]
 name = "mage"

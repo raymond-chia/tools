@@ -157,7 +157,7 @@ where
 
 /// 從 reachable_positions 的結果中，回溯從起點到目標的路徑
 ///
-/// 返回不含起點、含目標的位置序列
+/// 返回含起點、含目標的完整位置序列
 pub fn reconstruct_path(
     reachable: &HashMap<Position, ReachableInfo>,
     start: Position,
@@ -175,6 +175,7 @@ pub fn reconstruct_path(
         current = previous;
     }
 
+    path.push(start);
     path.reverse();
     path
 }
