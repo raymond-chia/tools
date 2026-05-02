@@ -4,7 +4,7 @@ use crate::domain::alias::SkillName;
 use crate::domain::core_types::PendingReaction;
 use crate::ecs_types::components::Occupant;
 use crate::ecs_types::resources::ReactionState;
-use crate::error::Result;
+use crate::error::{ReactionError, Result, UnitError};
 use crate::logic::skill::skill_execution::EffectEntry;
 use bevy_ecs::prelude::World;
 
@@ -30,8 +30,41 @@ pub fn get_pending_reactions(world: &World) -> Vec<PendingReaction> {
 }
 
 /// 設定反應決策，將 pending 轉換為 queue
-pub fn set_reactions(world: &mut World, _decisions: Vec<(Occupant, SkillName)>) -> Result<()> {
-    unimplemented!("set_reactions 尚未實作")
+///
+/// - `decisions`：[(reactor, skill_name)] 按執行順序排列，未出現的 reactor 視為放棄
+/// - 若 ReactionState 不存在或 pending 為空，回傳 Err
+/// - 若 reactor 不在 pending 清單中，或技能不在可用清單中，回傳 Err
+pub fn set_reactions(world: &mut World, decisions: Vec<(Occupant, SkillName)>) -> Result<()> {
+    let state = world
+        .get_resource::<ReactionState>()
+        .ok_or(ReactionError::NoPendingReactions)?;
+    if state.pending.is_empty() {
+        return Err(ReactionError::NoPendingReactions.into());
+    }
+
+    let pending = state.pending.clone();
+
+    let mut queue = Vec::new();
+    for (reactor, skill_name) in decisions {
+        let entry = pending
+            .iter()
+            .find(|r| r.reactor == reactor)
+            .ok_or(ReactionError::ReactorNotFound { occupant: reactor })?;
+
+        if !entry.available_skills.contains(&skill_name) {
+            return Err(UnitError::SkillNotFound { skill_name }.into());
+        }
+
+        queue.push((reactor, skill_name, entry.trigger));
+    }
+
+    let mut state = world
+        .get_resource_mut::<ReactionState>()
+        .ok_or(ReactionError::NoPendingReactions)?;
+    state.pending = vec![];
+    state.queue = queue;
+
+    Ok(())
 }
 
 /// 執行 queue 中的下一個反應
