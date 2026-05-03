@@ -6,6 +6,8 @@ edition = "2024"
 [features]
 # 啟用測試輔助模組（test_helpers），僅供 dev-dependencies 使用
 test-helpers = []
+# 啟用 SkillType 等型別的 Clone，供 editor crate 使用
+clone-skill = []
 
 [dependencies]
 bevy_ecs.workspace = true

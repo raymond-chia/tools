@@ -18,7 +18,6 @@ use board::ecs_logic::spawner::spawn_level;
 use board::ecs_logic::turn::start_new_round;
 use board::ecs_types::components::{Initiative, Occupant, Position, ReactionPoint, Unit};
 use board::ecs_types::resources::ReactionState;
-use board::logic::skill::skill_execution::EffectEntry;
 use board::test_helpers::level_builder::{LevelBuilder, load_from_ascii};
 use std::collections::HashMap;
 
@@ -329,9 +328,9 @@ fn test_set_reactions_errors() {
 // process_reactions 錯誤情境
 // ============================================================================
 
-/// 補充錯誤情境：`set_reactions` 傳空決定後呼叫 `process_reactions` 應回傳 Err
+/// 補充情境：`set_reactions` 傳空決定後呼叫 `process_reactions` 應回傳 Done
 #[test]
-fn test_process_reactions_err_when_no_decisions() {
+fn test_process_reactions_done_when_no_decisions() {
     let (mut world, markers) = build_reaction_world(
         r#"
 P E . . ."#,
@@ -352,11 +351,12 @@ P E . . ."#,
     // 傳空決定（全部放棄）
     set_reactions(&mut world, vec![]).expect("空決定 set_reactions 應成功");
 
-    // 沒有待執行項目，呼叫 process_reactions 應 Err
-    let result = process_reactions(&mut world);
+    // 沒有待執行項目，呼叫 process_reactions 應回傳 Done
+    let result = process_reactions(&mut world).expect("process_reactions 應成功");
     assert!(
-        result.is_err(),
-        "無待執行反應時 process_reactions 應回傳 Err"
+        matches!(result, ProcessReactionResult::Done),
+        "無待執行反應時 process_reactions 應回傳 Done，實際：{:?}",
+        result
     );
 }
 

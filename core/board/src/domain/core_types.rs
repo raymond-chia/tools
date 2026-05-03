@@ -3,6 +3,7 @@
 use crate::domain::alias::{Coord, SkillName, TypeName};
 use crate::ecs_types::components::Occupant;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use strum_macros::{Display, EnumIter};
 
 // ============================================================================
@@ -224,7 +225,9 @@ pub struct Scaling {
 // ============================================================================
 
 /// 效果節點（遞迴巢狀結構）
-#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
+/// 禁止在非測試程式碼中 clone（效能考量，應使用引用）
+#[derive(Debug, Serialize, Deserialize, Display, EnumIter)]
+#[cfg_attr(any(test, feature = "clone-skill"), derive(Clone))]
 pub enum EffectNode {
     Area {
         area: Area,
@@ -244,7 +247,8 @@ pub enum EffectNode {
 }
 
 /// 技能效果
-#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
+#[derive(Debug, Serialize, Deserialize, Display, EnumIter)]
+#[cfg_attr(any(test, feature = "clone-skill"), derive(Clone))]
 pub enum Effect {
     HpEffect {
         scaling: Scaling,
@@ -317,21 +321,23 @@ pub enum ContinuousEffect {
 // ============================================================================
 
 /// 技能類型定義
-#[derive(Debug, Clone, Serialize, Deserialize, Display, EnumIter)]
+/// 禁止在非測試程式碼中 clone（效能考量，應使用引用）
+#[derive(Debug, Serialize, Deserialize, Display, EnumIter)]
+#[cfg_attr(any(test, feature = "clone-skill"), derive(Clone))]
 pub enum SkillType {
     Active {
         name: SkillName,
         tags: Vec<SkillTag>,
         cost: u32,
         target: Target,
-        effects: Vec<EffectNode>,
+        effects: Arc<[EffectNode]>,
     },
     Reaction {
         name: SkillName,
         tags: Vec<SkillTag>,
         cost: u32,
         triggering_unit: TriggeringSource,
-        effects: Vec<EffectNode>,
+        effects: Arc<[EffectNode]>,
     },
     Passive {
         name: SkillName,
@@ -341,7 +347,8 @@ pub enum SkillType {
 }
 
 /// Buff 定義（內嵌在技能 TOML 中）
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "clone-skill"), derive(Clone))]
 pub struct BuffType {
     pub name: String,
     pub stackable: bool,
@@ -405,7 +412,7 @@ impl Default for SkillType {
             tags: Vec::default(),
             cost: 0,
             target: Target::default(),
-            effects: Vec::default(),
+            effects: Arc::from([]),
         }
     }
 }

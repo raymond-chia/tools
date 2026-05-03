@@ -11,6 +11,7 @@ use crate::logic::id_generator::generate_unique_id;
 use crate::logic::skill::unit_attributes;
 use bevy_ecs::prelude::World;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 /// 反序列化並生成關卡的所有 Entity（棋盤、單位、物件）
 pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Result<()> {
@@ -74,7 +75,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                     occupant: Occupant::Object(id),
                     occupant_type_name: OccupantTypeName(object_type.name.clone()),
                     terrain_movement_cost: ObjectMovementCost(object_type.movement_cost),
-                    contact_effects: ContactEffects(Vec::new()),
+                    contact_effects: ContactEffects(Arc::from([])),
                 },
                 object_type.blocks_sight.then_some(BlocksSight),
                 object_type.blocks_sound.then_some(BlocksSound),

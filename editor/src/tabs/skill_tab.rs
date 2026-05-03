@@ -15,6 +15,7 @@ use board::domain::core_types::{
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::mem::discriminant;
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 
 /// 技能編輯器的 UI 狀態
@@ -446,7 +447,9 @@ pub fn render_form(
             ui.add_space(SPACING_SMALL);
             ui.separator();
             ui.heading("效果節點");
-            render_effect_node_list(ui, effects, "active_effects", 0, ui_state);
+            let mut active_nodes = effects.to_vec();
+            render_effect_node_list(ui, &mut active_nodes, "active_effects", 0, ui_state);
+            *effects = Arc::from(active_nodes);
         }
         SkillType::Reaction {
             triggering_unit,
@@ -458,7 +461,9 @@ pub fn render_form(
             ui.add_space(SPACING_SMALL);
             ui.separator();
             ui.heading("效果節點");
-            render_effect_node_list(ui, effects, "reaction_effects", 0, ui_state);
+            let mut reaction_nodes = effects.to_vec();
+            render_effect_node_list(ui, &mut reaction_nodes, "reaction_effects", 0, ui_state);
+            *effects = Arc::from(reaction_nodes);
         }
         SkillType::Passive { effects, .. } => {
             ui.heading("持續效果");

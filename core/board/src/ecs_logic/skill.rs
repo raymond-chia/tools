@@ -27,6 +27,7 @@ use crate::logic::skill::{CasterInfo, UnitInfo, is_in_filter, manhattan_distance
 use bevy_ecs::prelude::{Entity, With, World};
 use rand::RngExt;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// 可用技能資訊
 pub struct AvailableSkill {
@@ -447,7 +448,7 @@ pub fn execute_skill(
             Some(SkillType::Active { tags, .. }) => tags.clone(),
             _ => Vec::new(),
         };
-        (target.clone(), effects.to_vec(), cost, skill_tags)
+        (target, effects, cost, skill_tags)
     };
 
     if caster_mp < cost as i32 {
@@ -610,7 +611,7 @@ pub fn execute_skill(
                     occupant: Occupant::Object(id),
                     occupant_type_name: OccupantTypeName(object_type.clone()),
                     terrain_movement_cost: ObjectMovementCost(0),
-                    contact_effects: ContactEffects(Vec::new()),
+                    contact_effects: ContactEffects(Arc::from([])),
                 });
             }
             // TODO 其他效果類型的寫入邏輯

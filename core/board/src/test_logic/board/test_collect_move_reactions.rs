@@ -8,6 +8,7 @@ use crate::error::Result;
 use crate::logic::skill::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
 use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 const ALLY_ALLIANCE: ID = 1;
 const ENEMY_ALLIANCE: ID = 2;
@@ -88,7 +89,7 @@ fn reaction_skill(
             source_filter: filter,
             trigger: ReactionTrigger::AttackOfOpportunity,
         },
-        effects: Vec::new(),
+        effects: Arc::from([]),
     }
 }
 

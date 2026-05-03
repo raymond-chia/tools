@@ -5,6 +5,7 @@ use crate::domain::core_types::{BuffType, DefenseType, EffectNode};
 use bevy_ecs::bundle::Bundle;
 use bevy_ecs::component::Component;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 /// 生成 tag components 的 macro
 macro_rules! define_tag_components {
@@ -138,7 +139,7 @@ define_tag_components!(BlocksSight, BlocksSound);
 // - 每回合操作（像你這裡）：幾 KB 完全沒問題，甚至幾十 KB 都不會有感
 // - 真正該擔心的：大型集合（上千元素的 Vec/HashMap）在熱路徑中反覆 clone
 #[derive(Debug, Clone, Component)]
-pub struct ContactEffects(pub Vec<EffectNode>);
+pub struct ContactEffects(pub Arc<[EffectNode]>);
 
 /// 施加在單位上的 Buff
 /// Buff 施加後的運行時狀態

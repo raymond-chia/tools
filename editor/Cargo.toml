@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-board = { version = "0.1.0", path = "../core/board" }
+board = { version = "0.1.0", path = "../core/board", features = ["clone-skill"] }
 bevy_ecs.workspace = true
 eframe = "0.33.3"
 egui = "0.33.3"

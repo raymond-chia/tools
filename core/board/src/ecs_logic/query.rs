@@ -17,6 +17,7 @@ use bevy_ecs::lifecycle::{Add, Remove};
 use bevy_ecs::prelude::{Entity, On, Query, ResMut, Resource, With, World};
 use bevy_ecs::world::EntityRef;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// 查詢所有單位，以位置為 key
 pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>> {
@@ -180,10 +181,10 @@ pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<
 }
 
 /// 取得指定技能名稱對應的 Active 技能欄位；若非 Active 則視為 SkillNotFound
-pub(crate) fn get_active_skill_data<'a>(
-    game_data: &'a GameData,
+pub(crate) fn get_active_skill_data(
+    game_data: &GameData,
     skill_name: &SkillName,
-) -> Result<(&'a Target, &'a [EffectNode], u32)> {
+) -> Result<(Target, Arc<[EffectNode]>, u32)> {
     let skill_type =
         game_data
             .skill_map
@@ -198,7 +199,7 @@ pub(crate) fn get_active_skill_data<'a>(
             cost,
             tags: _,
             name: _,
-        } => Ok((target, effects, *cost)),
+        } => Ok((target.clone(), effects.clone(), *cost)),
         SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
             skill_name: skill_name.clone(),
         }

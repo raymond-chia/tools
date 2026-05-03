@@ -5,6 +5,7 @@ use crate::domain::core_types::{
 use crate::ecs_types::components::*;
 use crate::logic::skill::unit_attributes::{calculate_attributes, filter_continuous_effect};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 // 技能名稱常數
 const SKILL_PHYSICAL_ACCURACY: &str = "physical_accuracy";
@@ -36,7 +37,7 @@ fn create_active_skill() -> SkillType {
             allow_same_target: false,
             area: Area::Single,
         },
-        effects: vec![EffectNode::Leaf {
+        effects: Arc::from([EffectNode::Leaf {
             who: CasterOrTarget::Target,
             effect: Effect::HpEffect {
                 scaling: Scaling {
@@ -45,7 +46,7 @@ fn create_active_skill() -> SkillType {
                     value_percent: 100,
                 },
             },
-        }],
+        }]),
     }
 }
 
