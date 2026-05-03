@@ -32,8 +32,8 @@ fn test_parse_and_insert_game_data_sets_resource() {
     );
     assert_eq!(
         game_data.unit_type_map.len(),
-        3,
-        "unit_type_map 應包含 3 個單位類型"
+        4,
+        "unit_type_map 應包含 4 個單位類型"
     );
     assert!(
         game_data.unit_type_map.contains_key(UNIT_TYPE_WARRIOR),

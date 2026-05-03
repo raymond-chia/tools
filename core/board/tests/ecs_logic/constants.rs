@@ -9,6 +9,7 @@ pub const SKILL_WARRIOR_REACTION_2: &str = "warrior-reaction-2";
 pub const SKILL_WARRIOR_COUNTER: &str = "warrior-counter";
 pub const UNIT_TYPE_WARRIOR: &str = "warrior";
 pub const UNIT_TYPE_WARRIOR_B: &str = "warrior-b";
+pub const UNIT_TYPE_WARRIOR_COUNTER_ONLY: &str = "warrior-counter-only";
 pub const UNIT_TYPE_MAGE: &str = "mage";
 pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_PIT: &str = "pit";
@@ -273,6 +274,10 @@ skills = ["warrior-passive", "melee-attack", "warrior-reaction", "warrior-reacti
 [[units]]
 name = "mage"
 skills = ["mage-passive", "melee-attack", "diamond-aoe-1", "summon-wall-aoe"]
+
+[[units]]
+name = "warrior-counter-only"
+skills = ["warrior-passive", "warrior-counter"]
 "#;
 
 /// 最小物件 TOML：包含一個 wall 物件類型

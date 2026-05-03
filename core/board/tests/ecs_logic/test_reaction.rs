@@ -2,7 +2,8 @@
 
 use super::constants::{
     OBJECTS_TOML, SKILL_WARRIOR_COUNTER, SKILL_WARRIOR_REACTION, SKILL_WARRIOR_REACTION_2,
-    SKILLS_TOML, UNIT_TYPE_WARRIOR, UNIT_TYPE_WARRIOR_B, UNITS_TOML,
+    SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNIT_TYPE_WARRIOR_B,
+    UNIT_TYPE_WARRIOR_COUNTER_ONLY, UNITS_TOML,
 };
 use bevy_ecs::prelude::{Entity, With, World};
 use board::domain::alias::SkillName;
@@ -29,11 +30,22 @@ const ENEMY_FACTION_ID: u32 = 2;
 /// - P 的 Initiative 設為 100（確保先手）
 /// - 回傳 (world, markers)，呼叫端自行從 markers 查 occupant
 fn build_reaction_world(ascii: &str) -> (World, HashMap<String, Vec<Position>>) {
+    build_reaction_world_with(ascii, UNIT_TYPE_WARRIOR)
+}
+
+/// 建立含 P 和 E 的 World，E 的單位類型由呼叫端指定
+///
+/// - `enemy_unit_type`：ascii 中 "E" marker 對應的單位類型
+/// - ascii 中 "E1" 固定為 warrior，"E2" 固定為 warrior-b
+fn build_reaction_world_with(
+    ascii: &str,
+    enemy_unit_type: &str,
+) -> (World, HashMap<String, Vec<Position>>) {
     let (_, markers) = load_from_ascii(ascii).expect("load_from_ascii 應成功");
 
     let level_toml = LevelBuilder::from_ascii(ascii)
         .unit("P", UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID)
-        .unit("E", UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID)
+        .unit("E", enemy_unit_type, ENEMY_FACTION_ID)
         .unit("E1", UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID)
         .unit("E2", UNIT_TYPE_WARRIOR_B, ENEMY_FACTION_ID)
         .to_toml()
@@ -844,4 +856,50 @@ P E . .
         "反應鏈結束應回傳 Done，實際：{:?}",
         result
     );
+}
+
+/// 整合測試 4：不觸發 AttackOfOpportunity 的情況，P 應直達目的地
+///
+/// | # | 敵人類型               | 說明                                              |
+/// |---|----------------------|--------------------------------------------------|
+/// | 1 | 無技能（mage）        | 路過沒有任何反應技能的單位，不觸發                  |
+/// | 2 | 只有 TakesDamage     | warrior-counter-only 只有 TakesDamage，不觸發移動反應 |
+///
+/// 地圖：P(0,0)  E(1,0)  .(2,0)  T(3,0)
+#[test]
+fn test_reaction_no_attack_of_opportunity() {
+    struct TestCase {
+        name: &'static str,
+        enemy_unit_type: &'static str,
+    }
+
+    let test_data = [
+        TestCase {
+            name: "路過沒有反應技能的單位（mage）",
+            enemy_unit_type: UNIT_TYPE_MAGE,
+        },
+        TestCase {
+            name: "路過只有 TakesDamage 技能的單位（warrior-counter-only）",
+            enemy_unit_type: UNIT_TYPE_WARRIOR_COUNTER_ONLY,
+        },
+    ];
+
+    let ascii = r#"
+P E . T
+. . . ."#;
+
+    for case in test_data {
+        let (mut world, markers) = build_reaction_world_with(ascii, case.enemy_unit_type);
+
+        let player_occupant = find_occupant(&mut world, markers["P"][0]);
+        let target_pos = markers["T"][0];
+
+        execute_move(&mut world, target_pos).expect("移動應成功");
+
+        let pending = get_pending_reactions(&world);
+        assert_eq!(pending.len(), 0, "[{}] 移動後不應有待反應者", case.name);
+
+        let player_pos = find_current_pos(&mut world, player_occupant);
+        assert_eq!(player_pos, target_pos, "[{}] P 應直達目的地", case.name);
+    }
 }
