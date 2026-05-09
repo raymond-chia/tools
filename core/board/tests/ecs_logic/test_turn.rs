@@ -3,7 +3,7 @@
 use super::constants::{UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::ecs_logic::movement::execute_move;
+use board::ecs_logic::movement::{advance_move, plan_move};
 use board::ecs_logic::turn::{
     can_delay_current_unit, delay_current_unit, end_battle, end_current_turn, get_turn_order,
     remove_dead_unit, start_new_round,
@@ -309,7 +309,8 @@ fn test_can_delay_current_unit_based_on_movement() {
 
     // 移動後不可延遲
     let target = Position { x: 1, y: 0 };
-    execute_move(&mut world, target).expect("移動應成功");
+    plan_move(&mut world, target).expect("plan_move 應成功");
+    advance_move(&mut world).expect("移動應成功");
     let can_delay = can_delay_current_unit(&mut world).expect("查詢應成功");
     assert!(!can_delay, "移動後不可延遲");
     let result = delay_current_unit(&mut world, 1);

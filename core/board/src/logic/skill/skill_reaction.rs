@@ -12,7 +12,7 @@ use std::collections::HashMap;
 pub struct ReactionUnitInfo<'a> {
     pub unit_info: UnitInfo,
     pub remaining_reactions: i32,
-    pub skills: &'a [SkillType],
+    pub skills: Vec<&'a SkillType>,
 }
 
 /// 單一反應者的反應結果

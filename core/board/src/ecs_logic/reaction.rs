@@ -62,7 +62,7 @@ pub fn set_reactions(world: &mut World, decisions: Vec<(Occupant, SkillName)>) -
         .get_resource_mut::<ReactionState>()
         .ok_or(ReactionError::NoPendingReactions)?;
     state.pending = vec![];
-    state.queue = queue;
+    state.decided = queue;
 
     Ok(())
 }

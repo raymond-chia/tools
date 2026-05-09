@@ -53,7 +53,7 @@ fn to_reaction_map<'a>(
                     ReactionUnitInfo {
                         unit_info: entry.unit_info.clone(),
                         remaining_reactions: config.remaining_reactions,
-                        skills: &config.skills,
+                        skills: config.skills.iter().collect(),
                     },
                 )
             })

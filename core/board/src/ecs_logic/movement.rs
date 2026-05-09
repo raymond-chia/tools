@@ -1,26 +1,39 @@
 //! ECS 移動操作函數
 
 use super::{get_component, get_component_mut};
-use crate::domain::alias::{ID, MovementCost};
+use crate::domain::alias::{ID, MovementCost, SkillName};
 use crate::domain::constants::BASIC_MOVEMENT_COST;
+use crate::domain::core_types::{PendingReaction, ReactionTrigger, SkillType};
 use crate::ecs_logic::query::{
-    build_faction_alliance_map, find_entity_by_occupant, get_resource, resolve_alliance,
+    build_faction_alliance_map, find_entity_by_occupant, get_resource, get_resource_mut,
+    resolve_alliance,
 };
 use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
-    ActionState, MovementPoint, Object, ObjectMovementCost, Occupant, Position, Unit, UnitFaction,
+    ActionState, MovementPoint, Object, ObjectMovementCost, Occupant, Position, ReactionPoint,
+    Skills, Unit, UnitFaction,
 };
-use crate::ecs_types::resources::{Board, TurnOrder};
-use crate::error::{BoardError, Result};
+use crate::ecs_types::resources::{Board, GameData, MovementPlan, ReactionState, TurnOrder};
+use crate::error::{BoardError, DataError, Result};
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
+use crate::logic::skill::UnitInfo;
+use crate::logic::skill::skill_reaction::{ReactionUnitInfo, collect_move_reactions};
 use bevy_ecs::prelude::{With, World};
 use std::collections::HashMap;
 
-/// 移動結果，包含路徑與消耗
+/// advance_move 的回傳值
 #[derive(Debug, Clone)]
-pub struct MoveResult {
-    pub path: Vec<Position>,
-    pub cost: MovementCost,
+pub enum AdvanceMoveResult {
+    /// 走完整段路徑，移動結束
+    Completed {
+        path_walked: Vec<Position>,
+        cost: MovementCost,
+    },
+    /// 走到某格觸發反應，停在該格等待反應處理
+    Interrupted {
+        path_walked: Vec<Position>,
+        cost: MovementCost,
+    },
 }
 
 /// 計算單位可到達的所有位置
@@ -30,7 +43,6 @@ pub fn get_reachable_positions(
     world: &mut World,
     occupant: Occupant,
 ) -> Result<HashMap<Position, ReachableInfo>> {
-    // 查詢單位的位置、陣營與移動資訊
     let entity = find_entity_by_occupant(world, occupant)?;
     let entity_ref = world.entity(entity);
     let unit_pos = *get_component!(entity_ref, Position)?;
@@ -49,7 +61,6 @@ pub fn get_reachable_positions(
     // 計算可用預算（2 倍移動力 - 已使用的）
     let budget = movement_point * 2 - movement_used;
 
-    // 構建 occupant closure（查詢位置上的佔據者所屬的同盟）
     let get_occupant_alliance = |pos: Position| -> Option<ID> {
         units_faction.get(&pos).and_then(|faction_id| {
             faction_to_alliance
@@ -59,10 +70,8 @@ pub fn get_reachable_positions(
         })
     };
 
-    // 構建 terrain_cost closure（物件消耗疊加在基礎消耗上）
     let get_terrain_cost = |pos: Position| -> MovementCost {
-        let base_cost = BASIC_MOVEMENT_COST;
-        base_cost + objects_movement_cost.get(&pos).copied().unwrap_or(0)
+        BASIC_MOVEMENT_COST + objects_movement_cost.get(&pos).copied().unwrap_or(0)
     };
 
     let mover_alliance = resolve_alliance(&faction_to_alliance, faction)?;
@@ -81,28 +90,18 @@ pub fn get_reachable_positions(
     )
 }
 
-/// 執行單位移動到指定位置
+/// 規劃移動路徑並存入 MovementPlan resource
 ///
-/// 執行步驟：
-/// 1. 驗證目標位置可到達
-/// 2. 計算移動路徑
-/// 3. 更新單位位置
-/// 4. 累加 MovementUsed
-///
-/// # 驗證：
-/// - 目標位置不能被佔據（友軍或敵軍）
-/// - 目標位置必須在可到達集合內
-/// - 移動消耗不能超過可用預算
-pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
+/// 驗證目標位置可到達後，將完整路徑存入 resource。
+/// 後續呼叫 advance_move 或 force_advance_move 才真正移動單位。
+pub fn plan_move(world: &mut World, target: Position) -> Result<()> {
     // 從 TurnOrder 取得當前行動單位
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
     let occupant = get_current_unit(turn_order)?;
 
-    // 驗證佔據者存在並取得起點位置與 Entity
     let entity = find_entity_by_occupant(world, occupant)?;
     let start_pos = *get_component!(world.entity(entity), Position)?;
 
-    // 計算可到達位置
     let reachable = get_reachable_positions(world, occupant)?;
 
     // 驗證目標位置是否可到達且不是僅穿越位置
@@ -122,43 +121,250 @@ pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult> {
         .into());
     }
 
-    let cost_to_target = reach_info.cost;
-
-    // 計算路徑
+    // path 含起點：[start, step1, ..., target]
     let path = reconstruct_path(&reachable, start_pos, target);
 
-    // 更新位置和消耗
+    // step_costs[0] = 0（起點），step_costs[i] = 走到 path[i] 的移動消耗
+    let mut step_costs = Vec::with_capacity(path.len());
+    step_costs.push(0);
+    for i in 1..path.len() {
+        let prev_cumulative = if i == 1 {
+            0
+        } else {
+            reachable
+                .get(&path[i - 1])
+                .expect("path 中的位置必定在 reachable 內")
+                .cost
+        };
+        let curr_cumulative = reachable
+            .get(&path[i])
+            .expect("path 中的位置必定在 reachable 內")
+            .cost;
+        step_costs.push(curr_cumulative - prev_cumulative);
+    }
+
+    world.insert_resource(MovementPlan {
+        path,
+        step_costs,
+        next_step_index: 0,
+    });
+
+    Ok(())
+}
+
+/// 沿著 MovementPlan 的路徑移動，每格檢查反應
+///
+/// 遇到反應時停在觸發格，寫入 ReactionState 並回傳 Interrupted。
+/// 反應處理完後再次呼叫此函數繼續走剩餘路徑。
+/// 走完整段路徑後移除 MovementPlan 並回傳 Completed。
+pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
+    // === 讀取階段 ===
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let occupant = get_current_unit(turn_order)?;
+
+    let entity = find_entity_by_occupant(world, occupant)?;
+    let mover_faction = get_component!(world.entity(entity), UnitFaction)?.0;
+
+    let MovementPlan {
+        path,
+        step_costs,
+        next_step_index,
+    } = get_resource::<MovementPlan>(world, "請先呼叫 plan_move")?.clone();
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+    let mover_alliance = resolve_alliance(&faction_to_alliance, mover_faction)?;
+    let mover_info = UnitInfo {
+        occupant,
+        faction_id: mover_faction,
+        alliance_id: mover_alliance,
+    };
+
+    let reaction_unit_map = build_reaction_unit_map(world, &faction_to_alliance)?;
+
+    // === 純邏輯 ===
+    // path[next_step_index..] 從當前位置開始，含當前格作為 from
+    let reaction_result =
+        collect_move_reactions(&mover_info, &path[next_step_index..], &reaction_unit_map)?;
+    let stop_pos = reaction_result.stop_position;
+    let has_reactions = !reaction_result.reactions.is_empty();
+
+    // steps_to_stop：在 path[next_step_index..] 中的 index，即走了幾步
+    let steps_to_stop = path[next_step_index..]
+        .iter()
+        .position(|p| *p == stop_pos)
+        .ok_or_else(|| DataError::InternalError {
+            message: format!(
+                "collect_move_reactions 回傳的 stop_position {:?} 不在 path[{}..] 中",
+                stop_pos, next_step_index
+            ),
+        })?;
+
+    let stop_index = next_step_index + steps_to_stop;
+    let walked_path: Vec<Position> = path[next_step_index..=stop_index].to_vec();
+    let walked_cost: MovementCost = step_costs[next_step_index + 1..=stop_index].iter().sum();
+    let reached_end = stop_index == path.len() - 1;
+
+    // === 寫入階段 ===
+    let entity = find_entity_by_occupant(world, occupant)?;
     let mut entity_mut = world.entity_mut(entity);
     {
         let mut pos = get_component_mut!(entity_mut, Position)?;
-        *pos = target;
+        *pos = stop_pos;
     }
     {
         let mut action_state = get_component_mut!(entity_mut, ActionState)?;
         match action_state.as_ref() {
             ActionState::Moved { cost } => {
                 *action_state = ActionState::Moved {
-                    cost: cost + cost_to_target,
+                    cost: cost + walked_cost,
                 };
             }
             ActionState::Done => {
-                // 理論上不會到這裡，因為 budget 為 0 時 reachable 為空
-                unreachable!("ActionState::Done 時不應有可到達位置");
+                unreachable!("ActionState::Done 時不應有 reachable");
             }
         }
     }
 
-    Ok(MoveResult {
-        path,
-        cost: cost_to_target,
+    if reached_end {
+        world.remove_resource::<MovementPlan>();
+    } else {
+        let mut plan_mut = get_resource_mut::<MovementPlan>(world, "請先呼叫 plan_move")?;
+        plan_mut.next_step_index = stop_index;
+    }
+
+    if has_reactions {
+        let pending: Vec<PendingReaction> = reaction_result
+            .reactions
+            .into_iter()
+            .map(|r| PendingReaction {
+                reactor: r.occupant,
+                trigger: occupant,
+                trigger_event: ReactionTrigger::AttackOfOpportunity,
+                available_skills: r.skill_names,
+            })
+            .collect();
+        world.insert_resource(ReactionState {
+            pending,
+            decided: vec![],
+        });
+        return Ok(AdvanceMoveResult::Interrupted {
+            path_walked: walked_path,
+            cost: walked_cost,
+        });
+    }
+
+    Ok(AdvanceMoveResult::Completed {
+        path_walked: walked_path,
+        cost: walked_cost,
     })
 }
 
+/// 強制沿著 MovementPlan 走下一格，不檢查反應
+///
+/// 用於反應觸發後強制離開觸發格，避免重複觸發。
+/// 走完整段路徑時移除 MovementPlan 並回傳 Completed。
+pub fn force_advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let occupant = get_current_unit(turn_order)?;
+
+    let MovementPlan {
+        path,
+        step_costs,
+        next_step_index,
+    } = get_resource::<MovementPlan>(world, "請先呼叫 plan_move")?.clone();
+
+    let new_next_step_index = next_step_index + 1;
+    let next_pos = path[new_next_step_index];
+    let this_step_cost = step_costs[new_next_step_index];
+
+    let entity = find_entity_by_occupant(world, occupant)?;
+    let mut entity_mut = world.entity_mut(entity);
+    {
+        let mut pos = get_component_mut!(entity_mut, Position)?;
+        *pos = next_pos;
+    }
+    {
+        let mut action_state = get_component_mut!(entity_mut, ActionState)?;
+        match action_state.as_ref() {
+            ActionState::Moved { cost } => {
+                *action_state = ActionState::Moved {
+                    cost: cost + this_step_cost,
+                };
+            }
+            ActionState::Done => {
+                unreachable!("ActionState::Done 時不應有 reachable");
+            }
+        }
+    }
+
+    world.remove_resource::<MovementPlan>();
+    return Ok(AdvanceMoveResult::Completed {
+        path_walked: vec![next_pos],
+        cost: this_step_cost,
+    });
+}
+
 // ============================================================================
-// 移動系統專用查詢函式（精簡快照，避免複製整份 bundle）
+// 私有輔助函數
 // ============================================================================
 
-/// 取得單位 faction 對應，只複製必要的 faction_id 欄位
+fn build_reaction_unit_map<'a>(
+    world: &'a mut World,
+    faction_to_alliance: &'a HashMap<ID, ID>,
+) -> Result<HashMap<Position, ReactionUnitInfo<'a>>> {
+    let mut query = world.query_filtered::<(
+        &Position,
+        &Occupant,
+        &UnitFaction,
+        &ReactionPoint,
+        &Skills,
+    ), With<Unit>>();
+
+    // 先快照原始資料釋放 world borrow，再借用 game_data 查詢 SkillType
+    let snapshots: Vec<(Position, Occupant, ID, i32, Vec<SkillName>)> = query
+        .iter(world)
+        .filter(|(_, _, _, reaction_point, _)| reaction_point.0 > 0)
+        .map(|(pos, occupant, faction, reaction_point, skills)| {
+            (
+                *pos,
+                *occupant,
+                faction.0,
+                reaction_point.0,
+                skills.0.clone(),
+            )
+        })
+        .collect();
+
+    let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
+
+    let mut result = HashMap::new();
+    for (pos, occupant, faction_id, remaining_reactions, skill_names) in snapshots {
+        let alliance_id = resolve_alliance(faction_to_alliance, faction_id)?;
+
+        let skills: Vec<&'a SkillType> = skill_names
+            .iter()
+            .filter_map(|name| game_data.skill_map.get(name))
+            .filter(|s| matches!(s, SkillType::Reaction { .. }))
+            .collect();
+
+        result.insert(
+            pos,
+            ReactionUnitInfo {
+                unit_info: UnitInfo {
+                    occupant,
+                    faction_id,
+                    alliance_id,
+                },
+                remaining_reactions,
+                skills,
+            },
+        );
+    }
+
+    Ok(result)
+}
+
+/// 取得單位 faction 對應表
 fn get_units_faction_map(world: &mut World) -> Result<HashMap<Position, ID>> {
     let mut result = HashMap::new();
     let mut query = world.query_filtered::<(&Position, &UnitFaction), With<Unit>>();
@@ -169,7 +375,7 @@ fn get_units_faction_map(world: &mut World) -> Result<HashMap<Position, ID>> {
     Ok(result)
 }
 
-/// 取得物件地形消耗對應，只複製必要的 terrain_movement_cost 欄位
+/// 取得物件地形消耗對應表
 fn get_objects_movement_cost_map(world: &mut World) -> Result<HashMap<Position, MovementCost>> {
     let mut result = HashMap::new();
     let mut query = world.query_filtered::<(&Position, &ObjectMovementCost), With<Object>>();

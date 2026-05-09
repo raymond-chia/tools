@@ -52,6 +52,8 @@ pub enum LoadError {
 /// 遊戲資料存取錯誤
 #[derive(Debug, ThisError)]
 pub enum DataError {
+    #[error("內部邏輯錯誤: {message}")]
+    InternalError { message: String },
     #[error("找不到 {name} resource\nNOTE: {note}")]
     MissingResource { name: String, note: String },
     #[error("{name} resource 已存在\nNOTE: {note}")]
@@ -132,7 +134,7 @@ pub enum DeploymentError {
 /// 反應系統錯誤
 #[derive(Debug, ThisError)]
 pub enum ReactionError {
-    #[error("沒有待處理的反應，請先呼叫 execute_move 或 set_reactions")]
+    #[error("沒有待處理的反應")]
     NoPendingReactions,
     #[error("佔據者 {occupant:?} 不在待反應清單中")]
     ReactorNotFound { occupant: Occupant },

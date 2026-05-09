@@ -366,6 +366,7 @@ pub struct BuffType {
 pub struct PendingReaction {
     pub reactor: Occupant,
     pub trigger: Occupant,
+    pub trigger_event: ReactionTrigger,
     pub available_skills: Vec<SkillName>,
 }
 

@@ -23,7 +23,7 @@ World 操作集中原則（ecs_logic）
 
 自訂錯誤型別
 
-- `core/` crate 為了容易解析錯誤，使用自訂 enum，不用 String、anyhow 等通用錯誤型別
+- `core/` crate 為了容易解析錯誤，使用自訂 enum，不用 String、anyhow 等通用錯誤型別。禁止使用 expect
 
 ## 開發方法（TDD）
 

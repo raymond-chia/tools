@@ -2,7 +2,7 @@
 
 use bevy_ecs::world::World;
 use board::domain::constants::BASIC_MOVEMENT_COST;
-use board::ecs_logic::movement::execute_move;
+use board::ecs_logic::movement::{AdvanceMoveResult, advance_move, plan_move};
 use board::ecs_logic::turn::{end_current_turn, start_new_round};
 use board::ecs_types::components::{Occupant, Position};
 use board::test_helpers::level_builder::load_from_ascii;
@@ -141,16 +141,22 @@ P p p p T
 
         start_new_round(&mut world).expect("start_new_round 應成功");
 
-        let result = execute_move(&mut world, target);
+        plan_move(&mut world, target).expect(&format!("Case '{}' plan_move 應成功", desc));
+        let result = advance_move(&mut world);
         assert!(result.is_ok(), "Case '{}' 應成功：{:?}", desc, result);
 
-        let move_result = result.expect("應成功");
+        let (path_walked, cost) = match result.expect("應成功") {
+            AdvanceMoveResult::Completed { path_walked, cost } => (path_walked, cost),
+            AdvanceMoveResult::Interrupted { .. } => {
+                panic!("Case '{}' 應 Completed，但回傳 Interrupted", desc)
+            }
+        };
         let expected_path: Vec<Position> = expected_path
             .into_iter()
             .map(|(x, y)| Position { x, y })
             .collect();
-        assert_eq!(move_result.path, expected_path, "Case '{}' 路徑不符", desc);
-        assert_eq!(move_result.cost, expected_cost, "Case '{}' 消耗不符", desc);
+        assert_eq!(path_walked, expected_path, "Case '{}' 路徑不符", desc);
+        assert_eq!(cost, expected_cost, "Case '{}' 消耗不符", desc);
 
         // 驗證 Position 已更新
         let mut query = world.query::<(&Occupant, &Position)>();
@@ -173,11 +179,17 @@ fn test_execute_move_accumulates_movement_used() {
         .enumerate()
     {
         // 第 1 次移動
-        let result = execute_move(&mut world, *target);
+        plan_move(&mut world, *target).expect(&format!("第 {} 次 plan_move 應成功", i + 1));
+        let result = advance_move(&mut world);
         assert!(result.is_ok(), "第 {} 次移動應成功：{:?}", i + 1, result);
 
-        let move_result = result.expect("應成功");
-        assert_eq!(move_result.cost, 20, "第 {} 次消耗應為 20", i + 1);
+        let cost = match result.expect("應成功") {
+            AdvanceMoveResult::Completed { cost, .. } => cost,
+            AdvanceMoveResult::Interrupted { .. } => {
+                panic!("第 {} 次移動應 Completed", i + 1)
+            }
+        };
+        assert_eq!(cost, 20, "第 {} 次消耗應為 20", i + 1);
 
         // 驗證位置已更新
         let mut query = world.query::<(&Occupant, &Position)>();
@@ -193,13 +205,13 @@ fn test_execute_move_accumulates_movement_used() {
         );
     }
 
-    let result = execute_move(&mut world, targets[1]);
+    let result = plan_move(&mut world, targets[1]);
     assert!(result.is_err(), "總共超出 2 倍移動力，移動應失敗");
 
     end_current_turn(&mut world).expect("結束回合應成功");
 
-    let result = execute_move(&mut world, targets[1]);
-    assert!(result.is_ok(), "移動力重置後，可以再次移動");
+    plan_move(&mut world, targets[1]).expect("移動力重置後 plan_move 應成功");
+    advance_move(&mut world).expect("移動力重置後，可以再次移動");
 }
 
 // ============================================================================
@@ -249,7 +261,7 @@ w . . . T
         let (mut world, _, _) = build_world(ascii);
         let target = markers[target_marker][0];
 
-        let result = execute_move(&mut world, target);
+        let result = plan_move(&mut world, target);
         assert!(result.is_err(), "Case '{}' 應回傳錯誤", desc);
     }
 }

@@ -629,10 +629,11 @@ fn handle_mouse_click(
                 match reachable_positions.get(&clicked_pos) {
                     Some(info) => {
                         if !info.passthrough_only {
-                            board::ecs_logic::movement::execute_move(
+                            board::ecs_logic::movement::plan_move(
                                 &mut ui_state.world,
                                 clicked_pos,
                             )?;
+                            board::ecs_logic::movement::advance_move(&mut ui_state.world)?;
                             ui_state.selected_left_pos = Some(clicked_pos);
                         }
                     }

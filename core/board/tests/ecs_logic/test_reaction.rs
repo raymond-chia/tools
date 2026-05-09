@@ -8,9 +8,9 @@ use super::constants::{
 use bevy_ecs::prelude::{Entity, With, World};
 use board::domain::alias::SkillName;
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::domain::core_types::PendingReaction;
+use board::domain::core_types::{PendingReaction, ReactionTrigger};
 use board::ecs_logic::loader::parse_and_insert_game_data;
-use board::ecs_logic::movement::execute_move;
+use board::ecs_logic::movement::{advance_move, plan_move};
 use board::ecs_logic::reaction::{
     ProcessReactionResult, get_pending_reactions, process_reactions, set_reactions,
 };
@@ -146,7 +146,7 @@ fn test_get_pending_reactions() {
             name: "resource 存在但 reactions 為空",
             resource: Some(ReactionState {
                 pending: vec![],
-                queue: vec![],
+                decided: vec![],
             }),
             expected_len: 0,
         },
@@ -156,9 +156,10 @@ fn test_get_pending_reactions() {
                 pending: vec![PendingReaction {
                     reactor: Occupant::Unit(REACTOR_ID_1),
                     trigger: Occupant::Unit(TRIGGER_ID_1),
+                    trigger_event: ReactionTrigger::AttackOfOpportunity,
                     available_skills: vec![skill_a.clone()],
                 }],
-                queue: vec![],
+                decided: vec![],
             }),
             expected_len: 1,
         },
@@ -169,15 +170,17 @@ fn test_get_pending_reactions() {
                     PendingReaction {
                         reactor: Occupant::Unit(REACTOR_ID_1),
                         trigger: Occupant::Unit(TRIGGER_ID_1),
+                        trigger_event: ReactionTrigger::AttackOfOpportunity,
                         available_skills: vec![skill_a.clone()],
                     },
                     PendingReaction {
                         reactor: Occupant::Unit(REACTOR_ID_2),
                         trigger: Occupant::Unit(TRIGGER_ID_1),
+                        trigger_event: ReactionTrigger::AttackOfOpportunity,
                         available_skills: vec![skill_b.clone()],
                     },
                 ],
-                queue: vec![],
+                decided: vec![],
             }),
             expected_len: 2,
         },
@@ -188,15 +191,17 @@ fn test_get_pending_reactions() {
                     PendingReaction {
                         reactor: Occupant::Unit(REACTOR_ID_1),
                         trigger: Occupant::Unit(TRIGGER_ID_1),
+                        trigger_event: ReactionTrigger::AttackOfOpportunity,
                         available_skills: vec![skill_a.clone(), skill_b.clone()],
                     },
                     PendingReaction {
                         reactor: Occupant::Unit(REACTOR_ID_2),
                         trigger: Occupant::Unit(TRIGGER_ID_2),
+                        trigger_event: ReactionTrigger::AttackOfOpportunity,
                         available_skills: vec![skill_b.clone()],
                     },
                 ],
-                queue: vec![],
+                decided: vec![],
             }),
             expected_len: 2,
         },
@@ -286,7 +291,7 @@ fn test_set_reactions_errors() {
         let mut world = World::new();
         world.insert_resource(ReactionState {
             pending: vec![],
-            queue: vec![],
+            decided: vec![],
         });
         let result = set_reactions(&mut world, vec![(reactor, skill_a.clone())]);
         assert!(result.is_err(), "pending 為空時應回傳 Err");
@@ -299,9 +304,10 @@ fn test_set_reactions_errors() {
             pending: vec![PendingReaction {
                 reactor,
                 trigger: Occupant::Unit(TRIGGER_ID),
+                trigger_event: ReactionTrigger::AttackOfOpportunity,
                 available_skills: vec![skill_a.clone()],
             }],
-            queue: vec![],
+            decided: vec![],
         });
         let unknown = Occupant::Unit(99);
         let result = set_reactions(&mut world, vec![(unknown, skill_a.clone())]);
@@ -315,9 +321,10 @@ fn test_set_reactions_errors() {
             pending: vec![PendingReaction {
                 reactor,
                 trigger: Occupant::Unit(TRIGGER_ID),
+                trigger_event: ReactionTrigger::AttackOfOpportunity,
                 available_skills: vec![skill_a.clone()],
             }],
-            queue: vec![],
+            decided: vec![],
         });
         let result = set_reactions(&mut world, vec![(reactor, skill_b.clone())]);
         assert!(result.is_err(), "技能不在可用清單應回傳 Err");
@@ -343,9 +350,10 @@ P E . . ."#,
         pending: vec![PendingReaction {
             reactor: enemy_occupant,
             trigger: Occupant::Unit(0),
+            trigger_event: ReactionTrigger::AttackOfOpportunity,
             available_skills: vec![SKILL_WARRIOR_REACTION.to_string()],
         }],
-        queue: vec![],
+        decided: vec![],
     });
 
     // 傳空決定（全部放棄）
@@ -431,7 +439,8 @@ P E . . .
 
         // ── 第一次移動 ──
         {
-            execute_move(&mut world, target_pos).expect("第一次移動應成功");
+            plan_move(&mut world, target_pos).expect("plan_move 應成功");
+            advance_move(&mut world).expect("第一次移動應成功");
 
             let player_pos = find_current_pos(&mut world, player_occupant);
             assert_eq!(
@@ -493,7 +502,8 @@ P E . . .
         }
 
         // ── 第二次移動 ──
-        execute_move(&mut world, target_pos).expect("第二次移動應成功");
+        plan_move(&mut world, target_pos).expect("plan_move 應成功");
+        advance_move(&mut world).expect("第二次移動應成功");
 
         let pending = get_pending_reactions(&world);
 
@@ -562,7 +572,8 @@ P E . . .
                 // E 放棄反應，P 應繼續移動並直達目的地
                 set_reactions(&mut world, vec![]).expect("第二次 set_reactions（放棄）應成功");
 
-                execute_move(&mut world, target_pos).expect("第三次移動應成功");
+                plan_move(&mut world, target_pos).expect("plan_move 應成功");
+                advance_move(&mut world).expect("第三次移動應成功");
                 let player_pos = find_current_pos(&mut world, player_occupant);
                 assert_eq!(
                     player_pos, target_pos,
@@ -684,7 +695,8 @@ P .  . . T
         let target_pos = markers["T"][0];
 
         // P 移動到 T，路過 E1(x=1) 和 E2(x=2) 的 range=1 範圍
-        execute_move(&mut world, target_pos).expect("移動應成功");
+        plan_move(&mut world, target_pos).expect("plan_move 應成功");
+        advance_move(&mut world).expect("移動應成功");
 
         // 應有 2 個待反應者
         let pending = get_pending_reactions(&world);
@@ -789,7 +801,8 @@ P E . .
     let target_pos = markers["T"][0];
 
     // P 移動到 T，觸發 E 的 AttackOfOpportunity
-    execute_move(&mut world, target_pos).expect("移動應成功");
+    plan_move(&mut world, target_pos).expect("plan_move 應成功");
+    advance_move(&mut world).expect("移動應成功");
 
     // 第一輪：E 有待反應
     let pending = get_pending_reactions(&world);
@@ -894,7 +907,8 @@ P E . T
         let player_occupant = find_occupant(&mut world, markers["P"][0]);
         let target_pos = markers["T"][0];
 
-        execute_move(&mut world, target_pos).expect("移動應成功");
+        plan_move(&mut world, target_pos).expect("plan_move 應成功");
+        advance_move(&mut world).expect("移動應成功");
 
         let pending = get_pending_reactions(&world);
         assert_eq!(pending.len(), 0, "[{}] 移動後不應有待反應者", case.name);
