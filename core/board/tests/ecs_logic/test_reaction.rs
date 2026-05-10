@@ -10,7 +10,7 @@ use board::domain::alias::SkillName;
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{PendingReaction, ReactionTrigger};
 use board::ecs_logic::loader::parse_and_insert_game_data;
-use board::ecs_logic::movement::{advance_move, plan_move};
+use board::ecs_logic::movement::{advance_move, force_advance_move, plan_move};
 use board::ecs_logic::reaction::{
     ProcessReactionResult, get_pending_reactions, process_reactions, set_reactions,
 };
@@ -29,21 +29,23 @@ const ENEMY_FACTION_ID: u32 = 2;
 /// - P 的 Initiative 設為 100（確保先手）
 /// - 回傳 (world, markers)，呼叫端自行從 markers 查 occupant
 fn build_reaction_world(ascii: &str) -> (World, HashMap<String, Vec<Position>>) {
-    build_reaction_world_with(ascii, UNIT_TYPE_WARRIOR)
+    build_reaction_world_with(ascii, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR)
 }
 
-/// 建立含 P 和 E 的 World，E 的單位類型由呼叫端指定
+/// 建立含 P 和 E 的 World，P 和 E 的單位類型由呼叫端指定
 ///
+/// - `player_unit_type`：ascii 中 "P" marker 對應的單位類型
 /// - `enemy_unit_type`：ascii 中 "E" marker 對應的單位類型
 /// - ascii 中 "E1" 固定為 warrior，"E2" 固定為 warrior-b
 fn build_reaction_world_with(
     ascii: &str,
+    player_unit_type: &str,
     enemy_unit_type: &str,
 ) -> (World, HashMap<String, Vec<Position>>) {
     let (_, markers) = load_from_ascii(ascii).expect("load_from_ascii 應成功");
 
     let level_toml = LevelBuilder::from_ascii(ascii)
-        .unit("P", UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID)
+        .unit("P", player_unit_type, PLAYER_FACTION_ID)
         .unit("E", enemy_unit_type, ENEMY_FACTION_ID)
         .unit("E1", UNIT_TYPE_WARRIOR, ENEMY_FACTION_ID)
         .unit("E2", UNIT_TYPE_WARRIOR_B, ENEMY_FACTION_ID)
@@ -442,13 +444,6 @@ P E . . .
             plan_move(&mut world, target_pos).expect("plan_move 應成功");
             advance_move(&mut world).expect("第一次移動應成功");
 
-            let player_pos = find_current_pos(&mut world, player_occupant);
-            assert_eq!(
-                player_pos, STOP_AFTER_FIRST_MOVE,
-                "[{}] 第一次移動後 P 應停在觸發步的 to 位置",
-                case.name
-            );
-
             let pending = get_pending_reactions(&world);
             assert_eq!(
                 pending.len(),
@@ -499,10 +494,20 @@ P E . . .
                 case.name,
                 result
             );
+
+            // 反應結束後 force_advance_move 踏入觸發格，再斷言位置
+            force_advance_move(&mut world).expect("第一次 force_advance_move 應成功");
+
+            let player_pos = find_current_pos(&mut world, player_occupant);
+            assert_eq!(
+                player_pos, STOP_AFTER_FIRST_MOVE,
+                "[{}] force_advance_move 後 P 應在觸發格",
+                case.name
+            );
         }
 
         // ── 第二次移動 ──
-        plan_move(&mut world, target_pos).expect("plan_move 應成功");
+        plan_move(&mut world, target_pos).expect("第二次 plan_move 應成功");
         advance_move(&mut world).expect("第二次移動應成功");
 
         let pending = get_pending_reactions(&world);
@@ -524,13 +529,6 @@ P E . . .
             assert_eq!(
                 pending[0].trigger, player_occupant,
                 "[{}] 觸發者應為玩家",
-                case.name
-            );
-
-            let player_pos = find_current_pos(&mut world, player_occupant);
-            assert_eq!(
-                player_pos, STOP_AFTER_SECOND_MOVE,
-                "[{}] 第二次移動觸發反應後 P 應停在觸發步的 to 位置",
                 case.name
             );
 
@@ -568,12 +566,32 @@ P E . . .
                     case.name,
                     result
                 );
+
+                force_advance_move(&mut world).expect("第二次 force_advance_move 應成功");
+
+                let player_pos = find_current_pos(&mut world, player_occupant);
+                assert_eq!(
+                    player_pos, STOP_AFTER_SECOND_MOVE,
+                    "[{}] 第二次 force_advance_move 後 P 應在觸發格",
+                    case.name
+                );
             } else {
                 // E 放棄反應，P 應繼續移動並直達目的地
                 set_reactions(&mut world, vec![]).expect("第二次 set_reactions（放棄）應成功");
 
-                plan_move(&mut world, target_pos).expect("plan_move 應成功");
+                let result =
+                    process_reactions(&mut world).expect("放棄反應 process_reactions 應成功");
+                assert!(
+                    matches!(result, ProcessReactionResult::Done),
+                    "[{}] 放棄反應應回傳 Done，實際：{:?}",
+                    case.name,
+                    result
+                );
+
+                force_advance_move(&mut world).expect("放棄後 force_advance_move 應成功");
+                plan_move(&mut world, target_pos).expect("第三次 plan_move 應成功");
                 advance_move(&mut world).expect("第三次移動應成功");
+
                 let player_pos = find_current_pos(&mut world, player_occupant);
                 assert_eq!(
                     player_pos, target_pos,
@@ -790,10 +808,12 @@ P .  . . T
 /// process_reactions → Done
 #[test]
 fn test_reaction_chain_counter() {
-    let (mut world, markers) = build_reaction_world(
+    let (mut world, markers) = build_reaction_world_with(
         r#"
 P E . .
 . . . T"#,
+        UNIT_TYPE_WARRIOR,
+        UNIT_TYPE_WARRIOR,
     );
 
     let player_occupant = find_occupant(&mut world, markers["P"][0]);
@@ -902,7 +922,8 @@ P E . T
 . . . ."#;
 
     for case in test_data {
-        let (mut world, markers) = build_reaction_world_with(ascii, case.enemy_unit_type);
+        let (mut world, markers) =
+            build_reaction_world_with(ascii, UNIT_TYPE_MAGE, case.enemy_unit_type);
 
         let player_occupant = find_occupant(&mut world, markers["P"][0]);
         let target_pos = markers["T"][0];

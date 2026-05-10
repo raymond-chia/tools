@@ -146,7 +146,7 @@ pub enum TargetSelection {
 }
 
 /// 反應觸發類型
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, Display, EnumIter)]
 pub enum ReactionTrigger {
     #[default]
     AttackOfOpportunity,

@@ -1,9 +1,11 @@
-//! 移動反應收集邏輯
+//! 反應收集邏輯
 
 use crate::domain::alias::SkillName;
-use crate::domain::core_types::{ReactionTrigger, SkillType};
+use crate::domain::core_types::{PendingReaction, ReactionTrigger, SkillType, TriggeringSource};
 use crate::ecs_types::components::{Occupant, Position};
+use crate::ecs_types::resources::GameData;
 use crate::error::Result;
+use crate::logic::skill::skill_execution::{CheckTarget, CombatStats, EffectEntry, ResolvedEffect};
 use crate::logic::skill::{UnitInfo, is_in_filter, manhattan_distance};
 use std::collections::HashMap;
 
@@ -115,4 +117,103 @@ pub(crate) fn collect_move_reactions(
         stop_position: path[earliest_from_idx + 1],
         reactions,
     })
+}
+
+/// 受傷單位的反應資訊（供 collect_takes_damage_reactions 使用）
+pub struct TakesDamageUnitInfo {
+    pub pos: Position,
+    pub remaining_reaction_point: i32,
+    pub skill_names: Vec<SkillName>,
+}
+
+/// 從效果結果中收集受傷單位可觸發的 TakesDamage 反應
+///
+/// - `entries`：技能執行後產生的效果條目
+/// - `attacker`：施放者（成為 trigger）
+/// - `unit_reaction_info`：場上單位的反應資訊，key 為 Occupant
+/// - `game_data`：用於過濾 TakesDamage 技能
+/// - `unit_stats_on_board`：場上單位的戰鬥數值，用於 filter 判斷
+pub(crate) fn collect_takes_damage_reactions(
+    entries: &[EffectEntry],
+    attacker: Occupant,
+    attacker_pos: Position,
+    game_data: &GameData,
+    unit_reaction_info: &HashMap<Occupant, TakesDamageUnitInfo>,
+    unit_stats_on_board: &HashMap<Position, CombatStats>,
+) -> Vec<PendingReaction> {
+    let takes_damage_skills: HashMap<&SkillName, _> = game_data
+        .skill_map
+        .iter()
+        .filter_map(|(name, skill_type)| match skill_type {
+            SkillType::Reaction {
+                triggering_unit, ..
+            } if matches!(triggering_unit.trigger, ReactionTrigger::TakesDamage) => {
+                Some((name, triggering_unit))
+            }
+            _ => None,
+        })
+        .collect();
+    entries
+        .iter()
+        .filter_map(|entry| match (&entry.effect, &entry.target) {
+            (ResolvedEffect::HpChange { final_amount, .. }, CheckTarget::Unit(damaged_id))
+                if *final_amount < 0 =>
+            {
+                Some(Occupant::Unit(*damaged_id))
+            }
+            _ => None,
+        })
+        .filter_map(|damaged_occupant| {
+            let info = unit_reaction_info.get(&damaged_occupant)?;
+            if info.remaining_reaction_point <= 0 {
+                return None;
+            }
+            let available_skills = filter_takes_damage_skills(
+                info.pos,
+                &info.skill_names,
+                attacker_pos,
+                &takes_damage_skills,
+                unit_stats_on_board,
+            );
+            if available_skills.is_empty() {
+                return None;
+            }
+            Some(PendingReaction {
+                reactor: damaged_occupant,
+                trigger: attacker,
+                trigger_event: ReactionTrigger::TakesDamage,
+                available_skills,
+            })
+        })
+        .collect()
+}
+
+fn filter_takes_damage_skills<'a>(
+    damaged_pos: Position,
+    damaged_skills: &[SkillName],
+    attacker_pos: Position,
+    takes_damage_skills: &HashMap<&'a SkillName, &'a TriggeringSource>,
+    unit_stats_on_board: &HashMap<Position, CombatStats>,
+) -> Vec<SkillName> {
+    damaged_skills
+        .iter()
+        .filter_map(|skill_name| {
+            let triggering_unit = takes_damage_skills.get(skill_name)?;
+            let distance = manhattan_distance(damaged_pos, attacker_pos);
+            let (min_range, max_range) = triggering_unit.source_range;
+            if distance < min_range || distance > max_range {
+                return None;
+            }
+            let damaged_info = unit_stats_on_board.get(&damaged_pos)?;
+            let attacker_info = unit_stats_on_board.get(&attacker_pos)?;
+            if !is_in_filter(
+                &damaged_info.unit_info,
+                &attacker_info.unit_info,
+                triggering_unit.source_filter,
+            ) {
+                return None;
+            }
+            Some(skill_name.clone())
+        })
+        .collect()
 }

@@ -1,5 +1,6 @@
 use crate::domain::alias::{ID, SkillName};
-use crate::domain::core_types::{EffectNode, SkillType, Target};
+use crate::domain::constants::IMPASSABLE_MOVEMENT_COST;
+use crate::domain::core_types::{EffectNode, SkillTag, SkillType, Target, TriggeringSource};
 use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
@@ -11,6 +12,8 @@ use crate::ecs_types::components::{
 use crate::ecs_types::resources::{GameData, LevelConfig, OccupantIndex, SkillTargeting};
 use crate::error::{BoardError, DataError, Result, UnitError};
 use crate::logic::debug::short_type_name;
+use crate::logic::skill::UnitInfo;
+use crate::logic::skill::skill_execution::{CombatStats, ObjectOnBoard};
 use bevy_ecs::change_detection::Mut;
 use bevy_ecs::event::EntityEvent;
 use bevy_ecs::lifecycle::{Add, Remove};
@@ -184,7 +187,7 @@ pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<
 pub(crate) fn get_active_skill_data(
     game_data: &GameData,
     skill_name: &SkillName,
-) -> Result<(Target, Arc<[EffectNode]>, u32)> {
+) -> Result<(Target, Arc<[EffectNode]>, u32, Vec<SkillTag>)> {
     let skill_type =
         game_data
             .skill_map
@@ -197,10 +200,42 @@ pub(crate) fn get_active_skill_data(
             target,
             effects,
             cost,
-            tags: _,
+            tags,
             name: _,
-        } => Ok((target.clone(), effects.clone(), *cost)),
+        } => Ok((target.clone(), effects.clone(), *cost, tags.clone())),
         SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
+            skill_name: skill_name.clone(),
+        }
+        .into()),
+    }
+}
+
+/// 取得指定技能名稱對應的 Reaction 技能欄位；若非 Reaction 則視為 SkillNotFound
+pub(crate) fn get_reaction_skill_data(
+    game_data: &GameData,
+    skill_name: &SkillName,
+) -> Result<(TriggeringSource, Arc<[EffectNode]>, u32, Vec<SkillTag>)> {
+    let skill_type =
+        game_data
+            .skill_map
+            .get(skill_name)
+            .ok_or_else(|| UnitError::SkillNotFound {
+                skill_name: skill_name.clone(),
+            })?;
+    match skill_type {
+        SkillType::Reaction {
+            triggering_unit,
+            effects,
+            cost,
+            tags,
+            name: _,
+        } => Ok((
+            triggering_unit.clone(),
+            effects.clone(),
+            *cost,
+            tags.clone(),
+        )),
+        SkillType::Active { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
             skill_name: skill_name.clone(),
         }
         .into()),
@@ -233,4 +268,53 @@ pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeB
 /// 查詢當前技能選目標狀態供 UI 渲染與確認施放
 pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting> {
     get_resource::<SkillTargeting>(world, "請先呼叫 start_skill_targeting")
+}
+
+/// 建構棋盤上所有物件的位置對應表
+pub(crate) fn build_objects_on_board(world: &mut World) -> HashMap<Position, ObjectOnBoard> {
+    world
+        .query_filtered::<(&Position, &Occupant, &ObjectMovementCost), With<Object>>()
+        .iter(world)
+        .map(|(pos, occ, mc)| {
+            (
+                *pos,
+                ObjectOnBoard {
+                    occupant: *occ,
+                    occupies_tile: mc.0 >= IMPASSABLE_MOVEMENT_COST,
+                },
+            )
+        })
+        .collect()
+}
+
+/// 建構棋盤上所有單位的戰鬥屬性位置對應表
+pub(crate) fn build_unit_stats_on_board(
+    world: &mut World,
+    faction_to_alliance: &HashMap<ID, ID>,
+) -> Result<HashMap<Position, CombatStats>> {
+    let unit_entities: Vec<Entity> = world
+        .query_filtered::<Entity, With<Unit>>()
+        .iter(world)
+        .collect();
+    let mut result = HashMap::new();
+    for unit_entity in unit_entities {
+        let entity_ref = world.entity(unit_entity);
+        let pos = *get_component!(entity_ref, Position)?;
+        let occupant = *get_component!(entity_ref, Occupant)?;
+        let faction_id = get_component!(entity_ref, UnitFaction)?.0;
+        let attributes = read_attribute_bundle(&entity_ref)?;
+        let alliance_id = resolve_alliance(faction_to_alliance, faction_id)?;
+        result.insert(
+            pos,
+            CombatStats {
+                unit_info: UnitInfo {
+                    occupant,
+                    faction_id,
+                    alliance_id,
+                },
+                attribute: attributes,
+            },
+        );
+    }
+    Ok(result)
 }

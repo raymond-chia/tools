@@ -2,11 +2,11 @@
 
 use super::{get_component, get_component_mut};
 use crate::domain::alias::{ID, SkillName};
-use crate::domain::constants::IMPASSABLE_MOVEMENT_COST;
 use crate::domain::core_types::{SkillType, TargetSelection};
 use crate::ecs_logic::query::{
-    build_faction_alliance_map, find_entity_by_occupant, get_active_skill_data, get_resource,
-    get_resource_mut, read_attribute_bundle, resolve_alliance,
+    build_faction_alliance_map, build_objects_on_board, build_unit_stats_on_board,
+    find_entity_by_occupant, get_active_skill_data, get_resource, get_resource_mut,
+    read_attribute_bundle, resolve_alliance,
 };
 use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
@@ -19,12 +19,12 @@ use crate::error::{BoardError, Result, UnitError};
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::skill::line_of_sight::has_line_of_sight;
 use crate::logic::skill::skill_execution::{
-    CheckTarget, CombatStats, EffectEntry, ObjectOnBoard, ResolvedEffect, resolve_effect_tree,
+    CheckTarget, CombatStats, EffectEntry, ResolvedEffect, resolve_effect_tree,
 };
 use crate::logic::skill::skill_range::{compute_affected_positions, compute_range_positions};
 use crate::logic::skill::skill_target::{validate_filter, validate_skill_targets};
 use crate::logic::skill::{CasterInfo, UnitInfo, is_in_filter, manhattan_distance};
-use bevy_ecs::prelude::{Entity, With, World};
+use bevy_ecs::prelude::{With, World};
 use rand::RngExt;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -119,7 +119,7 @@ pub fn get_skill_targetable_positions(
     let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
 
     // 讀取：技能 range
-    let (target, _, _) = get_active_skill_data(game_data, skill_name)?;
+    let (target, _, _, _) = get_active_skill_data(game_data, skill_name)?;
     let range = target.range;
 
     // 讀取：視線阻擋格子集合
@@ -160,7 +160,7 @@ pub fn get_skill_affected_positions(
 
     let target = {
         let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
-        let (target, _, _) = get_active_skill_data(game_data, skill_name)?;
+        let (target, _, _, _) = get_active_skill_data(game_data, skill_name)?;
         target.clone()
     };
 
@@ -260,7 +260,7 @@ pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Resul
             }
             .into());
         }
-        let (target, _, cost) = get_active_skill_data(game_data, skill_name)?;
+        let (target, _, cost, _) = get_active_skill_data(game_data, skill_name)?;
         (cost, target.count)
     };
 
@@ -297,7 +297,7 @@ pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()> {
 
     let (count, allow_same_target, min_range, max_range, selection, filter) = {
         let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
-        let (target, _, _) = get_active_skill_data(game_data, &skill_name)?;
+        let (target, _, _, _) = get_active_skill_data(game_data, &skill_name)?;
         (
             target.count,
             target.allow_same_target,
@@ -443,12 +443,7 @@ pub fn execute_skill(
 
     let (target, effects, cost, skill_tags) = {
         let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
-        let (target, effects, cost) = get_active_skill_data(game_data, skill_name)?;
-        let skill_tags = match game_data.skill_map.get(skill_name) {
-            Some(SkillType::Active { tags, .. }) => tags.clone(),
-            _ => Vec::new(),
-        };
-        (target, effects, cost, skill_tags)
+        get_active_skill_data(game_data, skill_name)?
     };
 
     if caster_mp < cost as i32 {
@@ -459,45 +454,8 @@ pub fn execute_skill(
         .into());
     }
 
-    let unit_entities: Vec<Entity> = world
-        .query_filtered::<Entity, With<Unit>>()
-        .iter(world)
-        .collect();
-    let mut unit_stats_on_board: HashMap<Position, CombatStats> = HashMap::new();
-    for unit_entity in unit_entities {
-        let entity_ref = world.entity(unit_entity);
-        let pos = *get_component!(entity_ref, Position)?;
-        let occupant = *get_component!(entity_ref, Occupant)?;
-        let faction_id = get_component!(entity_ref, UnitFaction)?.0;
-        let attributes = read_attribute_bundle(&entity_ref)?;
-
-        let alliance_id = resolve_alliance(&faction_to_alliance, faction_id)?;
-        unit_stats_on_board.insert(
-            pos,
-            CombatStats {
-                unit_info: UnitInfo {
-                    occupant,
-                    faction_id,
-                    alliance_id,
-                },
-                attribute: attributes,
-            },
-        );
-    }
-
-    let objects_on_board: HashMap<Position, ObjectOnBoard> = world
-        .query_filtered::<(&Position, &Occupant, &ObjectMovementCost), With<Object>>()
-        .iter(world)
-        .map(|(pos, occ, mc)| {
-            (
-                *pos,
-                ObjectOnBoard {
-                    occupant: *occ,
-                    occupies_tile: mc.0 >= IMPASSABLE_MOVEMENT_COST,
-                },
-            )
-        })
-        .collect();
+    let unit_stats_on_board = build_unit_stats_on_board(world, &faction_to_alliance)?;
+    let objects_on_board = build_objects_on_board(world);
 
     let blocks_sight: HashSet<Position> = world
         .query_filtered::<&Position, With<BlocksSight>>()
@@ -587,7 +545,18 @@ pub fn execute_skill(
         }
     }
 
-    for entry in &all_entries {
+    apply_effect_entries(world, &all_entries, &mut used_ids)?;
+
+    Ok(all_entries)
+}
+
+/// 將效果條目寫入 World（HP 變更、物件生成）
+pub(crate) fn apply_effect_entries(
+    world: &mut World,
+    entries: &[EffectEntry],
+    used_ids: &mut HashSet<ID>,
+) -> Result<()> {
+    for entry in entries {
         match &entry.effect {
             ResolvedEffect::HpChange { final_amount, .. } => {
                 let entity = match entry.target {
@@ -603,7 +572,7 @@ pub fn execute_skill(
                     CheckTarget::Position(pos) => pos,
                     CheckTarget::Unit(_) => unreachable!("SpawnObject 不應該有 Unit 目標"),
                 };
-                let id = generate_unique_id(&mut used_ids)?;
+                let id = generate_unique_id(used_ids)?;
                 // TODO 物件的其他屬性（例如 contact_effects）應該從技能效果定義中讀取，而不是寫死
                 world.spawn(ObjectBundle {
                     object: Object,
@@ -618,8 +587,7 @@ pub fn execute_skill(
             ResolvedEffect::ApplyBuff(_) | ResolvedEffect::NoEffect => {}
         }
     }
-
-    Ok(all_entries)
+    Ok(())
 }
 
 /// 檢查施放者的行動點是否足夠發動技能

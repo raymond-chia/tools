@@ -51,6 +51,7 @@ core/board/
 │   │   ├── deployment.rs - 單位部署函數
 │   │   ├── query.rs      - World 查詢函數
 │   │   ├── movement.rs   - 單位移動 ECS 操作函數
+│   │   ├── reaction.rs   - 技能反應系統 ECS 操作函數
 │   │   ├── turn.rs       - 回合順序 ECS 操作函數
 │   │   └── skill.rs      - 技能系統 ECS 操作函數
 │   ├── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
@@ -141,6 +142,7 @@ core/board/
 ### logic/skill/skill_reaction.rs
 
 - `pub(crate) fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
+- `pub(crate) fn collect_takes_damage_reactions(entries: &[EffectEntry], attacker: Occupant, attacker_pos: Position, game_data: &GameData, unit_reaction_info: &HashMap<Occupant, TakesDamageUnitInfo>, unit_stats_on_board: &HashMap<Position, CombatStats>) -> Vec<PendingReaction>` - 收集因受傷觸發的反應
 
 ### logic/skill/skill_target.rs
 
@@ -203,15 +205,20 @@ core/board/
 - `pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
 - `pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>>` - 建構陣營聯盟對應表
 - `pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<ID>` - 解析陣營聯盟關係
-- `pub(crate) fn get_active_skill_data<'a>(game_data: &'a GameData, skill_name: &SkillName) -> Result<(&'a Target, &'a [EffectNode], u32)>` - 查詢技能的目標與效果資料
+- `pub(crate) fn get_active_skill_data(game_data: &GameData, skill_name: &SkillName) -> Result<(Target, Arc<[EffectNode]>, u32, Vec<SkillTag>)>` - 查詢技能的目標與效果資料
+- `pub(crate) fn get_reaction_skill_data(game_data: &GameData, skill_name: &SkillName) -> Result<(TriggeringSource, Arc<[EffectNode]>, u32, Vec<SkillTag>)>` - 查詢反應技能的觸發源與效果資料
 - `pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeBundle>` - 讀取實體的屬性集合
+- `pub(crate) fn build_objects_on_board(world: &mut World) -> HashMap<Position, ObjectOnBoard>` - 建構棋盤上的物件映射
+- `pub(crate) fn build_unit_stats_on_board(world: &mut World, faction_to_alliance: &HashMap<ID, ID>) -> Result<HashMap<Position, CombatStats>>` - 建構棋盤上的單位戰鬥統計映射
 - `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
 - `pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting>` - 查詢當前技能選目標狀態供 UI 渲染與確認施放
 
 ### ecs_logic/movement.rs
 
 - `pub fn get_reachable_positions(world: &mut World, occupant: Occupant) -> Result<HashMap<Position, ReachableInfo>>` - 計算單位可到達的所有位置
-- `pub fn execute_move(world: &mut World, target: Position) -> Result<MoveResult>` - 執行當前單位移動到指定位置
+- `pub fn plan_move(world: &mut World, target: Position) -> Result<()>` - 規劃當前單位移動到指定位置
+- `pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult>` - 推進當前單位的移動計畫
+- `pub fn force_advance_move(world: &mut World) -> Result<AdvanceMoveResult>` - 強制推進當前單位的移動計畫
 
 ### ecs_logic/turn.rs
 
@@ -224,16 +231,22 @@ core/board/
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
 - `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
 
+### ecs_logic/reaction.rs
+
+- `pub fn get_pending_reactions(world: &World) -> Vec<PendingReaction>` - 取得所有待處理的反應
+- `pub fn set_reactions(world: &mut World, decisions: Vec<(Occupant, SkillName)>) -> Result<()>` - 設定單位的反應決策
+- `pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult>` - 處理並執行所有待決的反應
+
 ### ecs_logic/skill.rs
 
 - `pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool>` - 查詢當前單位是否可使用技能
 - `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 - `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
-- `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
 - `pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Result<()>` - 開始技能選目標流程並建立暫存
 - `pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()>` - 新增一個目標位置到選取暫存
 - `pub fn cancel_skill_targeting(world: &mut World)` - 取消技能選目標流程
+- `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
 
 ### error.rs
 

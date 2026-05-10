@@ -138,7 +138,7 @@ value_percent = -60
 [skills.Reaction]
 name = "warrior-reaction"
 tags = []
-cost = 1
+cost = 0
 
 [skills.Reaction.triggering_unit]
 source_range = [1, 1]
@@ -221,7 +221,7 @@ contact_effects = []
 [skills.Reaction]
 name = "warrior-reaction-2"
 tags = []
-cost = 1
+cost = 0
 
 [skills.Reaction.triggering_unit]
 source_range = [1, 1]
@@ -243,7 +243,7 @@ value_percent = -50
 [skills.Reaction]
 name = "warrior-counter"
 tags = []
-cost = 1
+cost = 0
 
 [skills.Reaction.triggering_unit]
 source_range = [1, 1]

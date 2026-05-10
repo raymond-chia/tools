@@ -199,7 +199,14 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
             ),
         })?;
 
+    // 有反應時停在觸發格的前一格（stop_index - 1），無反應時走到 stop_index
     let stop_index = next_step_index + steps_to_stop;
+    let stop_index = if has_reactions {
+        stop_index - 1
+    } else {
+        stop_index
+    };
+    let actual_stop_pos = path[stop_index];
     let walked_path: Vec<Position> = path[next_step_index..=stop_index].to_vec();
     let walked_cost: MovementCost = step_costs[next_step_index + 1..=stop_index].iter().sum();
     let reached_end = stop_index == path.len() - 1;
@@ -209,7 +216,7 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
     let mut entity_mut = world.entity_mut(entity);
     {
         let mut pos = get_component_mut!(entity_mut, Position)?;
-        *pos = stop_pos;
+        *pos = actual_stop_pos;
     }
     {
         let mut action_state = get_component_mut!(entity_mut, ActionState)?;

@@ -149,6 +149,8 @@ pub enum UnitError {
     InsufficientActionPoint { used: i32, max: i32 },
     #[error("MP 不足: 需要 {cost}，目前 {current}")]
     InsufficientMp { cost: u32, current: i32 },
+    #[error("反應點不足: 目前 {current}")]
+    InsufficientReactionPoint { current: i32 },
     #[error("技能 '{skill_name}' 必須至少有一個 effect")]
     EmptySkillEffects { skill_name: SkillName },
 }
