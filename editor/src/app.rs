@@ -76,12 +76,24 @@ impl eframe::App for EditorApp {
                 )
             }
             EditorTab::Unit => {
+                let existing_skill_names: std::collections::HashSet<String> = self
+                    .skill_editor
+                    .items
+                    .iter()
+                    .map(|skill| skill.name().to_string())
+                    .collect();
+
                 self.unit_editor.ui_state.available_skills = self
                     .skill_editor
                     .items
                     .iter()
                     .map(|skill| skill.name().clone())
                     .collect();
+
+                for unit in &mut self.unit_editor.items {
+                    unit.skills
+                        .retain(|s| existing_skill_names.contains(s.as_str()));
+                }
 
                 render_editor_ui(
                     ui,

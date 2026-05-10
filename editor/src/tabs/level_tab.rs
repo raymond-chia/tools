@@ -8,9 +8,9 @@ mod edit;
 use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::MessageState;
 use bevy_ecs::world::World;
-use board::domain::alias::TypeName;
+use board::domain::alias::{SkillName, TypeName};
 use board::domain::core_types::SkillType;
-use board::ecs_types::components::Position;
+use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::loader_schema::{LevelType, ObjectType, UnitType};
 use board::logic::skill::skill_execution::EffectEntry;
@@ -28,6 +28,12 @@ pub enum DraggedObject {
 #[derive(Clone, Copy, Debug)]
 pub struct DragState {
     pub object: DraggedObject,
+}
+
+/// 反應決策草稿：玩家安排的執行順序 + 每人選的技能（None = 跳過）
+#[derive(Debug, Default)]
+pub struct ReactionDecisionState {
+    pub decisions: Vec<(Occupant, Option<SkillName>)>,
 }
 
 /// 戰鬥模式底部面板的動作狀態
@@ -92,6 +98,9 @@ pub struct LevelTabUIState {
     pub battle_log: Vec<EffectEntry>,
     /// 右側面板顯示模式（單位詳情 / 戰鬥 log）
     pub right_panel_view: RightPanelView,
+
+    /// 反應決策草稿（pending 為空時 decisions 也為空）
+    pub reaction_decision: ReactionDecisionState,
 
     /// 當前標籤頁的模式
     pub mode: LevelTabMode,

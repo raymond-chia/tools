@@ -3,6 +3,9 @@
 use super::battlefield::{self, CellHighlight, Snapshot};
 use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState, RightPanelView};
 use crate::constants::*;
+use board::domain::alias::SkillName;
+use board::domain::core_types::PendingReaction;
+use board::ecs_logic::reaction::ProcessReactionResult;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
@@ -203,6 +206,11 @@ fn render_turn_order_panel(
 
 /// 渲染底部操作面板
 fn render_bottom_panel(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState) -> Result<(), String> {
+    let pending = board::ecs_logic::reaction::get_pending_reactions(&ui_state.world);
+    if !pending.is_empty() {
+        return render_reaction_panel(ui, ui_state, &pending);
+    }
+
     let mut error = Ok(());
     ui.horizontal(|ui| {
         // 預留一些空隙
@@ -533,6 +541,7 @@ fn render_skill_popup(
         ui_state.right_panel_view = RightPanelView::Log;
         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
         ui_state.battle_action = BattleAction::Normal;
+        sync_reaction_decisions(ui_state);
         return Ok(());
     }
 
@@ -635,6 +644,7 @@ fn handle_mouse_click(
                             )?;
                             board::ecs_logic::movement::advance_move(&mut ui_state.world)?;
                             ui_state.selected_left_pos = Some(clicked_pos);
+                            sync_reaction_decisions(ui_state);
                         }
                     }
                     _ => {}
@@ -670,6 +680,7 @@ fn handle_mouse_click(
                         ui_state.right_panel_view = RightPanelView::Log;
                         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
                         ui_state.battle_action = BattleAction::Normal;
+                        sync_reaction_decisions(ui_state);
                     }
                 }
             }
@@ -868,4 +879,164 @@ fn find_unit_name_by_id(id: board::domain::alias::ID, snapshot: &Snapshot) -> Op
         }
     }
     None
+}
+
+/// 同步反應決策草稿：依照最新 pending 更新 decisions，保留已有選擇，補入新反應者，移除消失者
+fn sync_reaction_decisions(ui_state: &mut LevelTabUIState) {
+    let pending = board::ecs_logic::reaction::get_pending_reactions(&ui_state.world);
+    let decisions = &mut ui_state.reaction_decision.decisions;
+
+    // 移除不在 pending 中的反應者
+    decisions.retain(|(occupant, _)| pending.iter().any(|r| r.reactor == *occupant));
+
+    // 補入 pending 中新出現的反應者（保持 pending 原始順序新增到尾端）
+    for reaction in &pending {
+        if !decisions
+            .iter()
+            .any(|(occupant, _)| *occupant == reaction.reactor)
+        {
+            decisions.push((reaction.reactor, None));
+        }
+    }
+}
+
+/// 渲染反應決策面板（取代底部操作面板）
+fn render_reaction_panel(
+    ui: &mut egui::Ui,
+    ui_state: &mut LevelTabUIState,
+    pending: &[PendingReaction],
+) -> Result<(), String> {
+    let mut confirm_clicked = false;
+    let error = Ok(());
+
+    ui.horizontal(|ui| {
+        ui.set_height(BOTTOM_PANEL_HEIGHT);
+
+        ui.label("反應：");
+
+        // 每個 decision 條目：反應者名稱 + 技能下拉 + 上移/下移
+        let decision_count = ui_state.reaction_decision.decisions.len();
+        let mut swap_indices: Option<(usize, usize)> = None;
+
+        for idx in 0..decision_count {
+            let (occupant, _) = ui_state.reaction_decision.decisions[idx];
+
+            let reactor_name = find_reactor_name(occupant, pending);
+            let available_skills = pending
+                .iter()
+                .find(|r| r.reactor == occupant)
+                .map(|r| r.available_skills.as_slice())
+                .unwrap_or(&[]);
+
+            ui.group(|ui| {
+                ui.label(&reactor_name);
+
+                // 技能下拉：None = 跳過
+                let selected_skill = &mut ui_state.reaction_decision.decisions[idx].1;
+                let selected_label = selected_skill
+                    .as_ref()
+                    .map(|s| s.as_str())
+                    .unwrap_or("跳過");
+                egui::ComboBox::from_id_salt(format!("reaction_skill_{}", idx))
+                    .selected_text(selected_label)
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .selectable_label(selected_skill.is_none(), "跳過")
+                            .clicked()
+                        {
+                            *selected_skill = None;
+                        }
+                        for skill_name in available_skills {
+                            let is_selected = selected_skill.as_ref() == Some(skill_name);
+                            if ui
+                                .selectable_label(is_selected, skill_name.as_str())
+                                .clicked()
+                            {
+                                *selected_skill = Some(skill_name.clone());
+                            }
+                        }
+                    });
+
+                // 排序按鈕
+                ui.horizontal(|ui| {
+                    let up_enabled = idx > 0;
+                    let down_enabled = idx + 1 < decision_count;
+                    ui.add_enabled_ui(up_enabled, |ui| {
+                        if ui.small_button("↑").clicked() {
+                            swap_indices = Some((idx - 1, idx));
+                        }
+                    });
+                    ui.add_enabled_ui(down_enabled, |ui| {
+                        if ui.small_button("↓").clicked() {
+                            swap_indices = Some((idx, idx + 1));
+                        }
+                    });
+                });
+            });
+        }
+
+        if let Some((a, b)) = swap_indices {
+            ui_state.reaction_decision.decisions.swap(a, b);
+        }
+
+        ui.separator();
+
+        let button_size = egui::vec2(
+            BOTTOM_PANEL_BUTTON_WIDTH,
+            BOTTOM_PANEL_HEIGHT - SPACING_SMALL * 2.0,
+        );
+        if ui
+            .add_sized(
+                button_size,
+                egui::Button::new("確認反應").wrap_mode(egui::TextWrapMode::Wrap),
+            )
+            .clicked()
+        {
+            confirm_clicked = true;
+        }
+    });
+
+    if confirm_clicked {
+        let decisions: Vec<(Occupant, SkillName)> = ui_state
+            .reaction_decision
+            .decisions
+            .iter()
+            .filter_map(|(occupant, skill)| skill.clone().map(|s| (*occupant, s)))
+            .collect();
+
+        board::ecs_logic::reaction::set_reactions(&mut ui_state.world, decisions)
+            .map_err(|e| format!("設定反應失敗：{}", e))?;
+
+        ui_state.reaction_decision.decisions.clear();
+
+        loop {
+            match board::ecs_logic::reaction::process_reactions(&mut ui_state.world)
+                .map_err(|e| format!("執行反應失敗：{}", e))?
+            {
+                ProcessReactionResult::Executed { effects } => {
+                    ui_state.battle_log.extend(effects);
+                    ui_state.right_panel_view = RightPanelView::Log;
+                }
+                ProcessReactionResult::NeedDecision => {
+                    sync_reaction_decisions(ui_state);
+                    break;
+                }
+                ProcessReactionResult::Done => {
+                    board::ecs_logic::movement::force_advance_move(&mut ui_state.world)
+                        .map_err(|e| format!("繼續移動失敗：{}", e))?;
+                    break;
+                }
+            }
+        }
+    }
+
+    error
+}
+
+/// 從 pending 列表中找到反應者的顯示名稱（目前以 ID 顯示，pending 不含型別名）
+fn find_reactor_name(occupant: Occupant, _pending: &[PendingReaction]) -> String {
+    match occupant {
+        Occupant::Unit(id) => format!("單位#{}", id),
+        Occupant::Object(id) => format!("物件#{}", id),
+    }
 }
