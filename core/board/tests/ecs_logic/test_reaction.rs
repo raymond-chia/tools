@@ -16,7 +16,9 @@ use board::ecs_logic::reaction::{
 };
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_logic::turn::start_new_round;
-use board::ecs_types::components::{Initiative, Occupant, Position, ReactionPoint, Unit};
+use board::ecs_types::components::{
+    Initiative, MaxReactionPoint, Occupant, Position, ReactionPoint, Unit,
+};
 use board::ecs_types::resources::ReactionState;
 use board::test_helpers::level_builder::{LevelBuilder, load_from_ascii};
 use std::collections::HashMap;
@@ -74,7 +76,10 @@ fn build_reaction_world_with(
         query.iter(&world).collect()
     };
     for entity in all_unit_entities {
-        world.entity_mut(entity).insert(ReactionPoint(1));
+        world
+            .entity_mut(entity)
+            .insert(MaxReactionPoint(1))
+            .insert(ReactionPoint(1));
     }
 
     start_new_round(&mut world).expect("start_new_round 應成功");
@@ -435,6 +440,7 @@ P E . . .
         let enemy_entity = find_entity(&mut world, enemy_occupant);
         world
             .entity_mut(enemy_entity)
+            .insert(MaxReactionPoint(case.enemy_reaction_point))
             .insert(ReactionPoint(case.enemy_reaction_point));
 
         const STOP_AFTER_FIRST_MOVE: Position = Position { x: 0, y: 1 };

@@ -108,6 +108,7 @@ define_attribute_components!(
     (block_protection, BlockProtection),
     (will, Will),
     (movement_point, MovementPoint),
+    (max_reaction_point, MaxReactionPoint),
     (reaction_point, ReactionPoint),
     (flanking_accuracy_bonus, FlankingAccuracyBonus),
 );

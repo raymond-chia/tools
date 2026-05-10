@@ -162,6 +162,7 @@ impl From<CalculatedAttributes> for AttributeBundle {
             block_protection: BlockProtection(attributes.block_protection),
             will: Will(attributes.will),
             movement_point: MovementPoint(attributes.movement_point),
+            max_reaction_point: MaxReactionPoint(attributes.reaction_point),
             reaction_point: ReactionPoint(attributes.reaction_point),
             flanking_accuracy_bonus: FlankingAccuracyBonus(attributes.flanking_accuracy_bonus),
         }

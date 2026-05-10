@@ -3,7 +3,9 @@
 use super::{get_component, get_component_mut};
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_logic::query::{find_entity_by_occupant, get_resource, get_resource_mut};
-use crate::ecs_types::components::{ActionState, Initiative, Occupant, Unit, UnitFaction};
+use crate::ecs_types::components::{
+    ActionState, Initiative, MaxReactionPoint, Occupant, ReactionPoint, Unit, UnitFaction,
+};
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::debug::short_type_name;
@@ -94,12 +96,18 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
         }
     }
 
-    // 重置當前單位的 ActionState
-    // TODO 重置反應次數
+    // 重置當前單位的 ActionState 與反應點數
     let entity = find_entity_by_occupant(world, current_occupant)?;
     let mut entity_mut = world.entity_mut(entity);
-    let mut action_state = get_component_mut!(entity_mut, ActionState)?;
-    *action_state = ActionState::Moved { cost: 0 };
+    {
+        let mut action_state = get_component_mut!(entity_mut, ActionState)?;
+        *action_state = ActionState::Moved { cost: 0 };
+    }
+    {
+        let max_reaction_point = get_component_mut!(entity_mut, MaxReactionPoint)?.0;
+        let mut reaction_point = get_component_mut!(entity_mut, ReactionPoint)?;
+        reaction_point.0 = max_reaction_point;
+    }
 
     require_turn_order(world)
 }

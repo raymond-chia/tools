@@ -2,13 +2,14 @@
 
 use super::constants::{UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
+use bevy_ecs::prelude::{Entity, With};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_logic::movement::{advance_move, plan_move};
 use board::ecs_logic::turn::{
     can_delay_current_unit, delay_current_unit, end_battle, end_current_turn, get_turn_order,
     remove_dead_unit, start_new_round,
 };
-use board::ecs_types::components::{Occupant, Position};
+use board::ecs_types::components::{MaxReactionPoint, Occupant, Position, ReactionPoint, Unit};
 use board::test_helpers::level_builder::LevelBuilder;
 
 // ============================================================================
@@ -422,5 +423,57 @@ fn test_get_turn_order_without_initialization_returns_error() {
         result.is_err(),
         "未初始化時應返回錯誤，實際結果：{:?}",
         result
+    );
+}
+
+// ============================================================================
+// 回合結束恢復藉機攻擊次數測試
+// ============================================================================
+
+/// 驗證 end_current_turn 正確恢復 ReactionPoint 到 MaxReactionPoint
+///
+/// - U1 的 MaxReactionPoint = 2，使用一次反應後 ReactionPoint = 1
+/// - 回合結束後，ReactionPoint 應恢復為 2
+#[test]
+fn test_end_current_turn_restores_reaction_point() {
+    let level_toml = LevelBuilder::from_ascii(
+        "
+        . U . . .
+        . . . . .
+        . . . . .
+    ",
+    )
+    .unit("U", UNIT_TYPE_WARRIOR, 1)
+    .to_toml()
+    .expect("LevelBuilder::to_toml 應成功");
+    let mut world = setup_world_with_level(&level_toml);
+
+    let entity: Entity = {
+        let mut query = world.query_filtered::<Entity, With<Unit>>();
+        query.iter(&world).next().expect("應有至少一個單位")
+    };
+    world
+        .entity_mut(entity)
+        .insert(MaxReactionPoint(2))
+        .insert(ReactionPoint(1));
+
+    let reaction_point_before = world
+        .entity(entity)
+        .get::<ReactionPoint>()
+        .expect("應有 ReactionPoint")
+        .0;
+    assert_eq!(reaction_point_before, 1, "設定後應為 1");
+
+    start_new_round(&mut world).expect("開始回合應成功");
+    end_current_turn(&mut world).expect("結束回合應成功");
+
+    let reaction_point_after = world
+        .entity(entity)
+        .get::<ReactionPoint>()
+        .expect("應有 ReactionPoint")
+        .0;
+    assert_eq!(
+        reaction_point_after, 2,
+        "回合結束後，ReactionPoint 應恢復為 MaxReactionPoint（2）"
     );
 }

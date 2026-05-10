@@ -5,9 +5,9 @@ use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
     ContactEffects, CurrentHp, CurrentMp, FlankingAccuracyBonus, Fortitude, Initiative,
-    MagicalAccuracy, MagicalAttack, MaxHp, MaxMp, MovementPoint, Object, ObjectBundle,
-    ObjectMovementCost, Occupant, OccupantTypeName, PhysicalAccuracy, PhysicalAttack, Position,
-    ReactionPoint, Skills, Unit, UnitBundle, UnitFaction, Will,
+    MagicalAccuracy, MagicalAttack, MaxHp, MaxMp, MaxReactionPoint, MovementPoint, Object,
+    ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName, PhysicalAccuracy, PhysicalAttack,
+    Position, ReactionPoint, Skills, Unit, UnitBundle, UnitFaction, Will,
 };
 use crate::ecs_types::resources::{GameData, LevelConfig, OccupantIndex, SkillTargeting};
 use crate::error::{BoardError, DataError, Result, UnitError};
@@ -260,6 +260,7 @@ pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeB
         block_protection: get_component!(entity_ref, BlockProtection)?.clone(),
         will: get_component!(entity_ref, Will)?.clone(),
         movement_point: get_component!(entity_ref, MovementPoint)?.clone(),
+        max_reaction_point: get_component!(entity_ref, MaxReactionPoint)?.clone(),
         reaction_point: get_component!(entity_ref, ReactionPoint)?.clone(),
         flanking_accuracy_bonus: get_component!(entity_ref, FlankingAccuracyBonus)?.clone(),
     })
