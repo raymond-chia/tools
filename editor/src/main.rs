@@ -6,6 +6,8 @@ mod editor_macros;
 mod generic_editor;
 mod generic_io;
 mod tabs;
+#[cfg(test)]
+mod tests;
 mod utils;
 
 use app::EditorApp;
