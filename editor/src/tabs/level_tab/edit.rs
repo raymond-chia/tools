@@ -61,7 +61,7 @@ pub fn render_form(
         ui.add(
             egui::DragValue::new(&mut level.max_player_units)
                 .speed(DRAG_VALUE_SPEED)
-                .range(1..=6),
+                .range(0..=6),
         );
         ui.add_space(SPACING_SMALL);
         ui.heading("部署點");
@@ -78,6 +78,7 @@ pub fn render_form(
         .map(|u| u.name.clone())
         .collect();
     egui::CollapsingHeader::new(format!("單位配置（{}）", level.unit_placements.len()))
+        .id_salt("unit_placements_header")
         .default_open(false)
         .show(ui, |ui| {
             render_unit_placement_list(
@@ -99,6 +100,7 @@ pub fn render_form(
         .map(|o| o.name.clone())
         .collect();
     egui::CollapsingHeader::new(format!("物件配置（{}）", level.object_placements.len()))
+        .id_salt("object_placements_header")
         .default_open(false)
         .show(ui, |ui| {
             render_object_placement_list(
@@ -410,7 +412,7 @@ fn render_object_placement_list(
     }
 }
 
-/// 渲染戰場預覽，支持拖曳修改位置，以及 Ctrl+D 複製懸停格的單位 / 物件
+/// 渲染戰場預覽，支持拖曳修改位置
 fn render_battlefield(
     ui: &mut egui::Ui,
     level: &mut LevelType,
@@ -458,22 +460,28 @@ fn render_battlefield(
                 battlefield::render_hover_tooltip(ui, rect, hovered_pos, get_tooltip_info_fn);
             }
 
-            // 把懸停格回傳出去，供閉包外判斷 Ctrl+D
+            // 把懸停格回傳出去，供閉包外判斷 Ctrl+D / Backspace
             hovered_pos
         });
 
     // 儲存滾動位置供下一幀使用
     ui_state.scroll_offset = scroll_output.state.offset;
 
-    // Ctrl+D：複製滑鼠懸停那格的單位 / 物件到最近空格
     if let Some(hovered_pos) = scroll_output.inner {
+        // Ctrl+D：複製滑鼠懸停那格的單位 / 物件到最近空格
         if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D)) {
             try_duplicate(level, hovered_pos, board, message_state);
+        }
+        // Backspace：刪除滑鼠懸停那格的單位 / 物件
+        if ui.input(|i| i.key_pressed(egui::Key::Backspace)) {
+            try_delete(level, hovered_pos);
         }
     }
 
     ui.add_space(SPACING_SMALL);
     battlefield::render_battlefield_legend(ui);
+
+    ui.label("快捷鍵：Ctrl+D 複製懸停格。Backspace 刪除");
 }
 
 // ==================== 輔助函數 ====================
@@ -701,21 +709,17 @@ fn find_nearest_empty(level: &LevelType, origin: Position, board: Board) -> Opti
     None
 }
 
-// 複製:依懸停格找出是 unit 還是 object,clone 整筆 placement、改 position 後 push
+// 複製：依懸停格找出是部署點 / unit / object，在最近空格新增一份
 fn try_duplicate(
     level: &mut LevelType,
     origin: Position,
     board: Board,
     message_state: &mut MessageState,
 ) {
-    // 先確認原格有可複製物(只處理 unit / object,不處理部署點)
+    // 先確認原格有可複製物（空格不處理）
     let dragged = identify_dragged_object(level, &origin);
-    let is_dup_target = matches!(
-        dragged,
-        Some(DraggedObject::Unit(_)) | Some(DraggedObject::Object(_))
-    );
-    if !is_dup_target {
-        return; // 懸停格不是單位也不是物件,靜默不動作
+    if dragged.is_none() {
+        return; // 懸停格是空格，靜默不動作
     }
 
     let Some(new_pos) = find_nearest_empty(level, origin, board) else {
@@ -724,6 +728,9 @@ fn try_duplicate(
     };
 
     match dragged {
+        Some(DraggedObject::Deployment(_)) => {
+            level.deployment_positions.push(new_pos);
+        }
         Some(DraggedObject::Unit(idx)) => {
             let mut copy = level.unit_placements[idx].clone();
             copy.position = new_pos;
@@ -734,6 +741,23 @@ fn try_duplicate(
             copy.position = new_pos;
             level.object_placements.push(copy);
         }
-        _ => {}
+        None => {}
+    }
+}
+
+// 刪除：依懸停格找出是部署點 / unit / object，移除整筆
+fn try_delete(level: &mut LevelType, origin: Position) {
+    match identify_dragged_object(level, &origin) {
+        Some(DraggedObject::Deployment(idx)) => {
+            level.deployment_positions.remove(idx);
+        }
+        Some(DraggedObject::Unit(idx)) => {
+            level.unit_placements.remove(idx);
+        }
+        Some(DraggedObject::Object(idx)) => {
+            level.object_placements.remove(idx);
+        }
+        // 空格：靜默不動作
+        None => {}
     }
 }

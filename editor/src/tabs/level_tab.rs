@@ -130,25 +130,26 @@ impl EditorItem for LevelType {
         if self.board_width == 0 || self.board_height == 0 {
             return Err("棋盤尺寸必須大於 0".to_string());
         }
-        if self.max_player_units == 0 {
-            return Err("人數上限必須大於 0".to_string());
+
+        let has_player_unit = self
+            .unit_placements
+            .iter()
+            .any(|u| u.faction_id == PLAYER_FACTION_ID);
+
+        // 玩家必須有兵源：人數上限為 0 時，靠預放的玩家單位墊底
+        if self.max_player_units == 0 && !has_player_unit {
+            return Err("人數上限為 0 時，必須至少放置一個玩家單位".to_string());
         }
-        if self.deployment_positions.is_empty() {
-            // 允許沒有部署點，但必須有預先放好的玩家單位墊底
-            let has_player_unit = self
-                .unit_placements
-                .iter()
-                .any(|u| u.faction_id == PLAYER_FACTION_ID);
-            if !has_player_unit {
-                return Err("沒有部署點時，必須至少放置一個玩家單位".to_string());
-            }
-        } else if self.deployment_positions.len() < self.max_player_units {
+
+        // 有設人數上限時，部署點數量必須湊滿上限
+        if self.deployment_positions.len() < self.max_player_units {
             return Err(format!(
                 "部署點數量 ({}) 少於上限 ({})",
                 self.deployment_positions.len(),
                 self.max_player_units
             ));
         }
+
         if self.factions.is_empty() {
             return Err("至少需要一個陣營".to_string());
         }

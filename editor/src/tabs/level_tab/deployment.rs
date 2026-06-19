@@ -6,6 +6,7 @@ use crate::constants::*;
 use crate::utils::search::{
     combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
 };
+use board::domain::constants::PLAYER_FACTION_ID;
 use board::ecs_types::components::Position;
 use board::error::Result as CResult;
 
@@ -25,7 +26,7 @@ pub fn render_form(
     let deployed_count = deployed_positions(&snapshot).count();
 
     // 頂部：按鈕區
-    if let Err(e) = render_top_bar(ui, deployed_count, ui_state) {
+    if let Err(e) = render_top_bar(ui, &snapshot, ui_state) {
         message_state.set_error(format!("渲染頂部按鈕區失敗：{}", e));
         return;
     }
@@ -91,7 +92,7 @@ pub fn render_form(
 
 fn render_top_bar(
     ui: &mut egui::Ui,
-    deployed_count: usize,
+    snapshot: &Snapshot,
     ui_state: &mut LevelTabUIState,
 ) -> Result<(), String> {
     let mut error = Ok(());
@@ -103,9 +104,9 @@ fn render_top_bar(
 
         ui.separator();
 
-        let has_deployed = deployed_count > 0;
+        let can_start = can_start_battle(snapshot);
         if ui
-            .add_enabled(has_deployed, egui::Button::new("開始戰鬥"))
+            .add_enabled(can_start, egui::Button::new("開始戰鬥"))
             .clicked()
         {
             // TODO: 未來改為玩家單位進入敵人 10 格範圍內才觸發
@@ -329,6 +330,8 @@ fn render_battlefield(
     Ok(())
 }
 
+// ==================== 輔助函數 ====================
+
 /// 處理棋盤點擊事件
 /// 左鍵：點擊部署點則選擇，否則取消選擇
 /// 右鍵：點擊有單位的位置則顯示詳情，否則取消選擇
@@ -364,4 +367,15 @@ fn deployed_positions(snapshot: &Snapshot) -> impl Iterator<Item = &Position> {
         .unit_map
         .keys()
         .filter(|pos| snapshot.deployment_positions.contains(pos))
+}
+
+/// 判斷是否能開始戰鬥：部署點上有單位，或戰場上有預放的玩家單位
+fn can_start_battle(snapshot: &Snapshot) -> bool {
+    if deployed_positions(snapshot).next().is_some() {
+        return true;
+    }
+    snapshot
+        .unit_map
+        .values()
+        .any(|bundle| bundle.unit_faction.0 == PLAYER_FACTION_ID)
 }
