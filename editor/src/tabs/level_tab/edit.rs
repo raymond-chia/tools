@@ -128,7 +128,7 @@ pub fn render_form(
     }
 
     // 戰場預覽區
-    render_battlefield(ui, level, ui_state);
+    render_battlefield(ui, level, ui_state, message_state);
 }
 
 /// 渲染陣營列表
@@ -404,8 +404,13 @@ fn render_object_placement_list(
     }
 }
 
-/// 渲染戰場預覽，支持拖曳修改位置
-fn render_battlefield(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState) {
+/// 渲染戰場預覽，支持拖曳修改位置，以及 Ctrl+D 複製懸停格的單位 / 物件
+fn render_battlefield(
+    ui: &mut egui::Ui,
+    level: &mut LevelType,
+    ui_state: &mut LevelTabUIState,
+    message_state: &mut MessageState,
+) {
     let board = Board {
         width: level.board_width,
         height: level.board_height,
@@ -418,7 +423,7 @@ fn render_battlefield(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut L
         // 避免兩個 scroll bar 重疊
         .max_width(ui.available_width() - SPACING_MEDIUM)
         .min_scrolled_height(LIST_PANEL_MIN_HEIGHT)
-        .show(ui, |ui: &mut egui::Ui| {
+        .show(ui, |ui: &mut egui::Ui| -> Option<Position> {
             let total_size = battlefield::calculate_grid_dimensions(board);
             let (rect, response) =
                 ui.allocate_exact_size(total_size, egui::Sense::click_and_drag());
@@ -446,9 +451,20 @@ fn render_battlefield(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut L
                 let get_tooltip_info_fn = get_tooltip_info(&deployment_set, &unit_map, &object_map);
                 battlefield::render_hover_tooltip(ui, rect, hovered_pos, get_tooltip_info_fn);
             }
+
+            // 把懸停格回傳出去，供閉包外判斷 Ctrl+D
+            hovered_pos
         });
+
     // 儲存滾動位置供下一幀使用
     ui_state.scroll_offset = scroll_output.state.offset;
+
+    // Ctrl+D：複製滑鼠懸停那格的單位 / 物件到最近空格
+    if let Some(hovered_pos) = scroll_output.inner {
+        if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D)) {
+            try_duplicate(level, hovered_pos, board, message_state);
+        }
+    }
 
     ui.add_space(SPACING_SMALL);
     battlefield::render_battlefield_legend(ui);
@@ -648,5 +664,70 @@ fn get_tooltip_info(
         } else {
             format!("({}, {})", pos.x, pos.y)
         }
+    }
+}
+
+// 找最近空格:以 origin 為中心,曼哈頓距離 1~3 圈往外找,跳過所有已占用格
+fn find_nearest_empty(level: &LevelType, origin: Position, board: Board) -> Option<Position> {
+    let (deployment_set, unit_map, object_map) = prepare_lookup_maps(level);
+    let occupied = |p: &Position| {
+        deployment_set.contains(p) || unit_map.contains_key(p) || object_map.contains_key(p)
+    };
+    for radius in 1..=3 {
+        for dx in -(radius as i64)..=(radius as i64) {
+            for dy in -(radius as i64)..=(radius as i64) {
+                if dx.unsigned_abs() as usize + dy.unsigned_abs() as usize != radius {
+                    continue; // 只取剛好等於這圈距離的格子
+                }
+                let (Some(x), Some(y)) = (
+                    origin.x.checked_add_signed(dx as isize),
+                    origin.y.checked_add_signed(dy as isize),
+                ) else {
+                    continue;
+                };
+                let cand = Position { x, y };
+                if board::logic::board::is_valid_position(board, cand) && !occupied(&cand) {
+                    return Some(cand);
+                }
+            }
+        }
+    }
+    None
+}
+
+// 複製:依懸停格找出是 unit 還是 object,clone 整筆 placement、改 position 後 push
+fn try_duplicate(
+    level: &mut LevelType,
+    origin: Position,
+    board: Board,
+    message_state: &mut MessageState,
+) {
+    // 先確認原格有可複製物(只處理 unit / object,不處理部署點)
+    let dragged = identify_dragged_object(level, &origin);
+    let is_dup_target = matches!(
+        dragged,
+        Some(DraggedObject::Unit(_)) | Some(DraggedObject::Object(_))
+    );
+    if !is_dup_target {
+        return; // 懸停格不是單位也不是物件,靜默不動作
+    }
+
+    let Some(new_pos) = find_nearest_empty(level, origin, board) else {
+        message_state.set_error("附近三格內沒有空格可放置複製品".to_string());
+        return;
+    };
+
+    match dragged {
+        Some(DraggedObject::Unit(idx)) => {
+            let mut copy = level.unit_placements[idx].clone();
+            copy.position = new_pos;
+            level.unit_placements.push(copy);
+        }
+        Some(DraggedObject::Object(idx)) => {
+            let mut copy = level.object_placements[idx].clone();
+            copy.position = new_pos;
+            level.object_placements.push(copy);
+        }
+        _ => {}
     }
 }
