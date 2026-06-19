@@ -65,7 +65,6 @@ pub fn render_form(
 
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
-            .max_height(300.0)
             .show(ui, |ui| {
                 let visible_skills =
                     filter_by_search(&ui_state.available_skills, &ui_state.skill_search_query);

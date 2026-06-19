@@ -4,7 +4,8 @@ use super::{get_component, get_component_mut};
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_logic::query::{find_entity_by_occupant, get_resource, get_resource_mut};
 use crate::ecs_types::components::{
-    ActionState, Initiative, MaxReactionPoint, Occupant, ReactionPoint, Unit, UnitFaction,
+    ActionState, AppliedBuff, Initiative, MaxReactionPoint, Occupant, ReactionPoint, Unit,
+    UnitFaction,
 };
 use crate::ecs_types::resources::TurnOrder;
 use crate::error::{BoardError, DataError, Result};
@@ -43,6 +44,30 @@ fn insert_turn_order(world: &mut World, round: u32) {
 /// 從 World 取得 TurnOrder 的內部 helper
 fn require_turn_order(world: &World) -> Result<&TurnOrder> {
     get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")
+}
+
+/// 整輪輪替時呼叫:所有 buff 的 remaining_duration 減 1(None 視為無限期,不動)
+fn tick_buff_durations(world: &mut World) {
+    let mut query = world.query::<&mut AppliedBuff>();
+    for mut buff in query.iter_mut(world) {
+        if let Some(remaining) = buff.remaining_duration {
+            buff.remaining_duration = Some(remaining.saturating_sub(1));
+        }
+    }
+}
+
+/// 單位回合開始時呼叫:移除該單位身上已過期(remaining_duration == Some(0))的 buff
+fn remove_expired_buffs_for(world: &mut World, occupant: Occupant) {
+    let expired: Vec<bevy_ecs::entity::Entity> = world
+        .query::<(bevy_ecs::entity::Entity, &AppliedBuff)>()
+        .iter(world)
+        .filter(|(_, buff)| buff.target == occupant && buff.remaining_duration == Some(0))
+        .map(|(entity, _)| entity)
+        .collect();
+
+    for entity in expired {
+        world.despawn(entity);
+    }
 }
 
 /// 取得 TurnOrder 當前行動單位
@@ -92,9 +117,18 @@ pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder> {
         None => {
             // 所有單位都已行動，開始新一輪
             let prev_round = inner.round;
+            tick_buff_durations(world);
             insert_turn_order(world, prev_round + 1);
         }
     }
+
+    // 新一輪時 current_index 歸 0,此處統一取推進後的當前單位
+    let next_occupant = {
+        let turn_order = require_turn_order(world)?;
+        get_current_unit(turn_order)?
+    };
+    // 下一個單位的回合開始：移除它身上已過期的 buff
+    remove_expired_buffs_for(world, next_occupant);
 
     // 重置當前單位的 ActionState 與反應點數
     let entity = find_entity_by_occupant(world, current_occupant)?;
