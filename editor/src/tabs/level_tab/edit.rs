@@ -71,37 +71,43 @@ pub fn render_form(
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
 
-    // 單位配置區
-    ui.heading("單位配置");
+    // 單位配置區（可收合，避免新增/複製時清單變長把戰場往下推）
     let unit_names: Vec<TypeName> = ui_state
         .available_units
         .iter()
         .map(|u| u.name.clone())
         .collect();
-    render_unit_placement_list(
-        ui,
-        &mut level.unit_placements,
-        &level.factions,
-        &unit_names,
-        &mut ui_state.unit_search_query,
-    );
+    egui::CollapsingHeader::new(format!("單位配置（{}）", level.unit_placements.len()))
+        .default_open(false)
+        .show(ui, |ui| {
+            render_unit_placement_list(
+                ui,
+                &mut level.unit_placements,
+                &level.factions,
+                &unit_names,
+                &mut ui_state.unit_search_query,
+            );
+        });
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
 
-    // 物件配置區
-    ui.heading("物件配置");
+    // 物件配置區（可收合）
     let object_names: Vec<TypeName> = ui_state
         .available_objects
         .iter()
         .map(|o| o.name.clone())
         .collect();
-    render_object_placement_list(
-        ui,
-        &mut level.object_placements,
-        &object_names,
-        &mut ui_state.object_search_query,
-    );
+    egui::CollapsingHeader::new(format!("物件配置（{}）", level.object_placements.len()))
+        .default_open(false)
+        .show(ui, |ui| {
+            render_object_placement_list(
+                ui,
+                &mut level.object_placements,
+                &object_names,
+                &mut ui_state.object_search_query,
+            );
+        });
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();

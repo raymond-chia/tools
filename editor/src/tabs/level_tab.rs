@@ -9,6 +9,7 @@ use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::MessageState;
 use bevy_ecs::world::World;
 use board::domain::alias::{SkillName, TypeName};
+use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::SkillType;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
@@ -132,7 +133,16 @@ impl EditorItem for LevelType {
         if self.max_player_units == 0 {
             return Err("人數上限必須大於 0".to_string());
         }
-        if self.deployment_positions.len() < self.max_player_units {
+        if self.deployment_positions.is_empty() {
+            // 允許沒有部署點，但必須有預先放好的玩家單位墊底
+            let has_player_unit = self
+                .unit_placements
+                .iter()
+                .any(|u| u.faction_id == PLAYER_FACTION_ID);
+            if !has_player_unit {
+                return Err("沒有部署點時，必須至少放置一個玩家單位".to_string());
+            }
+        } else if self.deployment_positions.len() < self.max_player_units {
             return Err(format!(
                 "部署點數量 ({}) 少於上限 ({})",
                 self.deployment_positions.len(),
