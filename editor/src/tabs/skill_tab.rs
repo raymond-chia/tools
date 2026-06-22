@@ -310,97 +310,6 @@ pub fn file_name() -> &'static str {
     "skills"
 }
 
-// ==================== 通用輔助函數 ====================
-
-/// 通用 enum 下拉選單，使用 Display 比較 discriminant
-fn enum_combo_box<E>(ui: &mut egui::Ui, label: &str, current: &mut E, id_salt: &str)
-where
-    E: IntoEnumIterator + Default + Display + Clone,
-{
-    ui.horizontal(|ui| {
-        ui.label(label);
-        let current_label = current.to_string();
-        egui::ComboBox::from_id_salt(id_salt)
-            .selected_text(&current_label)
-            .show_ui(ui, |ui| {
-                for variant in E::iter() {
-                    let variant_label = variant.to_string();
-                    let selected = variant_label == current_label;
-                    if ui.selectable_label(selected, &variant_label).clicked() {
-                        *current = variant;
-                    }
-                }
-            });
-    });
-}
-
-/// 通用 enum variant 新增按鈕（Grid 排列）
-fn enum_add_buttons<E>(ui: &mut egui::Ui, items: &mut Vec<E>, id_salt: &str, columns: usize)
-where
-    E: IntoEnumIterator + Display,
-{
-    egui::Grid::new(id_salt)
-        .num_columns(columns)
-        .show(ui, |ui| {
-            for (idx, variant) in E::iter().enumerate() {
-                if ui.button(format!("+ {}", variant)).clicked() {
-                    items.push(variant);
-                }
-                if (idx + 1) % columns == 0 {
-                    ui.end_row();
-                }
-            }
-        });
-}
-
-/// 渲染數值輸入
-fn drag_value<N: egui::emath::Numeric>(ui: &mut egui::Ui, label: &str, value: &mut N) {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::DragValue::new(value).speed(DRAG_VALUE_SPEED));
-    });
-}
-
-/// 渲染數值範圍輸入
-fn pair_drag_value<N: egui::emath::Numeric>(ui: &mut egui::Ui, label: &str, pair: &mut (N, N)) {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        ui.add(egui::DragValue::new(&mut pair.0).speed(DRAG_VALUE_SPEED));
-        ui.label("~");
-        ui.add(egui::DragValue::new(&mut pair.1).speed(DRAG_VALUE_SPEED));
-    });
-}
-
-/// 渲染刪除按鈕，回傳是否點擊
-fn delete_button(ui: &mut egui::Ui) -> bool {
-    ui.button("x").clicked()
-}
-
-/// 渲染簡單 Vec 的新增/刪除列表
-fn render_simple_vec<E, F>(
-    ui: &mut egui::Ui,
-    label: &str,
-    items: &mut Vec<E>,
-    id_salt: &str,
-    render_item: F,
-) where
-    F: Fn(&mut egui::Ui, &mut E, &str),
-{
-    ui.label(label);
-    let mut to_remove = None;
-    for (idx, item) in items.iter_mut().enumerate() {
-        ui.horizontal(|ui| {
-            if delete_button(ui) {
-                to_remove = Some(idx);
-            }
-            render_item(ui, item, &format!("{id_salt}_{idx}"));
-        });
-    }
-    if let Some(idx) = to_remove {
-        items.remove(idx);
-    }
-}
-
 // ==================== 表單渲染 ====================
 
 /// 渲染技能編輯表單
@@ -616,10 +525,11 @@ fn render_continuous_effect_list(
     });
 
     if ui.button("+ 種族屬性").clicked() {
+        effects.clear();
         for attr in Attribute::iter() {
             effects.push(ContinuousEffect::AttributeFlat {
                 attribute: attr,
-                value: 0,
+                value: default_race_attribute_value(attr),
             });
         }
     }
@@ -629,7 +539,12 @@ fn render_continuous_effect_list(
 fn render_continuous_effect(ui: &mut egui::Ui, effect: &mut ContinuousEffect, id_salt: &str) {
     match effect {
         ContinuousEffect::AttributeFlat { attribute, value } => {
+            let previous_attribute = *attribute;
             enum_combo_box(ui, "屬性：", attribute, &format!("{id_salt}_attr"));
+            // 切換屬性時，數值跳到新屬性的預設值
+            if *attribute != previous_attribute {
+                *value = default_race_attribute_value(*attribute);
+            }
             drag_value(ui, "數值：", value);
         }
         ContinuousEffect::AttributeScaling {
@@ -987,5 +902,106 @@ fn render_effect_condition(ui: &mut egui::Ui, condition: &mut EffectCondition, i
             let mut zero = 0_i32;
             drag_value(ui, "暴擊加成（僅 AgilityAndBlock 可用）：", &mut zero);
         });
+    }
+}
+
+// ==================== 通用輔助函數 ====================
+
+/// 通用 enum 下拉選單，使用 Display 比較 discriminant
+fn enum_combo_box<E>(ui: &mut egui::Ui, label: &str, current: &mut E, id_salt: &str)
+where
+    E: IntoEnumIterator + Default + Display + Clone,
+{
+    ui.horizontal(|ui| {
+        ui.label(label);
+        let current_label = current.to_string();
+        egui::ComboBox::from_id_salt(id_salt)
+            .selected_text(&current_label)
+            .show_ui(ui, |ui| {
+                for variant in E::iter() {
+                    let variant_label = variant.to_string();
+                    let selected = variant_label == current_label;
+                    if ui.selectable_label(selected, &variant_label).clicked() {
+                        *current = variant;
+                    }
+                }
+            });
+    });
+}
+
+/// 通用 enum variant 新增按鈕（Grid 排列）
+fn enum_add_buttons<E>(ui: &mut egui::Ui, items: &mut Vec<E>, id_salt: &str, columns: usize)
+where
+    E: IntoEnumIterator + Display,
+{
+    egui::Grid::new(id_salt)
+        .num_columns(columns)
+        .show(ui, |ui| {
+            for (idx, variant) in E::iter().enumerate() {
+                if ui.button(format!("+ {}", variant)).clicked() {
+                    items.push(variant);
+                }
+                if (idx + 1) % columns == 0 {
+                    ui.end_row();
+                }
+            }
+        });
+}
+
+/// 渲染數值輸入
+fn drag_value<N: egui::emath::Numeric>(ui: &mut egui::Ui, label: &str, value: &mut N) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.add(egui::DragValue::new(value).speed(DRAG_VALUE_SPEED));
+    });
+}
+
+/// 渲染數值範圍輸入
+fn pair_drag_value<N: egui::emath::Numeric>(ui: &mut egui::Ui, label: &str, pair: &mut (N, N)) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.add(egui::DragValue::new(&mut pair.0).speed(DRAG_VALUE_SPEED));
+        ui.label("~");
+        ui.add(egui::DragValue::new(&mut pair.1).speed(DRAG_VALUE_SPEED));
+    });
+}
+
+/// 渲染刪除按鈕，回傳是否點擊
+fn delete_button(ui: &mut egui::Ui) -> bool {
+    ui.button("x").clicked()
+}
+
+/// 渲染簡單 Vec 的新增/刪除列表
+fn render_simple_vec<E, F>(
+    ui: &mut egui::Ui,
+    label: &str,
+    items: &mut Vec<E>,
+    id_salt: &str,
+    render_item: F,
+) where
+    F: Fn(&mut egui::Ui, &mut E, &str),
+{
+    ui.label(label);
+    let mut to_remove = None;
+    for (idx, item) in items.iter_mut().enumerate() {
+        ui.horizontal(|ui| {
+            if delete_button(ui) {
+                to_remove = Some(idx);
+            }
+            render_item(ui, item, &format!("{id_salt}_{idx}"));
+        });
+    }
+    if let Some(idx) = to_remove {
+        items.remove(idx);
+    }
+}
+
+/// 編輯器產生 `AttributeFlat` 時，各屬性帶入的初始值；未列出的屬性為 0
+fn default_race_attribute_value(attr: Attribute) -> i32 {
+    match attr {
+        Attribute::MovementPoint => 50,
+        Attribute::ReactionPoint => 1,
+        Attribute::FlankingAccuracyBonus => 10,
+        _ => 0,
     }
 }

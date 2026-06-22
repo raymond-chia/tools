@@ -68,8 +68,8 @@ define_attributes!(
 /// 技能標籤
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum SkillTag {
-    Flankable,
     #[default]
+    Flankable,
     UsableAfterDoubleMove,
     AllowedDuringGrabbing,
 }
