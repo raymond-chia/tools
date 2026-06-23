@@ -31,8 +31,8 @@ pub trait EditorItem:
     }
 
     /// 編輯確認後的鉤子（驗證通過後呼叫）
-    /// 用於進行排序、正規化等操作
-    fn after_confirm(&mut self) {}
+    /// 用於進行排序、正規化等操作，可參考 UI 狀態（如技能列表順序）
+    fn after_confirm(&mut self, _ui_state: &Self::UIState) {}
 }
 
 /// 驗證項目名稱的輔助函數（用於檢查名稱非空和重複）

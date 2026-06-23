@@ -31,6 +31,16 @@ impl EditorItem for UnitType {
     fn type_name() -> &'static str {
         "單位"
     }
+
+    fn after_confirm(&mut self, ui_state: &Self::UIState) {
+        // 依技能列表的順序重建已選技能，使儲存順序與列表一致
+        self.skills = ui_state
+            .available_skills
+            .iter()
+            .filter(|name| self.skills.contains(name))
+            .cloned()
+            .collect();
+    }
 }
 
 /// 取得單位的檔案名稱

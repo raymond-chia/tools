@@ -247,6 +247,7 @@ core/board/
 - `pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()>` - 新增一個目標位置到選取暫存
 - `pub fn cancel_skill_targeting(world: &mut World)` - 取消技能選目標流程
 - `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
+- `pub(crate) fn apply_effect_entries(world: &mut World, entries: &[EffectEntry], used_ids: &mut HashSet<ID>) -> Result<()>` - 應用效果條目到遊戲世界
 
 ### error.rs
 

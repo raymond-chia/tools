@@ -120,7 +120,7 @@ impl<T: EditorItem> GenericEditorState<T> {
 
         // 驗證通過後的鉤子（如排序、正規化等）
         let mut confirmed_item = item;
-        confirmed_item.after_confirm();
+        confirmed_item.after_confirm(&self.ui_state);
 
         // 執行相應的操作
         match editing_index {

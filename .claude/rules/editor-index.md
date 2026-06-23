@@ -43,6 +43,9 @@ editor/
 │   │   ├── mod.rs           - 工具模組定義和導出
 │   │   ├── dnd.rs           - 拖放功能
 │   │   └── search.rs        - 搜尋和過濾功能
+│   ├── tests/               - 測試模組
+│   │   ├── mod.rs           - 測試模組定義
+│   │   └── generic_io.rs    - GenericIO 功能測試
 │   └── tabs/
 │       ├── mod.rs           - 標籤頁模組定義
 │       ├── object_tab.rs    - 物件編輯器
@@ -83,7 +86,7 @@ editor/
   - `fn type_name() -> &'static str` - 項目類型名稱
   - `fn type_name_plural() -> &'static str` - 複數形式
   - `fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String>` - 驗證項目
-  - `fn after_confirm(&mut self)` - 編輯確認後的鉤子（如排序、正規化等）
+  - `fn after_confirm(&mut self, ui_state: &Self::UIState)` - 編輯確認後的鉤子（如排序、正規化等，可參考 UI 狀態）
 - `pub fn validate_name<T: EditorItem>(item: &T, all_items: &[T], editing_index: Option<usize>) -> Result<(), String>` - 驗證項目名稱（檢查非空和重複）
 
 ### editor/generic_editor.rs

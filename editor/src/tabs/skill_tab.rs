@@ -86,7 +86,7 @@ impl EditorItem for SkillType {
         Ok(())
     }
 
-    fn after_confirm(&mut self) {
+    fn after_confirm(&mut self, _ui_state: &Self::UIState) {
         if let Self::Active {
             target, effects, ..
         } = self

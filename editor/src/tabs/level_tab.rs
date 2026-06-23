@@ -193,7 +193,7 @@ impl EditorItem for LevelType {
         Ok(())
     }
 
-    fn after_confirm(&mut self) {
+    fn after_confirm(&mut self, _ui_state: &Self::UIState) {
         // 按位置排序（X 座標優先，再按 Y 座標）
         self.deployment_positions.sort_by_key(|pos| (pos.x, pos.y));
         self.unit_placements
