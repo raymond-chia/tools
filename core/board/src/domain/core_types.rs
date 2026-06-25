@@ -94,8 +94,8 @@ pub enum AccuracySource {
 /// 效果目標
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Display, EnumIter)]
 pub enum CasterOrTarget {
-    Caster,
     #[default]
+    Caster,
     Target,
 }
 

@@ -1,6 +1,6 @@
 //! 單位編輯器 tab
 
-use crate::constants::SPACING_SMALL;
+use crate::constants::{SPACING_MEDIUM, SPACING_SMALL};
 use crate::editor_item::EditorItem;
 use crate::generic_editor::MessageState;
 use crate::utils::search::{filter_by_search, render_search_input};
@@ -97,5 +97,13 @@ pub fn render_form(
     }
 
     ui.separator();
+
+    // 依儲存順序列出技能總數與已選技能名稱，方便快速檢視
     ui.label(format!("已選擇：{} 個技能", unit.skills.len()));
+    ui.horizontal_wrapped(|ui| {
+        for skill_name in &unit.skills {
+            ui.label(skill_name);
+            ui.add_space(SPACING_MEDIUM);
+        }
+    });
 }

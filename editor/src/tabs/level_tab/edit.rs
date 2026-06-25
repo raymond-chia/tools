@@ -48,6 +48,19 @@ pub fn render_form(
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
 
+    // 上方部署按鈕（部署返回後免去重新捲動到底部）
+    if ui
+        .push_id("start_deploy_top", |ui| {
+            render_start_deploy_button(ui, level, ui_state, message_state)
+        })
+        .inner
+    {
+        return;
+    }
+
+    ui.add_space(SPACING_MEDIUM);
+    ui.separator();
+
     // 陣營配置區
     ui.heading("陣營配置");
     render_faction_list(ui, &mut level.factions);
@@ -114,6 +127,17 @@ pub fn render_form(
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
 
+    // 戰場預覽區
+    render_battlefield(ui, level, ui_state, message_state);
+}
+
+/// 渲染「開始部署」按鈕，回傳是否已進入部署模式
+fn render_start_deploy_button(
+    ui: &mut egui::Ui,
+    level: &mut LevelType,
+    ui_state: &mut LevelTabUIState,
+    message_state: &mut MessageState,
+) -> bool {
     if ui.button("開始部署").clicked() {
         match initialize_world(
             level,
@@ -127,16 +151,14 @@ pub fn render_form(
                 ui_state.selected_right_pos = None;
                 ui_state.battle_action = BattleAction::Normal;
                 ui_state.mode = LevelTabMode::Deploy;
-                return;
+                return true;
             }
             Err(msg) => {
                 message_state.set_error(format!("進入部署模式失敗：{}", msg));
             }
         }
     }
-
-    // 戰場預覽區
-    render_battlefield(ui, level, ui_state, message_state);
+    false
 }
 
 /// 渲染陣營列表
@@ -424,7 +446,15 @@ fn render_battlefield(
         height: level.board_height,
     };
 
-    ui.heading("戰場預覽");
+    ui.horizontal(|ui| {
+        ui.heading("戰場預覽");
+        ui.add_space(SPACING_MEDIUM);
+        // 下方部署按鈕
+        ui.push_id("start_deploy_bottom", |ui| {
+            render_start_deploy_button(ui, level, ui_state, message_state)
+        })
+        .inner;
+    });
 
     let scroll_output = egui::ScrollArea::both()
         .auto_shrink([false; 2])

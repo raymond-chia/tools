@@ -190,6 +190,20 @@ impl EditorItem for LevelType {
             return Err("部署點和單位位置存在重複".to_string());
         }
 
+        // 檢查單位未設定類型
+        for (idx, unit) in self.unit_placements.iter().enumerate() {
+            if unit.unit_type_name.is_empty() {
+                return Err(format!("第 {} 個單位未設定類型", idx + 1));
+            }
+        }
+
+        // 檢查物件未設定類型
+        for (idx, obj) in self.object_placements.iter().enumerate() {
+            if obj.object_type_name.is_empty() {
+                return Err(format!("第 {} 個物件未設定類型", idx + 1));
+            }
+        }
+
         Ok(())
     }
 
