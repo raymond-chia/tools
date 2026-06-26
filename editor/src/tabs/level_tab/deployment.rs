@@ -113,7 +113,6 @@ fn render_top_bar(
             match board::ecs_logic::turn::start_new_round(&mut ui_state.world) {
                 Ok(_) => {
                     board::ecs_logic::deployment::remove_deployment_positions(&mut ui_state.world);
-                    ui_state.battle_log.clear();
                     ui_state.mode = LevelTabMode::Battle;
                 }
                 Err(e) => {

@@ -1,6 +1,6 @@
 //! 回合順序計算邏輯（純邏輯，不操作 World）
 
-use crate::domain::core_types::TurnEntry;
+use crate::domain::turn::TurnEntry;
 use crate::ecs_types::components::Occupant;
 use crate::error::{BoardError, Result};
 use std::cmp::Ordering;

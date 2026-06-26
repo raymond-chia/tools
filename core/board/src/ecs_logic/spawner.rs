@@ -4,7 +4,7 @@ use crate::ecs_types::components::{
     ActionState, BlocksSight, BlocksSound, ContactEffects, Object, ObjectBundle,
     ObjectMovementCost, Occupant, OccupantTypeName, Skills, Unit, UnitBundle, UnitFaction,
 };
-use crate::ecs_types::resources::{Board, DeploymentConfig, GameData, LevelConfig};
+use crate::ecs_types::resources::{BattleLog, Board, DeploymentConfig, GameData, LevelConfig};
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::LevelType;
 use crate::logic::id_generator::generate_unique_id;
@@ -104,6 +104,9 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
         max_player_units: level.max_player_units,
         deployment_positions: level.deployment_positions.into_iter().collect(),
     });
+
+    // 初始化戰鬥 log（關卡生成時建立，整場戰鬥持有同一份）
+    world.insert_resource(BattleLog::default());
 
     // Spawn Unit entities
     for bundle in unit_bundles {

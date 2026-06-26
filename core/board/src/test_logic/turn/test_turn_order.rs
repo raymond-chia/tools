@@ -1,6 +1,6 @@
 //! 回合順序計算與管理的測試
 
-use crate::domain::core_types::TurnEntry;
+use crate::domain::turn::TurnEntry;
 use crate::ecs_types::components::Occupant;
 use crate::logic::turn_order::{
     TurnOrderInput, calculate_turn_order, delay_unit, get_active_index, remove_unit,

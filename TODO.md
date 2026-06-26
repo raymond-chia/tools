@@ -17,7 +17,7 @@
   - [x] 反應技能執行效果
   - [x] 夾擊
   - `get_valid_targets`（列出所有合法目標格子）— 先不做，UI 自行用 min_range/max_range 畫範圍
-- [ ] 效果管理 - TTL 扣除、Buff/Debuff 生效時機
+- [x] 效果管理 - TTL 扣除、Buff/Debuff 生效時機
 - [ ] 光照系統 - 明亮/昏暗/黑暗、夜視、聽覺定位
 - [ ] 感知系統 - 視線 (Bresenham) + 聽覺感知、阻擋物件
 - [ ] 地圖物件 - 即死、阻止通過、阻擋視線/聲音

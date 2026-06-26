@@ -1,7 +1,9 @@
 //! ECS World Resource 定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
-use crate::domain::core_types::{PendingReaction, SkillType, TurnEntry};
+use crate::domain::battle_log::LogEvent;
+use crate::domain::core_types::{PendingReaction, SkillType};
+use crate::domain::turn::TurnEntry;
 use crate::ecs_types::components::{Occupant, Position};
 use crate::loader_schema::{Faction, ObjectType, UnitType};
 use bevy_ecs::entity::Entity;
@@ -82,3 +84,9 @@ pub struct ReactionState {
     pub pending: Vec<PendingReaction>,
     pub decided: Vec<(Occupant, SkillName, Occupant)>,
 }
+
+/// 戰鬥 log Resource（持有事件序列，由 core 產生與持有，前端只讀渲染）
+///
+/// log 事件型別（純資料）定義在 `domain::battle_log`。
+#[derive(Debug, Default, Resource)]
+pub struct BattleLog(pub Vec<LogEvent>);

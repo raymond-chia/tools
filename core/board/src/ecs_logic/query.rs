@@ -1,4 +1,5 @@
 use crate::domain::alias::{ID, SkillName};
+use crate::domain::battle_log::LogEvent;
 use crate::domain::constants::IMPASSABLE_MOVEMENT_COST;
 use crate::domain::core_types::{EffectNode, SkillTag, SkillType, Target, TriggeringSource};
 use crate::ecs_logic::get_component;
@@ -9,7 +10,9 @@ use crate::ecs_types::components::{
     ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName, PhysicalAccuracy, PhysicalAttack,
     Position, ReactionPoint, Skills, Unit, UnitBundle, UnitFaction, Will,
 };
-use crate::ecs_types::resources::{GameData, LevelConfig, OccupantIndex, SkillTargeting};
+use crate::ecs_types::resources::{
+    BattleLog, GameData, LevelConfig, OccupantIndex, SkillTargeting,
+};
 use crate::error::{BoardError, DataError, Result, UnitError};
 use crate::logic::debug::short_type_name;
 use crate::logic::skill::UnitInfo;
@@ -269,6 +272,15 @@ pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeB
 /// 查詢當前技能選目標狀態供 UI 渲染與確認施放
 pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting> {
     get_resource::<SkillTargeting>(world, "請先呼叫 start_skill_targeting")
+}
+
+/// 查詢戰鬥 log 事件序列供前端讀取渲染
+///
+/// 無 `BattleLog` Resource 時 fail fast 回傳錯誤。
+/// 讓「忘記 `spawn_level` 就讀 log」這類錯誤明確暴露，而非被空 slice 掩蓋。
+pub fn get_battle_log(world: &World) -> Result<&[LogEvent]> {
+    get_resource::<BattleLog>(world, "請先呼叫 spawn_level")
+        .map(|battle_log| battle_log.0.as_slice())
 }
 
 /// 建構棋盤上所有物件的位置對應表
