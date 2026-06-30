@@ -1013,7 +1013,10 @@ fn render_reaction_panel(
             match board::ecs_logic::reaction::process_reactions(&mut ui_state.world)
                 .map_err(|e| format!("執行反應失敗：{}", e))?
             {
-                ProcessReactionResult::Executed { effects } => {
+                ProcessReactionResult::Executed {
+                    effects,
+                    trigger: _,
+                } => {
                     ui_state.battle_log.extend(effects);
                     ui_state.right_panel_view = RightPanelView::Log;
                 }

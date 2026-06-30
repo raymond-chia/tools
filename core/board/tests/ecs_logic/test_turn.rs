@@ -8,6 +8,7 @@ use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{BuffType, EndCondition, PendingReaction, ReactionTrigger};
 use board::ecs_logic::movement::{advance_move, plan_move};
 use board::ecs_logic::query::get_battle_log;
+use board::ecs_logic::spawner::spawn_level;
 use board::ecs_logic::turn::{
     can_delay_current_unit, delay_current_unit, end_battle, end_current_turn, get_current_unit,
     get_turn_order, resolve_deaths, start_new_round,
@@ -15,7 +16,7 @@ use board::ecs_logic::turn::{
 use board::ecs_types::components::{
     AppliedBuff, CurrentHp, MaxReactionPoint, Occupant, Position, ReactionPoint, Unit,
 };
-use board::ecs_types::resources::ReactionState;
+use board::ecs_types::resources::{BattleLog, ReactionState};
 use board::test_helpers::level_builder::LevelBuilder;
 
 // ============================================================================
@@ -62,6 +63,76 @@ fn test_start_new_round_creates_turn_order() {
     let turn_order = start_new_round(&mut world).expect("開始第二場戰鬥應成功");
     assert_eq!(turn_order.round, 1, "新戰鬥應從 round = 1 開始");
     assert_eq!(turn_order.current_index, 0, "新戰鬥應從第一個單位開始");
+}
+
+/// 驗證 start_new_round 不清空也不重建 BattleLog（D8：log 在 spawn_level 建立、整場保留）
+///
+/// 鎖住 D8 修訂：log 的生命週期綁定 spawn_level，start_new_round 不得碰 log。
+/// 先讓 log 累積一筆（死亡事件），再 end_battle + start_new_round 開新一輪，
+/// 驗證既有 log 不被清空——跨場殘留改由重新 spawn_level 重建 World 化解。
+#[test]
+fn test_start_new_round_keeps_battle_log() {
+    let level_toml = LevelBuilder::from_ascii(
+        "
+        . U1 . U2 .
+        . . . . .
+    ",
+    )
+    .unit("U1", UNIT_TYPE_WARRIOR, 1)
+    .unit("U2", UNIT_TYPE_WARRIOR, 1)
+    .to_toml()
+    .expect("LevelBuilder::to_toml 應成功");
+    let mut world = setup_world_with_level(&level_toml);
+
+    assert_eq!(
+        get_battle_log(&world)
+            .expect("spawn_level 後應可取得 BattleLog")
+            .len(),
+        0,
+        "還沒有任何 log"
+    );
+
+    // 製造殘留 log，再 spawn_level 一次：驗證 spawn_level 以空 log 覆蓋既有殘留
+    // （insert_resource 是覆蓋而非附加；否則重玩同一場會殘留上一場的 log）
+    world
+        .get_resource_mut::<BattleLog>()
+        .expect("spawn_level 後應有 BattleLog")
+        .0
+        .push(LogEvent::Death {
+            unit: UNIT_TYPE_WARRIOR.to_string(),
+        });
+    assert_eq!(
+        get_battle_log(&world).expect("應可取得 BattleLog").len(),
+        1,
+        "前置條件：應有一筆殘留 log"
+    );
+    spawn_level(&mut world, &level_toml, "test-level").expect("重 spawn_level 應成功");
+    assert_eq!(
+        get_battle_log(&world).expect("應可取得 BattleLog").len(),
+        0,
+        "spawn_level 後 log 應為空"
+    );
+
+    let turn_order = start_new_round(&mut world).expect("開始回合應成功");
+    let first = turn_order.entries[0].occupant;
+
+    // 打死一個單位累積一筆死亡 log
+    kill_unit(&mut world, first);
+    resolve_deaths(&mut world).expect("resolve_deaths 應成功");
+    assert_eq!(
+        get_battle_log(&world).expect("應可取得 BattleLog").len(),
+        1,
+        "死亡後 log 應有一筆"
+    );
+
+    // 結束戰鬥並開新一輪：start_new_round 不得清空或重建既有 log
+    end_battle(&mut world).expect("結束戰鬥應成功");
+    start_new_round(&mut world).expect("再次開始回合應成功");
+    assert_eq!(
+        get_battle_log(&world).expect("應可取得 BattleLog").len(),
+        1,
+        "start_new_round 不應清空既有 log（D8：log 綁定 spawn_level）"
+    );
 }
 
 // ============================================================================
@@ -500,6 +571,65 @@ fn test_resolve_deaths_batch_starts_new_round_once() {
     assert_eq!(turn_order.round, 2, "所有單位行動完應換輪");
 }
 
+/// 驗證 AOE 同時打死「已行動者 + 未行動者」混合時，current_index 正確偏移到存活的未行動者。
+///
+/// 鎖住批次移除的索引偏移：死者橫跨 current_index 兩側（含已行動者）時，
+/// 不可沿用舊 current_index，須以 get_active_index 重找第一個存活未行動者。
+/// 此情境是 AOE 多死最易回歸 current_index 偏移的組合，先前未被覆蓋。
+#[test]
+fn test_resolve_deaths_mixed_acted_and_unacted() {
+    let level_toml = LevelBuilder::from_ascii(
+        "
+        . U1 . U2 . U3 . U4 .
+        . . . . . . . . .
+        . . . . . . . . .
+    ",
+    )
+    .unit("U1", UNIT_TYPE_WARRIOR, 1)
+    .unit("U2", UNIT_TYPE_WARRIOR, 1)
+    .unit("U3", UNIT_TYPE_MAGE, 1)
+    .unit("U4", UNIT_TYPE_WARRIOR, 1)
+    .to_toml()
+    .expect("LevelBuilder::to_toml 應成功");
+    let mut world = setup_world_with_level(&level_toml);
+
+    let turn_order = start_new_round(&mut world).expect("開始回合應成功");
+    assert_eq!(turn_order.entries.len(), 4, "初始應有 4 個單位");
+    let first = turn_order.entries[0].occupant;
+    let second = turn_order.entries[1].occupant;
+    let third = turn_order.entries[2].occupant;
+    let fourth = turn_order.entries[3].occupant;
+
+    // 第一個單位行動完畢，當前推進到第二個
+    end_current_turn(&mut world).expect("結束回合應成功");
+    let turn_order = get_turn_order(&world).expect("應取得 TurnOrder");
+    assert_eq!(turn_order.current_index, 1, "當前應為第二個單位");
+
+    // AOE 同時打死「已行動的第一個」與「未行動且非當前的第三個」
+    // 存活：第二個（當前，未行動）、第四個（未行動）
+    kill_unit(&mut world, first);
+    kill_unit(&mut world, third);
+    resolve_deaths(&mut world).expect("resolve_deaths 應成功");
+
+    let turn_order = get_turn_order(&world).expect("應取得 TurnOrder");
+    let result_occupants: Vec<Occupant> = turn_order.entries.iter().map(|e| e.occupant).collect();
+    assert_eq!(
+        result_occupants,
+        vec![second, fourth],
+        "移除已行動的第一個與未行動的第三個後，應剩第二、第四個單位"
+    );
+    assert_eq!(
+        turn_order.current_index, 0,
+        "current_index 應偏移到存活未行動者（第二個）的新位置"
+    );
+    assert_eq!(turn_order.round, 1, "尚有未行動單位，不應換輪");
+    assert_eq!(
+        get_current_unit(turn_order).expect("應取得當前單位"),
+        second,
+        "當前單位應仍為第二個（死者橫跨兩側不應改變存活當前者）"
+    );
+}
+
 /// 驗證批次死光剩餘單位而開新一輪時，存活單位的 buff 剩餘回合會遞減。
 ///
 /// 鎖住「`resolve_deaths` 換輪須與 `end_current_turn` 換輪一樣 tick buff duration」
@@ -712,19 +842,104 @@ fn test_resolve_deaths_without_reaction_state() {
     assert_eq!(turn_order.entries.len(), 1, "死者應被移除");
 }
 
-/// 驗證：死當前單位後，遞補為當前的下一個單位會跑回合開始流程（清掉其過期 buff）。
+/// 驗證：死亡使當前單位是否改變，決定遞補者是否跑回合開始流程（清掉其過期 buff）。
+///
+/// 共用條件分支 `new_current != prev_current`：
+/// - 死當前單位 → 下一個單位遞補為當前 → 新當前跑回合開始 → 其過期 buff 被清除。
+/// - 死非當前單位 → 當前單位不變 → 不重跑回合開始 → 其過期 buff 保留。
+///
+/// 過期 buff（duration == 0）掛在「死後將成為當前的單位」上，作為偵測回合開始是否跑過的探針。
 #[test]
-fn test_resolve_deaths_runs_turn_start_for_new_current_unit() {
+fn test_resolve_deaths_turn_start_on_current_change() {
+    struct TurnStartCase {
+        name: &'static str,
+        kill_index: usize,
+        buff_index: usize,
+        expected_current_index: usize,
+        expected_buff_count: usize,
+    }
+
+    let test_data = [
+        TurnStartCase {
+            name: "死當前單位→遞補者跑回合開始→過期 buff 被清除",
+            kill_index: 0,
+            buff_index: 1,
+            expected_current_index: 1,
+            expected_buff_count: 0,
+        },
+        TurnStartCase {
+            name: "死非當前單位→當前不變不重跑→過期 buff 保留",
+            kill_index: 2,
+            buff_index: 0,
+            expected_current_index: 0,
+            expected_buff_count: 1,
+        },
+    ];
+
+    for case in test_data {
+        let level_toml = LevelBuilder::from_ascii(
+            "
+            . U1 . U2 . U3 .
+            . . . . . . .
+            . . . . . . .
+        ",
+        )
+        .unit("U1", UNIT_TYPE_WARRIOR, 1)
+        .unit("U2", UNIT_TYPE_WARRIOR, 1)
+        .unit("U3", UNIT_TYPE_MAGE, 1)
+        .to_toml()
+        .expect("LevelBuilder::to_toml 應成功");
+        let mut world = setup_world_with_level(&level_toml);
+
+        let turn_order = start_new_round(&mut world).expect("開始回合應成功");
+        let initial: Vec<Occupant> = turn_order.entries.iter().map(|e| e.occupant).collect();
+        let kill_target = initial[case.kill_index];
+        let buff_target = initial[case.buff_index];
+        let expected_current = initial[case.expected_current_index];
+
+        // 過期 buff（duration == 0）掛在偵測對象身上，回合開始流程會清除過期 buff
+        spawn_buff_with_duration(&mut world, buff_target, 0);
+        assert_eq!(
+            buff_count_for(&mut world, buff_target),
+            1,
+            "[{}] 前置條件：偵測對象身上應有過期 buff",
+            case.name
+        );
+
+        kill_unit(&mut world, kill_target);
+        resolve_deaths(&mut world).expect("resolve_deaths 應成功");
+
+        let turn_order = get_turn_order(&world).expect("應取得 TurnOrder");
+        assert_eq!(
+            get_current_unit(turn_order).expect("應取得當前單位"),
+            expected_current,
+            "[{}] 當前單位不符預期",
+            case.name
+        );
+        assert_eq!(
+            buff_count_for(&mut world, buff_target),
+            case.expected_buff_count,
+            "[{}] 偵測對象的過期 buff 清除狀態不符預期",
+            case.name
+        );
+    }
+}
+
+/// 驗證：批次死光剩餘單位而換輪時，即使新當前與原當前是同一 occupant，仍須跑回合開始流程。
+///
+/// 鎖住 `is_new_round` 分支（與 `new_current != prev_current` 並列）：唯一單位行動完畢後
+/// 換輪，新一輪的當前仍是同一單位，但屬於新回合，過期 buff 仍應被回合開始流程清除。
+#[test]
+fn test_resolve_deaths_new_round_runs_turn_start_for_same_occupant() {
     let level_toml = LevelBuilder::from_ascii(
         "
-        . U1 . U2 . U3 .
-        . . . . . . .
-        . . . . . . .
+        . U1 . U2 .
+        . . . . .
+        . . . . .
     ",
     )
     .unit("U1", UNIT_TYPE_WARRIOR, 1)
     .unit("U2", UNIT_TYPE_WARRIOR, 1)
-    .unit("U3", UNIT_TYPE_MAGE, 1)
     .to_toml()
     .expect("LevelBuilder::to_toml 應成功");
     let mut world = setup_world_with_level(&level_toml);
@@ -733,74 +948,38 @@ fn test_resolve_deaths_runs_turn_start_for_new_current_unit() {
     let first = turn_order.entries[0].occupant;
     let second = turn_order.entries[1].occupant;
 
-    // 給遞補後將成為當前單位的第二個單位掛一個過期 buff
-    spawn_buff_with_duration(&mut world, second, 0);
-    assert_eq!(
-        buff_count_for(&mut world, second),
-        1,
-        "前置條件：第二個單位身上應有過期 buff"
-    );
-
-    // 打死當前單位（第一個），第二個單位遞補為當前
-    kill_unit(&mut world, first);
-    resolve_deaths(&mut world).expect("resolve_deaths 應成功");
-
+    // 第一個單位行動完畢，當前推進到第二個
+    end_current_turn(&mut world).expect("結束回合應成功");
     let turn_order = get_turn_order(&world).expect("應取得 TurnOrder");
     assert_eq!(
         get_current_unit(turn_order).expect("應取得當前單位"),
         second,
-        "第二個單位應遞補為當前"
+        "前置條件：當前應為第二個單位"
     );
-    assert_eq!(
-        buff_count_for(&mut world, second),
-        0,
-        "新當前單位應跑回合開始流程，過期 buff 應被清除"
-    );
-}
 
-/// 驗證：死非當前單位後，當前單位不變、不重跑回合開始（其過期 buff 保留）。
-#[test]
-fn test_resolve_deaths_skips_turn_start_when_current_unchanged() {
-    let level_toml = LevelBuilder::from_ascii(
-        "
-        . U1 . U2 . U3 .
-        . . . . . . .
-        . . . . . . .
-    ",
-    )
-    .unit("U1", UNIT_TYPE_WARRIOR, 1)
-    .unit("U2", UNIT_TYPE_WARRIOR, 1)
-    .unit("U3", UNIT_TYPE_MAGE, 1)
-    .to_toml()
-    .expect("LevelBuilder::to_toml 應成功");
-    let mut world = setup_world_with_level(&level_toml);
-
-    let turn_order = start_new_round(&mut world).expect("開始回合應成功");
-    let first = turn_order.entries[0].occupant;
-    let third = turn_order.entries[2].occupant;
-
-    // 給當前單位（第一個）掛一個過期 buff
+    // 給將存活的第一個單位掛一個過期 buff
     spawn_buff_with_duration(&mut world, first, 0);
     assert_eq!(
         buff_count_for(&mut world, first),
         1,
-        "前置條件：當前單位身上應有過期 buff"
+        "前置條件：第一個單位身上應有過期 buff"
     );
 
-    // 打死非當前單位（第三個），當前單位仍為第一個
-    kill_unit(&mut world, third);
+    // 打死當前（第二個）單位，唯一存活的第一個遞補並換新一輪 → 新當前仍是第一個（同 occupant）
+    kill_unit(&mut world, second);
     resolve_deaths(&mut world).expect("resolve_deaths 應成功");
 
     let turn_order = get_turn_order(&world).expect("應取得 TurnOrder");
+    assert_eq!(turn_order.round, 2, "死光剩餘單位應換新一輪");
     assert_eq!(
         get_current_unit(turn_order).expect("應取得當前單位"),
         first,
-        "當前單位應仍為第一個"
+        "新一輪當前仍為第一個單位（同 occupant）"
     );
     assert_eq!(
         buff_count_for(&mut world, first),
-        1,
-        "當前單位未改變，不應重跑回合開始，過期 buff 應保留"
+        0,
+        "換輪屬新回合，仍應跑回合開始流程，過期 buff 應被清除"
     );
 }
 

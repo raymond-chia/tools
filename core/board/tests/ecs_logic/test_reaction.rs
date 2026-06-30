@@ -476,7 +476,7 @@ P E . . .
 
             let result = process_reactions(&mut world).expect("第一次 process_reactions 應成功");
             match &result {
-                ProcessReactionResult::Executed { effects } => {
+                ProcessReactionResult::Executed { effects, .. } => {
                     assert!(
                         effects
                             .iter()
@@ -548,7 +548,7 @@ P E . . .
                 let result =
                     process_reactions(&mut world).expect("第二次 process_reactions 應成功");
                 match &result {
-                    ProcessReactionResult::Executed { effects } => {
+                    ProcessReactionResult::Executed { effects, .. } => {
                         assert!(
                             effects
                                 .iter()
@@ -734,7 +734,7 @@ P .  . . T
         let result = process_reactions(&mut world)
             .expect(&format!("[{}] 第一次 process_reactions 應成功", case.name));
         match &result {
-            ProcessReactionResult::Executed { effects } => {
+            ProcessReactionResult::Executed { effects, .. } => {
                 let expected_reactor = (case.expected_first)(e1_occupant, e2_occupant);
                 let expected_caster_id = match expected_reactor {
                     Occupant::Unit(id) => id,
@@ -766,7 +766,7 @@ P .  . . T
             );
         } else {
             match &result {
-                ProcessReactionResult::Executed { effects } => {
+                ProcessReactionResult::Executed { effects, .. } => {
                     let expected_reactor = (case.expected_second)(e1_occupant, e2_occupant);
                     let expected_caster_id = match expected_reactor {
                         Occupant::Unit(id) => id,
@@ -845,7 +845,7 @@ P E . .
     // E 執行 warrior-reaction 攻擊 P
     let result = process_reactions(&mut world).expect("第一次 process_reactions 應成功");
     match &result {
-        ProcessReactionResult::Executed { effects } => {
+        ProcessReactionResult::Executed { effects, .. } => {
             assert_eq!(
                 effects[0].skill_name, SKILL_WARRIOR_REACTION,
                 "E 反應的技能應為 {}，effects：{:?}",
@@ -878,7 +878,7 @@ P E . .
     // P 執行反擊
     let result = process_reactions(&mut world).expect("第三次 process_reactions 應成功");
     match &result {
-        ProcessReactionResult::Executed { effects } => {
+        ProcessReactionResult::Executed { effects, .. } => {
             assert_eq!(
                 effects[0].skill_name, SKILL_WARRIOR_COUNTER,
                 "P 反擊的技能應為 {}，effects：{:?}",

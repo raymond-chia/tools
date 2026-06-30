@@ -1,3 +1,4 @@
+pub mod battle_log;
 pub mod deployment;
 pub mod loader;
 pub mod movement;

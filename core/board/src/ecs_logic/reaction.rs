@@ -24,8 +24,14 @@ use std::collections::{HashMap, HashSet};
 /// 反應執行結果
 #[derive(Debug)]
 pub enum ProcessReactionResult {
-    /// 成功執行一個反應，附帶效果清單
-    Executed { effects: Vec<EffectEntry> },
+    /// 成功執行一個反應，附帶效果清單與觸發者
+    ///
+    /// 單次反應只對應單一 trigger，
+    /// 供呼叫端產生反應 log（`append_reaction_log`）時使用。
+    Executed {
+        effects: Vec<EffectEntry>,
+        trigger: Occupant,
+    },
     /// 需要玩家決策（新的 pending reactions 已寫入 ReactionState）
     NeedDecision,
     /// 所有反應已處理完畢
@@ -245,5 +251,8 @@ pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult> {
         }
     }
 
-    Ok(ProcessReactionResult::Executed { effects: entries })
+    Ok(ProcessReactionResult::Executed {
+        effects: entries,
+        trigger,
+    })
 }
