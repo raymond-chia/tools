@@ -39,7 +39,9 @@ core/board/
 │   │   ├── mod.rs        - 領域模型模組定義
 │   │   ├── alias.rs      - 類型別名定義
 │   │   ├── constants.rs  - 遊戲常數定義
-│   │   └── core_types.rs - 遊戲核心資料型別定義
+│   │   ├── core_types.rs - 遊戲核心資料型別定義
+│   │   ├── battle_log.rs - 戰鬥 log 事件型別定義（純資料）
+│   │   └── turn.rs       - 回合系統資料型別定義
 │   ├── ecs_types/        - ECS 型別定義
 │   │   ├── mod.rs        - ECS 型別模組定義
 │   │   ├── components.rs - ECS Component 定義（只存資料，derive Component 和 Debug，禁止 impl）
@@ -53,7 +55,8 @@ core/board/
 │   │   ├── movement.rs   - 單位移動 ECS 操作函數
 │   │   ├── reaction.rs   - 技能反應系統 ECS 操作函數
 │   │   ├── turn.rs       - 回合順序 ECS 操作函數
-│   │   └── skill.rs      - 技能系統 ECS 操作函數
+│   │   ├── skill.rs      - 技能系統 ECS 操作函數
+│   │   └── battle_log.rs - 戰鬥 log 產生 ECS 操作函數
 │   ├── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
 │   │   ├── mod.rs        - 業務邏輯模組定義
 │   │   ├── board.rs      - 棋盤驗證邏輯
@@ -212,6 +215,7 @@ core/board/
 - `pub(crate) fn build_unit_stats_on_board(world: &mut World, faction_to_alliance: &HashMap<ID, ID>) -> Result<HashMap<Position, CombatStats>>` - 建構棋盤上的單位戰鬥統計映射
 - `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
 - `pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting>` - 查詢當前技能選目標狀態供 UI 渲染與確認施放
+- `pub fn get_battle_log(world: &World) -> Result<&[LogEvent]>` - 查詢戰鬥 log 事件序列供前端讀取渲染
 
 ### ecs_logic/movement.rs
 
@@ -224,10 +228,10 @@ core/board/
 
 - `pub fn get_current_unit(turn_order: &TurnOrder) -> Result<Occupant>` - 取得目前行動單位
 - `pub fn start_new_round(world: &mut World) -> Result<&TurnOrder>` - 開始新的一輪並回傳
-- `pub fn end_current_turn(world: &mut World) -> Result<&TurnOrder>` - 結束當前單位的回合，推進到下一個
+- `pub fn end_current_turn(world: &mut World) -> Result<()>` - 結束當前單位的回合，推進到下一個
 - `pub fn can_delay_current_unit(world: &mut World) -> Result<bool>` - 檢查當前單位是否可被延遲
-- `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<&TurnOrder>` - 延後當前單位到指定位置並回傳
-- `pub fn remove_dead_unit(world: &mut World, occupant: Occupant) -> Result<&TurnOrder>` - 移除死亡單位並回傳
+- `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<()>` - 延後當前單位到指定位置
+- `pub fn resolve_deaths(world: &mut World) -> Result<()>` - 掃描並移除全場死亡單位、同步回合表與反應面板、產生死亡 log
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
 - `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
 
@@ -248,6 +252,11 @@ core/board/
 - `pub fn cancel_skill_targeting(world: &mut World)` - 取消技能選目標流程
 - `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
 - `pub(crate) fn apply_effect_entries(world: &mut World, entries: &[EffectEntry], used_ids: &mut HashSet<ID>) -> Result<()>` - 應用效果條目到遊戲世界
+
+### ecs_logic/battle_log.rs
+
+- `pub fn append_skill_log(world: &mut World, entries: &[EffectEntry]) -> Result<()>` - 將技能執行的效果條目轉成技能 log 事件並 append 到 BattleLog
+- `pub fn append_reaction_log(world: &mut World, trigger: Occupant, entries: &[EffectEntry]) -> Result<()>` - 將反應執行的效果條目轉成反應 log 事件並 append 到 BattleLog
 
 ### error.rs
 

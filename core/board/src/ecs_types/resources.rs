@@ -57,11 +57,14 @@ pub struct TurnOrder {
 
 /// 移動計畫 Resource（plan_move 後存入，advance_move 執行時消費）
 ///
+/// - `occupant`：此計畫的移動者身分。移動途中該單位若死亡（如反應鏈打死移動者），
+///   遞補的當前單位不得沿用此計畫，據此偵測並作廢。
 /// - `path`：從起點（含）到終點的完整路徑
 /// - `step_costs`：與 `path` 同長，`step_costs[i]` 為走到 `path[i]` 所需的移動消耗（起點為 0）
 /// - `next_step_index`：當前所在格的索引（對應 path 中的位置），初始為 0
 #[derive(Debug, Clone, Resource)]
 pub struct MovementPlan {
+    pub occupant: Occupant,
     pub path: Vec<Position>,
     pub step_costs: Vec<MovementCost>,
     pub next_step_index: usize,

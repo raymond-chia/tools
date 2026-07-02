@@ -7,17 +7,20 @@ use super::constants::{
 };
 use bevy_ecs::prelude::{Entity, With, World};
 use board::domain::alias::SkillName;
+use board::domain::battle_log::{LogEffect, LogEvent, LogTarget};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{PendingReaction, ReactionTrigger};
+use board::ecs_logic::battle_log::append_reaction_log;
 use board::ecs_logic::loader::parse_and_insert_game_data;
 use board::ecs_logic::movement::{advance_move, force_advance_move, plan_move};
+use board::ecs_logic::query::get_battle_log;
 use board::ecs_logic::reaction::{
     ProcessReactionResult, get_pending_reactions, process_reactions, set_reactions,
 };
 use board::ecs_logic::spawner::spawn_level;
-use board::ecs_logic::turn::start_new_round;
+use board::ecs_logic::turn::{resolve_deaths, start_new_round};
 use board::ecs_types::components::{
-    Initiative, MaxReactionPoint, Occupant, Position, ReactionPoint, Unit,
+    CurrentHp, Initiative, MaxReactionPoint, Occupant, Position, ReactionPoint, Unit,
 };
 use board::ecs_types::resources::ReactionState;
 use board::test_helpers::level_builder::{LevelBuilder, load_from_ascii};
@@ -112,6 +115,89 @@ fn find_entity(world: &mut World, occupant: Occupant) -> bevy_ecs::prelude::Enti
         .find(|(_, occ)| **occ == occupant)
         .map(|(e, _)| e)
         .expect("應找到指定 occupant 的 entity")
+}
+
+// ============================================================================
+// 反應 log 產生測試
+// ============================================================================
+
+/// process_reactions 回傳 Executed 後，BattleLog 應 append 反應 log 事件
+///
+/// 移動路過敵人 E(warrior) 觸發 warrior-reaction，E 攻擊 trigger P(mage)：
+/// - reactor 名稱快照 = warrior
+/// - trigger 名稱快照 = mage
+/// - target 為單位（mage），effect = HpChange
+#[test]
+fn test_process_reactions_appends_reaction_log() {
+    let (mut world, markers) = build_reaction_world(
+        r#"
+P E . . .
+. . . T ."#,
+    );
+
+    let player_occupant = find_occupant(&mut world, markers["P"][0]);
+    let enemy_occupant = find_occupant(&mut world, markers["E"][0]);
+    let target_pos = markers["T"][0];
+
+    plan_move(&mut world, target_pos).expect("plan_move 應成功");
+    advance_move(&mut world).expect("移動應成功");
+
+    let pending = get_pending_reactions(&world);
+    assert_eq!(pending.len(), 1, "移動路過敵人應有 1 個待反應者");
+    set_reactions(
+        &mut world,
+        vec![(enemy_occupant, pending[0].available_skills[0].clone())],
+    )
+    .expect("set_reactions 應成功");
+
+    let (effects, trigger) = match process_reactions(&mut world).expect("process_reactions 應成功")
+    {
+        ProcessReactionResult::Executed { effects, trigger } => (effects, trigger),
+        other => panic!("應回傳 Executed，實際：{:?}", other),
+    };
+
+    // log 由呼叫端在反應後明確呼叫 append_reaction_log 產生（core 不自動 append）
+    append_reaction_log(&mut world, trigger, &effects).expect("append_reaction_log 應成功");
+
+    let log = get_battle_log(&world).expect("spawn_level 後應可取得 BattleLog");
+    assert_eq!(
+        log.len(),
+        effects.len(),
+        "log 筆數應與 EffectEntry 筆數一致（一筆 EffectEntry = 一筆 LogEvent）"
+    );
+    assert_eq!(log.len(), 1, "warrior-reaction 對單目標應產生一筆 log");
+    match &log[0] {
+        LogEvent::Reaction {
+            reactor,
+            trigger,
+            skill_name,
+            target,
+            effect,
+            ..
+        } => {
+            assert_eq!(reactor, UNIT_TYPE_WARRIOR, "reactor 名稱快照應為 warrior");
+            assert_eq!(trigger, UNIT_TYPE_MAGE, "trigger 名稱快照應為 mage");
+            assert_eq!(
+                skill_name, SKILL_WARRIOR_REACTION,
+                "技能名應為 warrior-reaction"
+            );
+            assert_eq!(
+                *target,
+                LogTarget::Unit {
+                    name: UNIT_TYPE_MAGE.to_string()
+                },
+                "目標名稱快照應為 mage（被攻擊的 trigger）"
+            );
+            match effect {
+                LogEffect::HpChange { amount } => {
+                    assert!(*amount < 0, "傷害應為負值，實際 {}", amount);
+                }
+                other => panic!("應為 HpChange，實際 {:?}", other),
+            }
+            let _ = player_occupant;
+        }
+        other => panic!("應為 Reaction 事件，實際 {:?}", other),
+    }
 }
 
 // ============================================================================
@@ -943,4 +1029,185 @@ P E . T
         let player_pos = find_current_pos(&mut world, player_occupant);
         assert_eq!(player_pos, target_pos, "[{}] P 應直達目的地", case.name);
     }
+}
+
+// ============================================================================
+// P1 / P2 回歸測試（斷言正確行為）
+//
+// 這兩個測試對應 code review 發現、plan.md 未涵蓋的問題：
+// - P1：resolve_deaths 只剔除 ReactionState.pending，不剔除 decided 佇列。
+// - P2：反應打死移動者後，force_advance_move 會對遞補的當前單位誤套用死者的移動計畫。
+//
+// 兩個測試斷言「修正後應有的正確行為」：在實作修好前會失敗（紅燈），
+// 修好後轉綠。禁止用 #[should_panic] 把現行錯誤行為當成通過。
+// ============================================================================
+
+/// 將指定 occupant 的單位 HP 設為 0（模擬被任意來源打死）
+fn kill_unit(world: &mut World, occupant: Occupant) {
+    let entity = {
+        let mut query = world.query::<(Entity, &Occupant)>();
+        query
+            .iter(world)
+            .find(|(_, occ)| **occ == occupant)
+            .map(|(entity, _)| entity)
+            .expect("應找到指定單位")
+    };
+    world.entity_mut(entity).insert(CurrentHp(0));
+}
+
+/// P1：decided 佇列中的 reactor 在被 pop 前死亡，process_reactions 仍會 pop 出死者。
+///
+/// 場景（模擬 editor 反應 loop：每次 Executed 後都呼叫 resolve_deaths）：
+/// - P 移動路過 E1、E2 兩個 warrior，兩者皆待反應。
+/// - set_reactions 一次把 [E1, E2] 排入 decided。
+/// - process_reactions 執行 E1 的反應（Executed）。
+/// - 此時 E2 仍在 decided 中；模擬本回合任意來源（AOE／持續傷害等）打死 E2，
+///   呼叫 resolve_deaths——它只清 pending，不清 decided。
+/// - 再次 process_reactions：decided 仍含已死的 E2，pop 出後 find_entity_by_occupant
+///   查不到已 despawn 的 E2 → 回傳 Err。
+///
+/// 正確行為：resolve_deaths 應一併從 decided 剔除死者，第二次 process_reactions
+/// 直接跳過已死的 E2、正常回傳 Done，且過程不查詢已 despawn 的 E2。
+///
+/// 在實作修好前，第二次 process_reactions 會 pop 出死者並回 Err，本測試失敗（紅燈）。
+#[test]
+fn test_resolve_deaths_removes_dead_from_decided() {
+    let (mut world, markers) = build_reaction_world_with(
+        r#"
+. E1 . . .
+P .  . . T
+. E2 . ."#,
+        UNIT_TYPE_MAGE,
+        UNIT_TYPE_WARRIOR,
+    );
+
+    let e1_occupant = find_occupant(&mut world, markers["E1"][0]);
+    let e2_occupant = find_occupant(&mut world, markers["E2"][0]);
+    let target_pos = markers["T"][0];
+
+    plan_move(&mut world, target_pos).expect("plan_move 應成功");
+    advance_move(&mut world).expect("移動應成功");
+
+    let pending = get_pending_reactions(&world);
+    assert_eq!(pending.len(), 2, "應有 2 個待反應者（E1、E2）");
+
+    // 一次把 E1、E2 排入 decided（順序 [E1, E2]）
+    set_reactions(
+        &mut world,
+        vec![
+            (e1_occupant, SKILL_WARRIOR_REACTION.to_string()),
+            (e2_occupant, SKILL_WARRIOR_REACTION_2.to_string()),
+        ],
+    )
+    .expect("set_reactions 應成功");
+
+    // 執行 E1 的反應
+    let result = process_reactions(&mut world).expect("第一次 process_reactions 應成功");
+    assert!(
+        matches!(result, ProcessReactionResult::Executed { .. }),
+        "第一次應回傳 Executed，實際：{:?}",
+        result
+    );
+
+    // 模擬本回合任意來源打死仍在 decided 中的 E2，並走 editor 的死亡編排
+    kill_unit(&mut world, e2_occupant);
+    resolve_deaths(&mut world).expect("resolve_deaths 應成功");
+
+    // 死者 E2 應已從 decided 剔除：第二次 process_reactions 不再 pop 出死者，
+    // 無待執行反應 → 回傳 Done（而非查不到 entity 的 Err）。
+    let result = process_reactions(&mut world)
+        .expect("第二次 process_reactions 應成功（死者已從 decided 剔除，不查已 despawn 的 E2）");
+    assert!(
+        matches!(result, ProcessReactionResult::Done),
+        "死者從 decided 剔除後，reaction 佇列已空應回傳 Done，實際：{:?}",
+        result
+    );
+}
+
+/// P2：反應打死移動者後，force_advance_move 對遞補的當前單位誤套用死者的移動計畫。
+///
+/// 場景（warrior 對打，P 有 warrior-counter，E 反應攻擊 P 觸發 counter 打死 E，
+/// 但這裡反過來讓 E 的反應把 P 打死，模擬移動者於反應鏈中死亡）：
+/// - P(warrior) 移動路過 E(warrior)，E 觸發 AttackOfOpportunity。
+/// - 為確保 E 的反應能一擊打死 P，先把 P 的 HP 壓到極低。
+/// - process_reactions 執行 E 的反應攻擊 P → P HP≤0。
+/// - resolve_deaths 移除死掉的移動者 P（despawn、移出 turn_order）。
+/// - 反應鏈結束（Done），editor 編排無條件呼叫 force_advance_move。
+///
+/// 正確行為：移動者死亡時其移動計畫應作廢，force_advance_move 不應把死者遺留的
+/// MovementPlan 套用到遞補的當前單位（E 應留在原位）。
+///
+/// 現行實作以 get_current_unit 取得遞補的 E，卻套用 P 遺留的 MovementPlan，
+/// 把 E 移到 P 的路徑下一格 → 本測試在實作修好前失敗（紅燈）。
+#[test]
+fn test_force_advance_move_after_mover_dies_in_reaction() {
+    let (mut world, markers) = build_reaction_world_with(
+        r#"
+P E . .
+. . . T"#,
+        UNIT_TYPE_WARRIOR,
+        UNIT_TYPE_WARRIOR,
+    );
+
+    let player_occupant = find_occupant(&mut world, markers["P"][0]);
+    let enemy_occupant = find_occupant(&mut world, markers["E"][0]);
+    let target_pos = markers["T"][0];
+
+    // 把移動者 P 的 HP 壓到 1，確保 E 的反應一擊致死
+    let player_entity = find_entity(&mut world, player_occupant);
+    world.entity_mut(player_entity).insert(CurrentHp(1));
+
+    let enemy_start_pos = find_current_pos(&mut world, enemy_occupant);
+
+    plan_move(&mut world, target_pos).expect("plan_move 應成功");
+    advance_move(&mut world).expect("移動應成功");
+
+    let pending = get_pending_reactions(&world);
+    assert_eq!(pending.len(), 1, "移動路過 E 應有 1 個待反應者");
+
+    set_reactions(
+        &mut world,
+        vec![(enemy_occupant, pending[0].available_skills[0].clone())],
+    )
+    .expect("set_reactions 應成功");
+
+    // E 執行反應攻擊 P
+    let result = process_reactions(&mut world).expect("process_reactions 應成功");
+    assert!(
+        matches!(result, ProcessReactionResult::Executed { .. }),
+        "E 反應應回傳 Executed，實際：{:?}",
+        result
+    );
+
+    // editor 編排：Executed 後 resolve_deaths（移動者 P 應在此死亡並被移除）
+    resolve_deaths(&mut world).expect("resolve_deaths 應成功");
+
+    // 確認 P 確實已死並被移除
+    let alive: Vec<Occupant> = {
+        let mut query = world.query::<&Occupant>();
+        query.iter(&world).copied().collect()
+    };
+    assert!(
+        !alive.contains(&player_occupant),
+        "前置：移動者 P 應已死亡並被 despawn"
+    );
+
+    // 反應鏈結束（decided 已空、無新 pending）→ Done
+    let result = process_reactions(&mut world).expect("反應鏈結束 process_reactions 應成功");
+    assert!(
+        matches!(result, ProcessReactionResult::Done),
+        "反應鏈結束應回傳 Done，實際：{:?}",
+        result
+    );
+
+    // editor 在 Done 分支無條件呼叫 force_advance_move。
+    // 移動者已死，此處 get_current_unit 取得的是遞補的 E。
+    let _ = force_advance_move(&mut world).expect("force_advance_move 呼叫本身");
+
+    // 現行實作會把存活的 E 沿 P 的路徑移動一格（誤套用死者的 MovementPlan）。
+    let enemy_pos_after = find_current_pos(&mut world, enemy_occupant);
+    assert_eq!(
+        enemy_pos_after, enemy_start_pos,
+        "P2：移動者死亡後 force_advance_move 不應移動存活的 E（E 應留在原位）"
+    );
 }

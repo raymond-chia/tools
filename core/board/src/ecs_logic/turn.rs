@@ -269,11 +269,16 @@ pub fn resolve_deaths(world: &mut World) -> Result<()> {
         .0
         .extend(death_events);
 
-    // 從 pending 剔除死者（無 ReactionState 則跳過）
+    // 從 pending 與 decided 剔除死者（無 ReactionState 則跳過）
+    // decided 也須剔除：否則 process_reactions 之後會 pop 出已死的 reactor，
+    // 查不到已 despawn 的 entity 而報錯。
     if let Some(mut state) = world.get_resource_mut::<ReactionState>() {
         state
             .pending
             .retain(|reaction| !dead_occupants.contains(&reaction.reactor));
+        state
+            .decided
+            .retain(|(reactor, _, _)| !dead_occupants.contains(reactor));
     }
 
     // 批次從回合表移除所有死者，最後只判一次是否開新一輪。

@@ -144,6 +144,7 @@ pub fn plan_move(world: &mut World, target: Position) -> Result<()> {
     }
 
     world.insert_resource(MovementPlan {
+        occupant,
         path,
         step_costs,
         next_step_index: 0,
@@ -166,6 +167,7 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
     let mover_faction = get_component!(world.entity(entity), UnitFaction)?.0;
 
     let MovementPlan {
+        occupant: _,
         path,
         step_costs,
         next_step_index,
@@ -270,15 +272,29 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
 ///
 /// 用於反應觸發後強制離開觸發格，避免重複觸發。
 /// 走完整段路徑時移除 MovementPlan 並回傳 Completed。
+///
+/// 若原移動者已在反應鏈中死亡（當前單位已遞補為他人），此計畫作廢：
+/// 移除 MovementPlan、不移動任何單位，回傳走了 0 步的 Completed。
+/// 避免把死者遺留的計畫誤套用到遞補的當前單位身上。
 pub fn force_advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
     let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
     let occupant = get_current_unit(turn_order)?;
 
     let MovementPlan {
+        occupant: plan_occupant,
         path,
         step_costs,
         next_step_index,
     } = get_resource::<MovementPlan>(world, "請先呼叫 plan_move")?.clone();
+
+    // 移動者已死、當前單位已遞補為他人：計畫作廢，不動任何單位
+    if plan_occupant != occupant {
+        world.remove_resource::<MovementPlan>();
+        return Ok(AdvanceMoveResult::Completed {
+            path_walked: vec![],
+            cost: 0,
+        });
+    }
 
     let new_next_step_index = next_step_index + 1;
     let next_pos = path[new_next_step_index];

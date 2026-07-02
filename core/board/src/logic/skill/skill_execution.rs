@@ -77,7 +77,8 @@ pub struct CheckDetail {
 ///
 /// 這是給**未來動畫演出**用的低階結算資料（逐格、逐判定的完整結果），
 /// **不是**戰鬥 log。戰鬥 log 是另一套獨立、人類可讀、自帶名稱快照的型別
-/// （見 `ecs_types::resources` 的 log 事件與 Resource）。
+/// （log 事件型別見 `domain::battle_log`，持有序列的 `BattleLog` Resource
+/// 見 `ecs_types::resources`）。
 /// 兩者職責分開：log 給玩家閱讀，`EffectEntry` 給動畫驅動。
 /// 因此 log 不得重用 `EffectEntry` 或其相關型別
 /// （`CheckResult` / `CheckDetail` / `ResolvedEffect` / `CheckTarget`）。

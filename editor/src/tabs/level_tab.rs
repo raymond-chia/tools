@@ -14,7 +14,6 @@ use board::domain::core_types::SkillType;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::loader_schema::{LevelType, ObjectType, UnitType};
-use board::logic::skill::skill_execution::EffectEntry;
 use std::collections::HashSet;
 
 /// 拖曳物體的類型和索引
@@ -95,8 +94,6 @@ pub struct LevelTabUIState {
     /// 延遲置中：下一幀 render_battlefield 時消費
     pub pending_center_pos: Option<Position>,
 
-    /// 戰鬥演出 log
-    pub battle_log: Vec<EffectEntry>,
     /// 右側面板顯示模式（單位詳情 / 戰鬥 log）
     pub right_panel_view: RightPanelView,
 

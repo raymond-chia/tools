@@ -4,15 +4,13 @@ use super::battlefield::{self, CellHighlight, Snapshot};
 use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState, RightPanelView};
 use crate::constants::*;
 use board::domain::alias::SkillName;
+use board::domain::battle_log::{LogCheck, LogCheckDetail, LogEffect, LogEvent, LogTarget};
 use board::domain::core_types::PendingReaction;
 use board::ecs_logic::reaction::ProcessReactionResult;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
 use board::error::Result as CResult;
 use board::logic::movement::ReachableInfo;
-use board::logic::skill::skill_execution::{
-    CheckDetail, CheckResult, CheckTarget, EffectEntry, ResolvedEffect,
-};
 use std::collections::{HashMap, HashSet};
 
 /// 渲染戰鬥模式表單
@@ -96,7 +94,12 @@ pub fn render_form(
                             }
                         },
                         RightPanelView::Log => {
-                            render_battle_log(ui, &ui_state.battle_log, &snapshot);
+                            match board::ecs_logic::query::get_battle_log(&ui_state.world) {
+                                Ok(log) => render_battle_log(ui, log),
+                                Err(e) => {
+                                    ui.label(format!("讀取戰鬥 log 失敗：{}", e));
+                                }
+                            }
                         }
                     }
                 });
@@ -537,7 +540,10 @@ fn render_skill_popup(
         let entries =
             board::ecs_logic::skill::execute_skill(&mut ui_state.world, &skill_name, &picked)
                 .map_err(|e| format!("施放技能失敗：{}", e))?;
-        ui_state.battle_log.extend(entries);
+        board::ecs_logic::battle_log::append_skill_log(&mut ui_state.world, &entries)
+            .map_err(|e| format!("產生技能 log 失敗：{}", e))?;
+        board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)
+            .map_err(|e| format!("處理死亡失敗：{}", e))?;
         ui_state.right_panel_view = RightPanelView::Log;
         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
         ui_state.battle_action = BattleAction::Normal;
@@ -676,7 +682,11 @@ fn handle_mouse_click(
                             &skill_name,
                             &picked,
                         )?;
-                        ui_state.battle_log.extend(entries);
+                        board::ecs_logic::battle_log::append_skill_log(
+                            &mut ui_state.world,
+                            &entries,
+                        )?;
+                        board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)?;
                         ui_state.right_panel_view = RightPanelView::Log;
                         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
                         ui_state.battle_action = BattleAction::Normal;
@@ -769,8 +779,8 @@ fn render_right_panel_toggle(ui: &mut egui::Ui, view: &mut RightPanelView) {
     });
 }
 
-/// 渲染戰鬥 log 面板
-fn render_battle_log(ui: &mut egui::Ui, log: &[EffectEntry], snapshot: &Snapshot) {
+/// 渲染戰鬥 log 面板（讀取 core 提供的 LogEvent 序列，自帶名稱快照）
+fn render_battle_log(ui: &mut egui::Ui, log: &[LogEvent]) {
     ui.heading("戰鬥 Log");
     ui.add_space(SPACING_SMALL);
     if log.is_empty() {
@@ -781,67 +791,104 @@ fn render_battle_log(ui: &mut egui::Ui, log: &[EffectEntry], snapshot: &Snapshot
         .id_salt("battle_log_scroll")
         .auto_shrink([false; 2])
         .show(ui, |ui| {
-            for entry in log {
-                render_effect_entry(ui, entry, snapshot);
+            for event in log {
+                render_log_event(ui, event);
                 ui.separator();
             }
         });
 }
 
-/// 渲染單筆效果條目（多行）
-fn render_effect_entry(ui: &mut egui::Ui, entry: &EffectEntry, snapshot: &Snapshot) {
-    let caster_str = match find_unit_name_by_id(entry.caster, snapshot) {
-        Some(name) => name,
-        None => format!("單位#{}", entry.caster),
-    };
-    let target_str = format_check_target(&entry.target, snapshot);
-    ui.add(
-        egui::Label::new(format!(
-            "{} 對 {} 使用 {}",
-            caster_str, target_str, entry.skill_name
-        ))
-        .wrap(),
-    );
-    ui.add(
-        egui::Label::new(format!(
-            "判定：{}",
-            format_check(&entry.check, entry.check_detail.as_ref())
-        ))
-        .wrap(),
-    );
-    ui.add(egui::Label::new(format!("效果：{}", format_effect(&entry.effect))).wrap());
-}
-
-fn format_check_target(target: &CheckTarget, snapshot: &Snapshot) -> String {
-    match target {
-        CheckTarget::Unit(id) => match find_unit_name_by_id(*id, snapshot) {
-            Some(name) => format!("單位 {}", name),
-            None => format!("單位#{}", id),
-        },
-        CheckTarget::Position(pos) => format!("位置({}, {})", pos.x, pos.y),
+/// 渲染單筆 log 事件（多行）
+fn render_log_event(ui: &mut egui::Ui, event: &LogEvent) {
+    match event {
+        LogEvent::Skill {
+            caster,
+            skill_name,
+            target,
+            check,
+            check_detail,
+            effect,
+        } => {
+            ui.add(
+                egui::Label::new(format!(
+                    "{} 對 {} 使用 {}",
+                    caster,
+                    format_log_target(target),
+                    skill_name
+                ))
+                .wrap(),
+            );
+            ui.add(
+                egui::Label::new(format!(
+                    "判定：{}",
+                    format_log_check(check, check_detail.as_ref())
+                ))
+                .wrap(),
+            );
+            ui.add(egui::Label::new(format!("效果：{}", format_log_effect(effect))).wrap());
+        }
+        LogEvent::Reaction {
+            reactor,
+            trigger,
+            skill_name,
+            target,
+            check,
+            check_detail,
+            effect,
+        } => {
+            ui.add(
+                egui::Label::new(format!(
+                    "{} 反應 {}，對 {} 使用 {}",
+                    reactor,
+                    trigger,
+                    format_log_target(target),
+                    skill_name
+                ))
+                .wrap(),
+            );
+            ui.add(
+                egui::Label::new(format!(
+                    "判定：{}",
+                    format_log_check(check, check_detail.as_ref())
+                ))
+                .wrap(),
+            );
+            ui.add(egui::Label::new(format!("效果：{}", format_log_effect(effect))).wrap());
+        }
+        LogEvent::Death { unit } => {
+            ui.add(egui::Label::new(format!("{} 死亡", unit)).wrap());
+        }
     }
 }
 
-fn format_check(check: &CheckResult, detail: Option<&CheckDetail>) -> String {
+fn format_log_target(target: &LogTarget) -> String {
+    match target {
+        LogTarget::Unit { name } => format!("單位 {}", name),
+        LogTarget::Object { name } => format!("物件 {}", name),
+        LogTarget::EmptyGround => "空地".to_string(),
+    }
+}
+
+fn format_log_check(check: &LogCheck, detail: Option<&LogCheckDetail>) -> String {
     let result_str = match check {
-        CheckResult::Auto => "自動命中".to_string(),
-        CheckResult::Hit { crit } => {
+        LogCheck::Auto => "自動命中".to_string(),
+        LogCheck::Hit { crit } => {
             if *crit {
                 "爆擊命中".to_string()
             } else {
                 "命中".to_string()
             }
         }
-        CheckResult::Block { crit } => {
+        LogCheck::Block { crit } => {
             if *crit {
                 "爆擊被格擋".to_string()
             } else {
                 "被格擋".to_string()
             }
         }
-        CheckResult::Evade => "閃避".to_string(),
-        CheckResult::Resisted => "抵抗".to_string(),
-        CheckResult::Affected => "生效".to_string(),
+        LogCheck::Evade => "閃避".to_string(),
+        LogCheck::Resisted => "抵抗".to_string(),
+        LogCheck::Affected => "生效".to_string(),
     };
     match detail {
         None => result_str,
@@ -861,24 +908,13 @@ fn format_check(check: &CheckResult, detail: Option<&CheckDetail>) -> String {
     }
 }
 
-fn format_effect(effect: &ResolvedEffect) -> String {
+fn format_log_effect(effect: &LogEffect) -> String {
     match effect {
-        ResolvedEffect::NoEffect => "無效果".to_string(),
-        ResolvedEffect::HpChange { final_amount, .. } => format!("HP 變化 {}", final_amount),
-        ResolvedEffect::SpawnObject { object_type } => format!("產生物件 {}", object_type),
-        ResolvedEffect::ApplyBuff(name) => format!("施加狀態 {}", name),
+        LogEffect::None => "無效果".to_string(),
+        LogEffect::HpChange { amount } => format!("HP 變化 {}", amount),
+        LogEffect::SpawnObject { object_type } => format!("產生物件 {}", object_type),
+        LogEffect::ApplyBuff { buff_name } => format!("施加狀態 {}", buff_name),
     }
-}
-
-fn find_unit_name_by_id(id: board::domain::alias::ID, snapshot: &Snapshot) -> Option<String> {
-    for bundle in snapshot.unit_map.values() {
-        if let Occupant::Unit(unit_id) = bundle.occupant {
-            if unit_id == id {
-                return Some(bundle.occupant_type_name.0.clone());
-            }
-        }
-    }
-    None
 }
 
 /// 同步反應決策草稿：依照最新 pending 更新 decisions，保留已有選擇，補入新反應者，移除消失者
@@ -1013,11 +1049,15 @@ fn render_reaction_panel(
             match board::ecs_logic::reaction::process_reactions(&mut ui_state.world)
                 .map_err(|e| format!("執行反應失敗：{}", e))?
             {
-                ProcessReactionResult::Executed {
-                    effects,
-                    trigger: _,
-                } => {
-                    ui_state.battle_log.extend(effects);
+                ProcessReactionResult::Executed { effects, trigger } => {
+                    board::ecs_logic::battle_log::append_reaction_log(
+                        &mut ui_state.world,
+                        trigger,
+                        &effects,
+                    )
+                    .map_err(|e| format!("產生反應 log 失敗：{}", e))?;
+                    board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)
+                        .map_err(|e| format!("處理死亡失敗：{}", e))?;
                     ui_state.right_panel_view = RightPanelView::Log;
                 }
                 ProcessReactionResult::NeedDecision => {

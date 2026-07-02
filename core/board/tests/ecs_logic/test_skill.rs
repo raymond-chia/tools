@@ -1,8 +1,11 @@
 //! 技能執行測試
 
-use super::constants::{SKILL_SUMMON_WALL_AOE, SKILL_WARRIOR_ACTIVE_2};
+use super::constants::{SKILL_SUMMON_WALL_AOE, SKILL_WARRIOR_ACTIVE_2, UNIT_TYPE_WARRIOR};
 use bevy_ecs::prelude::{Entity, World};
 use board::domain::alias::MovementCost;
+use board::domain::battle_log::{LogCheck, LogEffect, LogEvent, LogTarget};
+use board::ecs_logic::battle_log::append_skill_log;
+use board::ecs_logic::query::get_battle_log;
 use board::ecs_logic::skill::execute_skill;
 use board::ecs_logic::turn::start_new_round;
 use board::ecs_types::components::{
@@ -214,6 +217,77 @@ fn test_execute_skill_action_point_and_mp() {
     }
 }
 
+/// execute_skill 對單一敵人施放後，BattleLog 應 append 一筆技能 log 事件
+///
+/// warrior-active-2（直接 Leaf、無 Branch）對 enemy(warrior) 攻擊：
+/// - caster 名稱快照 = warrior
+/// - target 為單位（warrior），check = Auto，effect = HpChange（最終傷害值）
+#[test]
+fn test_execute_skill_appends_skill_log() {
+    let (mut world, player_occupant, markers) = build_warrior_world(
+        "
+        . . . .
+        . P E .
+        . . . .
+        ",
+        10,
+    );
+    let enemy_pos = markers["E"][0];
+    set_active_action_state(&mut world, player_occupant, ActionState::Moved { cost: 0 });
+
+    let entries = execute_skill(
+        &mut world,
+        &SKILL_WARRIOR_ACTIVE_2.to_string(),
+        &[enemy_pos],
+    )
+    .expect("施放應成功");
+
+    // log 由呼叫端在施放後明確呼叫 append_skill_log 產生（core 不自動 append）
+    append_skill_log(&mut world, &entries).expect("append_skill_log 應成功");
+
+    // 預期：每筆 EffectEntry 對應一筆 LogEvent
+    let log = get_battle_log(&world).expect("spawn_level 後應可取得 BattleLog");
+    assert_eq!(
+        log.len(),
+        entries.len(),
+        "log 筆數應與 EffectEntry 筆數一致（一筆 EffectEntry = 一筆 LogEvent）"
+    );
+
+    // warrior-active-2 對單一目標只產生一筆 HpChange entry
+    assert_eq!(log.len(), 1, "warrior-active-2 對單目標應產生一筆 log");
+    match &log[0] {
+        LogEvent::Skill {
+            caster,
+            skill_name,
+            target,
+            check,
+            effect,
+            ..
+        } => {
+            assert_eq!(caster, UNIT_TYPE_WARRIOR, "caster 名稱快照應為 warrior");
+            assert_eq!(
+                skill_name, SKILL_WARRIOR_ACTIVE_2,
+                "技能名應為 warrior-active-2"
+            );
+            assert_eq!(
+                *target,
+                LogTarget::Unit {
+                    name: UNIT_TYPE_WARRIOR.to_string()
+                },
+                "目標名稱快照應為 warrior"
+            );
+            assert_eq!(*check, LogCheck::Auto, "warrior-active-2 無判定，應為 Auto");
+            match effect {
+                LogEffect::HpChange { amount } => {
+                    assert!(*amount < 0, "傷害應為負值，實際 {}", amount);
+                }
+                other => panic!("應為 HpChange，實際 {:?}", other),
+            }
+        }
+        other => panic!("應為 Skill 事件，實際 {:?}", other),
+    }
+}
+
 #[test]
 fn test_execute_skill_skill_not_found() {
     let (mut world, player_occupant, markers) = build_warrior_world(
@@ -328,6 +402,33 @@ fn test_execute_skill_summon_wall_aoe() {
         wall_count,
         expected_spawn_positions.len(),
         "World 中應在預期位置新增對應數量的 wall 物件"
+    );
+
+    // log：每個召喚 entry 轉成一筆 SpawnObject(wall)，target 名稱直接取自
+    // effect 的 object_type（不查 World）——同格可疊多物件，事後查 World 取不到
+    // 「剛召喚的那個」，故 target 與 effect 皆為 wall，不受該格原有 swamp 干擾。
+    append_skill_log(&mut world, &entries).expect("append_skill_log 應成功");
+    let log = get_battle_log(&world).expect("spawn_level 後應可取得 BattleLog");
+    assert_eq!(
+        log.len(),
+        entries.len(),
+        "log 筆數應與 EffectEntry 筆數一致"
+    );
+    let spawn_log_count = log
+        .iter()
+        .filter(|event| match event {
+            LogEvent::Skill { target, effect, .. } => matches!(
+                (target, effect),
+                (LogTarget::Object { name }, LogEffect::SpawnObject { object_type })
+                    if name == "wall" && object_type == "wall"
+            ),
+            _ => false,
+        })
+        .count();
+    assert_eq!(
+        spawn_log_count,
+        expected_spawn_positions.len(),
+        "每個召喚應產生一筆 target=wall + SpawnObject(wall) 的 log（取自 effect，不查 World）"
     );
 }
 
