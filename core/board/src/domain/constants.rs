@@ -27,3 +27,6 @@ pub const CRIT_DAMAGE_MULTIPLIER: i32 = 2;
 
 /// 夾擊判定所需的最少相鄰己方數量（含 caster 本人若相鄰）
 pub const FLANKING_REQUIRED_ALLIES: usize = 2;
+
+/// 施放者相鄰敵人時的命中懲罰（負值，直接加到命中值）
+pub const ACCURACY_PENALTY_WHEN_ENEMY_ADJACENT: i32 = -20;

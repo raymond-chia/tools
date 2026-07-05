@@ -55,6 +55,7 @@ define_attributes!(
 pub enum SkillTag {
     #[default]
     Flankable,
+    AccuracyPenaltyWhenEnemyAdjacent,
     UsableAfterDoubleMove,
     AllowedDuringGrabbing,
 }

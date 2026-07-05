@@ -1,3 +1,4 @@
+mod test_adjacent_penalty;
 mod test_collect_move_reactions;
 mod test_compute_affected_positions;
 mod test_compute_range_positions;

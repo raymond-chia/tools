@@ -1,7 +1,9 @@
 //! 技能效果樹執行邏輯
 
 use crate::domain::alias::{ID, SkillName, TypeName};
-use crate::domain::constants::{CRIT_DAMAGE_MULTIPLIER, FLANKING_REQUIRED_ALLIES};
+use crate::domain::constants::{
+    ACCURACY_PENALTY_WHEN_ENEMY_ADJACENT, CRIT_DAMAGE_MULTIPLIER, FLANKING_REQUIRED_ALLIES,
+};
 use crate::domain::core_types::{
     AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
     Scaling, SkillTag, TargetFilter,
@@ -125,6 +127,7 @@ pub(crate) fn resolve_effect_tree(
                         skill_tags,
                         inner_nodes,
                         caster,
+                        caster_pos,
                         target_pos,
                         *filter,
                         units_on_board,
@@ -142,6 +145,7 @@ pub(crate) fn resolve_effect_tree(
                     skill_tags,
                     std::slice::from_ref(node),
                     caster,
+                    caster_pos,
                     target_pos,
                     TargetFilter::Any,
                     units_on_board,
@@ -164,6 +168,7 @@ fn resolve_at_position(
     skill_tags: &[SkillTag],
     nodes: &[EffectNode],
     caster: &CombatStats,
+    caster_pos: Position,
     target_pos: Position,
     filter: TargetFilter,
     units_on_board: &HashMap<Position, CombatStats>,
@@ -179,13 +184,21 @@ fn resolve_at_position(
             }
             let flanking_bonus =
                 compute_flanking_bonus(skill_tags, caster, target_pos, units_on_board, board);
+            let adjacent_enemy_penalty = compute_adjacent_enemy_penalty(
+                skill_tags,
+                caster,
+                caster_pos,
+                units_on_board,
+                board,
+            );
+            let accuracy_modifier = flanking_bonus + adjacent_enemy_penalty;
             resolve_nodes_for_unit(
                 caster_id,
                 skill_name,
                 nodes,
                 caster,
                 target_stats,
-                flanking_bonus,
+                accuracy_modifier,
                 CheckResult::Auto,
                 None,
                 rng,
@@ -219,6 +232,24 @@ fn compute_flanking_bonus(
         return 0;
     }
     caster.attribute.flanking_accuracy_bonus.0
+}
+
+/// 根據技能 tag 與 caster 相鄰敵人狀態計算命中懲罰
+fn compute_adjacent_enemy_penalty(
+    skill_tags: &[SkillTag],
+    caster: &CombatStats,
+    caster_pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    board: Board,
+) -> i32 {
+    let is_penalized = skill_tags
+        .iter()
+        .any(|t| matches!(t, SkillTag::AccuracyPenaltyWhenEnemyAdjacent));
+    if !is_penalized || !is_adjacent_to_enemy(&caster.unit_info, caster_pos, units_on_board, board)
+    {
+        return 0;
+    }
+    ACCURACY_PENALTY_WHEN_ENEMY_ADJACENT
 }
 
 /// 帶判定結果的效果節點解析
@@ -512,6 +543,24 @@ fn is_flanked(
         })
         .count();
     ally_count >= FLANKING_REQUIRED_ALLIES
+}
+
+/// 判定 caster 的 4 個曼哈頓相鄰格中是否有敵方單位
+fn is_adjacent_to_enemy(
+    caster: &UnitInfo,
+    caster_pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    board: Board,
+) -> bool {
+    let neighbors = [(1_i32, 0_i32), (-1, 0), (0, 1), (0, -1)];
+    neighbors.iter().any(|(dx, dy)| {
+        match try_position(board, caster_pos.x as i32 + dx, caster_pos.y as i32 + dy) {
+            Some(neighbor) => units_on_board
+                .get(&neighbor)
+                .is_some_and(|stats| stats.unit_info.alliance_id != caster.alliance_id),
+            None => false,
+        }
+    })
 }
 
 /// 判斷位置是否被佔據（有單位或不可通過物件）
