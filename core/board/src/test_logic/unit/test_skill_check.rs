@@ -1,4 +1,6 @@
-use crate::logic::skill::skill_check::{HitCheckResult, resolve_hit};
+use crate::logic::skill::skill_check::{
+    HitCheckResult, HitProbabilities, hit_probabilities, resolve_hit,
+};
 
 // ============================================================================
 // 命中判定（一般、強制、暴擊）
@@ -131,5 +133,93 @@ fn test_resolve_hit() {
             "hit={attacker_hit}, eva={defender_evasion}, blk={defender_block}, crit_rate={crit_rate}, hit_roll={hit_roll}\n \
                 search: {attacker_hit}, {defender_evasion}, {defender_block}, {crit_rate}, {hit_roll}"
         );
+    }
+}
+
+// ============================================================================
+// 命中機率（預覽用，d100 均勻分布下各結果的百分點數）
+// ============================================================================
+
+/// 枚舉骰 1~100 逐格跑 resolve_hit，數出各結果的格子數，
+/// 作為 hit_probabilities 的期望值來源（即測試規格）。
+fn count_by_enumeration(
+    attacker_hit: i32,
+    defender_evasion: i32,
+    defender_block: i32,
+) -> HitProbabilities {
+    let mut hit = 0;
+    let mut block = 0;
+    let mut evade = 0;
+    for roll in 1..=100 {
+        let mut roll_fn = || roll;
+        let result = resolve_hit(
+            attacker_hit,
+            defender_evasion,
+            defender_block,
+            0,
+            &mut roll_fn,
+        );
+        match result.check {
+            HitCheckResult::Hit { .. } => hit += 1,
+            HitCheckResult::Block { .. } => block += 1,
+            HitCheckResult::Evade => evade += 1,
+        }
+    }
+    HitProbabilities { hit, block, evade }
+}
+
+#[test]
+fn test_hit_probabilities() {
+    // (attacker_hit, defender_evasion, defender_block)
+    let test_data = [
+        // 一般情境：閃避門檻與格擋門檻都落在中間段
+        (50, 50, 50),
+        (70, 50, 50),
+        (90, 50, 50),
+        (90, 70, 50),
+        (90, 50, 70),
+        // 無格擋
+        (50, 30, 0),
+        (50, 50, 0),
+        (50, 70, 0),
+        // 無閃避
+        (50, 0, 30),
+        (50, 0, 50),
+        (50, 0, 70),
+        // 攻擊遠高於閃避
+        (900, 0, 0),
+        (800, 0, 0),
+        (700, 0, 0),
+        // 閃避遠高於攻擊
+        (0, 900, 0),
+        (0, 800, 0),
+        (0, 700, 0),
+        // 格擋遠高於攻擊
+        (0, 0, 900),
+        (0, 0, 800),
+        (0, 0, 700),
+        // 門檻恰在強制區段邊界附近
+        (0, 4, 0),
+        (0, 5, 0),
+        (0, 6, 0),
+    ];
+
+    for (attacker_hit, defender_evasion, defender_block) in test_data {
+        let expected = count_by_enumeration(attacker_hit, defender_evasion, defender_block);
+        let actual = hit_probabilities(attacker_hit, defender_evasion, defender_block);
+        assert_eq!(
+            actual, expected,
+            "hit={attacker_hit}, eva={defender_evasion}, blk={defender_block}\n \
+                search: {attacker_hit}, {defender_evasion}, {defender_block}"
+        );
+        // 三分項總和必為 100（d100 全覆蓋）
+        assert_eq!(
+            actual.hit + actual.block + actual.evade,
+            100,
+            "機率總和應為 100"
+        );
+        assert!(actual.hit >= 0);
+        assert!(actual.block >= 0);
+        assert!(actual.evade >= 0);
     }
 }

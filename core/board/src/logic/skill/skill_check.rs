@@ -88,3 +88,60 @@ fn is_crit(roll: i32, crit_rate: i32) -> bool {
     let crit_threshold = 100 - crit_rate;
     roll >= crit_threshold
 }
+
+// ============================================================================
+// 命中機率（預覽用）
+// ============================================================================
+
+/// d100 均勻分布下各命中結果的百分點數（總和恆為 100）
+///
+/// 不含爆擊（預覽只需正常命中傷害），三分項對應 resolve_hit 的三種結果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HitProbabilities {
+    pub hit: i32,
+    pub block: i32,
+    pub evade: i32,
+}
+
+/// 計算命中機率（與 compute_hit_result 的門檻邏輯一致）
+///
+/// 判定域為 d100，每格 1 百分點：
+/// 1. 強制閃避段 [1, FORCED_FAILURE_UPPER] 恆為 Evade
+/// 2. 強制命中段 [FORCED_SUCCESS_LOWER, 100] 恆為 Hit
+/// 3. 中間段依 evasion_threshold / block_threshold 切成 Evade / Block / Hit
+pub(crate) fn hit_probabilities(
+    attacker_hit: i32,
+    defender_evasion: i32,
+    defender_block: i32,
+) -> HitProbabilities {
+    let evasion_threshold = defender_evasion - attacker_hit;
+    let block_threshold = evasion_threshold + defender_block;
+
+    // 中間段的閉區間 [middle_lower, middle_upper]
+    let middle_lower = FORCED_FAILURE_UPPER + 1;
+    let middle_upper = FORCED_SUCCESS_LOWER - 1;
+
+    // 中間段內：roll < evasion_threshold → Evade
+    let middle_evade = count_below(middle_lower, middle_upper, evasion_threshold);
+    // 中間段內：evasion_threshold ≤ roll < block_threshold → Block
+    let middle_block = count_below(middle_lower, middle_upper, block_threshold) - middle_evade;
+    // 中間段內剩餘 → Hit
+    let middle_total = middle_upper - middle_lower + 1;
+    let middle_hit = middle_total - middle_evade - middle_block;
+
+    let forced_evade = FORCED_FAILURE_UPPER;
+    let forced_hit = 100 - FORCED_SUCCESS_LOWER + 1;
+
+    HitProbabilities {
+        hit: middle_hit + forced_hit,
+        block: middle_block,
+        evade: middle_evade + forced_evade,
+    }
+}
+
+/// 計算閉區間 [lower, upper] 內滿足 roll < threshold 的整數格子數
+fn count_below(lower: i32, upper: i32, threshold: i32) -> i32 {
+    // roll < threshold 等價於 roll ≤ threshold - 1，與 upper 取交集
+    let effective_upper = (threshold - 1).min(upper);
+    (effective_upper - lower + 1).max(0)
+}
