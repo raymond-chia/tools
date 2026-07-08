@@ -45,8 +45,8 @@ fn test_parse_and_insert_game_data_sets_resource() {
     );
     assert_eq!(
         game_data.object_type_map.len(),
-        3,
-        "object_type_map 應包含 3 個物件類型"
+        4,
+        "object_type_map 應包含 4 個物件類型"
     );
     assert!(
         game_data.object_type_map.contains_key(OBJECT_TYPE_WALL),

@@ -7,7 +7,7 @@ use crate::ecs_types::components::Position;
 use crate::error::Result;
 use crate::logic::skill::skill_reaction::{MoveReaction, ReactionUnitInfo, collect_move_reactions};
 use crate::test_helpers::level_builder::{LevelBuilder, MarkerEntry};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 const ALLY_ALLIANCE: ID = 1;
@@ -313,7 +313,9 @@ fn collect_move_reactions_cases() {
         let path = resolve_path(&markers, path_names);
         let units_on_board = to_reaction_map(&unit_markers, &reaction_configs);
 
-        let result = collect_move_reactions(mover, &path, &units_on_board).expect("collect 失敗");
+        let blocks_sight = HashSet::new();
+        let result = collect_move_reactions(mover, &path, &units_on_board, &blocks_sight)
+            .expect("collect 失敗");
 
         assert_eq!(
             result.stop_position, markers[*expected_stop][0],

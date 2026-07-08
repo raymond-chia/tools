@@ -10,8 +10,8 @@ use crate::ecs_logic::query::{
 };
 use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
-    ActionState, MovementPoint, Object, ObjectMovementCost, Occupant, Position, ReactionPoint,
-    Skills, Unit, UnitFaction,
+    ActionState, BlocksSight, MovementPoint, Object, ObjectMovementCost, Occupant, Position,
+    ReactionPoint, Skills, Unit, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, GameData, MovementPlan, ReactionState, TurnOrder};
 use crate::error::{BoardError, DataError, Result};
@@ -19,7 +19,7 @@ use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstr
 use crate::logic::skill::UnitInfo;
 use crate::logic::skill::skill_reaction::{ReactionUnitInfo, collect_move_reactions};
 use bevy_ecs::prelude::{With, World};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// advance_move 的回傳值
 #[derive(Debug, Clone)]
@@ -181,12 +181,22 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
         alliance_id: mover_alliance,
     };
 
+    let blocks_sight: HashSet<Position> = world
+        .query_filtered::<&Position, With<BlocksSight>>()
+        .iter(world)
+        .copied()
+        .collect();
+
     let reaction_unit_map = build_reaction_unit_map(world, &faction_to_alliance)?;
 
     // === 純邏輯 ===
     // path[next_step_index..] 從當前位置開始，含當前格作為 from
-    let reaction_result =
-        collect_move_reactions(&mover_info, &path[next_step_index..], &reaction_unit_map)?;
+    let reaction_result = collect_move_reactions(
+        &mover_info,
+        &path[next_step_index..],
+        &reaction_unit_map,
+        &blocks_sight,
+    )?;
     let stop_pos = reaction_result.stop_position;
     let has_reactions = !reaction_result.reactions.is_empty();
 

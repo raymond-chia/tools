@@ -5,9 +5,10 @@ use crate::domain::core_types::{PendingReaction, ReactionTrigger, SkillType, Tri
 use crate::ecs_types::components::{Occupant, Position};
 use crate::ecs_types::resources::GameData;
 use crate::error::Result;
+use crate::logic::skill::line_of_sight::has_line_of_sight;
 use crate::logic::skill::skill_execution::{CheckTarget, CombatStats, EffectEntry, ResolvedEffect};
 use crate::logic::skill::{UnitInfo, is_in_filter, manhattan_distance};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// 反應者的場上資訊
 #[derive(Debug)]
@@ -35,10 +36,14 @@ pub struct CollectMoveReactionsResult {
 ///
 /// 外層遍歷每個反應者，內層掃描路徑找到該反應者最早觸發的步驟。
 /// 維護 earliest_from_idx 逐步收縮搜尋範圍，後續 reactor 只需掃到該步驟為止。
+///
+/// `blocks_sight`：阻擋視線的格子集合。反應者對觸發格（移動者離開的那格）無視線時，
+/// 該步驟不觸發反應，比照 execute_skill 的 caster ↔ target 判定。
 pub(crate) fn collect_move_reactions(
     mover: &UnitInfo,
     path: &[Position],
     units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>,
+    blocks_sight: &HashSet<Position>,
 ) -> Result<CollectMoveReactionsResult> {
     // earliest_from_idx: 目前已知最早觸發的步驟索引（exclusive upper bound）
     // from -> to. 最後一個 to idx = len-1, 最後一個 from idx = len-2
@@ -84,6 +89,11 @@ pub(crate) fn collect_move_reactions(
         // 掃描路徑，只掃到 earliest_from_idx 為止（含）
         // take(n) = take(idx + 1)
         for (step_index, from) in path.iter().enumerate().take(earliest_from_idx + 1) {
+            // 視線基準：反應者 ↔ 觸發格（移動者離開的那格），被阻擋則此步驟不觸發
+            if !has_line_of_sight(*reactor_pos, *from, blocks_sight) {
+                continue;
+            }
+
             let distance = manhattan_distance(*reactor_pos, *from);
 
             let is_in_range = |range: (usize, usize)| distance >= range.0 && distance <= range.1;

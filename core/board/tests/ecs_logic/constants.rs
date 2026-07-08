@@ -14,6 +14,7 @@ pub const UNIT_TYPE_MAGE: &str = "mage";
 pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_PIT: &str = "pit";
 pub const OBJECT_TYPE_SWAMP: &str = "swamp";
+pub const OBJECT_TYPE_FOG: &str = "fog";
 
 pub const SKILLS_TOML: &str = r#"
 [[skills]]
@@ -298,5 +299,11 @@ blocks_sound = false
 name = "swamp"
 movement_cost = 10
 blocks_sight = false
+blocks_sound = false
+
+[[objects]]
+name = "fog"
+movement_cost = 0
+blocks_sight = true
 blocks_sound = false
 "#;
