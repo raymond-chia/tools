@@ -144,7 +144,7 @@ core/board/
 
 ### logic/skill/skill_reaction.rs
 
-- `pub(crate) fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
+- `pub(crate) fn collect_move_reactions(mover: &UnitInfo, path: &[Position], units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>, blocks_sight: &HashSet<Position>) -> Result<CollectMoveReactionsResult>` - 收集移動路徑上最早觸發反應的所有反應者
 - `pub(crate) fn collect_takes_damage_reactions(entries: &[EffectEntry], attacker: Occupant, attacker_pos: Position, game_data: &GameData, unit_reaction_info: &HashMap<Occupant, TakesDamageUnitInfo>, unit_stats_on_board: &HashMap<Position, CombatStats>) -> Vec<PendingReaction>` - 收集因受傷觸發的反應
 
 ### logic/skill/skill_target.rs
@@ -220,6 +220,7 @@ core/board/
 ### ecs_logic/movement.rs
 
 - `pub fn get_reachable_positions(world: &mut World, occupant: Occupant) -> Result<HashMap<Position, ReachableInfo>>` - 計算單位可到達的所有位置
+- `pub fn preview_move_reactions(world: &mut World, target: Position) -> Result<CollectMoveReactionsResult>` - 預覽當前單位移動到目標格會觸發的藉機攻擊
 - `pub fn plan_move(world: &mut World, target: Position) -> Result<()>` - 規劃當前單位移動到指定位置
 - `pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult>` - 推進當前單位的移動計畫
 - `pub fn force_advance_move(world: &mut World) -> Result<AdvanceMoveResult>` - 強制推進當前單位的移動計畫

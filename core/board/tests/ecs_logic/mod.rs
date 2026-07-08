@@ -3,6 +3,7 @@ mod test_buff_ttl;
 mod test_deployment;
 mod test_loader;
 mod test_move_reaction_los;
+mod test_move_reaction_preview;
 mod test_movement;
 mod test_query;
 mod test_reaction;

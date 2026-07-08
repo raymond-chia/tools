@@ -17,7 +17,9 @@ use crate::ecs_types::resources::{Board, GameData, MovementPlan, ReactionState, 
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
 use crate::logic::skill::UnitInfo;
-use crate::logic::skill::skill_reaction::{ReactionUnitInfo, collect_move_reactions};
+use crate::logic::skill::skill_reaction::{
+    CollectMoveReactionsResult, ReactionUnitInfo, collect_move_reactions,
+};
 use bevy_ecs::prelude::{With, World};
 use std::collections::{HashMap, HashSet};
 
@@ -88,6 +90,46 @@ pub fn get_reachable_positions(
         get_occupant_alliance,
         get_terrain_cost,
     )
+}
+
+/// 預覽當前行動單位移動到目標格會觸發的藉機攻擊
+///
+/// 唯讀操作：計算路徑並收集反應者，不改變 World、不產生 pending 反應。
+/// 供前端在玩家確認移動前顯示藉機攻擊警示。
+/// 目標不可達時回傳空路徑，收集不到任何反應。
+pub fn preview_move_reactions(
+    world: &mut World,
+    target: Position,
+) -> Result<CollectMoveReactionsResult> {
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let occupant = get_current_unit(turn_order)?;
+
+    let entity = find_entity_by_occupant(world, occupant)?;
+    let start_pos = *get_component!(world.entity(entity), Position)?;
+    let mover_faction = get_component!(world.entity(entity), UnitFaction)?.0;
+
+    let reachable = get_reachable_positions(world, occupant)?;
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+    let mover_alliance = resolve_alliance(&faction_to_alliance, mover_faction)?;
+    let mover_info = UnitInfo {
+        occupant,
+        faction_id: mover_faction,
+        alliance_id: mover_alliance,
+    };
+
+    let blocks_sight: HashSet<Position> = world
+        .query_filtered::<&Position, With<BlocksSight>>()
+        .iter(world)
+        .copied()
+        .collect();
+
+    let reaction_unit_map = build_reaction_unit_map(world, &faction_to_alliance)?;
+
+    // path 含起點：[start, step1, ..., target]；目標不可達時為空
+    let path = reconstruct_path(&reachable, start_pos, target);
+
+    collect_move_reactions(&mover_info, &path, &reaction_unit_map, &blocks_sight)
 }
 
 /// 規劃移動路徑並存入 MovementPlan resource
