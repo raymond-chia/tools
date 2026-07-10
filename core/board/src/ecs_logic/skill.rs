@@ -32,6 +32,7 @@ use std::sync::Arc;
 /// 可用技能資訊
 pub struct AvailableSkill {
     pub name: SkillName,
+    pub cost: u32,
     pub usable: bool,
 }
 
@@ -85,6 +86,7 @@ pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>> {
                 let usable = can_act && current_mp >= *cost as i32;
                 result.push(AvailableSkill {
                     name: name.clone(),
+                    cost: *cost,
                     usable,
                 });
             }

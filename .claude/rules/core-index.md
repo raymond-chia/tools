@@ -88,7 +88,8 @@ core/board/
 │       │   ├── test_skill_area.rs - 技能範圍計算測試
 │       │   ├── test_skill_single_execution.rs - 單一技能效果執行測試
 │       │   ├── test_line_of_sight.rs - 視線判定測試
-│       │   └── test_flanking.rs - 側翼攻擊測試
+│       │   ├── test_flanking.rs - 側翼攻擊測試
+│       │   └── test_adjacent_penalty.rs - 相鄰敵人命中懲罰測試
 │       ├── turn/         - 回合順序測試
 │       │   ├── mod.rs    - 模組宣告
 │       │   └── test_turn_order.rs - 回合順序計算與管理測試
@@ -132,6 +133,7 @@ core/board/
 ### logic/skill/skill_check.rs
 
 - `pub(crate) fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
+- `pub(crate) fn hit_probabilities(attacker_hit: i32, defender_evasion: i32, defender_block: i32) -> HitProbabilities` - 計算命中機率（預覽用）
 
 ### logic/skill/skill_range.rs
 
@@ -221,6 +223,7 @@ core/board/
 
 - `pub fn get_reachable_positions(world: &mut World, occupant: Occupant) -> Result<HashMap<Position, ReachableInfo>>` - 計算單位可到達的所有位置
 - `pub fn preview_move_reactions(world: &mut World, target: Position) -> Result<CollectMoveReactionsResult>` - 預覽當前單位移動到目標格會觸發的藉機攻擊
+- `pub fn preview_move_path(world: &mut World, target: Position) -> Result<MovePathPreview>` - 預覽當前單位移動到目標格的整條路徑警示（藉機攻擊與危險地面）
 - `pub fn plan_move(world: &mut World, target: Position) -> Result<()>` - 規劃當前單位移動到指定位置
 - `pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult>` - 推進當前單位的移動計畫
 - `pub fn force_advance_move(world: &mut World) -> Result<AdvanceMoveResult>` - 強制推進當前單位的移動計畫
