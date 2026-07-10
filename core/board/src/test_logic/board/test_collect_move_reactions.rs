@@ -98,17 +98,26 @@ fn resolve_path(markers: &HashMap<String, Vec<Position>>, names: &[&str]) -> Vec
     names.iter().map(|name| markers[*name][0]).collect()
 }
 
-/// 驗證反應結果：不在意反應者順序，但每個反應者的技能列表需完全匹配
-fn assert_reactions(
+/// 驗證最早觸發步驟那批反應者：不在意反應者順序，但每個反應者的技能列表需完全匹配
+///
+/// 只驗證 `from_index == earliest_from_index` 的那批（實際移動只在乎最早觸發的那批），
+/// 忽略路徑更後段才觸發的反應者。整條路徑全部反應者由獨立測試驗證。
+fn assert_earliest_reactions(
     result_reactions: &[MoveReaction],
+    earliest_from_index: usize,
     expected: &[(&str, &[&str])],
     unit_markers: &HashMap<String, Vec<MarkerEntry>>,
     ascii: &str,
 ) {
+    let earliest: Vec<&MoveReaction> = result_reactions
+        .iter()
+        .filter(|r| r.from_index == earliest_from_index)
+        .collect();
+
     assert_eq!(
-        result_reactions.len(),
+        earliest.len(),
         expected.len(),
-        "反應者數量不符，棋盤：{ascii}"
+        "最早那批反應者數量不符，棋盤：{ascii}"
     );
 
     // 建立 expected: HashMap<Occupant, sorted skill names>
@@ -122,7 +131,7 @@ fn assert_reactions(
         })
         .collect();
 
-    let actual_map: HashMap<_, Vec<&str>> = result_reactions
+    let actual_map: HashMap<_, Vec<&str>> = earliest
         .iter()
         .map(|r| {
             let mut names: Vec<&str> = r.skill_names.iter().map(|s| s.as_str()).collect();
@@ -131,7 +140,10 @@ fn assert_reactions(
         })
         .collect();
 
-    assert_eq!(actual_map, expected_map, "反應列表不符，棋盤：{ascii}");
+    assert_eq!(
+        actual_map, expected_map,
+        "最早那批反應列表不符，棋盤：{ascii}"
+    );
 }
 
 // ============================================================================
@@ -321,6 +333,71 @@ fn collect_move_reactions_cases() {
             result.stop_position, markers[*expected_stop][0],
             "stop_position 不符，棋盤：{ascii}"
         );
-        assert_reactions(&result.reactions, expected_reactions, &unit_markers, ascii);
+        assert_earliest_reactions(
+            &result.reactions,
+            result.earliest_from_index,
+            expected_reactions,
+            &unit_markers,
+            ascii,
+        );
     }
+}
+
+/// 整條路徑收集：不同步觸發的多個反應者都應回傳（不收斂到最早那批）。
+///
+/// Ea 於 from=P1（較早步驟）觸發，Eb 於 from=P2（較晚步驟）觸發，兩者都應在結果中。
+#[test]
+fn collect_move_reactions_collects_whole_path() {
+    let ascii = "
+        .  Ea .  Eb .
+        S  P1 P2 T  .
+        ";
+    let (markers, unit_markers) = standard_board(ascii).expect("建立棋盤失敗");
+    let mover = &unit_markers["S"][0].unit_info;
+    let path = resolve_path(&markers, &["S", "P1", "P2", "T"]);
+
+    let reaction_configs = HashMap::from([
+        (
+            "Ea",
+            reaction_config(
+                1,
+                vec![reaction_skill(OA11_NAME, 1, 1, TargetFilter::Enemy)],
+            ),
+        ),
+        (
+            "Eb",
+            reaction_config(
+                1,
+                vec![reaction_skill(OA12_NAME, 1, 2, TargetFilter::Enemy)],
+            ),
+        ),
+    ]);
+    let units_on_board = to_reaction_map(&unit_markers, &reaction_configs);
+
+    let blocks_sight = HashSet::new();
+    let result =
+        collect_move_reactions(mover, &path, &units_on_board, &blocks_sight).expect("collect 失敗");
+
+    let ea = unit_markers["Ea"][0].unit_info.occupant;
+    let eb = unit_markers["Eb"][0].unit_info.occupant;
+
+    let actual: HashMap<_, usize> = result
+        .reactions
+        .iter()
+        .map(|r| (r.occupant, r.from_index))
+        .collect();
+
+    assert_eq!(result.reactions.len(), 2, "整條路徑應回傳兩個反應者");
+    assert!(actual.contains_key(&ea), "應包含 Ea");
+    assert!(actual.contains_key(&eb), "應包含 Eb");
+    assert!(
+        actual[&ea] < actual[&eb],
+        "Ea 應在較早的步驟觸發，Ea from_index={}，Eb from_index={}",
+        actual[&ea],
+        actual[&eb]
+    );
+    assert_eq!(
+        result.earliest_from_index, actual[&ea],
+        "earliest_from_index 應為 Ea 觸發的步驟"
+    );
 }

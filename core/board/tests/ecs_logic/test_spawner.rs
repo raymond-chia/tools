@@ -85,7 +85,7 @@ fn test_spawn_level_with_object() {
     )
     .unit("W", UNIT_TYPE_WARRIOR, 0)
     .object("w", "wall")
-    .object("p", "pit")
+    .object("p", "spike")
     .deploy("D")
     .to_toml()
     .expect("LevelBuilder::to_toml 應成功");
@@ -135,7 +135,7 @@ fn test_spawn_level_occupant_ids_are_unique() {
     )
     .unit("W", UNIT_TYPE_WARRIOR, 0)
     .object("w", "wall")
-    .object("p", "pit")
+    .object("p", "spike")
     .deploy("D")
     .to_toml()
     .expect("LevelBuilder::to_toml 應成功");

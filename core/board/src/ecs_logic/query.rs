@@ -5,7 +5,7 @@ use crate::domain::core_types::{EffectNode, SkillTag, SkillType, Target, Trigger
 use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
-    ContactEffects, CurrentHp, CurrentMp, FlankingAccuracyBonus, Fortitude, Initiative,
+    ContactEffects, CurrentHp, CurrentMp, FlankingAccuracyBonus, Fortitude, Hazardous, Initiative,
     MagicalAccuracy, MagicalAttack, MaxHp, MaxMp, MaxReactionPoint, MovementPoint, Object,
     ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName, PhysicalAccuracy, PhysicalAttack,
     Position, ReactionPoint, Skills, Unit, UnitBundle, UnitFaction, Will,
@@ -57,6 +57,7 @@ pub struct ObjectQueryResult {
     pub bundle: ObjectBundle,
     pub blocks_sight: bool,
     pub blocks_sound: bool,
+    pub hazardous: bool,
 }
 
 /// 查詢所有物件，以位置為 key
@@ -80,12 +81,14 @@ pub fn get_all_objects(world: &mut World) -> Result<HashMap<Position, ObjectQuer
         };
         let blocks_sight = entity_ref.get::<BlocksSight>().is_some();
         let blocks_sound = entity_ref.get::<BlocksSound>().is_some();
+        let hazardous = entity_ref.get::<Hazardous>().is_some();
         result.insert(
             position,
             ObjectQueryResult {
                 bundle,
                 blocks_sight,
                 blocks_sound,
+                hazardous,
             },
         );
     }

@@ -1,7 +1,7 @@
 use crate::domain::alias::ID;
 use crate::ecs_logic::query::{get_resource, setup_occupant_index};
 use crate::ecs_types::components::{
-    ActionState, BlocksSight, BlocksSound, ContactEffects, Object, ObjectBundle,
+    ActionState, BlocksSight, BlocksSound, ContactEffects, Hazardous, Object, ObjectBundle,
     ObjectMovementCost, Occupant, OccupantTypeName, Skills, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{BattleLog, Board, DeploymentConfig, GameData, LevelConfig};
@@ -57,8 +57,12 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
             });
         }
 
-        let mut object_spawn_data: Vec<(ObjectBundle, Option<BlocksSight>, Option<BlocksSound>)> =
-            Vec::new();
+        let mut object_spawn_data: Vec<(
+            ObjectBundle,
+            Option<BlocksSight>,
+            Option<BlocksSound>,
+            Option<Hazardous>,
+        )> = Vec::new();
         for placement in &level.object_placements {
             let id = generate_unique_id(&mut used_ids)?;
             let object_type = game_data
@@ -79,6 +83,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 },
                 object_type.blocks_sight.then_some(BlocksSight),
                 object_type.blocks_sound.then_some(BlocksSound),
+                object_type.hazardous.then_some(Hazardous),
             ));
         }
 
@@ -114,7 +119,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
     }
 
     // Spawn Object entities
-    for (bundle, blocks_sight, blocks_sound) in object_spawn_data {
+    for (bundle, blocks_sight, blocks_sound, hazardous) in object_spawn_data {
         let mut entity = world.spawn(bundle);
 
         if let Some(tag) = blocks_sight {
@@ -122,6 +127,10 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
         }
 
         if let Some(tag) = blocks_sound {
+            entity.insert(tag);
+        }
+
+        if let Some(tag) = hazardous {
             entity.insert(tag);
         }
     }

@@ -23,19 +23,30 @@ pub struct ReactionUnitInfo<'a> {
 pub struct MoveReaction {
     pub occupant: Occupant,
     pub skill_names: Vec<SkillName>,
+    /// 該反應者觸發的步驟索引：移動者離開的那格（path 的 from 索引）
+    pub from_index: usize,
 }
 
 /// collect_move_reactions 的回傳值
+///
+/// `reactions` 涵蓋整條路徑上所有會觸發藉機攻擊的反應者（每個反應者記其最早觸發的步驟），
+/// 不收斂到單一步驟。呼叫端可自行取用：
+/// - 預覽：使用整條路徑的全部反應者。
+/// - 實際移動：過濾出最早觸發步驟（`earliest_from_index`）的那批。
 #[derive(Debug)]
 pub struct CollectMoveReactionsResult {
+    /// 最早觸發步驟的下一格（移動者實際會停下的位置）；無反應時為路徑終點
     pub stop_position: Position,
+    /// 最早觸發的步驟索引；無反應時為 path.len() - 2
+    pub earliest_from_index: usize,
+    /// 整條路徑上所有反應者，每個記其最早觸發步驟
     pub reactions: Vec<MoveReaction>,
 }
 
-/// 收集移動路徑上最早觸發反應的步驟的所有反應者
+/// 收集移動路徑上所有會觸發藉機攻擊的反應者
 ///
 /// 外層遍歷每個反應者，內層掃描路徑找到該反應者最早觸發的步驟。
-/// 維護 earliest_from_idx 逐步收縮搜尋範圍，後續 reactor 只需掃到該步驟為止。
+/// 不收斂：每個反應者各自記錄其最早觸發步驟，全部保留供呼叫端自行取用。
 ///
 /// `blocks_sight`：阻擋視線的格子集合。反應者對觸發格（移動者離開的那格）無視線時，
 /// 該步驟不觸發反應，比照 execute_skill 的 caster ↔ target 判定。
@@ -45,9 +56,8 @@ pub(crate) fn collect_move_reactions(
     units_on_board: &HashMap<Position, ReactionUnitInfo<'_>>,
     blocks_sight: &HashSet<Position>,
 ) -> Result<CollectMoveReactionsResult> {
-    // earliest_from_idx: 目前已知最早觸發的步驟索引（exclusive upper bound）
     // from -> to. 最後一個 to idx = len-1, 最後一個 from idx = len-2
-    let mut earliest_from_idx = path.len() - 2;
+    let last_from_idx = path.len() - 2;
     let mut reactions: Vec<MoveReaction> = Vec::new();
 
     for (reactor_pos, reactor) in units_on_board {
@@ -86,9 +96,8 @@ pub(crate) fn collect_move_reactions(
             continue;
         }
 
-        // 掃描路徑，只掃到 earliest_from_idx 為止（含）
-        // take(n) = take(idx + 1)
-        for (step_index, from) in path.iter().enumerate().take(earliest_from_idx + 1) {
+        // 掃描整條路徑，找該反應者最早觸發的步驟
+        for (step_index, from) in path.iter().enumerate().take(last_from_idx + 1) {
             // 視線基準：反應者 ↔ 觸發格（移動者離開的那格），被阻擋則此步驟不觸發
             if !has_line_of_sight(*reactor_pos, *from, blocks_sight) {
                 continue;
@@ -108,24 +117,27 @@ pub(crate) fn collect_move_reactions(
                 continue;
             }
 
-            if step_index < earliest_from_idx {
-                // 發現更早的步驟，丟掉之前的結果
-                earliest_from_idx = step_index;
-                reactions.clear();
-            }
-
             reactions.push(MoveReaction {
                 occupant: reactor.unit_info.occupant,
                 skill_names: matching_skills,
+                from_index: step_index,
             });
             // 這個 reactor 已找到最早觸發步驟，不需繼續掃
             break;
         }
     }
 
+    // 最早觸發步驟：所有反應者中最小的 from_index；無反應時為 last_from_idx
+    let earliest_from_index = reactions
+        .iter()
+        .map(|reaction| reaction.from_index)
+        .min()
+        .unwrap_or(last_from_idx);
+
     Ok(CollectMoveReactionsResult {
-        stop_position: path[earliest_from_idx + 1],
+        stop_position: path[earliest_from_index + 1],
         reactions,
+        earliest_from_index,
     })
 }
 

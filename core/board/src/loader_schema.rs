@@ -27,6 +27,7 @@ pub struct ObjectType {
     pub movement_cost: MovementCost,
     pub blocks_sight: bool,
     pub blocks_sound: bool,
+    pub hazardous: bool,
 }
 
 // ============================================================================

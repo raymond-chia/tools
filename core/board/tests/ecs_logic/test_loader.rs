@@ -1,6 +1,6 @@
 use super::constants::{
-    OBJECT_TYPE_PIT, OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILL_MELEE, SKILL_WARRIOR,
-    SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNITS_TOML,
+    OBJECT_TYPE_SPIKE, OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILL_MELEE,
+    SKILL_WARRIOR, SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNITS_TOML,
 };
 use bevy_ecs::prelude::World;
 use board::ecs_logic::loader::parse_and_insert_game_data;
@@ -53,8 +53,8 @@ fn test_parse_and_insert_game_data_sets_resource() {
         "object_type_map 應包含 {OBJECT_TYPE_WALL}"
     );
     assert!(
-        game_data.object_type_map.contains_key(OBJECT_TYPE_PIT),
-        "object_type_map 應包含 {OBJECT_TYPE_PIT}"
+        game_data.object_type_map.contains_key(OBJECT_TYPE_SPIKE),
+        "object_type_map 應包含 {OBJECT_TYPE_SPIKE}"
     );
     assert!(
         game_data.object_type_map.contains_key(OBJECT_TYPE_SWAMP),

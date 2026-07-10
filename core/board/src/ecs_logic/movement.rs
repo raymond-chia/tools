@@ -10,15 +10,15 @@ use crate::ecs_logic::query::{
 };
 use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
-    ActionState, BlocksSight, MovementPoint, Object, ObjectMovementCost, Occupant, Position,
-    ReactionPoint, Skills, Unit, UnitFaction,
+    ActionState, BlocksSight, Hazardous, MovementPoint, Object, ObjectMovementCost, Occupant,
+    Position, ReactionPoint, Skills, Unit, UnitFaction,
 };
 use crate::ecs_types::resources::{Board, GameData, MovementPlan, ReactionState, TurnOrder};
 use crate::error::{BoardError, DataError, Result};
 use crate::logic::movement::{Mover, ReachableInfo, reachable_positions, reconstruct_path};
 use crate::logic::skill::UnitInfo;
 use crate::logic::skill::skill_reaction::{
-    CollectMoveReactionsResult, ReactionUnitInfo, collect_move_reactions,
+    CollectMoveReactionsResult, MoveReaction, ReactionUnitInfo, collect_move_reactions,
 };
 use bevy_ecs::prelude::{With, World};
 use std::collections::{HashMap, HashSet};
@@ -132,6 +132,84 @@ pub fn preview_move_reactions(
     collect_move_reactions(&mover_info, &path, &reaction_unit_map, &blocks_sight)
 }
 
+/// 移動路徑規劃期預覽的回傳值
+///
+/// 對應 BG3 的移動預覽：整條路徑的藉機攻擊警示與危險地面警示。
+/// 唯讀，不改變 World、不產生 pending 反應。
+#[derive(Debug)]
+pub struct MovePathPreview {
+    /// 整條路徑上所有會觸發藉機攻擊的反應者（沿途每處脫離都提示）
+    pub reactions: Vec<MoveReaction>,
+    /// 路徑上經過的危險地面格
+    pub hazard_positions: Vec<Position>,
+}
+
+/// 預覽當前行動單位移動到目標格的整條路徑警示
+///
+/// 唯讀操作：計算路徑，收集整條路徑的藉機攻擊反應者與危險地面格，
+/// 不改變 World、不產生 pending 反應。供前端在玩家確認移動前顯示完整風險。
+/// 目標不可達時回傳空路徑，無任何警示。
+///
+/// 與 advance_move 不同：預覽回傳整條路徑的反應者，實際移動仍走到第一個觸發就停。
+pub fn preview_move_path(world: &mut World, target: Position) -> Result<MovePathPreview> {
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let occupant = get_current_unit(turn_order)?;
+
+    let entity = find_entity_by_occupant(world, occupant)?;
+    let start_pos = *get_component!(world.entity(entity), Position)?;
+    let mover_faction = get_component!(world.entity(entity), UnitFaction)?.0;
+
+    let reachable = get_reachable_positions(world, occupant)?;
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+    let mover_alliance = resolve_alliance(&faction_to_alliance, mover_faction)?;
+    let mover_info = UnitInfo {
+        occupant,
+        faction_id: mover_faction,
+        alliance_id: mover_alliance,
+    };
+
+    let blocks_sight: HashSet<Position> = world
+        .query_filtered::<&Position, With<BlocksSight>>()
+        .iter(world)
+        .copied()
+        .collect();
+
+    let hazard_cells: HashSet<Position> = world
+        .query_filtered::<&Position, With<Hazardous>>()
+        .iter(world)
+        .copied()
+        .collect();
+
+    let reaction_unit_map = build_reaction_unit_map(world, &faction_to_alliance)?;
+
+    // path 含起點：[start, step1, ..., target]；目標不可達時為空
+    let path = reconstruct_path(&reachable, start_pos, target);
+
+    if path.is_empty() {
+        return Err(BoardError::Unreachable {
+            x: target.x,
+            y: target.y,
+        }
+        .into());
+    }
+
+    let reaction_result =
+        collect_move_reactions(&mover_info, &path, &reaction_unit_map, &blocks_sight)?;
+
+    // 危險地面：路徑上（不含起點）經過的危險格
+    let hazard_positions: Vec<Position> = path[1..]
+        .iter()
+        .copied()
+        .filter(|pos| hazard_cells.contains(pos))
+        .collect();
+
+    Ok(MovePathPreview {
+        reactions: reaction_result.reactions,
+        hazard_positions,
+    })
+}
+
 /// 規劃移動路徑並存入 MovementPlan resource
 ///
 /// 驗證目標位置可到達後，將完整路徑存入 resource。
@@ -240,7 +318,14 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
         &blocks_sight,
     )?;
     let stop_pos = reaction_result.stop_position;
-    let has_reactions = !reaction_result.reactions.is_empty();
+    // 只取最早觸發步驟的那批反應者（實際移動走到第一個觸發就停）
+    let earliest_from_index = reaction_result.earliest_from_index;
+    let earliest_reactions: Vec<_> = reaction_result
+        .reactions
+        .into_iter()
+        .filter(|reaction| reaction.from_index == earliest_from_index)
+        .collect();
+    let has_reactions = !earliest_reactions.is_empty();
 
     // steps_to_stop：在 path[next_step_index..] 中的 index，即走了幾步
     let steps_to_stop = path[next_step_index..]
@@ -294,8 +379,7 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
     }
 
     if has_reactions {
-        let pending: Vec<PendingReaction> = reaction_result
-            .reactions
+        let pending: Vec<PendingReaction> = earliest_reactions
             .into_iter()
             .map(|r| PendingReaction {
                 reactor: r.occupant,

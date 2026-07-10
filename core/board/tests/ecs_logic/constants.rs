@@ -12,7 +12,7 @@ pub const UNIT_TYPE_WARRIOR_B: &str = "warrior-b";
 pub const UNIT_TYPE_WARRIOR_COUNTER_ONLY: &str = "warrior-counter-only";
 pub const UNIT_TYPE_MAGE: &str = "mage";
 pub const OBJECT_TYPE_WALL: &str = "wall";
-pub const OBJECT_TYPE_PIT: &str = "pit";
+pub const OBJECT_TYPE_SPIKE: &str = "spike";
 pub const OBJECT_TYPE_SWAMP: &str = "swamp";
 pub const OBJECT_TYPE_FOG: &str = "fog";
 
@@ -288,22 +288,26 @@ name = "wall"
 movement_cost = 10000
 blocks_sight = true
 blocks_sound = true
+hazardous = false
 
 [[objects]]
-name = "pit"
+name = "spike"
 movement_cost = 0
 blocks_sight = false
 blocks_sound = false
+hazardous = true
 
 [[objects]]
 name = "swamp"
 movement_cost = 10
 blocks_sight = false
 blocks_sound = false
+hazardous = true
 
 [[objects]]
 name = "fog"
 movement_cost = 0
 blocks_sight = true
 blocks_sound = false
+hazardous = false
 "#;

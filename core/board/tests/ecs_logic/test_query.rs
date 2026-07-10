@@ -1,4 +1,4 @@
-use super::constants::{OBJECT_TYPE_PIT, OBJECT_TYPE_WALL, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
+use super::constants::{OBJECT_TYPE_SPIKE, OBJECT_TYPE_WALL, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR};
 use super::setup_world_with_level;
 use board::domain::alias::ID;
 use board::domain::constants::PLAYER_FACTION_ID;
@@ -104,17 +104,31 @@ fn test_get_all_objects_returns_correct_data() {
                 . . .
             ",
             vec![("w", OBJECT_TYPE_WALL)],
-            vec![(Position { x: 0, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true)],
+            vec![(
+                Position { x: 0, y: 0 },
+                OBJECT_TYPE_WALL,
+                10000,
+                true,
+                true,
+                false,
+            )],
         ),
         (
-            "單一 pit",
+            "單一 spike",
             "
                 . . .
                 . p .
                 . . .
             ",
-            vec![("p", OBJECT_TYPE_PIT)],
-            vec![(Position { x: 1, y: 1 }, OBJECT_TYPE_PIT, 0, false, false)],
+            vec![("p", OBJECT_TYPE_SPIKE)],
+            vec![(
+                Position { x: 1, y: 1 },
+                OBJECT_TYPE_SPIKE,
+                0,
+                false,
+                false,
+                true,
+            )],
         ),
         (
             "混合多種物件",
@@ -124,11 +138,32 @@ fn test_get_all_objects_returns_correct_data() {
                 . . p
                 . w .
             ",
-            vec![("w", OBJECT_TYPE_WALL), ("p", OBJECT_TYPE_PIT)],
+            vec![("w", OBJECT_TYPE_WALL), ("p", OBJECT_TYPE_SPIKE)],
             vec![
-                (Position { x: 0, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
-                (Position { x: 1, y: 3 }, OBJECT_TYPE_WALL, 10000, true, true),
-                (Position { x: 2, y: 2 }, OBJECT_TYPE_PIT, 0, false, false),
+                (
+                    Position { x: 0, y: 0 },
+                    OBJECT_TYPE_WALL,
+                    10000,
+                    true,
+                    true,
+                    false,
+                ),
+                (
+                    Position { x: 1, y: 3 },
+                    OBJECT_TYPE_WALL,
+                    10000,
+                    true,
+                    true,
+                    false,
+                ),
+                (
+                    Position { x: 2, y: 2 },
+                    OBJECT_TYPE_SPIKE,
+                    0,
+                    false,
+                    false,
+                    true,
+                ),
             ],
         ),
         (
@@ -140,9 +175,30 @@ fn test_get_all_objects_returns_correct_data() {
             ",
             vec![("w", OBJECT_TYPE_WALL)],
             vec![
-                (Position { x: 0, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
-                (Position { x: 1, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
-                (Position { x: 2, y: 0 }, OBJECT_TYPE_WALL, 10000, true, true),
+                (
+                    Position { x: 0, y: 0 },
+                    OBJECT_TYPE_WALL,
+                    10000,
+                    true,
+                    true,
+                    false,
+                ),
+                (
+                    Position { x: 1, y: 0 },
+                    OBJECT_TYPE_WALL,
+                    10000,
+                    true,
+                    true,
+                    false,
+                ),
+                (
+                    Position { x: 2, y: 0 },
+                    OBJECT_TYPE_WALL,
+                    10000,
+                    true,
+                    true,
+                    false,
+                ),
             ],
         ),
     ];
@@ -158,7 +214,7 @@ fn test_get_all_objects_returns_correct_data() {
         let objects = get_all_objects(&mut world).expect("get_all_objects 應成功");
 
         assert_eq!(objects.len(), expected.len(), "[{label}] 物件數量不符");
-        for (pos, typ, movement_cost, blocks_sight, blocks_sound) in &expected {
+        for (pos, typ, movement_cost, blocks_sight, blocks_sound, hazardous) in &expected {
             let result = objects
                 .get(pos)
                 .expect(&format!("應有位置 ({}, {}) 的物件", pos.x, pos.y));
@@ -182,6 +238,10 @@ fn test_get_all_objects_returns_correct_data() {
             assert_eq!(
                 result.blocks_sound, *blocks_sound,
                 "[{label}] blocks_sound 應為 {blocks_sound}"
+            );
+            assert_eq!(
+                result.hazardous, *hazardous,
+                "[{label}] hazardous 應為 {hazardous}"
             );
         }
     }

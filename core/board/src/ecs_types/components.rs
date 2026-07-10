@@ -132,7 +132,7 @@ pub enum ActionState {
 #[derive(Debug, Clone, Component)]
 pub struct ObjectMovementCost(pub MovementCost);
 
-define_tag_components!(BlocksSight, BlocksSound);
+define_tag_components!(BlocksSight, BlocksSound, Hazardous);
 
 /// 接觸效果（單位接觸物件時觸發的效果鏈）
 // by claude
