@@ -179,6 +179,7 @@ fn test_flanking_accuracy_bonus() {
             &setup.objects_on_board,
             setup.board,
             &mut rng,
+            false,
         )
         .expect("resolve_effect_tree 應成功執行");
 

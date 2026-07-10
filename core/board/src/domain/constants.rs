@@ -22,6 +22,9 @@ pub const FORCED_FAILURE_UPPER: i32 = 5;
 /// 強制成功下界（骰 96~100 強制成功）
 pub const FORCED_SUCCESS_LOWER: i32 = 96;
 
+/// 傷害預覽強制命中時，CheckDetail.roll 的顯示隨機值（不參與判定）
+pub const FORCED_HIT_PREVIEW_ROLL: i32 = 100;
+
 /// 暴擊傷害倍率
 pub const CRIT_DAMAGE_MULTIPLIER: i32 = 2;
 

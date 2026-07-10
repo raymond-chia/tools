@@ -12,14 +12,11 @@ pub enum HitCheckResult {
     Evade,
 }
 
-/// 命中判定的完整輸出，附帶骰值與門檻供 log 顯示
+/// 命中判定的輸出，附帶骰值供呼叫端組裝顯示資料
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HitResult {
     pub check: HitCheckResult,
     pub roll: i32,
-    pub evasion_threshold: i32,
-    pub block_threshold: i32,
-    pub crit_rate: i32,
 }
 
 /// 解析命中判定
@@ -49,13 +46,7 @@ pub(crate) fn resolve_hit(
 
     let check = compute_hit_result(roll, evasion_threshold, block_threshold, crit_rate);
 
-    HitResult {
-        check,
-        roll,
-        evasion_threshold,
-        block_threshold,
-        crit_rate,
-    }
+    HitResult { check, roll }
 }
 
 fn compute_hit_result(

@@ -207,6 +207,7 @@ pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult> {
         &objects_on_board,
         board,
         &mut || rng.random_range(1..=100),
+        false,
     )?;
 
     let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;

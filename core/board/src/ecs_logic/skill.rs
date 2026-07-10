@@ -392,6 +392,86 @@ pub fn cancel_skill_targeting(world: &mut World) {
     world.remove_resource::<SkillTargeting>();
 }
 
+/// 預覽技能效果，回傳強制命中（非爆擊）的效果條目供 UI 顯示預期傷害
+///
+/// 與 `execute_skill` 的差異：
+/// - 命中判定一律視為正常命中（`resolve_effect_tree` 的 `force_hit`），不消耗真實 rng
+/// - 不驗證目標（射程、視線、filter）；假設呼叫端傳入的目標已合法
+/// - 不寫入 World（不扣 MP、不套用效果條目）
+pub fn preview_skill_effect(
+    world: &mut World,
+    skill_name: &SkillName,
+    target_positions: &[Position],
+) -> Result<Vec<EffectEntry>> {
+    let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
+
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let active_occupant = get_current_unit(turn_order)?;
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+
+    let caster_entity = find_entity_by_occupant(world, active_occupant)?;
+    let (caster_pos, caster_occupant, caster_faction, caster_attributes) = {
+        let entity_ref = world.entity(caster_entity);
+        let pos = *get_component!(entity_ref, Position)?;
+        let occupant = *get_component!(entity_ref, Occupant)?;
+        let faction = get_component!(entity_ref, UnitFaction)?.0;
+        let attributes = read_attribute_bundle(&entity_ref)?;
+        (pos, occupant, faction, attributes)
+    };
+
+    let caster_alliance = resolve_alliance(&faction_to_alliance, caster_faction)?;
+    let caster_info = UnitInfo {
+        occupant: caster_occupant,
+        faction_id: caster_faction,
+        alliance_id: caster_alliance,
+    };
+
+    let (_, effects, _, skill_tags) = {
+        let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
+        get_active_skill_data(game_data, skill_name)?
+    };
+
+    let unit_stats_on_board = build_unit_stats_on_board(world, &faction_to_alliance)?;
+    let objects_on_board = build_objects_on_board(world);
+
+    // ========================================================================
+    // 純邏輯階段（不寫入 World）
+    // ========================================================================
+
+    let caster_stats = CombatStats {
+        unit_info: caster_info,
+        attribute: caster_attributes,
+    };
+
+    let caster_id = match caster_occupant {
+        Occupant::Unit(id) => id,
+        Occupant::Object(_) => return Err(BoardError::NoActiveUnit.into()),
+    };
+
+    let mut rng = rand::rng();
+    let mut all_entries = Vec::new();
+    for target_pos in target_positions {
+        let entries = resolve_effect_tree(
+            caster_id,
+            skill_name,
+            &skill_tags,
+            &effects,
+            &caster_stats,
+            caster_pos,
+            *target_pos,
+            &unit_stats_on_board,
+            &objects_on_board,
+            board,
+            &mut || rng.random_range(1..=100),
+            true,
+        )?;
+        all_entries.extend(entries);
+    }
+
+    Ok(all_entries)
+}
+
 /// 執行技能，回傳效果條目供演出
 pub fn execute_skill(
     world: &mut World,
@@ -527,6 +607,7 @@ pub fn execute_skill(
             &objects_on_board,
             board,
             &mut || rng.random_range(1..=100),
+            false,
         )?;
         all_entries.extend(entries);
     }

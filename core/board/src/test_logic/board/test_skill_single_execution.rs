@@ -292,6 +292,7 @@ fn test_multi_leaf_ally_and_enemy() {
             &sb.objects_on_board,
             sb.board,
             &mut rng,
+            false,
         )
         .expect("resolve_effect_tree 應成功執行");
 
@@ -370,6 +371,7 @@ fn test_spawn_object_on_empty_and_occupied() {
             &sb.objects_on_board,
             sb.board,
             &mut rng,
+            false,
         )
         .expect("resolve_effect_tree 應成功執行");
 
@@ -438,6 +440,7 @@ fn test_area_spawn_object() {
             &sb.objects_on_board,
             sb.board,
             &mut rng,
+            false,
         )
         .expect("resolve_effect_tree 應成功執行");
 
@@ -607,6 +610,7 @@ fn test_nested_branch_hit_then_fort() {
             &sb.objects_on_board,
             sb.board,
             &mut rng,
+            false,
         )
         .expect("resolve_effect_tree 應成功執行");
 

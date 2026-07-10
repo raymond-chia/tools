@@ -260,6 +260,7 @@ fn run_for_targets(
                 &HashMap::new(),
                 board,
                 rng,
+                false,
             )
             .expect("resolve_effect_tree 應成功執行")
         })

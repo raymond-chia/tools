@@ -3,6 +3,7 @@
 use crate::domain::alias::{ID, SkillName, TypeName};
 use crate::domain::constants::{
     ACCURACY_PENALTY_WHEN_ENEMY_ADJACENT, CRIT_DAMAGE_MULTIPLIER, FLANKING_REQUIRED_ALLIES,
+    FORCED_HIT_PREVIEW_ROLL,
 };
 use crate::domain::core_types::{
     AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
@@ -95,6 +96,9 @@ pub struct EffectEntry {
 }
 
 /// 解析效果樹，產生效果條目列表
+///
+/// `force_hit` 為預覽用開關：開啟時所有命中判定直接視為正常命中（非爆擊、非格擋），
+/// 不消耗 rng，用於施放前的傷害預覽。
 pub(crate) fn resolve_effect_tree(
     caster_id: ID,
     skill_name: &str,
@@ -107,6 +111,7 @@ pub(crate) fn resolve_effect_tree(
     objects_on_board: &HashMap<Position, ObjectOnBoard>, // 暫時只有傳入阻止通行的物件
     board: Board,
     rng: &mut impl FnMut() -> i32,
+    force_hit: bool,
 ) -> Result<Vec<EffectEntry>> {
     let mut entries = Vec::new();
 
@@ -134,6 +139,7 @@ pub(crate) fn resolve_effect_tree(
                         objects_on_board,
                         board,
                         rng,
+                        force_hit,
                         &mut entries,
                     );
                 }
@@ -152,6 +158,7 @@ pub(crate) fn resolve_effect_tree(
                     objects_on_board,
                     board,
                     rng,
+                    force_hit,
                     &mut entries,
                 );
             }
@@ -175,6 +182,7 @@ fn resolve_at_position(
     objects_on_board: &HashMap<Position, ObjectOnBoard>,
     board: Board,
     rng: &mut impl FnMut() -> i32,
+    force_hit: bool,
     entries: &mut Vec<EffectEntry>,
 ) {
     match units_on_board.get(&target_pos) {
@@ -202,6 +210,7 @@ fn resolve_at_position(
                 CheckResult::Auto,
                 None,
                 rng,
+                force_hit,
                 entries,
             );
         }
@@ -263,6 +272,7 @@ fn resolve_nodes_for_unit(
     parent_check: CheckResult,
     parent_check_detail: Option<CheckDetail>,
     rng: &mut impl FnMut() -> i32,
+    force_hit: bool,
     entries: &mut Vec<EffectEntry>,
 ) {
     for node in nodes {
@@ -328,7 +338,7 @@ fn resolve_nodes_for_unit(
                 on_failure,
             } => {
                 let (check, detail) =
-                    resolve_branch_check(caster, target, condition, flanking_bonus, rng);
+                    resolve_branch_check(caster, target, condition, flanking_bonus, rng, force_hit);
 
                 let branch_nodes = match check {
                     CheckResult::Auto
@@ -359,6 +369,7 @@ fn resolve_nodes_for_unit(
                         check,
                         Some(detail),
                         rng,
+                        force_hit,
                         entries,
                     );
                 }
@@ -414,6 +425,7 @@ fn resolve_branch_check(
     condition: &EffectCondition,
     flanking_bonus: i32,
     rng: &mut impl FnMut() -> i32,
+    force_hit: bool,
 ) -> (CheckResult, CheckDetail) {
     let attacker_acc = match condition.accuracy_source {
         AccuracySource::Physical => caster.attribute.physical_accuracy.0,
@@ -425,14 +437,23 @@ fn resolve_branch_check(
         get_defense_values(&target.attribute, condition.defense_type);
     let crit_rate = condition.crit_bonus;
 
-    let outcome = resolve_hit(
-        attacker_acc,
-        defender_evasion,
-        defender_block,
-        crit_rate,
-        rng,
-    );
-    let check = hit_to_check(outcome.check, condition.defense_type);
+    // 預覽時直接構造正常命中（非爆擊、非格擋），不消耗 rng。
+    // roll 為純顯示欄位，此時填哨兵值 FORCED_HIT_PREVIEW_ROLL。
+    let (hit_check, roll) = match force_hit {
+        true => (HitCheckResult::Hit { crit: false }, FORCED_HIT_PREVIEW_ROLL),
+        false => {
+            let outcome = resolve_hit(
+                attacker_acc,
+                defender_evasion,
+                defender_block,
+                crit_rate,
+                rng,
+            );
+            (outcome.check, outcome.roll)
+        }
+    };
+
+    let check = hit_to_check(hit_check, condition.defense_type);
     let detail = CheckDetail {
         accuracy_source: condition.accuracy_source.clone(),
         defense_type: condition.defense_type,
@@ -440,7 +461,7 @@ fn resolve_branch_check(
         defender_evasion,
         defender_block,
         crit_rate,
-        roll: outcome.roll,
+        roll,
     };
     (check, detail)
 }
