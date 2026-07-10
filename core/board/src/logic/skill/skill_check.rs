@@ -92,6 +92,8 @@ pub struct HitProbabilities {
     pub hit: i32,
     pub block: i32,
     pub evade: i32,
+    /// 爆擊率，直接為 crit_rate（供 UI 顯示，不影響三分項）
+    pub crit: i32,
 }
 
 /// 計算命中機率（與 compute_hit_result 的門檻邏輯一致）
@@ -104,6 +106,7 @@ pub(crate) fn hit_probabilities(
     attacker_hit: i32,
     defender_evasion: i32,
     defender_block: i32,
+    crit_rate: i32,
 ) -> HitProbabilities {
     let evasion_threshold = defender_evasion - attacker_hit;
     let block_threshold = evasion_threshold + defender_block;
@@ -127,6 +130,7 @@ pub(crate) fn hit_probabilities(
         hit: middle_hit + forced_hit,
         block: middle_block,
         evade: middle_evade + forced_evade,
+        crit: crit_rate,
     }
 }
 

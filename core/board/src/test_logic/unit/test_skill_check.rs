@@ -165,7 +165,13 @@ fn count_by_enumeration(
             HitCheckResult::Evade => evade += 1,
         }
     }
-    HitProbabilities { hit, block, evade }
+    // 枚舉用 crit_rate=0，crit 分項恆為 0
+    HitProbabilities {
+        hit,
+        block,
+        evade,
+        crit: 0,
+    }
 }
 
 #[test]
@@ -206,7 +212,7 @@ fn test_hit_probabilities() {
 
     for (attacker_hit, defender_evasion, defender_block) in test_data {
         let expected = count_by_enumeration(attacker_hit, defender_evasion, defender_block);
-        let actual = hit_probabilities(attacker_hit, defender_evasion, defender_block);
+        let actual = hit_probabilities(attacker_hit, defender_evasion, defender_block, 0);
         assert_eq!(
             actual, expected,
             "hit={attacker_hit}, eva={defender_evasion}, blk={defender_block}\n \
