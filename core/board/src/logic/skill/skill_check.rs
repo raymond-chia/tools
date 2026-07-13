@@ -1,4 +1,5 @@
 use crate::domain::constants::{FORCED_FAILURE_UPPER, FORCED_SUCCESS_LOWER};
+use crate::domain::core_types::HitCheckBreakdowns;
 
 // ============================================================================
 // 命中判定
@@ -102,12 +103,12 @@ pub struct HitProbabilities {
 /// 1. 強制閃避段 [1, FORCED_FAILURE_UPPER] 恆為 Evade
 /// 2. 強制命中段 [FORCED_SUCCESS_LOWER, 100] 恆為 Hit
 /// 3. 中間段依 evasion_threshold / block_threshold 切成 Evade / Block / Hit
-pub(crate) fn hit_probabilities(
-    attacker_hit: i32,
-    defender_evasion: i32,
-    defender_block: i32,
-    crit_rate: i32,
-) -> HitProbabilities {
+pub(crate) fn hit_probabilities(breakdowns: &HitCheckBreakdowns) -> HitProbabilities {
+    let attacker_hit = breakdowns.attacker_accuracy.total;
+    let defender_evasion = breakdowns.defender_evasion.total;
+    let defender_block = breakdowns.defender_block.total;
+    let crit_rate = breakdowns.crit;
+
     let evasion_threshold = defender_evasion - attacker_hit;
     let block_threshold = evasion_threshold + defender_block;
 

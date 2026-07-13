@@ -1,3 +1,6 @@
+use crate::domain::core_types::{
+    AccuracyBreakdown, BlockBreakdown, EvasionBreakdown, HitCheckBreakdowns,
+};
 use crate::logic::skill::skill_check::{
     HitCheckResult, HitProbabilities, hit_probabilities, resolve_hit,
 };
@@ -212,7 +215,25 @@ fn test_hit_probabilities() {
 
     for (attacker_hit, defender_evasion, defender_block) in test_data {
         let expected = count_by_enumeration(attacker_hit, defender_evasion, defender_block);
-        let actual = hit_probabilities(attacker_hit, defender_evasion, defender_block, 0);
+        let breakdowns = HitCheckBreakdowns {
+            attacker_accuracy: AccuracyBreakdown {
+                base: attacker_hit,
+                skill_bonus: 0,
+                flanking_bonus: 0,
+                adjacent_penalty: 0,
+                total: attacker_hit,
+            },
+            defender_evasion: EvasionBreakdown {
+                base: defender_evasion,
+                total: defender_evasion,
+            },
+            defender_block: BlockBreakdown {
+                base: defender_block,
+                total: defender_block,
+            },
+            crit: 0,
+        };
+        let actual = hit_probabilities(&breakdowns);
         assert_eq!(
             actual, expected,
             "hit={attacker_hit}, eva={defender_evasion}, blk={defender_block}\n \

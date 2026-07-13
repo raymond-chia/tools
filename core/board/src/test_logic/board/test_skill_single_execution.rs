@@ -632,10 +632,24 @@ fn test_nested_branch_hit_then_fort() {
                         check_detail: Some(CheckDetail {
                             accuracy_source: AccuracySource::Physical,
                             defense_type: DefenseType::AgilityAndBlock,
-                            attacker_accuracy: 0,
-                            defender_evasion: enemy_agility_high,
-                            defender_block: 1000000,
-                            crit_rate: 0,
+                            breakdowns: HitCheckBreakdowns {
+                                attacker_accuracy: AccuracyBreakdown {
+                                    base: 0,
+                                    skill_bonus: 0,
+                                    flanking_bonus: 0,
+                                    adjacent_penalty: 0,
+                                    total: 0,
+                                },
+                                defender_evasion: EvasionBreakdown {
+                                    base: enemy_agility_high,
+                                    total: enemy_agility_high,
+                                },
+                                defender_block: BlockBreakdown {
+                                    base: 1000000,
+                                    total: 1000000,
+                                },
+                                crit: 0,
+                            },
                             roll: 50,
                         }),
                         effect: ResolvedEffect::NoEffect,
@@ -660,10 +674,24 @@ fn test_nested_branch_hit_then_fort() {
                         check_detail: Some(CheckDetail {
                             accuracy_source: AccuracySource::Physical,
                             defense_type: DefenseType::AgilityAndBlock,
-                            attacker_accuracy: 0,
-                            defender_evasion: enemy_agility_low,
-                            defender_block: 1000000,
-                            crit_rate: 0,
+                            breakdowns: HitCheckBreakdowns {
+                                attacker_accuracy: AccuracyBreakdown {
+                                    base: 0,
+                                    skill_bonus: 0,
+                                    flanking_bonus: 0,
+                                    adjacent_penalty: 0,
+                                    total: 0,
+                                },
+                                defender_evasion: EvasionBreakdown {
+                                    base: enemy_agility_low,
+                                    total: enemy_agility_low,
+                                },
+                                defender_block: BlockBreakdown {
+                                    base: 1000000,
+                                    total: 1000000,
+                                },
+                                crit: 0,
+                            },
                             roll: 50,
                         }),
                         effect: ResolvedEffect::HpChange {
@@ -684,10 +712,21 @@ fn test_nested_branch_hit_then_fort() {
                         check_detail: Some(CheckDetail {
                             accuracy_source: AccuracySource::Physical,
                             defense_type: DefenseType::Fortitude,
-                            attacker_accuracy: 0,
-                            defender_evasion: enemy_fortitude_low,
-                            defender_block: 0,
-                            crit_rate: 0,
+                            breakdowns: HitCheckBreakdowns {
+                                attacker_accuracy: AccuracyBreakdown {
+                                    base: 0,
+                                    skill_bonus: 0,
+                                    flanking_bonus: 0,
+                                    adjacent_penalty: 0,
+                                    total: 0,
+                                },
+                                defender_evasion: EvasionBreakdown {
+                                    base: enemy_fortitude_low,
+                                    total: enemy_fortitude_low,
+                                },
+                                defender_block: BlockBreakdown { base: 0, total: 0 },
+                                crit: 0,
+                            },
                             roll: 50,
                         }),
                         effect: ResolvedEffect::ApplyBuff("poison".to_string()),
@@ -713,10 +752,24 @@ fn test_nested_branch_hit_then_fort() {
                         check_detail: Some(CheckDetail {
                             accuracy_source: AccuracySource::Physical,
                             defense_type: DefenseType::AgilityAndBlock,
-                            attacker_accuracy: 0,
-                            defender_evasion: enemy_agility_low,
-                            defender_block: 1000000,
-                            crit_rate: 0,
+                            breakdowns: HitCheckBreakdowns {
+                                attacker_accuracy: AccuracyBreakdown {
+                                    base: 0,
+                                    skill_bonus: 0,
+                                    flanking_bonus: 0,
+                                    adjacent_penalty: 0,
+                                    total: 0,
+                                },
+                                defender_evasion: EvasionBreakdown {
+                                    base: enemy_agility_low,
+                                    total: enemy_agility_low,
+                                },
+                                defender_block: BlockBreakdown {
+                                    base: 1000000,
+                                    total: 1000000,
+                                },
+                                crit: 0,
+                            },
                             roll: 50,
                         }),
                         effect: ResolvedEffect::HpChange {
@@ -737,10 +790,21 @@ fn test_nested_branch_hit_then_fort() {
                         check_detail: Some(CheckDetail {
                             accuracy_source: AccuracySource::Physical,
                             defense_type: DefenseType::Fortitude,
-                            attacker_accuracy: 0,
-                            defender_evasion: enemy_fortitude_high,
-                            defender_block: 0,
-                            crit_rate: 0,
+                            breakdowns: HitCheckBreakdowns {
+                                attacker_accuracy: AccuracyBreakdown {
+                                    base: 0,
+                                    skill_bonus: 0,
+                                    flanking_bonus: 0,
+                                    adjacent_penalty: 0,
+                                    total: 0,
+                                },
+                                defender_evasion: EvasionBreakdown {
+                                    base: enemy_fortitude_high,
+                                    total: enemy_fortitude_high,
+                                },
+                                defender_block: BlockBreakdown { base: 0, total: 0 },
+                                crit: 0,
+                            },
                             roll: 50,
                         }),
                         effect: ResolvedEffect::HpChange {

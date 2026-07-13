@@ -210,7 +210,7 @@ fn test_adjacent_enemy_accuracy_penalty() {
             .as_ref()
             .expect("命中判定應有 detail");
         assert_eq!(
-            detail.attacker_accuracy, expected_attacker_accuracy,
+            detail.breakdowns.attacker_accuracy.total, expected_attacker_accuracy,
             "{label}: attacker_accuracy 不符"
         );
         match expected {

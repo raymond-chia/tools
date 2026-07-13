@@ -2,7 +2,7 @@
 
 use super::{get_component, get_component_mut};
 use crate::domain::alias::{ID, SkillName};
-use crate::domain::core_types::{SkillType, TargetSelection};
+use crate::domain::core_types::{HitCheckBreakdowns, SkillType, TargetSelection};
 use crate::ecs_logic::query::{
     build_faction_alliance_map, build_objects_on_board, build_unit_stats_on_board,
     find_entity_by_occupant, get_active_skill_data, get_resource, get_resource_mut,
@@ -18,8 +18,10 @@ use crate::ecs_types::resources::{Board, GameData, SkillTargeting, TurnOrder};
 use crate::error::{BoardError, Result, UnitError};
 use crate::logic::id_generator::generate_unique_id;
 use crate::logic::skill::line_of_sight::has_line_of_sight;
+use crate::logic::skill::skill_check::{HitProbabilities, hit_probabilities};
 use crate::logic::skill::skill_execution::{
-    CheckTarget, CombatStats, EffectEntry, ResolvedEffect, resolve_effect_tree,
+    CheckTarget, CombatStats, EffectEntry, ResolvedEffect, preview_first_branch_accuracy,
+    resolve_effect_tree,
 };
 use crate::logic::skill::skill_range::{compute_affected_positions, compute_range_positions};
 use crate::logic::skill::skill_target::{validate_filter, validate_skill_targets};
@@ -470,6 +472,87 @@ pub fn preview_skill_effect(
     }
 
     Ok(all_entries)
+}
+
+/// 單體命中率預覽結果
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HitPreview {
+    /// 命中/格擋/閃避/爆擊機率
+    pub probabilities: HitProbabilities,
+    /// 命中值來源明細（供 UI 逐項解釋）
+    pub breakdowns: HitCheckBreakdowns,
+}
+
+/// 單體技能命中率預覽（供 UI 懸停目標時顯示）
+///
+/// 回傳當前行動單位對 `target_pos` 施放 `skill_name` 的命中/格擋/閃避/爆擊機率，
+/// 並附命中值來源明細（`AccuracyBreakdown`）供 UI 逐項展開解釋。
+///
+/// 只處理「頂層第一個節點為 Branch」的單體判定；AOE、無判定技能或目標格無單位時回 `None`。
+pub fn preview_hit_probabilities(
+    world: &mut World,
+    skill_name: &SkillName,
+    target_pos: Position,
+) -> Result<Option<HitPreview>> {
+    let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
+
+    let turn_order = get_resource::<TurnOrder>(world, "請先呼叫 start_new_round")?;
+    let active_occupant = get_current_unit(turn_order)?;
+
+    let faction_to_alliance = build_faction_alliance_map(world)?;
+
+    let caster_entity = find_entity_by_occupant(world, active_occupant)?;
+    let (caster_pos, caster_occupant, caster_faction, caster_attributes) = {
+        let entity_ref = world.entity(caster_entity);
+        let pos = *get_component!(entity_ref, Position)?;
+        let occupant = *get_component!(entity_ref, Occupant)?;
+        let faction = get_component!(entity_ref, UnitFaction)?.0;
+        let attributes = read_attribute_bundle(&entity_ref)?;
+        (pos, occupant, faction, attributes)
+    };
+
+    let caster_alliance = resolve_alliance(&faction_to_alliance, caster_faction)?;
+    let caster_info = UnitInfo {
+        occupant: caster_occupant,
+        faction_id: caster_faction,
+        alliance_id: caster_alliance,
+    };
+
+    let (_, effects, _, skill_tags) = {
+        let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
+        get_active_skill_data(game_data, skill_name)?
+    };
+
+    let unit_stats_on_board = build_unit_stats_on_board(world, &faction_to_alliance)?;
+
+    // ========================================================================
+    // 純邏輯階段（不寫入 World）
+    // ========================================================================
+
+    let caster_stats = CombatStats {
+        unit_info: caster_info,
+        attribute: caster_attributes,
+    };
+
+    let breakdowns = preview_first_branch_accuracy(
+        &skill_tags,
+        &effects,
+        &caster_stats,
+        caster_pos,
+        target_pos,
+        &unit_stats_on_board,
+        board,
+    );
+
+    let preview = breakdowns.map(|breakdowns| {
+        let probabilities = hit_probabilities(&breakdowns);
+        HitPreview {
+            probabilities,
+            breakdowns,
+        }
+    });
+
+    Ok(preview)
 }
 
 /// 執行技能，回傳效果條目供演出

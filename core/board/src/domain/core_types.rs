@@ -357,6 +357,55 @@ pub struct PendingReaction {
 }
 
 // ============================================================================
+// 命中拆解
+// ============================================================================
+
+/// 命中值的組成明細（供 UI 逐項解釋命中率來源）
+///
+/// `total` = `base` + `skill_bonus` + `flanking_bonus` + `adjacent_penalty`，
+/// 即最終代入命中判定的攻擊命中值。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccuracyBreakdown {
+    /// 依 accuracy_source 選出的基礎命中（physical 或 magical accuracy）
+    pub base: i32,
+    /// 技能效果自帶的命中加成（condition.accuracy_bonus）
+    pub skill_bonus: i32,
+    /// 側翼加成（未觸發為 0）
+    pub flanking_bonus: i32,
+    /// 相鄰敵人懲罰（未觸發為 0，觸發為負值）
+    pub adjacent_penalty: i32,
+    /// 四項相加後的最終命中值
+    pub total: i32,
+}
+
+/// 閃避值的組成明細（目前僅基礎值，未來可加地形、姿態等來源）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EvasionBreakdown {
+    pub base: i32,
+    /// 各來源相加後的最終閃避值
+    pub total: i32,
+}
+
+/// 格擋值的組成明細（目前僅基礎值，未來可加來源）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockBreakdown {
+    pub base: i32,
+    /// 各來源相加後的最終格擋值
+    pub total: i32,
+}
+
+/// 命中判定的組成明細（命中值明細 + 防禦值 + 爆擊率）
+///
+/// 命中率預覽與 log／動畫的判定明細共用此結構，避免各處重複維護同一組 breakdown 欄位。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HitCheckBreakdowns {
+    pub attacker_accuracy: AccuracyBreakdown,
+    pub defender_evasion: EvasionBreakdown,
+    pub defender_block: BlockBreakdown,
+    pub crit: i32,
+}
+
+// ============================================================================
 // 手動實作 Default（EnumIter 需要 Default，但 #[default] 只能用在 unit variant）
 // ============================================================================
 

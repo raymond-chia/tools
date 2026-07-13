@@ -170,10 +170,7 @@ fn to_log_check_detail(detail: &CheckDetail) -> LogCheckDetail {
     LogCheckDetail {
         accuracy_source: detail.accuracy_source.clone(),
         defense_type: detail.defense_type,
-        attacker_accuracy: detail.attacker_accuracy,
-        defender_evasion: detail.defender_evasion,
-        defender_block: detail.defender_block,
-        crit_rate: detail.crit_rate,
+        breakdowns: detail.breakdowns.clone(),
         roll: detail.roll,
     }
 }

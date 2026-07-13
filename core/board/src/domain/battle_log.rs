@@ -15,7 +15,7 @@
 //! 持有事件序列的 `BattleLog` Resource 定義在 `ecs_types::resources`。
 
 use crate::domain::alias::{SkillName, TypeName};
-use crate::domain::core_types::{AccuracySource, DefenseType};
+use crate::domain::core_types::{AccuracySource, DefenseType, HitCheckBreakdowns};
 
 /// log 事件的目標（自帶名稱快照，不依賴事後反查、不暴露座標給玩家）
 #[derive(Debug, Clone, PartialEq)]
@@ -45,14 +45,14 @@ pub enum LogCheck {
 }
 
 /// log 的命中判定明細數值（供逐項展開顯示）
+///
+/// 與動畫用的 `CheckDetail` 維持分離（各自獨立結構），但內部共用
+/// `HitCheckBreakdowns` 數值明細，避免重複維護同一組 breakdown 欄位。
 #[derive(Debug, Clone, PartialEq)]
 pub struct LogCheckDetail {
     pub accuracy_source: AccuracySource,
     pub defense_type: DefenseType,
-    pub attacker_accuracy: i32,
-    pub defender_evasion: i32,
-    pub defender_block: i32,
-    pub crit_rate: i32,
+    pub breakdowns: HitCheckBreakdowns,
     pub roll: i32,
 }
 

@@ -6,8 +6,9 @@ use crate::domain::constants::{
     FORCED_HIT_PREVIEW_ROLL,
 };
 use crate::domain::core_types::{
-    AccuracySource, Attribute, CasterOrTarget, DefenseType, Effect, EffectCondition, EffectNode,
-    Scaling, SkillTag, TargetFilter,
+    AccuracyBreakdown, AccuracySource, Attribute, BlockBreakdown, CasterOrTarget, DefenseType,
+    Effect, EffectCondition, EffectNode, EvasionBreakdown, HitCheckBreakdowns, Scaling, SkillTag,
+    TargetFilter,
 };
 use crate::ecs_types::components::{AttributeBundle, Occupant, Position};
 use crate::ecs_types::resources::Board;
@@ -64,15 +65,87 @@ pub enum ResolvedEffect {
     ApplyBuff(String),
 }
 
+/// 組裝攻擊命中值，回傳逐項來源明細
+fn compute_attacker_accuracy(
+    caster: &CombatStats,
+    condition: &EffectCondition,
+    flanking_bonus: i32,
+    adjacent_penalty: i32,
+) -> AccuracyBreakdown {
+    let base = match condition.accuracy_source {
+        AccuracySource::Physical => caster.attribute.physical_accuracy.0,
+        AccuracySource::Magical => caster.attribute.magical_accuracy.0,
+    };
+    let skill_bonus = condition.accuracy_bonus;
+    let total = base + skill_bonus + flanking_bonus + adjacent_penalty;
+    AccuracyBreakdown {
+        base,
+        skill_bonus,
+        flanking_bonus,
+        adjacent_penalty,
+        total,
+    }
+}
+
+/// 預覽單體技能「第一個判定」的命中數值
+///
+/// 只看頂層 `nodes[0]`：
+/// - 若為 `Branch`，以其 condition 組出命中值與防禦值供上層算機率。
+/// - 若為 `Area`（AOE）、`Leaf`（無判定）或空，回 `None`——這些情況不顯示命中率。
+///
+/// 注意：僅檢查第一個節點。若頂層為 `[Leaf, Branch, ...]`（第一個非 Branch
+/// 但後續有判定），仍回 `None`，不往後找。
+pub(crate) fn preview_first_branch_accuracy(
+    skill_tags: &[SkillTag],
+    nodes: &[EffectNode],
+    caster: &CombatStats,
+    caster_pos: Position,
+    target_pos: Position,
+    units_on_board: &HashMap<Position, CombatStats>,
+    board: Board,
+) -> Option<HitCheckBreakdowns> {
+    let condition = match nodes.first() {
+        Some(EffectNode::Branch { condition, .. }) => condition,
+        _ => return None,
+    };
+    let target_stats = match units_on_board.get(&target_pos) {
+        Some(stats) => stats,
+        None => return None,
+    };
+
+    // 注意：以下「算 flanking/adjacent → 組 accuracy → 取 defender 值組 breakdown」
+    // 這條組裝鏈，與 `resolve_branch_check` 重複。
+    // 不抽共用的原因是 `resolve_branch_check` 會需要太多參數：
+    // 故刻意複製。修改此段時，請同步檢查 `resolve_branch_check`。
+    let flanking_bonus =
+        compute_flanking_bonus(skill_tags, caster, target_pos, units_on_board, board);
+    let adjacent_penalty =
+        compute_adjacent_enemy_penalty(skill_tags, caster, caster_pos, units_on_board, board);
+    let attacker_accuracy =
+        compute_attacker_accuracy(caster, condition, flanking_bonus, adjacent_penalty);
+    let (defender_evasion, defender_block) =
+        get_defense_values(&target_stats.attribute, condition.defense_type);
+
+    Some(HitCheckBreakdowns {
+        attacker_accuracy,
+        defender_evasion: EvasionBreakdown {
+            base: defender_evasion,
+            total: defender_evasion,
+        },
+        defender_block: BlockBreakdown {
+            base: defender_block,
+            total: defender_block,
+        },
+        crit: condition.crit_bonus,
+    })
+}
+
 /// 命中判定的詳細數值（用於 log 顯示）
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckDetail {
     pub accuracy_source: AccuracySource,
     pub defense_type: DefenseType,
-    pub attacker_accuracy: i32,
-    pub defender_evasion: i32,
-    pub defender_block: i32,
-    pub crit_rate: i32,
+    pub breakdowns: HitCheckBreakdowns,
     pub roll: i32,
 }
 
@@ -199,14 +272,14 @@ fn resolve_at_position(
                 units_on_board,
                 board,
             );
-            let accuracy_modifier = flanking_bonus + adjacent_enemy_penalty;
             resolve_nodes_for_unit(
                 caster_id,
                 skill_name,
                 nodes,
                 caster,
                 target_stats,
-                accuracy_modifier,
+                flanking_bonus,
+                adjacent_enemy_penalty,
                 CheckResult::Auto,
                 None,
                 rng,
@@ -269,6 +342,7 @@ fn resolve_nodes_for_unit(
     caster: &CombatStats,
     target: &CombatStats,
     flanking_bonus: i32,
+    adjacent_penalty: i32,
     parent_check: CheckResult,
     parent_check_detail: Option<CheckDetail>,
     rng: &mut impl FnMut() -> i32,
@@ -337,8 +411,15 @@ fn resolve_nodes_for_unit(
                 on_success,
                 on_failure,
             } => {
-                let (check, detail) =
-                    resolve_branch_check(caster, target, condition, flanking_bonus, rng, force_hit);
+                let (check, detail) = resolve_branch_check(
+                    caster,
+                    target,
+                    condition,
+                    flanking_bonus,
+                    adjacent_penalty,
+                    rng,
+                    force_hit,
+                );
 
                 let branch_nodes = match check {
                     CheckResult::Auto
@@ -366,6 +447,7 @@ fn resolve_nodes_for_unit(
                         caster,
                         target,
                         flanking_bonus,
+                        adjacent_penalty,
                         check,
                         Some(detail),
                         rng,
@@ -424,18 +506,21 @@ fn resolve_branch_check(
     target: &CombatStats,
     condition: &EffectCondition,
     flanking_bonus: i32,
+    adjacent_penalty: i32,
     rng: &mut impl FnMut() -> i32,
     force_hit: bool,
 ) -> (CheckResult, CheckDetail) {
-    let attacker_acc = match condition.accuracy_source {
-        AccuracySource::Physical => caster.attribute.physical_accuracy.0,
-        AccuracySource::Magical => caster.attribute.magical_accuracy.0,
-    } + condition.accuracy_bonus
-        + flanking_bonus;
+    // 注意：以下「組 accuracy → 取 defender 值組 breakdown」這條組裝鏈，
+    // 與 `preview_first_branch_accuracy` 重複。
+    // 不抽共用的原因是參數太多：共用函數得同時吃下 caster、target、condition、
+    // flanking_bonus、adjacent_penalty 這一長串，簽名反而更難讀，
+    // 故刻意複製。修改此段時，請同步檢查 `preview_first_branch_accuracy`。
+    let attacker_accuracy =
+        compute_attacker_accuracy(caster, condition, flanking_bonus, adjacent_penalty);
 
     let (defender_evasion, defender_block) =
         get_defense_values(&target.attribute, condition.defense_type);
-    let crit_rate = condition.crit_bonus;
+    let crit = condition.crit_bonus;
 
     // 預覽時直接構造正常命中（非爆擊、非格擋），不消耗 rng。
     // roll 為純顯示欄位，此時填哨兵值 FORCED_HIT_PREVIEW_ROLL。
@@ -443,10 +528,10 @@ fn resolve_branch_check(
         true => (HitCheckResult::Hit { crit: false }, FORCED_HIT_PREVIEW_ROLL),
         false => {
             let outcome = resolve_hit(
-                attacker_acc,
+                attacker_accuracy.total,
                 defender_evasion,
                 defender_block,
-                crit_rate,
+                crit,
                 rng,
             );
             (outcome.check, outcome.roll)
@@ -457,10 +542,18 @@ fn resolve_branch_check(
     let detail = CheckDetail {
         accuracy_source: condition.accuracy_source.clone(),
         defense_type: condition.defense_type,
-        attacker_accuracy: attacker_acc,
-        defender_evasion,
-        defender_block,
-        crit_rate,
+        breakdowns: HitCheckBreakdowns {
+            attacker_accuracy,
+            defender_evasion: EvasionBreakdown {
+                base: defender_evasion,
+                total: defender_evasion,
+            },
+            defender_block: BlockBreakdown {
+                base: defender_block,
+                total: defender_block,
+            },
+            crit,
+        },
         roll,
     };
     (check, detail)
