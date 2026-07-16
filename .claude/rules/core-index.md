@@ -133,7 +133,7 @@ core/board/
 ### logic/skill/skill_check.rs
 
 - `pub(crate) fn resolve_hit(attacker_hit: i32, defender_evasion: i32, defender_block: i32, crit_rate: i32, rng_int: &mut impl FnMut() -> i32) -> HitResult` - 解析命中判定結果
-- `pub(crate) fn hit_probabilities(attacker_hit: i32, defender_evasion: i32, defender_block: i32) -> HitProbabilities` - 計算命中機率（預覽用）
+- `pub(crate) fn hit_probabilities(breakdowns: &HitCheckBreakdowns) -> HitProbabilities` - 計算命中機率（預覽用）
 
 ### logic/skill/skill_range.rs
 
@@ -142,7 +142,8 @@ core/board/
 
 ### logic/skill/skill_execution.rs
 
-- `pub(crate) fn resolve_effect_tree(caster_id: ID, skill_name: &str, skill_tags: &[SkillTag], nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
+- `pub(crate) fn preview_first_branch_accuracy(skill_tags: &[SkillTag], nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, board: Board) -> Option<HitCheckBreakdowns>` - 預覽效果樹第一分支的命中判定明細
+- `pub(crate) fn resolve_effect_tree(caster_id: ID, skill_name: &str, skill_tags: &[SkillTag], nodes: &[EffectNode], caster: &CombatStats, caster_pos: Position, target_pos: Position, units_on_board: &HashMap<Position, CombatStats>, objects_on_board: &HashMap<Position, ObjectOnBoard>, board: Board, rng: &mut impl FnMut() -> i32, force_hit: bool) -> Result<Vec<EffectEntry>>` - 執行效果樹節點並產生效果條目
 
 ### logic/skill/skill_reaction.rs
 
@@ -255,6 +256,7 @@ core/board/
 - `pub fn add_skill_target(world: &mut World, pos: Position) -> Result<()>` - 新增一個目標位置到選取暫存
 - `pub fn cancel_skill_targeting(world: &mut World)` - 取消技能選目標流程
 - `pub fn preview_skill_effect(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 預覽技能強制命中（非爆擊）的效果供 UI 顯示預期傷害
+- `pub fn preview_hit_probabilities(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<Option<HitPreview>>` - 預覽技能對目標的命中機率與判定明細供 UI 顯示
 - `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
 - `pub(crate) fn apply_effect_entries(world: &mut World, entries: &[EffectEntry], used_ids: &mut HashSet<ID>) -> Result<()>` - 應用效果條目到遊戲世界
 

@@ -414,16 +414,51 @@ fn render_battlefield(
             // 計算路徑預覽（懸停時）
             let preview_path = preview_path(current_pos, hovered_pos, &reachable_positions);
 
+            // 計算路徑風險預覽（懸停在可停留目標時）：危險地面 + 藉機攻擊觸發格
+            let path_hazards = match hovered_pos {
+                Some(hover) if !preview_path.is_empty() => {
+                    match board::ecs_logic::movement::preview_move_path(&mut ui_state.world, hover)
+                    {
+                        Ok(preview_hazard) => collect_path_hazards(&preview_hazard, &preview_path),
+                        Err(e) => {
+                            error = Err(e);
+                            return;
+                        }
+                    }
+                }
+                _ => HashSet::new(),
+            };
+
+            // 計算命中率預覽（SkillMode 懸停在可攻擊目標時）
+            let hit_preview_text = match (&selected_skill, hovered_pos) {
+                (Some(skill_name), Some(hover)) if skill_targetable.contains(&hover) => {
+                    match board::ecs_logic::skill::preview_hit_probabilities(
+                        &mut ui_state.world,
+                        skill_name,
+                        hover,
+                    ) {
+                        Ok(Some(preview)) => Some(format_hit_preview(&preview)),
+                        Ok(None) => None,
+                        Err(e) => {
+                            error = Err(e);
+                            return;
+                        }
+                    }
+                }
+                _ => None,
+            };
+
             // 渲染網格（加上可移動範圍高亮）
             let get_cell_info_fn = battlefield::get_cell_info(snapshot);
             let get_cell_highlight_fn = get_cell_highlight(
                 ui_state.selected_right_pos,
-                preview_path,
+                &preview_path,
                 &reachable_positions,
                 remaining_1mov,
                 &skill_targetable,
                 &skill_all_filtered_positions,
                 &picked_set,
+                &path_hazards,
             );
 
             battlefield::render_grid(
@@ -444,7 +479,14 @@ fn render_battlefield(
                 );
                 let get_tooltip_info_fn =
                     get_tooltip_info_with_movement(&reachable_positions, snapshot, remaining_1mov);
-                battlefield::render_hover_tooltip(ui, rect, hovered_pos, get_tooltip_info_fn);
+                let get_tooltip_with_hit_fn = |pos: Position| -> String {
+                    let base = get_tooltip_info_fn(pos);
+                    match &hit_preview_text {
+                        Some(text) => format!("{}\n{}", base, text),
+                        None => base,
+                    }
+                };
+                battlefield::render_hover_tooltip(ui, rect, hovered_pos, get_tooltip_with_hit_fn);
             }
 
             ui.add_space(SPACING_SMALL);
@@ -511,12 +553,14 @@ fn render_skill_popup(
                 ui.horizontal_top(|ui| {
                     let item_size = egui::vec2(BOTTOM_PANEL_BUTTON_WIDTH, 0.0);
                     for skill in &skills {
+                        // 第一行技能名、第二行費用
+                        let button_text = format!("{}\n費用 {}", skill.name, skill.cost);
                         if skill.usable {
                             let is_selected = current_skill.as_ref() == Some(&skill.name);
                             if ui
                                 .add_sized(
                                     item_size,
-                                    egui::Button::selectable(is_selected, &skill.name),
+                                    egui::Button::selectable(is_selected, button_text),
                                 )
                                 .clicked()
                             {
@@ -524,7 +568,7 @@ fn render_skill_popup(
                             }
                         } else {
                             let label = egui::Label::new(
-                                egui::RichText::new(&skill.name).color(egui::Color32::GRAY),
+                                egui::RichText::new(button_text).color(egui::Color32::GRAY),
                             );
                             ui.add_sized(item_size, label).on_hover_text("缺乏魔力");
                         }
@@ -561,43 +605,61 @@ fn render_skill_popup(
 
 // ==================== 輔助函數 ====================
 
+/// 重建懸停目標的有序移動路徑（含起點）；目標不可停留或不可達時回空
 fn preview_path(
     src: Option<Position>,
     dst: Option<Position>,
     reachable_positions: &HashMap<Position, ReachableInfo>,
-) -> HashSet<Position> {
+) -> Vec<Position> {
     let (src, dst) = match (src, dst) {
         (Some(src), Some(dst)) => (src, dst),
-        _ => return HashSet::new(),
+        _ => return Vec::new(),
     };
     match reachable_positions.get(&dst) {
         Some(info) => {
             // 目的地不能停留
             if info.passthrough_only {
-                return HashSet::new();
+                return Vec::new();
             }
         }
         // 目的地不在可達範圍內
         None => {
-            return HashSet::new();
+            return Vec::new();
         }
     };
     board::logic::movement::reconstruct_path(&reachable_positions, src, dst)
-        .into_iter()
-        .collect()
+}
+
+/// 蒐集路徑風險格：危險地面 + 藉機攻擊觸發格（移動者被打的那一格）
+///
+/// 危險地面直接取 hazard_positions；藉機攻擊以 from_index 對映到 path 上
+/// 移動者離開的那格，即移動者遭攻擊時所在的位置（非攻擊者所在格）。
+fn collect_path_hazards(
+    preview: &board::ecs_logic::movement::MovePathPreview,
+    path: &[Position],
+) -> HashSet<Position> {
+    let mut hazards: HashSet<Position> = preview.hazard_positions.iter().copied().collect();
+    for reaction in &preview.reactions {
+        // from_index 由 core 依同一條 path 算出，必定落在範圍內
+        hazards.insert(path[reaction.from_index]);
+    }
+    hazards
 }
 
 fn get_cell_highlight<'a>(
     selected_pos: Option<Position>,
-    preview_path: HashSet<Position>,
+    preview_path: &'a [Position],
     reachable_positions: &'a HashMap<Position, ReachableInfo>,
     remaining_1mov: i32,
     skill_targetable: &'a HashSet<Position>,
     skill_all_filtered_positions: &'a HashSet<Position>,
     picked_set: &'a HashSet<Position>,
+    path_hazards: &'a HashSet<Position>,
 ) -> impl Fn(Position) -> CellHighlight + 'a {
     move |pos: Position| -> CellHighlight {
         let border = if skill_targetable.contains(&pos) {
+            Some(BATTLEFIELD_COLOR_SKILL_RED)
+        } else if path_hazards.contains(&pos) {
             Some(BATTLEFIELD_COLOR_SKILL_RED)
         } else if selected_pos == Some(pos) {
             Some(BATTLEFIELD_COLOR_HIGHLIGHT)
@@ -769,6 +831,34 @@ fn get_tooltip_info_with_movement<'a>(
 
         base_info
     }
+}
+
+/// 將命中率預覽格式化為 tooltip 文字（命中/格擋/閃避/爆擊率 + 命中值來源明細）
+fn format_hit_preview(preview: &board::ecs_logic::skill::HitPreview) -> String {
+    let prob = &preview.probabilities;
+    let acc = &preview.breakdowns.attacker_accuracy;
+
+    // 命中值來源逐項（省略為 0 的加成，保留基礎與最終）
+    let mut sources = vec![format!("基礎 {}", acc.base)];
+    if acc.skill_bonus != 0 {
+        sources.push(format!("技能 {:+}", acc.skill_bonus));
+    }
+    if acc.flanking_bonus != 0 {
+        sources.push(format!("側翼 {:+}", acc.flanking_bonus));
+    }
+    if acc.adjacent_penalty != 0 {
+        sources.push(format!("相鄰 {:+}", acc.adjacent_penalty));
+    }
+
+    format!(
+        "命中 {}% / 格擋 {}% / 閃避 {}%\n爆擊 {}%\n命中值：{} = {}",
+        prob.hit,
+        prob.block,
+        prob.evade,
+        prob.crit,
+        sources.join(" "),
+        acc.total,
+    )
 }
 
 /// 渲染右側面板切換鈕（詳情 / log）
