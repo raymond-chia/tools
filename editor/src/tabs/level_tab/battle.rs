@@ -837,27 +837,37 @@ fn get_tooltip_info_with_movement<'a>(
 fn format_hit_preview(preview: &board::ecs_logic::skill::HitPreview) -> String {
     let prob = &preview.probabilities;
     let acc = &preview.breakdowns.attacker_accuracy;
+    let evasion = &preview.breakdowns.defender_evasion;
+    let block = &preview.breakdowns.defender_block;
 
     // 命中值來源逐項（省略為 0 的加成，保留基礎與最終）
-    let mut sources = vec![format!("基礎 {}", acc.base)];
+    let mut accuracy_sources = vec![format!("基礎 {}", acc.base)];
     if acc.skill_bonus != 0 {
-        sources.push(format!("技能 {:+}", acc.skill_bonus));
+        accuracy_sources.push(format!("技能 {:+}", acc.skill_bonus));
     }
     if acc.flanking_bonus != 0 {
-        sources.push(format!("側翼 {:+}", acc.flanking_bonus));
+        accuracy_sources.push(format!("側翼 {:+}", acc.flanking_bonus));
     }
     if acc.adjacent_penalty != 0 {
-        sources.push(format!("相鄰 {:+}", acc.adjacent_penalty));
+        accuracy_sources.push(format!("相鄰 {:+}", acc.adjacent_penalty));
     }
 
+    // 對方閃避值、格擋值來源逐項（目前僅基礎，格式比照命中值）
+    let evasion_sources = vec![format!("基礎 {}", evasion.base)];
+    let block_sources = vec![format!("基礎 {}", block.base)];
+
     format!(
-        "命中 {}% / 格擋 {}% / 閃避 {}%\n爆擊 {}%\n命中值：{} = {}",
+        "命中 {}% / 格擋 {}% / 閃避 {}%\n爆擊 {}%\n命中值：{} = {}\n閃避值：{} = {}\n格擋值：{} = {}",
         prob.hit,
         prob.block,
         prob.evade,
         prob.crit,
-        sources.join(" "),
+        accuracy_sources.join(" "),
         acc.total,
+        evasion_sources.join(" "),
+        evasion.total,
+        block_sources.join(" "),
+        block.total,
     )
 }
 
@@ -983,8 +993,7 @@ fn format_log_check(check: &LogCheck, detail: Option<&LogCheckDetail>) -> String
     match detail {
         None => result_str,
         Some(d) => format!(
-            "{} [{} 命中 {} + 骰 {} = {} vs {} 閃避 {} / 格擋 {} (閃+格 {}), 爆 {}%]",
-            result_str,
+            "[{} 命中 {} + 骰 {} = {} vs {} 閃避 {} / 格擋 {} (閃+格 {}), 爆 {}%] {}",
             d.accuracy_source,
             d.breakdowns.attacker_accuracy.total,
             d.roll,
@@ -994,6 +1003,7 @@ fn format_log_check(check: &LogCheck, detail: Option<&LogCheckDetail>) -> String
             d.breakdowns.defender_block.total,
             d.breakdowns.defender_evasion.total + d.breakdowns.defender_block.total,
             d.breakdowns.crit,
+            result_str,
         ),
     }
 }
