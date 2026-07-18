@@ -161,16 +161,24 @@ pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String {
         if snapshot.deployment_positions.contains(&pos) {
             if let Some(bundle) = snapshot.unit_map.get(&pos) {
                 format!(
-                    "({}, {})\n部署點：{}",
-                    pos.x, pos.y, bundle.occupant_type_name.0
+                    "({}, {})\n部署點：{}\nHP：{} / {}",
+                    pos.x,
+                    pos.y,
+                    bundle.occupant_type_name.0,
+                    bundle.attributes.current_hp.0,
+                    bundle.attributes.max_hp.0
                 )
             } else {
                 format!("({}, {})\n空部署點", pos.x, pos.y)
             }
         } else if let Some(bundle) = snapshot.unit_map.get(&pos) {
             format!(
-                "({}, {})\n單位 {}",
-                pos.x, pos.y, bundle.occupant_type_name.0
+                "({}, {})\n單位 {}\nHP：{} / {}",
+                pos.x,
+                pos.y,
+                bundle.occupant_type_name.0,
+                bundle.attributes.current_hp.0,
+                bundle.attributes.max_hp.0
             )
         } else if let Some(obj) = snapshot.object_map.get(&pos) {
             format!(

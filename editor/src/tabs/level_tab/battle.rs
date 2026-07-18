@@ -993,7 +993,7 @@ fn format_log_check(check: &LogCheck, detail: Option<&LogCheckDetail>) -> String
     match detail {
         None => result_str,
         Some(d) => format!(
-            "[{} 命中 {} + 骰 {} = {} vs {} 閃避 {} / 格擋 {} (閃+格 {}), 爆 {}%] {}",
+            "[\n{}\n命中 {} + 骰 {}\n總計：{}\n{}\n閃避 {} / 格擋 {}\n爆 {}%\n{}\n]",
             d.accuracy_source,
             d.breakdowns.attacker_accuracy.total,
             d.roll,
@@ -1001,7 +1001,6 @@ fn format_log_check(check: &LogCheck, detail: Option<&LogCheckDetail>) -> String
             d.defense_type,
             d.breakdowns.defender_evasion.total,
             d.breakdowns.defender_block.total,
-            d.breakdowns.defender_evasion.total + d.breakdowns.defender_block.total,
             d.breakdowns.crit,
             result_str,
         ),
