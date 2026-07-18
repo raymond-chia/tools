@@ -18,35 +18,35 @@ fn test_resolve_hit() {
         // 命中
         (20, 30, 20, 0, 90, HitCheckResult::Hit { crit: false }),
         (20, 30, 20, 0, 60, HitCheckResult::Hit { crit: false }),
-        (20, 30, 20, 0, 31, HitCheckResult::Hit { crit: false }),
+        (20, 30, 20, 0, 32, HitCheckResult::Hit { crit: false }),
         // 命中（邊界）
-        (20, 30, 20, 0, 30, HitCheckResult::Hit { crit: false }),
+        (20, 30, 20, 0, 31, HitCheckResult::Hit { crit: false }),
         // 格擋
-        (20, 30, 20, 0, 29, HitCheckResult::Block { crit: false }),
+        (20, 30, 20, 0, 30, HitCheckResult::Block { crit: false }),
         (20, 30, 20, 0, 20, HitCheckResult::Block { crit: false }),
-        (20, 30, 20, 0, 11, HitCheckResult::Block { crit: false }),
+        (20, 30, 20, 0, 12, HitCheckResult::Block { crit: false }),
         // 格擋（邊界）
-        (20, 30, 20, 0, 10, HitCheckResult::Block { crit: false }),
+        (20, 30, 20, 0, 11, HitCheckResult::Block { crit: false }),
         // 閃避
+        (20, 30, 20, 0, 10, HitCheckResult::Evade),
         (20, 30, 20, 0, 9, HitCheckResult::Evade),
-        (20, 30, 20, 0, 8, HitCheckResult::Evade),
         (20, 30, 20, 0, 7, HitCheckResult::Evade),
         // 其他數值組合
         // 閃避 (50) + 格擋 (50) = 100
         // 命中
         (30, 50, 50, 0, 90, HitCheckResult::Hit { crit: false }),
         (30, 50, 50, 0, 80, HitCheckResult::Hit { crit: false }),
-        (30, 50, 50, 0, 71, HitCheckResult::Hit { crit: false }),
+        (30, 50, 50, 0, 72, HitCheckResult::Hit { crit: false }),
         // 命中（邊界）
-        (30, 50, 50, 0, 70, HitCheckResult::Hit { crit: false }),
+        (30, 50, 50, 0, 71, HitCheckResult::Hit { crit: false }),
         // 格擋
-        (30, 50, 50, 0, 69, HitCheckResult::Block { crit: false }),
+        (30, 50, 50, 0, 70, HitCheckResult::Block { crit: false }),
         (30, 50, 50, 0, 40, HitCheckResult::Block { crit: false }),
-        (30, 50, 50, 0, 21, HitCheckResult::Block { crit: false }),
+        (30, 50, 50, 0, 22, HitCheckResult::Block { crit: false }),
         // 格擋（邊界）
-        (30, 50, 50, 0, 20, HitCheckResult::Block { crit: false }),
+        (30, 50, 50, 0, 21, HitCheckResult::Block { crit: false }),
         // 閃避
-        (30, 50, 50, 0, 19, HitCheckResult::Evade),
+        (30, 50, 50, 0, 20, HitCheckResult::Evade),
         (30, 50, 50, 0, 10, HitCheckResult::Evade),
         (30, 50, 50, 0, 9, HitCheckResult::Evade),
         //
@@ -95,28 +95,30 @@ fn test_resolve_hit() {
         // 格擋
         (50, 30, 50, 100, 10, HitCheckResult::Block { crit: true }),
         (50, 30, 50, 100, 20, HitCheckResult::Block { crit: true }),
-        (50, 30, 50, 100, 29, HitCheckResult::Block { crit: true }),
+        (50, 30, 50, 100, 30, HitCheckResult::Block { crit: true }),
         // 暴擊
-        (50, 30, 50, 100, 30, HitCheckResult::Hit { crit: true }),
+        (50, 30, 50, 100, 31, HitCheckResult::Hit { crit: true }),
         // 不同數值
         // 格擋
         (50, 30, 60, 100, 20, HitCheckResult::Block { crit: true }),
         (50, 30, 60, 100, 30, HitCheckResult::Block { crit: true }),
-        (50, 30, 60, 100, 39, HitCheckResult::Block { crit: true }),
+        (50, 30, 60, 100, 40, HitCheckResult::Block { crit: true }),
         // 暴擊
-        (50, 30, 60, 100, 40, HitCheckResult::Hit { crit: true }),
+        (50, 30, 60, 100, 41, HitCheckResult::Hit { crit: true }),
         //
         // --- 閃避時不觸發暴擊 ---
         // 暴擊率 100%，但閃避了就不該暴擊
-        (20, 30, 20, 100, 30, HitCheckResult::Hit { crit: true }),
-        (20, 30, 20, 100, 10, HitCheckResult::Block { crit: true }),
-        (20, 30, 20, 100, 9, HitCheckResult::Evade),
+        (20, 30, 20, 100, 31, HitCheckResult::Hit { crit: true }),
+        (20, 30, 20, 100, 30, HitCheckResult::Block { crit: true }),
+        (20, 30, 20, 100, 11, HitCheckResult::Block { crit: true }),
+        (20, 30, 20, 100, 10, HitCheckResult::Evade),
         (20, 30, 20, 100, 6, HitCheckResult::Evade),
         (20, 30, 20, 100, 1, HitCheckResult::Evade),
         // 不同數值
-        (20, 50, 50, 100, 80, HitCheckResult::Hit { crit: true }),
-        (20, 50, 50, 100, 30, HitCheckResult::Block { crit: true }),
-        (20, 50, 50, 100, 29, HitCheckResult::Evade),
+        (20, 50, 50, 100, 81, HitCheckResult::Hit { crit: true }),
+        (20, 50, 50, 100, 80, HitCheckResult::Block { crit: true }),
+        (20, 50, 50, 100, 31, HitCheckResult::Block { crit: true }),
+        (20, 50, 50, 100, 30, HitCheckResult::Evade),
         (20, 50, 50, 100, 20, HitCheckResult::Evade),
         (20, 50, 50, 100, 10, HitCheckResult::Evade),
     ];

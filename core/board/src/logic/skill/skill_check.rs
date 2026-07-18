@@ -27,8 +27,8 @@ pub struct HitResult {
 /// 2. 強制命中（骰 96~100）
 /// 3. 計算閃避門檻 = defender_evasion - attacker_hit
 /// 4. 計算格擋門檻 = 閃避門檻 + defender_block
-/// 5. 骰 < 閃避門檻 → Evade
-/// 6. 骰 < 格擋門檻 → Block
+/// 5. 骰 ≤ 閃避門檻 → Evade（命中須大於閃避門檻才不算閃避）
+/// 6. 骰 ≤ 格擋門檻 → Block
 /// 7. 否則 → Hit
 /// 8. Hit 或 Block 時，骰 ≥ 100 - crit_rate → crit
 ///
@@ -63,11 +63,11 @@ fn compute_hit_result(
         let crit = is_crit(roll, crit_rate);
         return HitCheckResult::Hit { crit };
     }
-    if roll < evasion_threshold {
+    if roll <= evasion_threshold {
         return HitCheckResult::Evade;
     }
     let crit = is_crit(roll, crit_rate);
-    if roll < block_threshold {
+    if roll <= block_threshold {
         return HitCheckResult::Block { crit };
     }
     HitCheckResult::Hit { crit }
@@ -116,10 +116,11 @@ pub(crate) fn hit_probabilities(breakdowns: &HitCheckBreakdowns) -> HitProbabili
     let middle_lower = FORCED_FAILURE_UPPER + 1;
     let middle_upper = FORCED_SUCCESS_LOWER - 1;
 
-    // 中間段內：roll < evasion_threshold → Evade
-    let middle_evade = count_below(middle_lower, middle_upper, evasion_threshold);
-    // 中間段內：evasion_threshold ≤ roll < block_threshold → Block
-    let middle_block = count_below(middle_lower, middle_upper, block_threshold) - middle_evade;
+    // 中間段內：roll ≤ evasion_threshold → Evade
+    let middle_evade = count_at_or_below(middle_lower, middle_upper, evasion_threshold);
+    // 中間段內：evasion_threshold < roll ≤ block_threshold → Block
+    let middle_block =
+        count_at_or_below(middle_lower, middle_upper, block_threshold) - middle_evade;
     // 中間段內剩餘 → Hit
     let middle_total = middle_upper - middle_lower + 1;
     let middle_hit = middle_total - middle_evade - middle_block;
@@ -135,9 +136,8 @@ pub(crate) fn hit_probabilities(breakdowns: &HitCheckBreakdowns) -> HitProbabili
     }
 }
 
-/// 計算閉區間 [lower, upper] 內滿足 roll < threshold 的整數格子數
-fn count_below(lower: i32, upper: i32, threshold: i32) -> i32 {
-    // roll < threshold 等價於 roll ≤ threshold - 1，與 upper 取交集
-    let effective_upper = (threshold - 1).min(upper);
+/// 計算閉區間 [lower, upper] 內滿足 roll ≤ threshold 的整數格子數
+fn count_at_or_below(lower: i32, upper: i32, threshold: i32) -> i32 {
+    let effective_upper = threshold.min(upper);
     (effective_upper - lower + 1).max(0)
 }
