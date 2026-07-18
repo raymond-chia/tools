@@ -451,6 +451,7 @@ fn render_battlefield(
             // 渲染網格（加上可移動範圍高亮）
             let get_cell_info_fn = battlefield::get_cell_info(snapshot);
             let get_cell_highlight_fn = get_cell_highlight(
+                current_pos,
                 ui_state.selected_right_pos,
                 &preview_path,
                 &reachable_positions,
@@ -647,6 +648,7 @@ fn collect_path_hazards(
 }
 
 fn get_cell_highlight<'a>(
+    current_unit_pos: Option<Position>,
     selected_pos: Option<Position>,
     preview_path: &'a [Position],
     reachable_positions: &'a HashMap<Position, ReachableInfo>,
@@ -657,7 +659,9 @@ fn get_cell_highlight<'a>(
     path_hazards: &'a HashSet<Position>,
 ) -> impl Fn(Position) -> CellHighlight + 'a {
     move |pos: Position| -> CellHighlight {
-        let border = if skill_targetable.contains(&pos) {
+        let border = if current_unit_pos == Some(pos) {
+            Some(BATTLEFIELD_COLOR_CURRENT_UNIT)
+        } else if skill_targetable.contains(&pos) {
             Some(BATTLEFIELD_COLOR_SKILL_RED)
         } else if path_hazards.contains(&pos) {
             Some(BATTLEFIELD_COLOR_SKILL_RED)

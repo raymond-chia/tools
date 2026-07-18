@@ -46,6 +46,8 @@ pub(crate) const BATTLEFIELD_COLOR_UNIT: egui::Color32 = egui::Color32::DARK_GRA
 pub(crate) const BATTLEFIELD_COLOR_OBJECT: egui::Color32 = egui::Color32::GRAY;
 pub(crate) const BATTLEFIELD_COLOR_EMPTY: egui::Color32 = egui::Color32::DARK_GREEN;
 pub(crate) const BATTLEFIELD_COLOR_HIGHLIGHT: egui::Color32 = egui::Color32::YELLOW;
+// 關卡編輯器 - 戰場預覽 - 目前行動單位框
+pub(crate) const BATTLEFIELD_COLOR_CURRENT_UNIT: egui::Color32 = egui::Color32::GREEN;
 // 關卡編輯器 - 戰場預覽 - 技能相關顏色
 pub(crate) const BATTLEFIELD_COLOR_SKILL_RED: egui::Color32 =
     egui::Color32::from_rgb(255, 100, 100);
