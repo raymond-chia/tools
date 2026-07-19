@@ -10,7 +10,7 @@ use crate::ecs_logic::query::{
 };
 use crate::ecs_logic::turn::get_current_unit;
 use crate::ecs_types::components::{
-    ActionState, BlocksSight, ContactEffects, CurrentHp, CurrentMp, MovementPoint, Object,
+    ActionState, BlocksSight, ContactEffects, CurrentHp, CurrentMp, MaxHp, MovementPoint, Object,
     ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName, Position, Skills, Unit,
     UnitFaction,
 };
@@ -730,8 +730,9 @@ pub(crate) fn apply_effect_entries(
                     CheckTarget::Position(_) => unreachable!("HpChange 不應該有 Position 目標"),
                 };
                 let mut entity_mut = world.entity_mut(entity);
+                let max_hp = get_component!(entity_mut, MaxHp)?.0;
                 let mut hp = get_component_mut!(entity_mut, CurrentHp)?;
-                hp.0 += final_amount;
+                hp.0 = (hp.0 + final_amount).min(max_hp);
             }
             ResolvedEffect::SpawnObject { object_type } => {
                 let pos = match entry.target {

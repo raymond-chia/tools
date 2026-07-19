@@ -850,10 +850,10 @@ fn format_hit_preview(preview: &board::ecs_logic::skill::HitPreview) -> String {
         accuracy_sources.push(format!("技能 {:+}", acc.skill_bonus));
     }
     if acc.flanking_bonus != 0 {
-        accuracy_sources.push(format!("側翼 {:+}", acc.flanking_bonus));
+        accuracy_sources.push(format!("夾擊 {:+}", acc.flanking_bonus));
     }
     if acc.adjacent_penalty != 0 {
-        accuracy_sources.push(format!("相鄰 {:+}", acc.adjacent_penalty));
+        accuracy_sources.push(format!("敵人相鄰 {:+}", acc.adjacent_penalty));
     }
 
     // 對方閃避值、格擋值來源逐項（目前僅基礎，格式比照命中值）
