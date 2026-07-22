@@ -4,7 +4,9 @@ use crate::ecs_types::components::{
     ActionState, BlocksSight, BlocksSound, ContactEffects, Hazardous, Object, ObjectBundle,
     ObjectMovementCost, Occupant, OccupantTypeName, Skills, Unit, UnitBundle, UnitFaction,
 };
-use crate::ecs_types::resources::{BattleLog, Board, DeploymentConfig, GameData, LevelConfig};
+use crate::ecs_types::resources::{
+    BattleLog, Board, DeploymentConfig, EndConditionConfig, GameData, LevelConfig,
+};
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::LevelType;
 use crate::logic::id_generator::generate_unique_id;
@@ -108,6 +110,12 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
     world.insert_resource(DeploymentConfig {
         max_player_units: level.max_player_units,
         deployment_positions: level.deployment_positions.into_iter().collect(),
+    });
+
+    // 插入勝利與失敗規則 resource
+    world.insert_resource(EndConditionConfig {
+        victory: level.victory_conditions,
+        defeat: level.defeat_conditions,
     });
 
     // 初始化戰鬥 log（關卡生成時建立，整場戰鬥持有同一份）

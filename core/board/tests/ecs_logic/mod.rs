@@ -1,6 +1,7 @@
 mod constants;
 mod test_buff_ttl;
 mod test_deployment;
+mod test_level_outcome;
 mod test_loader;
 mod test_move_reaction_los;
 mod test_move_reaction_preview;

@@ -1,7 +1,7 @@
 //! Loader 相關的資料結構定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
-use crate::domain::core_types::SkillType;
+use crate::domain::core_types::{OutcomeBranches, SkillType};
 use crate::ecs_types::components::Position;
 use serde::{Deserialize, Serialize};
 
@@ -70,6 +70,8 @@ pub struct LevelType {
     pub deployment_positions: Vec<Position>,
     pub unit_placements: Vec<UnitPlacement>,
     pub object_placements: Vec<ObjectPlacement>,
+    pub victory_conditions: OutcomeBranches,
+    pub defeat_conditions: OutcomeBranches,
 }
 
 // ============================================================================

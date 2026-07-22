@@ -1,5 +1,6 @@
 pub mod battle_log;
 pub mod deployment;
+pub mod level_outcome;
 pub mod loader;
 pub mod movement;
 pub mod query;

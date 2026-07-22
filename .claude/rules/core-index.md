@@ -51,6 +51,7 @@ core/board/
 │   │   ├── loader.rs     - 遊戲資料載入函數
 │   │   ├── spawner.rs    - 關卡生成函數
 │   │   ├── deployment.rs - 單位部署函數
+│   │   ├── level_outcome.rs - 關卡結局判定 ECS 操作函數
 │   │   ├── query.rs      - World 查詢函數
 │   │   ├── movement.rs   - 單位移動 ECS 操作函數
 │   │   ├── reaction.rs   - 技能反應系統 ECS 操作函數
@@ -180,6 +181,8 @@ core/board/
 - `pub fn deploy(mut self, marker: &str) -> Self` - 設定標記為部署點
 - `pub fn object(mut self, marker: &str, type_name: &str) -> Self` - 設定標記對應的物件類型
 - `pub fn max_player_units(mut self, n: usize) -> Self` - 手動設定玩家單位上限
+- `pub fn victory_conditions(mut self, conditions: OutcomeBranches) -> Self` - 設定勝利規則
+- `pub fn defeat_conditions(mut self, conditions: OutcomeBranches) -> Self` - 設定失敗規則
 - `pub fn to_unit_map(self) -> Result<(Board, HashMap<String, Vec<Position>>, HashMap<String, Vec<MarkerEntry>>)>` - 解析為棋盤、位置對應及 Marker 條目
 - `pub fn to_toml(self) -> Result<String>` - 組裝完整 TOML 字串
 
@@ -201,6 +204,10 @@ core/board/
 - `pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Position) -> Result<()>` - 部署玩家單位到指定位置
 - `pub fn undeploy_unit(world: &mut World, position: Position) -> Result<()>` - 取消指定部署點上的玩家單位部署
 - `pub fn remove_deployment_positions(world: &mut World)` - 清除所有部署位置
+
+### ecs_logic/level_outcome.rs
+
+- `pub fn resolve_level_outcome(world: &mut World) -> Result<LevelOutcome>` - 判定關卡結局（defeat 優先於 victory）並回傳結果
 
 ### ecs_logic/query.rs
 

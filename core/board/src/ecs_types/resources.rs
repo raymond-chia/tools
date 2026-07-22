@@ -2,7 +2,7 @@
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
 use crate::domain::battle_log::LogEvent;
-use crate::domain::core_types::{PendingReaction, SkillType};
+use crate::domain::core_types::{OutcomeBranches, PendingReaction, SkillType};
 use crate::domain::turn::TurnEntry;
 use crate::ecs_types::components::{Occupant, Position};
 use crate::loader_schema::{Faction, ObjectType, UnitType};
@@ -93,3 +93,10 @@ pub struct ReactionState {
 /// log 事件型別（純資料）定義在 `domain::battle_log`。
 #[derive(Debug, Default, Resource)]
 pub struct BattleLog(pub Vec<LogEvent>);
+
+/// 勝利與失敗規則 Resource
+#[derive(Debug, Resource)]
+pub struct EndConditionConfig {
+    pub victory: OutcomeBranches,
+    pub defeat: OutcomeBranches,
+}

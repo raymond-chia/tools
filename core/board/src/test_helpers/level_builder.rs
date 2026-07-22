@@ -4,6 +4,7 @@
 
 use crate::domain::alias::ID;
 use crate::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
+use crate::domain::core_types::OutcomeBranches;
 use crate::ecs_types::components::{Occupant, Position};
 use crate::ecs_types::resources::Board;
 use crate::error::{LoadError, Result};
@@ -124,6 +125,8 @@ pub struct LevelBuilder {
     unit_markers: Vec<UnitMarkerDef>,
     object_markers: Vec<ObjectMarkerDef>,
     deploy_marker: Option<String>,
+    victory_conditions: OutcomeBranches,
+    defeat_conditions: OutcomeBranches,
 }
 
 impl LevelBuilder {
@@ -156,6 +159,8 @@ impl LevelBuilder {
             unit_markers: Vec::new(),
             object_markers: Vec::new(),
             deploy_marker: None,
+            victory_conditions: Vec::new(),
+            defeat_conditions: Vec::new(),
         }
     }
 
@@ -187,6 +192,18 @@ impl LevelBuilder {
             marker: marker.to_string(),
             type_name: type_name.to_string(),
         });
+        self
+    }
+
+    /// 設定勝利規則（分支間 OR、分支內 AND）
+    pub fn victory_conditions(mut self, conditions: OutcomeBranches) -> Self {
+        self.victory_conditions = conditions;
+        self
+    }
+
+    /// 設定失敗規則（分支間 OR、分支內 AND）
+    pub fn defeat_conditions(mut self, conditions: OutcomeBranches) -> Self {
+        self.defeat_conditions = conditions;
         self
     }
 
@@ -313,6 +330,8 @@ impl LevelBuilder {
             deployment_positions,
             unit_placements,
             object_placements,
+            victory_conditions: self.victory_conditions,
+            defeat_conditions: self.defeat_conditions,
         };
 
         toml::to_string_pretty(&level).map_err(|e| {

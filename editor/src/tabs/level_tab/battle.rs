@@ -589,6 +589,8 @@ fn render_skill_popup(
             .map_err(|e| format!("產生技能 log 失敗：{}", e))?;
         board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)
             .map_err(|e| format!("處理死亡失敗：{}", e))?;
+        let _ = board::ecs_logic::level_outcome::resolve_level_outcome(&mut ui_state.world)
+            .map_err(|e| format!("判定關卡結局失敗：{}", e))?;
         ui_state.right_panel_view = RightPanelView::Log;
         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
         ui_state.battle_action = BattleAction::Normal;
@@ -753,6 +755,9 @@ fn handle_mouse_click(
                             &entries,
                         )?;
                         board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)?;
+                        let _ = board::ecs_logic::level_outcome::resolve_level_outcome(
+                            &mut ui_state.world,
+                        )?;
                         ui_state.right_panel_view = RightPanelView::Log;
                         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
                         ui_state.battle_action = BattleAction::Normal;
@@ -1161,6 +1166,9 @@ fn render_reaction_panel(
                     .map_err(|e| format!("產生反應 log 失敗：{}", e))?;
                     board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)
                         .map_err(|e| format!("處理死亡失敗：{}", e))?;
+                    let _ =
+                        board::ecs_logic::level_outcome::resolve_level_outcome(&mut ui_state.world)
+                            .map_err(|e| format!("判定關卡結局失敗：{}", e))?;
                     ui_state.right_panel_view = RightPanelView::Log;
                 }
                 ProcessReactionResult::NeedDecision => {

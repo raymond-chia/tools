@@ -1,6 +1,6 @@
 //! 基本資料類型定義
 
-use crate::domain::alias::{Coord, SkillName, TypeName};
+use crate::domain::alias::{Coord, ID, SkillName, TypeName};
 use crate::ecs_types::components::Occupant;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -354,6 +354,30 @@ pub struct PendingReaction {
     pub trigger: Occupant,
     pub trigger_event: ReactionTrigger,
     pub available_skills: Vec<SkillName>,
+}
+
+// ============================================================================
+// 關卡結局判定
+// ============================================================================
+
+/// 結局判定的葉子條件
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EndLevelCondition {
+    /// 指定 faction 全滅則此條件成立
+    EliminateFaction(ID),
+}
+
+/// 結局規則：多個結局分支（分支間 OR），每個分支為 (多語系 key, 該分支的達成條件（分支內 AND）)
+pub type OutcomeBranches = Vec<(String, Vec<EndLevelCondition>)>;
+
+/// 關卡結局判定結果
+#[derive(Debug, PartialEq)]
+pub enum LevelOutcome {
+    Undetermined,
+    /// 觸發分支的多語系 key
+    Victory(String),
+    /// 觸發分支的多語系 key
+    Defeat(String),
 }
 
 // ============================================================================
