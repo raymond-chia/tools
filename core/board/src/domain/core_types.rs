@@ -371,8 +371,9 @@ pub enum EndLevelCondition {
 pub type OutcomeBranches = Vec<(String, Vec<EndLevelCondition>)>;
 
 /// 關卡結局判定結果
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub enum LevelOutcome {
+    #[default]
     Undetermined,
     /// 觸發分支的多語系 key
     Victory(String),

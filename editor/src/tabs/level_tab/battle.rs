@@ -5,7 +5,7 @@ use super::{BattleAction, LevelTabMode, LevelTabUIState, MessageState, RightPane
 use crate::constants::*;
 use board::domain::alias::SkillName;
 use board::domain::battle_log::{LogCheck, LogCheckDetail, LogEffect, LogEvent, LogTarget};
-use board::domain::core_types::PendingReaction;
+use board::domain::core_types::{LevelOutcome, PendingReaction};
 use board::ecs_logic::reaction::ProcessReactionResult;
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::TurnOrder;
@@ -38,12 +38,17 @@ pub fn render_form(
     // 頂部：返回按鈕
     if ui.button("← 返回").clicked() {
         ui_state.mode = LevelTabMode::Edit;
+        ui_state.level_outcome = LevelOutcome::Undetermined;
         return;
     }
 
     ui.add_space(SPACING_SMALL);
 
     render_level_info(ui, &snapshot);
+
+    if render_outcome_banner(ui, &ui_state.level_outcome) {
+        return;
+    }
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
@@ -132,6 +137,24 @@ fn render_level_info(ui: &mut egui::Ui, snapshot: &Snapshot) {
         ui.separator();
         ui.label(format!("敵人數量：{}", enemy_count));
     });
+}
+
+/// 渲染關卡結局字幕，回傳結局是否已確定（true 時 caller 應停止渲染後續戰鬥 UI）
+fn render_outcome_banner(ui: &mut egui::Ui, outcome: &LevelOutcome) -> bool {
+    let (text, color) = match outcome {
+        LevelOutcome::Undetermined => return false,
+        LevelOutcome::Victory(key) => {
+            (format!("關卡勝利：\n{}", key), OUTCOME_BANNER_COLOR_VICTORY)
+        }
+        LevelOutcome::Defeat(key) => (format!("關卡失敗：\n{}", key), OUTCOME_BANNER_COLOR_DEFEAT),
+    };
+    ui.label(
+        egui::RichText::new(text)
+            .color(color)
+            .size(OUTCOME_BANNER_TEXT_SIZE)
+            .strong(),
+    );
+    true
 }
 
 /// 渲染回合順序面板（左側）
@@ -589,8 +612,9 @@ fn render_skill_popup(
             .map_err(|e| format!("產生技能 log 失敗：{}", e))?;
         board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)
             .map_err(|e| format!("處理死亡失敗：{}", e))?;
-        let _ = board::ecs_logic::level_outcome::resolve_level_outcome(&mut ui_state.world)
-            .map_err(|e| format!("判定關卡結局失敗：{}", e))?;
+        ui_state.level_outcome =
+            board::ecs_logic::level_outcome::resolve_level_outcome(&mut ui_state.world)
+                .map_err(|e| format!("判定關卡結局失敗：{}", e))?;
         ui_state.right_panel_view = RightPanelView::Log;
         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
         ui_state.battle_action = BattleAction::Normal;
@@ -755,9 +779,10 @@ fn handle_mouse_click(
                             &entries,
                         )?;
                         board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)?;
-                        let _ = board::ecs_logic::level_outcome::resolve_level_outcome(
-                            &mut ui_state.world,
-                        )?;
+                        ui_state.level_outcome =
+                            board::ecs_logic::level_outcome::resolve_level_outcome(
+                                &mut ui_state.world,
+                            )?;
                         ui_state.right_panel_view = RightPanelView::Log;
                         board::ecs_logic::skill::cancel_skill_targeting(&mut ui_state.world);
                         ui_state.battle_action = BattleAction::Normal;
@@ -1166,7 +1191,7 @@ fn render_reaction_panel(
                     .map_err(|e| format!("產生反應 log 失敗：{}", e))?;
                     board::ecs_logic::turn::resolve_deaths(&mut ui_state.world)
                         .map_err(|e| format!("處理死亡失敗：{}", e))?;
-                    let _ =
+                    ui_state.level_outcome =
                         board::ecs_logic::level_outcome::resolve_level_outcome(&mut ui_state.world)
                             .map_err(|e| format!("判定關卡結局失敗：{}", e))?;
                     ui_state.right_panel_view = RightPanelView::Log;

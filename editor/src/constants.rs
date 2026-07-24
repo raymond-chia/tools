@@ -62,3 +62,7 @@ pub(crate) const BATTLEFIELD_COLOR_MOVE_2MOV: egui::Color32 =
     egui::Color32::from_rgb(100, 100, 200);
 pub(crate) const BATTLEFIELD_COLOR_MOVE_PATH: egui::Color32 =
     egui::Color32::from_rgb(255, 200, 100);
+// 關卡編輯器 - 戰鬥 - 關卡結局字幕顏色
+pub(crate) const OUTCOME_BANNER_COLOR_VICTORY: egui::Color32 = egui::Color32::LIGHT_GREEN;
+pub(crate) const OUTCOME_BANNER_COLOR_DEFEAT: egui::Color32 = egui::Color32::LIGHT_RED;
+pub(crate) const OUTCOME_BANNER_TEXT_SIZE: f32 = 20.0;

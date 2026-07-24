@@ -7,6 +7,7 @@ use crate::utils::search::{
     combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
 };
 use board::domain::constants::PLAYER_FACTION_ID;
+use board::domain::core_types::LevelOutcome;
 use board::ecs_types::components::Position;
 use board::error::Result as CResult;
 
@@ -114,6 +115,7 @@ fn render_top_bar(
                 Ok(_) => {
                     board::ecs_logic::deployment::remove_deployment_positions(&mut ui_state.world);
                     ui_state.mode = LevelTabMode::Battle;
+                    ui_state.level_outcome = LevelOutcome::Undetermined;
                 }
                 Err(e) => {
                     error = Err(format!("開始戰鬥失敗：{}", e));

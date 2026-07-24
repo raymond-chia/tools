@@ -10,7 +10,7 @@ use crate::generic_editor::MessageState;
 use bevy_ecs::world::World;
 use board::domain::alias::{SkillName, TypeName};
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::domain::core_types::SkillType;
+use board::domain::core_types::{LevelOutcome, SkillType};
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::loader_schema::{LevelType, ObjectType, UnitType};
@@ -99,6 +99,9 @@ pub struct LevelTabUIState {
 
     /// 反應決策草稿（pending 為空時 decisions 也為空）
     pub reaction_decision: ReactionDecisionState,
+
+    /// 關卡結局字幕：切換模式時清為 Undetermined，非 Undetermined 時在戰場上方顯示
+    pub level_outcome: LevelOutcome,
 
     /// 當前標籤頁的模式
     pub mode: LevelTabMode,
