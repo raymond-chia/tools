@@ -1,0 +1,14 @@
+[package]
+name = "godot_bind"
+version = "0.1.0"
+edition = "2024"
+
+# gdext 需要 cdylib 產出 .dll 供 Godot 的 .gdextension 載入
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+board = { path = "../core/board" }
+bevy_ecs.workspace = true
+# gdext：Godot 4 官方 Rust 綁定，crates.io 穩定版
+godot = "0.5"
