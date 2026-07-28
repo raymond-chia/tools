@@ -26,7 +26,8 @@ pub(crate) const BOTTOM_PANEL_BUTTON_WIDTH: f32 = 130.0;
 pub(crate) const DRAG_VALUE_SPEED: f64 = 1.0;
 
 // 檔案相關
-pub(crate) const DATA_DIRECTORY_PATH: &str = "ignore-data/";
+// 與 godot 專案共用同一份資料（res://data/），路徑相對 workspace 根
+pub(crate) const DATA_DIRECTORY_PATH: &str = "godot/data/";
 pub(crate) const FILE_EXTENSION_TOML: &str = ".toml";
 
 // 編輯器相關

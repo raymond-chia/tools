@@ -72,6 +72,13 @@ use 語句應放在檔案頂部。不應在函數內部宣告 use。
 
 禁止向後相容。允許破壞現有 API 來改進設計。
 
+禁止執行 git commit。也禁止 git add 等會改動 index 的指令。只能提供 commit message 供用戶自行 commit。
+讀取狀態的指令（status、log、diff、show）不受限制。
+
+`godot/` 是獨立的 git repo。它不是 parent repo 的 submodule，parent 只把它當 untracked 目錄看待。
+因此 `godot/` 底下的檔案必須用 `git -C godot` 觀察，在 workspace 根執行的 git 指令看不到它，
+`git status` 也只會顯示 `?? godot/` 一行摘要。兩邊的變更要分別 commit，訊息也要分開給。
+
 優先使用 type alias。使用 core/board/src/alias.rs 中定義的類型別名（Coord、MovementCost、ID、TypeName、SkillName）來提升語義清晰度。
 
 檢查設計機制。實作完成後，應檢查是否違反 README-設計機制.md 中的設計規則。如果只是尚未實作完畢，只需提示尚未實作。如果存在違反，應警告用戶。
