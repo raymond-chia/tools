@@ -49,7 +49,7 @@ macro_rules! define_editors {
                 $(
                     {
                         let file_name = $file_fn();
-                        load_file(
+                        <$type>::load(
                             &mut app.$field,
                             &data_dir.join(format!("{}.toml", file_name)),
                             file_name,

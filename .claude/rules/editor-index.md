@@ -87,6 +87,8 @@ editor/
   - `fn type_name_plural() -> &'static str` - 複數形式
   - `fn validate(&self, all_items: &[Self], editing_index: Option<usize>) -> Result<(), String>` - 驗證項目
   - `fn after_confirm(&mut self, ui_state: &Self::UIState)` - 編輯確認後的鉤子（如排序、正規化等，可參考 UI 狀態）
+  - `fn load(state: &mut GenericEditorState<Self>, path: &Path, data_key: &str)` - 從檔案載入項目（預設從單一大檔讀取）
+  - `fn save(state: &mut GenericEditorState<Self>, path: &Path, data_key: &str)` - 儲存項目到檔案（預設只寫大檔，可覆寫以額外輸出）
 - `pub fn validate_name<T: EditorItem>(item: &T, all_items: &[T], editing_index: Option<usize>) -> Result<(), String>` - 驗證項目名稱（檢查非空和重複）
 
 ### editor/generic_editor.rs
@@ -173,3 +175,4 @@ GenericEditorState 的方法：
 ### editor/tabs/level_tab/edit.rs
 
 - `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染編輯模式的表單
+- `pub fn dump_levels_split(levels: &[LevelType], levels_file_path: &Path) -> Result<(), String>` - 把所有關卡各自拆成一個小檔輸出到子資料夾

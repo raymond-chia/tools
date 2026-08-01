@@ -6,7 +6,8 @@ mod deployment;
 mod edit;
 
 use crate::editor_item::{EditorItem, validate_name};
-use crate::generic_editor::MessageState;
+use crate::generic_editor::{GenericEditorState, MessageState};
+use crate::generic_io::save_file;
 use bevy_ecs::world::World;
 use board::domain::alias::{SkillName, TypeName};
 use board::domain::constants::PLAYER_FACTION_ID;
@@ -15,6 +16,7 @@ use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::loader_schema::{LevelType, ObjectType, UnitType};
 use std::collections::HashSet;
+use std::path::Path;
 
 /// 拖曳物體的類型和索引
 #[derive(Clone, Copy, Debug)]
@@ -214,6 +216,29 @@ impl EditorItem for LevelType {
             .sort_by_key(|unit| (unit.position.x, unit.position.y));
         self.object_placements
             .sort_by_key(|obj| (obj.position.x, obj.position.y));
+    }
+
+    fn save(state: &mut GenericEditorState<Self>, path: &Path, data_key: &str) {
+        // 先寫入大檔；失敗時 save_file 已設好錯誤訊息，不再拆解
+        save_file(state, path, data_key);
+        if state.message_state.is_error {
+            return;
+        }
+
+        // 大檔成功後，額外把每一關拆成獨立小檔
+        match edit::dump_levels_split(&state.items, path) {
+            Ok(()) => {
+                state.message_state.set_success(format!(
+                    "成功儲存並拆解 {} 個關卡到子資料夾",
+                    state.items.len()
+                ));
+            }
+            Err(msg) => {
+                state
+                    .message_state
+                    .set_error(format!("大檔已存，但拆解關卡失敗：{}", msg));
+            }
+        }
     }
 }
 

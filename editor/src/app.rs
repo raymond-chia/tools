@@ -4,7 +4,6 @@ use crate::constants::{
 use crate::define_editors;
 use crate::editor_item::EditorItem;
 use crate::generic_editor::{EditMode, GenericEditorState, MessageState};
-use crate::generic_io::{load_file, save_file};
 use crate::tabs;
 use crate::utils::dnd::render_dnd_handle;
 use crate::utils::search::{match_search_query, render_search_input};
@@ -154,10 +153,10 @@ fn render_file_operations_bar<T: EditorItem>(
 ) {
     ui.horizontal(|ui| {
         if ui.button("載入").clicked() {
-            load_file(state, file_path, data_key);
+            T::load(state, file_path, data_key);
         }
         if ui.button("儲存").clicked() {
-            save_file(state, file_path, data_key);
+            T::save(state, file_path, data_key);
         }
 
         ui.add_space(SPACING_MEDIUM);

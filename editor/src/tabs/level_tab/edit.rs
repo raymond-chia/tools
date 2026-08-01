@@ -15,6 +15,8 @@ use board::loader_schema::{
     UnitType, UnitsToml,
 };
 use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::Path;
 
 /// 渲染編輯模式的表單
 pub fn render_form(
@@ -512,6 +514,48 @@ fn render_battlefield(
     battlefield::render_battlefield_legend(ui);
 
     ui.label("快捷鍵：Ctrl+D 複製懸停格。Backspace 刪除");
+}
+
+/// 把所有關卡各自拆成一個小檔，寫到大檔同層的子資料夾內
+///
+/// 子資料夾名沿用大檔的 data_key（levels），每個小檔為頂層單一 level 格式，
+/// 依關卡名稱命名。進入時先清空子資料夾（移除舊小檔），再逐個寫入，
+/// 遇到任一錯誤（名稱為空、含非法字元、重名、寫檔失敗）即停並回報。
+pub fn dump_levels_split(levels: &[LevelType], levels_file_path: &Path) -> Result<(), String> {
+    let parent = levels_file_path
+        .parent()
+        .ok_or_else(|| format!("無法取得大檔的上層目錄：{}", levels_file_path.display()))?;
+    let split_dir = parent.join(super::file_name());
+
+    // 清空舊小檔：先整個移除再重建，避免改名 / 刪關卡後殘留孤兒檔
+    if split_dir.exists() {
+        fs::remove_dir_all(&split_dir)
+            .map_err(|e| format!("清空目錄失敗：{} - {}", split_dir.display(), e))?;
+    }
+    fs::create_dir_all(&split_dir)
+        .map_err(|e| format!("建立目錄失敗：{} - {}", split_dir.display(), e))?;
+
+    let mut used_names: HashSet<&str> = HashSet::new();
+    for level in levels {
+        let name = level.name.trim();
+        if name.is_empty() {
+            return Err("有關卡名稱為空，無法作為檔名".to_string());
+        }
+        if name.contains(INVALID_FILENAME_CHARS) {
+            return Err(format!("關卡名稱「{}」含有不能作為檔名的字元", name));
+        }
+        if !used_names.insert(name) {
+            return Err(format!("關卡名稱「{}」重複，無法拆成不同檔案", name));
+        }
+
+        let content = toml::to_string_pretty(level)
+            .map_err(|e| format!("序列化關卡「{}」失敗：{}", name, e))?;
+        let file_path = split_dir.join(format!("{}{}", name, FILE_EXTENSION_TOML));
+        fs::write(&file_path, content)
+            .map_err(|e| format!("寫入檔案失敗：{} - {}", file_path.display(), e))?;
+    }
+
+    Ok(())
 }
 
 // ==================== 輔助函數 ====================

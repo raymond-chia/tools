@@ -29,6 +29,8 @@ pub(crate) const DRAG_VALUE_SPEED: f64 = 1.0;
 // 與 godot 專案共用同一份資料（res://data/），路徑相對 workspace 根
 pub(crate) const DATA_DIRECTORY_PATH: &str = "godot/data/";
 pub(crate) const FILE_EXTENSION_TOML: &str = ".toml";
+// 檔名不允許的字元（跨平台保守集合）
+pub(crate) const INVALID_FILENAME_CHARS: &[char] = &['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
 // 編輯器相關
 pub(crate) const COPY_SUFFIX: &str = "-copy";

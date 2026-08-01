@@ -1,6 +1,9 @@
 //! 編輯器項目的通用 trait 定義
 
+use crate::generic_editor::GenericEditorState;
+use crate::generic_io::{load_file, save_file};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// 所有可編輯項目必須實現的基本 trait
 pub trait EditorItem:
@@ -33,6 +36,24 @@ pub trait EditorItem:
     /// 編輯確認後的鉤子（驗證通過後呼叫）
     /// 用於進行排序、正規化等操作，可參考 UI 狀態（如技能列表順序）
     fn after_confirm(&mut self, _ui_state: &Self::UIState) {}
+
+    /// 從檔案載入項目（載入按鈕與初始化呼叫）
+    /// 預設從單一大檔讀取
+    fn load(state: &mut GenericEditorState<Self>, path: &Path, data_key: &str)
+    where
+        Self: Sized,
+    {
+        load_file(state, path, data_key);
+    }
+
+    /// 儲存項目到檔案（儲存按鈕呼叫）
+    /// 預設只寫入單一大檔；需要額外輸出的型別（如關卡）可覆寫
+    fn save(state: &mut GenericEditorState<Self>, path: &Path, data_key: &str)
+    where
+        Self: Sized,
+    {
+        save_file(state, path, data_key);
+    }
 }
 
 /// 驗證項目名稱的輔助函數（用於檢查名稱非空和重複）
