@@ -640,59 +640,78 @@ fn render_effect_node(
     depth: usize,
     ui_state: &mut SkillTabUIState,
 ) {
-    match node {
-        EffectNode::Area {
-            area,
-            filter,
-            nodes,
-        } => {
-            render_area(ui, area, &format!("{id_salt}_area"));
-            enum_combo_box(ui, "過濾：", filter, &format!("{id_salt}_filter"));
-            ui.add_space(SPACING_SMALL);
-            ui.label("子節點：");
-            ui.indent(format!("{id_salt}_children"), |ui| {
-                render_effect_node_list(
-                    ui,
-                    nodes,
-                    &format!("{id_salt}_nodes"),
-                    depth + 1,
-                    ui_state,
-                );
-            });
-        }
-        EffectNode::Branch {
-            condition,
-            on_success,
-            on_failure,
-        } => {
-            render_effect_condition(ui, condition, &format!("{id_salt}_cond"));
-            ui.add_space(SPACING_SMALL);
-            ui.label("成功時：");
-            ui.indent(format!("{id_salt}_success"), |ui| {
-                render_effect_node_list(
-                    ui,
-                    on_success,
-                    &format!("{id_salt}_succ"),
-                    depth + 1,
-                    ui_state,
-                );
-            });
-            ui.label("失敗時：");
-            ui.indent(format!("{id_salt}_failure"), |ui| {
-                render_effect_node_list(
-                    ui,
-                    on_failure,
-                    &format!("{id_salt}_fail"),
-                    depth + 1,
-                    ui_state,
-                );
-            });
-        }
-        EffectNode::Leaf { who, effect } => {
-            enum_combo_box(ui, "效果對象：", who, &format!("{id_salt}_who"));
-            render_effect(ui, effect, &format!("{id_salt}_effect"), ui_state);
-        }
-    }
+    let (fill, stroke) = match depth % 3 {
+        0 => (
+            egui::Color32::from_rgba_unmultiplied(100, 70, 160, 28),
+            egui::Color32::from_rgb(150, 110, 220),
+        ),
+        1 => (
+            egui::Color32::from_rgba_unmultiplied(50, 110, 180, 28),
+            egui::Color32::from_rgb(90, 160, 230),
+        ),
+        _ => (
+            egui::Color32::from_rgba_unmultiplied(50, 150, 90, 24),
+            egui::Color32::from_rgb(90, 190, 120),
+        ),
+    };
+
+    egui::Frame::group(ui.style())
+        .fill(fill)
+        .stroke(egui::Stroke::new(1.0_f32, stroke))
+        .inner_margin(egui::Margin::symmetric(8, 6))
+        .show(ui, |ui| match node {
+            EffectNode::Area {
+                area,
+                filter,
+                nodes,
+            } => {
+                render_area(ui, area, &format!("{id_salt}_area"));
+                enum_combo_box(ui, "過濾：", filter, &format!("{id_salt}_filter"));
+                ui.add_space(SPACING_SMALL);
+                ui.label("子節點：");
+                ui.indent(format!("{id_salt}_children"), |ui| {
+                    render_effect_node_list(
+                        ui,
+                        nodes,
+                        &format!("{id_salt}_nodes"),
+                        depth + 1,
+                        ui_state,
+                    );
+                });
+            }
+            EffectNode::Branch {
+                condition,
+                on_success,
+                on_failure,
+            } => {
+                render_effect_condition(ui, condition, &format!("{id_salt}_cond"));
+                ui.add_space(SPACING_SMALL);
+                ui.label("成功時：");
+                ui.indent(format!("{id_salt}_success"), |ui| {
+                    render_effect_node_list(
+                        ui,
+                        on_success,
+                        &format!("{id_salt}_succ"),
+                        depth + 1,
+                        ui_state,
+                    );
+                });
+                ui.label("失敗時：");
+                ui.indent(format!("{id_salt}_failure"), |ui| {
+                    render_effect_node_list(
+                        ui,
+                        on_failure,
+                        &format!("{id_salt}_fail"),
+                        depth + 1,
+                        ui_state,
+                    );
+                });
+            }
+            EffectNode::Leaf { who, effect } => {
+                enum_combo_box(ui, "對象：", who, &format!("{id_salt}_who"));
+                render_effect(ui, effect, &format!("{id_salt}_effect"), ui_state);
+            }
+        });
 }
 
 // ==================== 步驟 7：Effect ====================
