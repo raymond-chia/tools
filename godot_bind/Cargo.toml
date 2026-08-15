@@ -10,5 +10,6 @@ crate-type = ["cdylib"]
 [dependencies]
 board = { path = "../core/board" }
 bevy_ecs.workspace = true
+toml.workspace = true
 # gdext：Godot 4 官方 Rust 綁定，crates.io 穩定版
 godot = "0.5"

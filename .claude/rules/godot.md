@@ -1,7 +1,13 @@
 ---
 paths:
   - "godot/**/*"
+  - "godot_bind/**/*"
 ---
+
+## Rust GDExtension 整合規則
+
+- `godot_bind` 應負責包裝 `ecs_logic` 的功能。
+- 包裝 `ecs_logic` 函式時，函式名稱應盡量與被包裝的函式保持一致；參數與回傳型別可依 Godot API 需求調整。
 
 ## 本地化 `.translation` 檔
 
