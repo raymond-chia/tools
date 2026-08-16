@@ -11,7 +11,7 @@ use crate::generic_io::save_file;
 use bevy_ecs::world::World;
 use board::domain::alias::{SkillName, TypeName};
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::domain::core_types::{LevelOutcome, SkillType};
+use board::domain::core_types::{LevelOutcome, OutcomeBranches, SkillType};
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
 use board::loader_schema::{LevelType, ObjectType, UnitType};
@@ -156,6 +156,9 @@ impl EditorItem for LevelType {
             return Err("至少需要一個陣營".to_string());
         }
 
+        validate_outcome_conditions("勝利", &self.victory_conditions)?;
+        validate_outcome_conditions("失敗", &self.defeat_conditions)?;
+
         let board = Board {
             width: self.board_width,
             height: self.board_height,
@@ -248,6 +251,37 @@ pub fn file_name() -> &'static str {
 }
 
 // ==================== 本地輔助函數 ====================
+
+fn validate_outcome_conditions(label: &str, branches: &OutcomeBranches) -> Result<(), String> {
+    if branches.is_empty() {
+        return Err(format!("至少需要一個{}條件分支", label));
+    }
+
+    for (branch_index, (reason_key, conditions)) in branches.iter().enumerate() {
+        if reason_key.trim().is_empty() {
+            return Err(format!(
+                "{}條件分支 #{} 的結果 key 不可空白",
+                label,
+                branch_index + 1
+            ));
+        }
+        if !edit::is_outcome_key_localized(reason_key) {
+            return Err(format!(
+                "{}條件分支 #{} 的結果 key 不存在於英語與繁中多語系資料",
+                label,
+                branch_index + 1
+            ));
+        }
+        if conditions.is_empty() {
+            return Err(format!(
+                "{}條件分支 #{} 至少需要一項條件",
+                label,
+                branch_index + 1
+            ));
+        }
+    }
+    Ok(())
+}
 
 fn check_position_in_bounds(
     board: Board,

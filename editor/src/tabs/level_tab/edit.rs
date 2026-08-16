@@ -7,7 +7,7 @@ use crate::utils::search::{
 use bevy_ecs::world::World;
 use board::domain::alias::{Coord, ID, TypeName};
 use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
-use board::domain::core_types::SkillType;
+use board::domain::core_types::{EndLevelCondition, OutcomeBranches, SkillType};
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
 use board::loader_schema::{
@@ -17,6 +17,8 @@ use board::loader_schema::{
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
+
+const OUTCOME_LOCALIZATION_CSV: &str = include_str!("../../../../godot/data/localization/ui.csv");
 
 /// 渲染編輯模式的表單
 pub fn render_form(
@@ -66,6 +68,33 @@ pub fn render_form(
     // 陣營配置區
     ui.heading("陣營配置");
     render_faction_list(ui, &mut level.factions);
+
+    ui.add_space(SPACING_MEDIUM);
+    ui.separator();
+
+    let outcome_key_options = outcome_key_options();
+    render_outcome_conditions(
+        ui,
+        "勝利條件",
+        "新增勝利分支",
+        "victory_conditions",
+        &mut level.victory_conditions,
+        &level.factions,
+        &outcome_key_options,
+    );
+
+    ui.add_space(SPACING_MEDIUM);
+    ui.separator();
+
+    render_outcome_conditions(
+        ui,
+        "失敗條件",
+        "新增失敗分支",
+        "defeat_conditions",
+        &mut level.defeat_conditions,
+        &level.factions,
+        &outcome_key_options,
+    );
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
@@ -224,7 +253,138 @@ fn render_faction_list(ui: &mut egui::Ui, factions: &mut Vec<Faction>) {
     }
 }
 
+/// 編輯關卡結局規則：分支之間為 OR，分支內的條件為 AND。
+fn render_outcome_conditions(
+    ui: &mut egui::Ui,
+    heading: &str,
+    add_branch_label: &str,
+    id_prefix: &str,
+    branches: &mut OutcomeBranches,
+    factions: &[Faction],
+    outcome_key_options: &[&str],
+) {
+    ui.heading(heading);
+    ui.label("任一分支成立即觸發；同一分支中的所有條件都必須成立。");
+
+    if ui.button(add_branch_label).clicked() {
+        branches.push((
+            outcome_key_options
+                .first()
+                .copied()
+                .unwrap_or_default()
+                .to_string(),
+            Vec::new(),
+        ));
+    }
+
+    let mut branch_to_remove = None;
+    for (branch_index, (reason_key, conditions)) in branches.iter_mut().enumerate() {
+        ui.push_id((id_prefix, branch_index), |ui| {
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(format!("分支 #{}", branch_index + 1));
+                    if ui.button("移除分支").clicked() {
+                        branch_to_remove = Some(branch_index);
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("結果 key：");
+                    let selected_key = outcome_key_options
+                        .contains(&reason_key.as_str())
+                        .then_some(reason_key.as_str())
+                        .unwrap_or("無效的多語系 key");
+                    combobox_with_dynamic_height(
+                        "outcome_reason_key",
+                        selected_key,
+                        outcome_key_options.len(),
+                    )
+                    .show_ui(ui, |ui| {
+                        for key in outcome_key_options {
+                            ui.selectable_value(reason_key, (*key).to_string(), *key);
+                        }
+                    });
+                });
+                ui.label("條件（全部成立 / AND）：");
+
+                let mut condition_to_remove = None;
+                for (condition_index, condition) in conditions.iter_mut().enumerate() {
+                    ui.push_id(condition_index, |ui| {
+                        ui.horizontal(|ui| match condition {
+                            EndLevelCondition::EliminateFaction(faction_id) => {
+                                ui.label("消滅指定陣營");
+                                let selected_name = factions
+                                    .iter()
+                                    .find(|faction| faction.id == *faction_id)
+                                    .map(|faction| faction.name.as_str())
+                                    .unwrap_or("未選擇陣營");
+                                combobox_with_dynamic_height(
+                                    "outcome_eliminate_faction",
+                                    selected_name,
+                                    factions.len(),
+                                )
+                                .show_ui(ui, |ui| {
+                                    for faction in factions {
+                                        let label = if faction.name.is_empty() {
+                                            format!("陣營 #{}", faction.id)
+                                        } else {
+                                            format!("{} (#{})", faction.name, faction.id)
+                                        };
+                                        ui.selectable_value(faction_id, faction.id, label);
+                                    }
+                                });
+                                if ui.button("移除條件").clicked() {
+                                    condition_to_remove = Some(condition_index);
+                                }
+                            }
+                        });
+                    });
+                }
+
+                if let Some(condition_index) = condition_to_remove {
+                    conditions.remove(condition_index);
+                }
+
+                if ui.button("新增條件：消滅指定陣營").clicked() {
+                    conditions.push(EndLevelCondition::EliminateFaction(
+                        factions
+                            .first()
+                            .map(|faction| faction.id)
+                            .unwrap_or_default(),
+                    ));
+                }
+            });
+        });
+        ui.add_space(SPACING_SMALL);
+    }
+
+    if let Some(branch_index) = branch_to_remove {
+        branches.remove(branch_index);
+    }
+}
+
 /// 渲染部署點列表
+/// 取得 `ui.csv` 中具備英語與繁中翻譯的關卡結局 key。
+fn outcome_key_options() -> Vec<&'static str> {
+    OUTCOME_LOCALIZATION_CSV
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let mut columns = line.splitn(3, ',');
+            let key = columns.next()?.trim();
+            let english = columns.next()?.trim();
+            let traditional_chinese = columns.next()?.trim();
+            (key.starts_with("OUTCOME_") && !english.is_empty() && !traditional_chinese.is_empty())
+                .then_some(key)
+        })
+        .collect()
+}
+
+/// 檢查關卡結局 key 是否存在於多語系資料，且英語與繁中都有翻譯。
+pub(crate) fn is_outcome_key_localized(key: &str) -> bool {
+    outcome_key_options().contains(&key)
+}
+
 fn render_deployment_positions_list(ui: &mut egui::Ui, positions: &mut Vec<Position>) {
     if ui.button("新增放置點").clicked() {
         positions.push(Position::default());

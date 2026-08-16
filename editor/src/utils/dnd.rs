@@ -36,7 +36,7 @@ pub fn render_dnd_handle(
 
 /// 繪製拖曳指示線
 pub(crate) fn draw_dnd_indicator(ui: &egui::Ui, dragged_idx: usize, target_idx: usize) {
-    let stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
+    let stroke = egui::Stroke::new(2.0_f32, egui::Color32::WHITE);
     let space_rect = ui.available_rect_before_wrap();
     let insert_y = if dragged_idx < target_idx {
         space_rect.bottom()

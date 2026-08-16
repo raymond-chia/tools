@@ -77,6 +77,8 @@ fn setup_fonts(ctx: &egui::Context) {
         egui::TextStyle::Small,
         egui::FontId::new(FONT_SIZE_SMALL, egui::FontFamily::Proportional),
     );
+    // 整個 editor 以操作與捲動為主，避免文字標籤攔截滑鼠拖曳成為選取範圍。
+    style.interaction.selectable_labels = false;
 
     ctx.set_style(style);
 }
