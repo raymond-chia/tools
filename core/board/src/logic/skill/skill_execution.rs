@@ -65,6 +65,45 @@ pub enum ResolvedEffect {
     ApplyBuff(String),
 }
 
+#[derive(Debug, Clone, Copy)]
+enum RollMode {
+    Random,
+    ForcedPreview,
+}
+
+impl From<bool> for RollMode {
+    fn from(force_hit: bool) -> Self {
+        if force_hit {
+            Self::ForcedPreview
+        } else {
+            Self::Random
+        }
+    }
+}
+
+struct EffectResolutionContext<'a> {
+    caster_id: ID,
+    skill_name: &'a str,
+    skill_tags: &'a [SkillTag],
+    caster: &'a CombatStats,
+    caster_pos: Position,
+    units_on_board: &'a HashMap<Position, CombatStats>,
+    objects_on_board: &'a HashMap<Position, ObjectOnBoard>,
+    board: Board,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AccuracyModifiers {
+    flanking_bonus: i32,
+    adjacent_penalty: i32,
+}
+
+struct ResolutionState<'a, R> {
+    rng: &'a mut R,
+    roll_mode: RollMode,
+    entries: Vec<EffectEntry>,
+}
+
 /// 組裝攻擊命中值，回傳逐項來源明細
 fn compute_attacker_accuracy(
     caster: &CombatStats,
@@ -184,8 +223,32 @@ pub(crate) fn resolve_effect_tree(
     rng: &mut impl FnMut() -> i32,
     force_hit: bool,
 ) -> Result<Vec<EffectEntry>> {
-    let mut entries = Vec::new();
+    let context = EffectResolutionContext {
+        caster_id,
+        skill_name,
+        skill_tags,
+        caster,
+        caster_pos,
+        units_on_board,
+        objects_on_board,
+        board,
+    };
+    let mut state = ResolutionState {
+        rng,
+        roll_mode: force_hit.into(),
+        entries: Vec::new(),
+    };
 
+    resolve_effect_nodes(&context, nodes, target_pos, &mut state)?;
+    Ok(state.entries)
+}
+
+fn resolve_effect_nodes<R: FnMut() -> i32>(
+    context: &EffectResolutionContext<'_>,
+    nodes: &[EffectNode],
+    target_pos: Position,
+    state: &mut ResolutionState<'_, R>,
+) -> Result<()> {
     for node in nodes {
         match node {
             EffectNode::Area {
@@ -193,108 +256,73 @@ pub(crate) fn resolve_effect_tree(
                 filter,
                 nodes: inner_nodes,
             } => {
-                let affected_positions =
-                    compute_affected_positions(area, caster_pos, target_pos, board)?;
+                let affected_positions = compute_affected_positions(
+                    area,
+                    context.caster_pos,
+                    target_pos,
+                    context.board,
+                )?;
 
                 for target_pos in affected_positions {
-                    resolve_at_position(
-                        caster_id,
-                        skill_name,
-                        skill_tags,
-                        inner_nodes,
-                        caster,
-                        caster_pos,
-                        target_pos,
-                        *filter,
-                        units_on_board,
-                        objects_on_board,
-                        board,
-                        rng,
-                        force_hit,
-                        &mut entries,
-                    );
+                    resolve_at_position(context, inner_nodes, target_pos, *filter, state);
                 }
             }
             EffectNode::Branch { .. } | EffectNode::Leaf { .. } => {
                 resolve_at_position(
-                    caster_id,
-                    skill_name,
-                    skill_tags,
+                    context,
                     std::slice::from_ref(node),
-                    caster,
-                    caster_pos,
                     target_pos,
                     TargetFilter::Any,
-                    units_on_board,
-                    objects_on_board,
-                    board,
-                    rng,
-                    force_hit,
-                    &mut entries,
+                    state,
                 );
             }
         }
     }
 
-    Ok(entries)
+    Ok(())
 }
 
 /// 在指定位置解析效果節點
-fn resolve_at_position(
-    caster_id: ID,
-    skill_name: &str,
-    skill_tags: &[SkillTag],
+fn resolve_at_position<R: FnMut() -> i32>(
+    context: &EffectResolutionContext<'_>,
     nodes: &[EffectNode],
-    caster: &CombatStats,
-    caster_pos: Position,
     target_pos: Position,
     filter: TargetFilter,
-    units_on_board: &HashMap<Position, CombatStats>,
-    objects_on_board: &HashMap<Position, ObjectOnBoard>,
-    board: Board,
-    rng: &mut impl FnMut() -> i32,
-    force_hit: bool,
-    entries: &mut Vec<EffectEntry>,
+    state: &mut ResolutionState<'_, R>,
 ) {
-    match units_on_board.get(&target_pos) {
+    match context.units_on_board.get(&target_pos) {
         Some(target_stats) => {
-            if !is_in_filter(&caster.unit_info, &target_stats.unit_info, filter) {
+            if !is_in_filter(&context.caster.unit_info, &target_stats.unit_info, filter) {
                 return;
             }
-            let flanking_bonus =
-                compute_flanking_bonus(skill_tags, caster, target_pos, units_on_board, board);
-            let adjacent_enemy_penalty = compute_adjacent_enemy_penalty(
-                skill_tags,
-                caster,
-                caster_pos,
-                units_on_board,
-                board,
-            );
+            let modifiers = AccuracyModifiers {
+                flanking_bonus: compute_flanking_bonus(
+                    context.skill_tags,
+                    context.caster,
+                    target_pos,
+                    context.units_on_board,
+                    context.board,
+                ),
+                adjacent_penalty: compute_adjacent_enemy_penalty(
+                    context.skill_tags,
+                    context.caster,
+                    context.caster_pos,
+                    context.units_on_board,
+                    context.board,
+                ),
+            };
             resolve_nodes_for_unit(
-                caster_id,
-                skill_name,
+                context,
                 nodes,
-                caster,
                 target_stats,
-                flanking_bonus,
-                adjacent_enemy_penalty,
+                modifiers,
                 CheckResult::Auto,
                 None,
-                rng,
-                force_hit,
-                entries,
+                state,
             );
         }
         None => {
-            resolve_nodes_for_position(
-                caster_id,
-                skill_name,
-                nodes,
-                target_pos,
-                units_on_board,
-                objects_on_board,
-                entries,
-            );
+            resolve_nodes_for_position(context, nodes, target_pos, &mut state.entries);
         }
     }
 }
@@ -333,31 +361,26 @@ fn compute_adjacent_enemy_penalty(
 }
 
 /// 帶判定結果的效果節點解析
-fn resolve_nodes_for_unit(
-    caster_id: ID,
-    skill_name: &str,
+fn resolve_nodes_for_unit<R: FnMut() -> i32>(
+    context: &EffectResolutionContext<'_>,
     nodes: &[EffectNode],
-    caster: &CombatStats,
     target: &CombatStats,
-    flanking_bonus: i32,
-    adjacent_penalty: i32,
+    modifiers: AccuracyModifiers,
     parent_check: CheckResult,
     parent_check_detail: Option<CheckDetail>,
-    rng: &mut impl FnMut() -> i32,
-    force_hit: bool,
-    entries: &mut Vec<EffectEntry>,
+    state: &mut ResolutionState<'_, R>,
 ) {
     for node in nodes {
         match node {
             EffectNode::Leaf { who, effect } => {
                 let resolved_target = match who {
-                    CasterOrTarget::Caster => caster,
+                    CasterOrTarget::Caster => context.caster,
                     CasterOrTarget::Target => target,
                 };
                 let check_target = occupant_to_check_target(resolved_target.unit_info.occupant);
                 match effect {
                     Effect::HpEffect { scaling } => {
-                        let raw_amount = compute_scaling(scaling, caster, target);
+                        let raw_amount = compute_scaling(scaling, context.caster, target);
                         let crit_multiplier = match parent_check {
                             CheckResult::Hit { crit: true } | CheckResult::Block { crit: true } => {
                                 CRIT_DAMAGE_MULTIPLIER
@@ -376,9 +399,9 @@ fn resolve_nodes_for_unit(
                             | CheckResult::Resisted
                             | CheckResult::Affected => final_amount,
                         };
-                        entries.push(EffectEntry {
-                            caster: caster_id,
-                            skill_name: skill_name.to_string(),
+                        state.entries.push(EffectEntry {
+                            caster: context.caster_id,
+                            skill_name: context.skill_name.to_string(),
                             target: check_target,
                             check: parent_check,
                             check_detail: parent_check_detail.clone(),
@@ -389,9 +412,9 @@ fn resolve_nodes_for_unit(
                         });
                     }
                     Effect::ApplyBuff { buff } => {
-                        entries.push(EffectEntry {
-                            caster: caster_id,
-                            skill_name: skill_name.to_string(),
+                        state.entries.push(EffectEntry {
+                            caster: context.caster_id,
+                            skill_name: context.skill_name.to_string(),
                             target: check_target,
                             check: parent_check,
                             check_detail: parent_check_detail.clone(),
@@ -409,15 +432,8 @@ fn resolve_nodes_for_unit(
                 on_success,
                 on_failure,
             } => {
-                let (check, detail) = resolve_branch_check(
-                    caster,
-                    target,
-                    condition,
-                    flanking_bonus,
-                    adjacent_penalty,
-                    rng,
-                    force_hit,
-                );
+                let (check, detail) =
+                    resolve_branch_check(context.caster, target, condition, modifiers, state);
 
                 let branch_nodes = match check {
                     CheckResult::Auto
@@ -429,9 +445,9 @@ fn resolve_nodes_for_unit(
 
                 if branch_nodes.is_empty() {
                     let check_target = occupant_to_check_target(target.unit_info.occupant);
-                    entries.push(EffectEntry {
-                        caster: caster_id,
-                        skill_name: skill_name.to_string(),
+                    state.entries.push(EffectEntry {
+                        caster: context.caster_id,
+                        skill_name: context.skill_name.to_string(),
                         target: check_target,
                         check,
                         check_detail: Some(detail),
@@ -439,18 +455,13 @@ fn resolve_nodes_for_unit(
                     });
                 } else {
                     resolve_nodes_for_unit(
-                        caster_id,
-                        skill_name,
+                        context,
                         branch_nodes,
-                        caster,
                         target,
-                        flanking_bonus,
-                        adjacent_penalty,
+                        modifiers,
                         check,
                         Some(detail),
-                        rng,
-                        force_hit,
-                        entries,
+                        state,
                     );
                 }
             }
@@ -463,22 +474,19 @@ fn resolve_nodes_for_unit(
 
 /// 對無單位位置解析效果節點（僅處理 SpawnObject 等位置效果）
 fn resolve_nodes_for_position(
-    caster_id: ID,
-    skill_name: &str,
+    context: &EffectResolutionContext<'_>,
     nodes: &[EffectNode],
     pos: Position,
-    units_on_board: &HashMap<Position, CombatStats>,
-    objects_on_board: &HashMap<Position, ObjectOnBoard>,
     entries: &mut Vec<EffectEntry>,
 ) {
     for node in nodes {
         if let EffectNode::Leaf { effect, who: _who } = node {
             match effect {
                 Effect::SpawnObject { object_type, .. } => {
-                    if !is_tile_occupied(pos, units_on_board, objects_on_board) {
+                    if !is_tile_occupied(pos, context.units_on_board, context.objects_on_board) {
                         entries.push(EffectEntry {
-                            caster: caster_id,
-                            skill_name: skill_name.to_string(),
+                            caster: context.caster_id,
+                            skill_name: context.skill_name.to_string(),
                             target: CheckTarget::Position(pos),
                             check: CheckResult::Auto,
                             check_detail: None,
@@ -499,22 +507,24 @@ fn resolve_nodes_for_position(
 }
 
 /// 解析 Branch 節點的判定結果
-fn resolve_branch_check(
+fn resolve_branch_check<R: FnMut() -> i32>(
     caster: &CombatStats,
     target: &CombatStats,
     condition: &EffectCondition,
-    flanking_bonus: i32,
-    adjacent_penalty: i32,
-    rng: &mut impl FnMut() -> i32,
-    force_hit: bool,
+    modifiers: AccuracyModifiers,
+    state: &mut ResolutionState<'_, R>,
 ) -> (CheckResult, CheckDetail) {
     // 注意：以下「組 accuracy → 取 defender 值組 breakdown」這條組裝鏈，
     // 與 `preview_first_branch_accuracy` 重複。
     // 不抽共用的原因是參數太多：共用函數得同時吃下 caster、target、condition、
     // flanking_bonus、adjacent_penalty 這一長串，簽名反而更難讀，
     // 故刻意複製。修改此段時，請同步檢查 `preview_first_branch_accuracy`。
-    let attacker_accuracy =
-        compute_attacker_accuracy(caster, condition, flanking_bonus, adjacent_penalty);
+    let attacker_accuracy = compute_attacker_accuracy(
+        caster,
+        condition,
+        modifiers.flanking_bonus,
+        modifiers.adjacent_penalty,
+    );
 
     let (defender_evasion, defender_block) =
         get_defense_values(&target.attribute, condition.defense_type);
@@ -522,15 +532,15 @@ fn resolve_branch_check(
 
     // 預覽時直接構造正常命中（非爆擊、非格擋），不消耗 rng。
     // roll 為純顯示欄位，此時填哨兵值 FORCED_HIT_PREVIEW_ROLL。
-    let (hit_check, roll) = match force_hit {
-        true => (HitCheckResult::Hit { crit: false }, FORCED_HIT_PREVIEW_ROLL),
-        false => {
+    let (hit_check, roll) = match state.roll_mode {
+        RollMode::ForcedPreview => (HitCheckResult::Hit { crit: false }, FORCED_HIT_PREVIEW_ROLL),
+        RollMode::Random => {
             let outcome = resolve_hit(
                 attacker_accuracy.total,
                 defender_evasion,
                 defender_block,
                 crit,
-                rng,
+                state.rng,
             );
             (outcome.check, outcome.roll)
         }
