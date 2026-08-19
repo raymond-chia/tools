@@ -4,9 +4,9 @@ use super::{get_component, get_component_mut};
 use crate::domain::alias::{ID, SkillName};
 use crate::domain::core_types::PendingReaction;
 use crate::ecs_logic::query::{
-    build_faction_alliance_map, build_objects_on_board, build_unit_stats_on_board,
-    find_entity_by_occupant, get_reaction_skill_data, get_resource, get_resource_mut,
-    read_attribute_bundle, resolve_alliance,
+    ReactionSkillData, build_faction_alliance_map, build_objects_on_board,
+    build_unit_stats_on_board, find_entity_by_occupant, get_reaction_skill_data, get_resource,
+    get_resource_mut, read_attribute_bundle, resolve_alliance,
 };
 use crate::ecs_logic::skill::apply_effect_entries;
 use crate::ecs_types::components::{
@@ -101,7 +101,7 @@ pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult> {
         None => {
             let has_pending = world
                 .get_resource::<ReactionState>()
-                .map_or(false, |s| !s.pending.is_empty());
+                .is_some_and(|state| !state.pending.is_empty());
             if has_pending {
                 return Ok(ProcessReactionResult::NeedDecision);
             }
@@ -130,7 +130,11 @@ pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult> {
     let reactor_alliance = resolve_alliance(&faction_to_alliance, reactor_faction)?;
 
     let game_data = get_resource::<GameData>(world, "請先呼叫 parse_and_insert_game_data")?;
-    let (_triggering, effects, cost, skill_tags) = get_reaction_skill_data(game_data, &skill_name)?;
+    let ReactionSkillData {
+        effects,
+        cost,
+        tags: skill_tags,
+    } = get_reaction_skill_data(game_data, &skill_name)?;
 
     let board = *get_resource::<Board>(world, "請先呼叫 spawn_level")?;
 
@@ -242,14 +246,17 @@ pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult> {
 
     apply_effect_entries(world, &entries, &mut used_ids)?;
 
-    {
+    let should_remove_reaction_state = {
         let mut state_mut = get_resource_mut::<ReactionState>(world, "ReactionState 應存在")?;
         if !new_pending.is_empty() {
             state_mut.pending = new_pending;
-        } else if state_mut.decided.is_empty() {
-            drop(state_mut);
-            world.remove_resource::<ReactionState>();
+            false
+        } else {
+            state_mut.decided.is_empty()
         }
+    };
+    if should_remove_reaction_state {
+        world.remove_resource::<ReactionState>();
     }
 
     Ok(ProcessReactionResult::Executed {

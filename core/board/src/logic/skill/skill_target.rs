@@ -26,7 +26,7 @@ pub(crate) fn validate_skill_targets(
         TargetSelection::Ground => false,
     };
 
-    if target_positions.len() == 0 || target_positions.len() > target.count {
+    if target_positions.is_empty() || target_positions.len() > target.count {
         return Err(BoardError::WrongTargetCount {
             expected: target.count,
             actual: target_positions.len(),
@@ -112,10 +112,7 @@ fn validate_range(
 }
 
 /// 要求目標位置有單位
-fn get_unit_at<'a>(
-    pos: Position,
-    units_on_board: &'a HashMap<Position, UnitInfo>,
-) -> Result<&'a UnitInfo> {
+fn get_unit_at(pos: Position, units_on_board: &HashMap<Position, UnitInfo>) -> Result<&UnitInfo> {
     units_on_board
         .get(&pos)
         .ok_or_else(|| BoardError::NoUnitAtTarget { x: pos.x, y: pos.y }.into())

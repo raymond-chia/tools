@@ -1,11 +1,11 @@
 use super::constants::{OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
-use bevy_ecs::prelude::{Without, World};
+use bevy_ecs::prelude::{Entity, Without, World};
 use board::ecs_logic::loader::parse_and_insert_game_data;
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_types::components::{
     BlocksSight, BlocksSound, CurrentHp, MaxHp, Object, Occupant, OccupantTypeName, Position, Unit,
 };
-use board::ecs_types::resources::Board;
+use board::ecs_types::resources::{Board, OccupantIndex};
 use board::error::{DataError, ErrorKind, LoadError};
 use board::test_helpers::level_builder::LevelBuilder;
 
@@ -157,6 +157,68 @@ fn test_spawn_level_occupant_ids_are_unique() {
 
     let unique_count = ids.iter().collect::<std::collections::HashSet<_>>().len();
     assert_eq!(ids.len(), unique_count, "所有 Occupant ID 應唯一，無碰撞");
+}
+
+#[test]
+fn test_spawn_level_again_resets_occupant_index_and_keeps_observers() {
+    let level_toml = LevelBuilder::from_ascii(
+        "
+        . W . . .
+        . . w . .
+        . . . . .
+        . . . . .
+    ",
+    )
+    .unit("W", UNIT_TYPE_WARRIOR, 0)
+    .object("w", "wall")
+    .to_toml()
+    .expect("LevelBuilder::to_toml 應成功");
+
+    let mut world = World::new();
+    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
+        .expect("parse_and_insert_game_data 應成功");
+    spawn_level(&mut world, &level_toml, "first-level").expect("第一次 spawn_level 應成功");
+
+    let first_level_entities: std::collections::HashSet<Entity> = world
+        .query::<(Entity, &Occupant)>()
+        .iter(&world)
+        .map(|(entity, _)| entity)
+        .collect();
+    let stale_occupant = Occupant::Unit(u32::MAX);
+    let stale_entity = world.spawn_empty().id();
+    world
+        .resource_mut::<OccupantIndex>()
+        .0
+        .insert(stale_occupant, stale_entity);
+
+    spawn_level(&mut world, &level_toml, "second-level").expect("第二次 spawn_level 應成功");
+
+    let second_level_entries: Vec<(Entity, Occupant)> = world
+        .query::<(Entity, &Occupant)>()
+        .iter(&world)
+        .filter(|(entity, _)| !first_level_entities.contains(entity))
+        .map(|(entity, occupant)| (entity, *occupant))
+        .collect();
+    let index = world
+        .get_resource::<OccupantIndex>()
+        .expect("spawn_level 後應有 OccupantIndex");
+
+    assert!(
+        !index.0.contains_key(&stale_occupant),
+        "第二次 spawn_level 應清除舊的 OccupantIndex 內容"
+    );
+    assert_eq!(
+        second_level_entries.len(),
+        2,
+        "第二個關卡應生成一個單位與一個物件"
+    );
+    for (entity, occupant) in second_level_entries {
+        assert_eq!(
+            index.0.get(&occupant),
+            Some(&entity),
+            "第二次 spawn_level 後 observer 應索引新生成的 entity"
+        );
+    }
 }
 
 // ============================================================================

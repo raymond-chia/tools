@@ -1,7 +1,7 @@
 use crate::domain::alias::{ID, SkillName};
 use crate::domain::battle_log::LogEvent;
 use crate::domain::constants::IMPASSABLE_MOVEMENT_COST;
-use crate::domain::core_types::{EffectNode, SkillTag, SkillType, Target, TriggeringSource};
+use crate::domain::core_types::{EffectNode, SkillTag, SkillType, Target};
 use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
@@ -190,10 +190,17 @@ pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<
 }
 
 /// 取得指定技能名稱對應的 Active 技能欄位；若非 Active 則視為 SkillNotFound
+pub(crate) struct ActiveSkillData {
+    pub target: Target,
+    pub effects: Arc<[EffectNode]>,
+    pub cost: u32,
+    pub tags: Vec<SkillTag>,
+}
+
 pub(crate) fn get_active_skill_data(
     game_data: &GameData,
     skill_name: &SkillName,
-) -> Result<(Target, Arc<[EffectNode]>, u32, Vec<SkillTag>)> {
+) -> Result<ActiveSkillData> {
     let skill_type =
         game_data
             .skill_map
@@ -208,7 +215,12 @@ pub(crate) fn get_active_skill_data(
             cost,
             tags,
             name: _,
-        } => Ok((target.clone(), effects.clone(), *cost, tags.clone())),
+        } => Ok(ActiveSkillData {
+            target: target.clone(),
+            effects: effects.clone(),
+            cost: *cost,
+            tags: tags.clone(),
+        }),
         SkillType::Reaction { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
             skill_name: skill_name.clone(),
         }
@@ -217,10 +229,16 @@ pub(crate) fn get_active_skill_data(
 }
 
 /// 取得指定技能名稱對應的 Reaction 技能欄位；若非 Reaction 則視為 SkillNotFound
+pub(crate) struct ReactionSkillData {
+    pub effects: Arc<[EffectNode]>,
+    pub cost: u32,
+    pub tags: Vec<SkillTag>,
+}
+
 pub(crate) fn get_reaction_skill_data(
     game_data: &GameData,
     skill_name: &SkillName,
-) -> Result<(TriggeringSource, Arc<[EffectNode]>, u32, Vec<SkillTag>)> {
+) -> Result<ReactionSkillData> {
     let skill_type =
         game_data
             .skill_map
@@ -230,17 +248,16 @@ pub(crate) fn get_reaction_skill_data(
             })?;
     match skill_type {
         SkillType::Reaction {
-            triggering_unit,
+            triggering_unit: _,
             effects,
             cost,
             tags,
             name: _,
-        } => Ok((
-            triggering_unit.clone(),
-            effects.clone(),
-            *cost,
-            tags.clone(),
-        )),
+        } => Ok(ReactionSkillData {
+            effects: effects.clone(),
+            cost: *cost,
+            tags: tags.clone(),
+        }),
         SkillType::Active { .. } | SkillType::Passive { .. } => Err(UnitError::SkillNotFound {
             skill_name: skill_name.clone(),
         }
@@ -291,12 +308,12 @@ pub(crate) fn build_objects_on_board(world: &mut World) -> HashMap<Position, Obj
     world
         .query_filtered::<(&Position, &Occupant, &ObjectMovementCost), With<Object>>()
         .iter(world)
-        .map(|(pos, occ, mc)| {
+        .map(|(pos, occupant, movement_cost)| {
             (
                 *pos,
                 ObjectOnBoard {
-                    occupant: *occ,
-                    occupies_tile: mc.0 >= IMPASSABLE_MOVEMENT_COST,
+                    occupant: *occupant,
+                    occupies_tile: movement_cost.0 >= IMPASSABLE_MOVEMENT_COST,
                 },
             )
         })

@@ -70,7 +70,7 @@ pub(crate) fn calculate_turn_order(
 /// # 錯誤
 /// - 若沒有未行動的單位則回傳錯誤
 /// - 若 target_index 小於等於當前單位索引則回傳錯誤
-pub(crate) fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()> {
+pub(crate) fn delay_unit(entries: &mut [TurnEntry], target_index: usize) -> Result<()> {
     let current_index = get_active_index(entries).ok_or(BoardError::NoActiveUnit)?;
 
     if target_index <= current_index {

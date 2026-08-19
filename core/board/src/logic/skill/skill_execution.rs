@@ -108,10 +108,7 @@ pub(crate) fn preview_first_branch_accuracy(
         Some(EffectNode::Branch { condition, .. }) => condition,
         _ => return None,
     };
-    let target_stats = match units_on_board.get(&target_pos) {
-        Some(stats) => stats,
-        None => return None,
-    };
+    let target_stats = units_on_board.get(&target_pos)?;
 
     // 注意：以下「算 flanking/adjacent → 組 accuracy → 取 defender 值組 breakdown」
     // 這條組裝鏈，與 `resolve_branch_check` 重複。
@@ -172,6 +169,7 @@ pub struct EffectEntry {
 ///
 /// `force_hit` 為預覽用開關：開啟時所有命中判定直接視為正常命中（非爆擊、非格擋），
 /// 不消耗 rng，用於施放前的傷害預覽。
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn resolve_effect_tree(
     caster_id: ID,
     skill_name: &str,

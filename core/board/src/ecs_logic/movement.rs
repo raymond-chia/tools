@@ -225,12 +225,10 @@ pub fn plan_move(world: &mut World, target: Position) -> Result<()> {
     let reachable = get_reachable_positions(world, occupant)?;
 
     // 驗證目標位置是否可到達且不是僅穿越位置
-    let reach_info = reachable
-        .get(&target)
-        .ok_or_else(|| BoardError::Unreachable {
-            x: target.x,
-            y: target.y,
-        })?;
+    let reach_info = reachable.get(&target).ok_or(BoardError::Unreachable {
+        x: target.x,
+        y: target.y,
+    })?;
 
     // 目標位置不能是友軍佔據的位置（僅穿越）
     if reach_info.passthrough_only {
@@ -346,8 +344,8 @@ pub fn advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
         stop_index
     };
     let actual_stop_pos = path[stop_index];
-    let walked_path: Vec<Position> = path[next_step_index..=stop_index].to_vec();
-    let walked_cost: MovementCost = step_costs[next_step_index + 1..=stop_index].iter().sum();
+    let walked_path = path[next_step_index..=stop_index].to_vec();
+    let walked_cost = step_costs[next_step_index + 1..=stop_index].iter().sum();
     let reached_end = stop_index == path.len() - 1;
 
     // === 寫入階段 ===
@@ -457,10 +455,10 @@ pub fn force_advance_move(world: &mut World) -> Result<AdvanceMoveResult> {
     }
 
     world.remove_resource::<MovementPlan>();
-    return Ok(AdvanceMoveResult::Completed {
+    Ok(AdvanceMoveResult::Completed {
         path_walked: vec![next_pos],
         cost: this_step_cost,
-    });
+    })
 }
 
 // ============================================================================

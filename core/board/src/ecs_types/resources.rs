@@ -64,10 +64,10 @@ pub struct TurnOrder {
 /// - `next_step_index`：當前所在格的索引（對應 path 中的位置），初始為 0
 #[derive(Debug, Clone, Resource)]
 pub struct MovementPlan {
-    pub occupant: Occupant,
-    pub path: Vec<Position>,
-    pub step_costs: Vec<MovementCost>,
-    pub next_step_index: usize,
+    pub(crate) occupant: Occupant,
+    pub(crate) path: Vec<Position>,
+    pub(crate) step_costs: Vec<MovementCost>,
+    pub(crate) next_step_index: usize,
 }
 
 /// 技能目標選取狀態（玩家逐次累積選目標時的暫存）

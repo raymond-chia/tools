@@ -15,6 +15,13 @@ use bevy_ecs::prelude::World;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+struct ObjectSpawnData {
+    bundle: ObjectBundle,
+    blocks_sight: Option<BlocksSight>,
+    blocks_sound: Option<BlocksSound>,
+    hazardous: Option<Hazardous>,
+}
+
 /// 反序列化並生成關卡的所有 Entity（棋盤、單位、物件）
 pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Result<()> {
     // 初始化 OccupantIndex（必須在 spawn 之前，observer 才能自動追蹤）
@@ -39,7 +46,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 .ok_or_else(|| DataError::UnitTypeNotFound {
                     type_name: placement.unit_type_name.clone(),
                 })?;
-            let no_buffs = &vec![];
+            let no_buffs = &[];
             let effects = unit_attributes::filter_continuous_effect(
                 &unit_type.skills,
                 no_buffs,
@@ -59,12 +66,7 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
             });
         }
 
-        let mut object_spawn_data: Vec<(
-            ObjectBundle,
-            Option<BlocksSight>,
-            Option<BlocksSound>,
-            Option<Hazardous>,
-        )> = Vec::new();
+        let mut object_spawn_data = Vec::new();
         for placement in &level.object_placements {
             let id = generate_unique_id(&mut used_ids)?;
             let object_type = game_data
@@ -74,8 +76,8 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                     type_name: placement.object_type_name.clone(),
                 })?;
 
-            object_spawn_data.push((
-                ObjectBundle {
+            object_spawn_data.push(ObjectSpawnData {
+                bundle: ObjectBundle {
                     object: Object,
                     position: placement.position,
                     occupant: Occupant::Object(id),
@@ -83,10 +85,10 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                     terrain_movement_cost: ObjectMovementCost(object_type.movement_cost),
                     contact_effects: ContactEffects(Arc::from([])),
                 },
-                object_type.blocks_sight.then_some(BlocksSight),
-                object_type.blocks_sound.then_some(BlocksSound),
-                object_type.hazardous.then_some(Hazardous),
-            ));
+                blocks_sight: object_type.blocks_sight.then_some(BlocksSight),
+                blocks_sound: object_type.blocks_sound.then_some(BlocksSound),
+                hazardous: object_type.hazardous.then_some(Hazardous),
+            });
         }
 
         (unit_bundles, object_spawn_data)
@@ -127,7 +129,13 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
     }
 
     // Spawn Object entities
-    for (bundle, blocks_sight, blocks_sound, hazardous) in object_spawn_data {
+    for ObjectSpawnData {
+        bundle,
+        blocks_sight,
+        blocks_sound,
+        hazardous,
+    } in object_spawn_data
+    {
         let mut entity = world.spawn(bundle);
 
         if let Some(tag) = blocks_sight {
