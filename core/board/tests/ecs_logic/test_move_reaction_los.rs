@@ -9,10 +9,12 @@
 //! TDD 紅燈：現行 advance_move 呼叫 collect_move_reactions 時不傳任何視線資訊，
 //! 因此霧氣不影響藉機攻擊；下列「霧氣阻擋應無反應」的案例會失敗，待實作補上視線判定後轉綠。
 
-use super::constants::{OBJECT_TYPE_FOG, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
+use super::constants::{
+    EQUIPMENTS_TOML, OBJECT_TYPE_FOG, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML,
+};
 use bevy_ecs::prelude::{Entity, With, World};
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::movement::{advance_move, plan_move};
 use board::ecs_logic::reaction::get_pending_reactions;
 use board::ecs_logic::spawner::spawn_level;
@@ -51,8 +53,16 @@ fn build_fog_world(ascii: &str) -> (World, HashMap<String, Vec<Position>>) {
         .expect("to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
 
     // 移動者可能標為 P 或 PF（PF = 移動者與霧氣同格），取存在的那個作為先手單位

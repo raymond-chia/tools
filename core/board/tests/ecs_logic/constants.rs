@@ -1,4 +1,5 @@
 pub const SKILL_WARRIOR: &str = "warrior-passive";
+pub const SKILL_RUBY_BURST: &str = "ruby-burst";
 pub const SKILL_MELEE: &str = "melee-attack";
 pub const SKILL_WARRIOR_ACTIVE_2: &str = "warrior-active-2";
 pub const SKILL_WARRIOR_ACTIVE_4: &str = "warrior-active-4";
@@ -15,6 +16,11 @@ pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_SPIKE: &str = "spike";
 pub const OBJECT_TYPE_SWAMP: &str = "swamp";
 pub const OBJECT_TYPE_FOG: &str = "fog";
+pub const EQUIPMENT_STEEL_SWORD: &str = "steel-sword";
+pub const EQUIPMENT_LEATHER_ARMOR: &str = "leather-armor";
+pub const EQUIPMENT_GIANT_ARMOR: &str = "giant-armor";
+pub const EQUIPMENT_RUBY_RING: &str = "ruby-ring";
+pub const EQUIPMENT_ECHO_CHARM: &str = "echo-charm";
 
 pub const SKILLS_TOML: &str = r#"
 [[skills]]
@@ -260,6 +266,62 @@ who = "Target"
 source = "Caster"
 source_attribute = "PhysicalAttack"
 value_percent = -100
+
+[[skills]]
+
+[skills.Passive]
+name = "iron-slash"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 5
+
+[[skills]]
+
+[skills.Passive]
+name = "steel-slash"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 10
+
+[[skills]]
+
+[skills.Passive]
+name = "leather-armor-passive"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Hp"
+value = 20
+
+[[skills]]
+
+[skills.Passive]
+name = "giant-armor-passive"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Hp"
+value = 50
+
+[[skills]]
+
+[skills.Passive]
+name = "ruby-burst"
+tags = []
+
+effects = []
 "#;
 
 /// 最小單位 TOML：包含一個 warrior 單位類型
@@ -267,6 +329,11 @@ pub const UNITS_TOML: &str = r#"
 [[units]]
 name = "warrior"
 skills = ["warrior-passive", "melee-attack", "warrior-active-2", "warrior-active-4", "warrior-reaction", "warrior-counter"]
+
+[units.equipment]
+weapon = "iron-sword"
+armor = "leather-armor"
+first_accessory = "ruby-ring"
 
 [[units]]
 name = "warrior-b"
@@ -279,6 +346,38 @@ skills = ["mage-passive", "melee-attack", "diamond-aoe-1", "summon-wall-aoe"]
 [[units]]
 name = "warrior-counter-only"
 skills = ["warrior-passive", "warrior-counter"]
+"#;
+
+pub const EQUIPMENTS_TOML: &str = r#"
+[[equipments]]
+name = "iron-sword"
+typ = "Weapon"
+granted_skills = ["iron-slash"]
+
+[[equipments]]
+name = "steel-sword"
+typ = "Weapon"
+granted_skills = ["steel-slash"]
+
+[[equipments]]
+name = "leather-armor"
+typ = "Armor"
+granted_skills = ["leather-armor-passive"]
+
+[[equipments]]
+name = "giant-armor"
+typ = "Armor"
+granted_skills = ["giant-armor-passive"]
+
+[[equipments]]
+name = "ruby-ring"
+typ = "Accessory"
+granted_skills = ["ruby-burst"]
+
+[[equipments]]
+name = "echo-charm"
+typ = "Accessory"
+granted_skills = ["warrior-passive"]
 "#;
 
 /// 最小物件 TOML：包含一個 wall 物件類型

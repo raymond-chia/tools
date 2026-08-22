@@ -93,6 +93,10 @@ editor/
 
 ### editor/generic_editor.rs
 
+- `pub enum EditMode<T>` - 編輯器項目的操作模式
+- `pub struct MessageState` - 編輯器訊息狀態
+- `pub struct GenericEditorState<T: EditorItem>` - 泛型編輯器狀態
+
 MessageState 的方法：
 
 - `pub fn set_success(&mut self, msg: impl Into<String>)` - 設置成功訊息
@@ -111,6 +115,8 @@ GenericEditorState 的方法：
 
 ### editor/editor_macros.rs
 
+- `pub enum EditorTab` - 編輯器標籤頁列舉
+- `pub struct EditorApp` - 編輯器應用程式
 - `pub fn new() -> Self` - 初始化編輯器應用程式（由 define_editors 巨集生成）
 
 ### editor/utils/dnd.rs
@@ -133,28 +139,39 @@ GenericEditorState 的方法：
 
 ### editor/tabs/unit_tab.rs
 
+- `pub struct UnitTabUIState` - 單位編輯頁面的 UI 狀態
 - `pub fn file_name() -> &'static str` - 取得單位檔案名稱
 - `pub fn render_form(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTabUIState, _message_state: &mut MessageState)` - 渲染單位編輯表單
 
 ### editor/tabs/skill_tab.rs
 
+- `pub struct SkillTabUIState` - 技能編輯頁面的 UI 狀態
 - `pub fn file_name() -> &'static str` - 取得技能檔案名稱
 - `pub fn render_form(ui: &mut egui::Ui, skill: &mut SkillType, ui_state: &mut SkillTabUIState, _message_state: &mut MessageState)` - 渲染技能編輯表單
 
 ### editor/tabs/level_tab.rs
 
+- `pub enum DraggedObject` - 戰場拖曳中的物件類型
+- `pub struct DragState` - 戰場拖曳狀態
+- `pub struct ReactionDecisionState` - 反應決策狀態
+- `pub enum BattleAction` - 戰鬥操作類型
+- `pub enum RightPanelView` - 右側面板顯示類型
+- `pub enum LevelTabMode` - 關卡編輯模式
+- `pub struct LevelTabUIState` - 關卡頁面的 UI 狀態
 - `pub fn file_name() -> &'static str` - 取得關卡檔案名稱
 - `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 根據模式渲染關卡編輯表單
 
 ### editor/tabs/level_tab/battlefield.rs
 
+- `pub struct VisibleGridRange` - 戰場網格的可見範圍
 - `pub fn query_snapshot(world: &mut World) -> CResult<Snapshot>` - 一次查詢所有關卡資料
 - `pub fn calculate_grid_dimensions(board: Board) -> egui::Vec2` - 計算棋盤預覽的總尺寸
 - `pub fn calculate_visible_range(scroll_offset: egui::Vec2, viewport_size: egui::Vec2, board: Board) -> VisibleGridRange` - 計算可見範圍內的格子索引
 - `pub fn screen_to_board_pos(screen_pos: egui::Pos2, rect: egui::Rect, board: Board) -> Option<Position>` - 將螢幕座標轉換為棋盤座標
 - `pub fn compute_hover_pos(response: &egui::Response, rect: egui::Rect, board: Board) -> Option<Position>` - 計算滑鼠懸停時的棋盤座標
 - `pub fn get_cell_info(snapshot: &Snapshot) -> impl Fn(Position) -> (String, egui::Color32, egui::Color32)` - 取得格子顯示資訊
-- `pub struct CellHighlight { pub border: Option<egui::Color32>, pub bg: Option<egui::Color32> }` - 單一格子的邊框與背景高亮
+- `pub struct CellHighlight` - 單一格子的邊框與背景高亮
+- `pub struct Snapshot` - 戰場顯示所需的快照資料
 - `pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String` - 取得懸停提示資訊
 - `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, board: Board, scroll_offset: egui::Vec2, get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32), get_cell_highlight: impl Fn(Position) -> CellHighlight)` - 繪製棋盤格子
 - `pub fn render_hover_tooltip(ui: &mut egui::Ui, rect: egui::Rect, hovered_pos: Position, get_tooltip_info: impl Fn(Position) -> String)` - 渲染懸停提示
@@ -175,4 +192,5 @@ GenericEditorState 的方法：
 ### editor/tabs/level_tab/edit.rs
 
 - `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染編輯模式的表單
+- `pub(crate) fn is_outcome_key_localized(key: &str) -> bool` - 判斷結局條件鍵是否已本地化
 - `pub fn dump_levels_split(levels: &[LevelType], levels_file_path: &Path) -> Result<(), String>` - 把所有關卡各自拆成一個小檔輸出到子資料夾

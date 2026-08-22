@@ -1,6 +1,7 @@
 mod constants;
 mod test_buff_ttl;
 mod test_deployment;
+mod test_equipment;
 mod test_level_outcome;
 mod test_loader;
 mod test_move_reaction_los;
@@ -16,13 +17,13 @@ mod test_turn;
 
 use bevy_ecs::prelude::{Entity, World};
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_types::components::{CurrentMp, Initiative, Occupant, Position};
 use board::test_helpers::level_builder::{LevelBuilder, load_from_ascii};
 use constants::{
-    OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_MAGE,
-    UNIT_TYPE_WARRIOR, UNITS_TOML,
+    EQUIPMENTS_TOML, OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILLS_TOML,
+    UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNITS_TOML,
 };
 use std::collections::HashMap;
 
@@ -31,8 +32,16 @@ const ENEMY_FACTION_ID: u32 = 2;
 
 fn setup_world_with_level(level_toml: &str) -> World {
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
     spawn_level(&mut world, level_toml, "test-level").expect("spawn_level 應成功");
     world
 }

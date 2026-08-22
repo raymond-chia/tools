@@ -1,8 +1,8 @@
 //! 反應系統整合測試
 
 use super::constants::{
-    OBJECTS_TOML, SKILL_WARRIOR_COUNTER, SKILL_WARRIOR_REACTION, SKILL_WARRIOR_REACTION_2,
-    SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNIT_TYPE_WARRIOR_B,
+    EQUIPMENTS_TOML, OBJECTS_TOML, SKILL_WARRIOR_COUNTER, SKILL_WARRIOR_REACTION,
+    SKILL_WARRIOR_REACTION_2, SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNIT_TYPE_WARRIOR_B,
     UNIT_TYPE_WARRIOR_COUNTER_ONLY, UNITS_TOML,
 };
 use bevy_ecs::prelude::{Entity, With, World};
@@ -11,7 +11,7 @@ use board::domain::battle_log::{LogEffect, LogEvent, LogTarget};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{PendingReaction, ReactionTrigger};
 use board::ecs_logic::battle_log::append_reaction_log;
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::movement::{advance_move, force_advance_move, plan_move};
 use board::ecs_logic::query::get_battle_log;
 use board::ecs_logic::reaction::{
@@ -58,8 +58,16 @@ fn build_reaction_world_with(
         .expect("to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
 
     let player_pos = markers["P"][0];

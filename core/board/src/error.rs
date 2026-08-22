@@ -66,6 +66,8 @@ pub enum DataError {
     IDGenerationFailed,
     #[error("找不到單位類型: {type_name}")]
     UnitTypeNotFound { type_name: TypeName },
+    #[error("找不到裝備類型: {equipment_name}")]
+    EquipmentTypeNotFound { equipment_name: TypeName },
     #[error("找不到物件類型: {type_name}")]
     ObjectTypeNotFound { type_name: TypeName },
 }

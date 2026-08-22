@@ -5,10 +5,11 @@ use crate::domain::core_types::{EffectNode, SkillTag, SkillType, Target};
 use crate::ecs_logic::get_component;
 use crate::ecs_types::components::{
     ActionState, Agility, AttributeBundle, Block, BlockProtection, BlocksSight, BlocksSound,
-    ContactEffects, CurrentHp, CurrentMp, FlankingAccuracyBonus, Fortitude, Hazardous, Initiative,
-    MagicalAccuracy, MagicalAttack, MaxHp, MaxMp, MaxReactionPoint, MovementPoint, Object,
-    ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName, PhysicalAccuracy, PhysicalAttack,
-    Position, ReactionPoint, Skills, Unit, UnitBundle, UnitFaction, Will,
+    ContactEffects, CurrentHp, CurrentMp, EquippedItems, FlankingAccuracyBonus, Fortitude,
+    Hazardous, Initiative, MagicalAccuracy, MagicalAttack, MaxHp, MaxMp, MaxReactionPoint,
+    MovementPoint, Object, ObjectBundle, ObjectMovementCost, Occupant, OccupantTypeName,
+    PhysicalAccuracy, PhysicalAttack, Position, ReactionPoint, Skills, Unit, UnitBundle,
+    UnitFaction, Will,
 };
 use crate::ecs_types::resources::{
     BattleLog, GameData, LevelConfig, OccupantIndex, SkillTargeting,
@@ -43,6 +44,7 @@ pub fn get_all_units(world: &mut World) -> Result<HashMap<Position, UnitBundle>>
             occupant_type_name: get_component!(entity_ref, OccupantTypeName)?.clone(),
             unit_faction: *get_component!(entity_ref, UnitFaction)?,
             skills: get_component!(entity_ref, Skills)?.clone(),
+            equipped_items: get_component!(entity_ref, EquippedItems)?.clone(),
             attributes: read_attribute_bundle(&entity_ref)?,
             action_state: get_component!(entity_ref, ActionState)?.clone(),
         };

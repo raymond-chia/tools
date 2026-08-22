@@ -1,8 +1,9 @@
 use crate::domain::alias::ID;
 use crate::ecs_logic::query::{get_resource, setup_occupant_index};
+use crate::ecs_logic::unit_data::{InitialUnitData, initial_unit_data};
 use crate::ecs_types::components::{
     ActionState, BlocksSight, BlocksSound, ContactEffects, Hazardous, Object, ObjectBundle,
-    ObjectMovementCost, Occupant, OccupantTypeName, Skills, Unit, UnitBundle, UnitFaction,
+    ObjectMovementCost, Occupant, OccupantTypeName, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{
     BattleLog, Board, DeploymentConfig, EndConditionConfig, GameData, LevelConfig,
@@ -10,7 +11,6 @@ use crate::ecs_types::resources::{
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::LevelType;
 use crate::logic::id_generator::generate_unique_id;
-use crate::logic::skill::unit_attributes;
 use bevy_ecs::prelude::World;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -46,13 +46,11 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 .ok_or_else(|| DataError::UnitTypeNotFound {
                     type_name: placement.unit_type_name.clone(),
                 })?;
-            let no_buffs = &[];
-            let effects = unit_attributes::filter_continuous_effect(
-                &unit_type.skills,
-                no_buffs,
-                &game_data.skill_map,
-            )?;
-            let attributes = unit_attributes::calculate_attributes(effects);
+            let InitialUnitData {
+                equipped_items,
+                skills,
+                attributes,
+            } = initial_unit_data(unit_type, game_data)?;
 
             unit_bundles.push(UnitBundle {
                 unit: Unit,
@@ -60,7 +58,8 @@ pub fn spawn_level(world: &mut World, level_toml: &str, level_name: &str) -> Res
                 occupant: Occupant::Unit(id),
                 occupant_type_name: OccupantTypeName(unit_type.name.clone()),
                 unit_faction: UnitFaction(placement.faction_id),
-                skills: Skills(unit_type.skills.clone()),
+                skills,
+                equipped_items,
                 attributes,
                 action_state: ActionState::Moved { cost: 0 },
             });

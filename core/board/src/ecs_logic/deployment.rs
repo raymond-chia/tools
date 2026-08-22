@@ -1,13 +1,13 @@
 use crate::domain::alias::{ID, TypeName};
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_logic::query::get_resource;
+use crate::ecs_logic::unit_data::{InitialUnitData, initial_unit_data};
 use crate::ecs_types::components::{
-    ActionState, Occupant, OccupantTypeName, Position, Skills, Unit, UnitBundle, UnitFaction,
+    ActionState, Occupant, OccupantTypeName, Position, Unit, UnitBundle, UnitFaction,
 };
 use crate::ecs_types::resources::{DeploymentConfig, GameData};
 use crate::error::{DataError, DeploymentError, Result};
 use crate::logic::id_generator::generate_unique_id;
-use crate::logic::skill::unit_attributes;
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::{With, World};
 use std::collections::{HashMap, HashSet};
@@ -66,20 +66,19 @@ pub fn deploy_unit(world: &mut World, unit_type_name: &TypeName, position: Posit
             .ok_or_else(|| DataError::UnitTypeNotFound {
                 type_name: unit_type_name.clone(),
             })?;
-    let no_buffs = &[];
-    let effects = unit_attributes::filter_continuous_effect(
-        &unit_type.skills,
-        no_buffs,
-        &game_data.skill_map,
-    )?;
-    let attributes = unit_attributes::calculate_attributes(effects);
+    let InitialUnitData {
+        equipped_items,
+        skills,
+        attributes,
+    } = initial_unit_data(unit_type, game_data)?;
     let bundle = UnitBundle {
         unit: Unit,
         position,
         occupant: Occupant::Unit(new_id),
         occupant_type_name: OccupantTypeName(unit_type.name.clone()),
         unit_faction: UnitFaction(PLAYER_FACTION_ID),
-        skills: Skills(unit_type.skills.clone()),
+        skills,
+        equipped_items,
         attributes,
         action_state: ActionState::Moved { cost: 0 },
     };

@@ -1,8 +1,8 @@
 //! Loader 相關的資料結構定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
-use crate::domain::core_types::{OutcomeBranches, SkillType};
-use crate::ecs_types::components::Position;
+use crate::domain::core_types::{EquipmentType as EquipmentKind, OutcomeBranches, SkillType};
+use crate::ecs_types::components::{EquippedItems, Position};
 use serde::{Deserialize, Serialize};
 
 // ============================================================================
@@ -12,8 +12,19 @@ use serde::{Deserialize, Serialize};
 /// 單位類型定義
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UnitType {
-    pub name: String,
+    pub name: TypeName,
     pub skills: Vec<SkillName>,
+    #[serde(default)]
+    pub equipment: EquippedItems,
+}
+
+/// 裝備類型定義。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EquipmentType {
+    pub name: TypeName,
+    pub typ: EquipmentKind,
+    #[serde(default)]
+    pub granted_skills: Vec<SkillName>,
 }
 
 // ============================================================================
@@ -88,6 +99,12 @@ pub struct SkillsToml {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UnitsToml {
     pub units: Vec<UnitType>,
+}
+
+/// 裝備 TOML 根結構。
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EquipmentsToml {
+    pub equipments: Vec<EquipmentType>,
 }
 
 /// 物件 TOML 頂層結構

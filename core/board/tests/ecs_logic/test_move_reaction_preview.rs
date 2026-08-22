@@ -12,12 +12,12 @@
 //! TDD 紅燈：preview_move_path 與 MovePathPreview 尚未實作，本檔案僅撰寫測試。
 
 use super::constants::{
-    OBJECT_TYPE_FOG, OBJECT_TYPE_SPIKE, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_MAGE,
+    EQUIPMENTS_TOML, OBJECT_TYPE_FOG, OBJECT_TYPE_SPIKE, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_MAGE,
     UNIT_TYPE_WARRIOR, UNITS_TOML,
 };
 use bevy_ecs::prelude::{Entity, With, World};
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::movement::preview_move_path;
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_logic::turn::start_new_round;
@@ -58,8 +58,16 @@ fn build_preview_world(
     let level_toml = builder.to_toml().expect("to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
 
     // 移動者 P 設為先手

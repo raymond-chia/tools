@@ -71,6 +71,15 @@ pub enum Occupant {
 #[derive(Debug, Clone, Component)]
 pub struct Skills(pub Vec<SkillName>);
 
+/// 單位目前穿戴的裝備名稱；兩個飾品欄固定存在。
+#[derive(Debug, Clone, Default, Component, Serialize, Deserialize)]
+pub struct EquippedItems {
+    pub weapon: Option<TypeName>,
+    pub armor: Option<TypeName>,
+    pub first_accessory: Option<TypeName>,
+    pub second_accessory: Option<TypeName>,
+}
+
 /// 單位所屬的陣營 ID（用於區分友軍/敵軍）
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct UnitFaction(pub ID);
@@ -166,6 +175,7 @@ pub struct UnitBundle {
     pub occupant_type_name: OccupantTypeName,
     pub unit_faction: UnitFaction,
     pub skills: Skills,
+    pub equipped_items: EquippedItems,
     pub attributes: AttributeBundle,
     pub action_state: ActionState,
 }

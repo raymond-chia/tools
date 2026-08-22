@@ -1,16 +1,24 @@
 use super::constants::{
-    OBJECT_TYPE_SPIKE, OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML, SKILL_MELEE,
-    SKILL_WARRIOR, SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNITS_TOML,
+    EQUIPMENTS_TOML, OBJECT_TYPE_SPIKE, OBJECT_TYPE_SWAMP, OBJECT_TYPE_WALL, OBJECTS_TOML,
+    SKILL_MELEE, SKILL_WARRIOR, SKILLS_TOML, UNIT_TYPE_MAGE, UNIT_TYPE_WARRIOR, UNITS_TOML,
 };
 use bevy_ecs::prelude::World;
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_types::resources::GameData;
 
 #[test]
 fn test_parse_and_insert_game_data_sets_resource() {
     let mut world = World::new();
 
-    let result = parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML);
+    let result = parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    );
     assert!(
         result.is_ok(),
         "parse_and_insert_game_data 應成功：{:?}",
@@ -21,7 +29,7 @@ fn test_parse_and_insert_game_data_sets_resource() {
     assert!(game_data.is_some(), "GameData resource 應已存入 World");
 
     let game_data = game_data.expect("GameData resource 應已存入 World");
-    assert_eq!(game_data.skill_map.len(), 10, "skill_map 應包含 10 個技能");
+    assert_eq!(game_data.skill_map.len(), 15, "skill_map 應包含 15 個技能");
     assert!(
         game_data.skill_map.contains_key(SKILL_WARRIOR),
         "skill_map 應包含 {SKILL_WARRIOR}"

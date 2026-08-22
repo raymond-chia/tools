@@ -56,7 +56,7 @@ fn test_get_all_units_returns_correct_data() {
     assert_eq!(units.len(), 2, "應有 2 個單位（1 玩家 + 1 敵方）");
     for (pos, typ, faction, max_hp) in [
         (enemy_pos, UNIT_TYPE_MAGE, 1, 80),
-        (pos1, UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID, 100),
+        (pos1, UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID, 120),
     ] {
         assert_unit(&units, pos, typ, faction, max_hp);
     }
@@ -67,7 +67,7 @@ fn test_get_all_units_returns_correct_data() {
     assert_eq!(units.len(), 3, "應有 3 個單位（2 玩家 + 1 敵方）");
     for (pos, typ, faction, max_hp) in [
         (enemy_pos, UNIT_TYPE_MAGE, 1, 80),
-        (pos1, UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID, 100),
+        (pos1, UNIT_TYPE_WARRIOR, PLAYER_FACTION_ID, 120),
         (pos2, UNIT_TYPE_MAGE, PLAYER_FACTION_ID, 80),
     ] {
         assert_unit(&units, pos, typ, faction, max_hp);

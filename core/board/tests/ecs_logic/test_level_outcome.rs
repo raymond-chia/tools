@@ -1,11 +1,11 @@
 //! 關卡結局判定整合測試（透過 world 建關卡驗證結局）
 
-use super::constants::{OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
+use super::constants::{EQUIPMENTS_TOML, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
 use bevy_ecs::prelude::{Entity, World};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{EndLevelCondition, LevelOutcome};
 use board::ecs_logic::level_outcome::resolve_level_outcome;
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_logic::turn::{resolve_deaths, start_new_round};
 use board::ecs_types::components::{CurrentHp, Position};
@@ -66,8 +66,16 @@ fn build_world(
         .expect("LevelBuilder::to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
     start_new_round(&mut world).expect("start_new_round 應成功");
     (world, markers)

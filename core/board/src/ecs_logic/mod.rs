@@ -8,6 +8,7 @@ pub mod reaction;
 pub mod skill;
 pub mod spawner;
 pub mod turn;
+pub(crate) mod unit_data;
 
 /// 從 EntityRef 取得 component 的不可變引用，若缺少則回傳 DataError::MissingComponent
 macro_rules! get_component {

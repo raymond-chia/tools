@@ -35,6 +35,7 @@ core/board/
 ├── src/
 │   ├── error.rs          - 錯誤型別定義
 │   ├── loader_schema.rs  - 載入相關資料結構定義
+│   ├── lib.rs            - Crate 模組與公開項目匯出
 │   ├── domain/           - 遊戲領域模型
 │   │   ├── mod.rs        - 領域模型模組定義
 │   │   ├── alias.rs      - 類型別名定義
@@ -51,12 +52,17 @@ core/board/
 │   │   ├── loader.rs     - 遊戲資料載入函數
 │   │   ├── spawner.rs    - 關卡生成函數
 │   │   ├── deployment.rs - 單位部署函數
+│   │   ├── unit_data.rs  - 單位初始裝備、技能與屬性資料整合函數
 │   │   ├── level_outcome.rs - 關卡結局判定 ECS 操作函數
 │   │   ├── query.rs      - World 查詢函數
 │   │   ├── movement.rs   - 單位移動 ECS 操作函數
 │   │   ├── reaction.rs   - 技能反應系統 ECS 操作函數
 │   │   ├── turn.rs       - 回合順序 ECS 操作函數
 │   │   ├── skill.rs      - 技能系統 ECS 操作函數
+│   │   ├── skill/        - 技能 ECS 操作的內部模組
+│   │       ├── apply.rs  - 技能效果套用函數
+│   │       ├── availability.rs - 技能可用性查詢函數
+│   │       └── context.rs - 技能執行內容查詢型別
 │   │   └── battle_log.rs - 戰鬥 log 產生 ECS 操作函數
 │   ├── logic/            - 核心業務邏輯（純邏輯運算，不依賴 ECS Query）
 │   │   ├── mod.rs        - 業務邏輯模組定義
@@ -121,7 +127,7 @@ core/board/
 ### logic/turn_order.rs
 
 - `pub(crate) fn calculate_turn_order(inputs: &[TurnOrderInput], rng_int: &mut impl FnMut() -> i32, rng_float: &mut impl FnMut() -> f64) -> Vec<TurnEntry>` - 計算一輪的行動順序
-- `pub(crate) fn delay_unit(entries: &mut Vec<TurnEntry>, target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
+- `pub(crate) fn delay_unit(entries: &mut [TurnEntry], target_index: usize) -> Result<()>` - 將單位延後到指定位置（只能往後）
 - `pub(crate) fn remove_unit(entries: &mut Vec<TurnEntry>, occupant: Occupant) -> Result<TurnEntry>` - 移除指定佔據者的單位
 - `pub(crate) fn get_active_index(entries: &[TurnEntry]) -> Option<usize>` - 取得下一個未行動的單位索引
 
@@ -188,7 +194,7 @@ core/board/
 
 ### ecs_logic/loader.rs
 
-- `pub fn parse_and_insert_game_data(world: &mut World, units_toml: &str, skills_toml: &str, objects_toml: &str) -> Result<()>` - 反序列化 TOML 並存入 World Resource
+- `pub fn parse_and_insert_game_data(world: &mut World, source: GameDataToml<'_>) -> Result<()>` - 反序列化 TOML 並存入 World Resource
 
 ### ecs_logic/spawner.rs
 
@@ -205,6 +211,10 @@ core/board/
 - `pub fn undeploy_unit(world: &mut World, position: Position) -> Result<()>` - 取消指定部署點上的玩家單位部署
 - `pub fn remove_deployment_positions(world: &mut World)` - 清除所有部署位置
 
+### ecs_logic/unit_data.rs
+
+- `pub(crate) fn initial_unit_data(unit_type: &UnitType, game_data: &GameData) -> Result<InitialUnitData>` - 建立單位的初始裝備、技能與屬性
+
 ### ecs_logic/level_outcome.rs
 
 - `pub fn resolve_level_outcome(world: &mut World) -> Result<LevelOutcome>` - 判定關卡結局（defeat 優先於 victory）並回傳結果
@@ -218,12 +228,12 @@ core/board/
 - `pub fn get_resource<'a, T: Resource>(world: &'a World, note: &str) -> Result<&'a T>` - 取得 World Resource（帶錯誤提示）
 - `pub(crate) fn build_faction_alliance_map(world: &World) -> Result<HashMap<ID, ID>>` - 建構陣營聯盟對應表
 - `pub(crate) fn resolve_alliance(map: &HashMap<ID, ID>, faction_id: ID) -> Result<ID>` - 解析陣營聯盟關係
-- `pub(crate) fn get_active_skill_data(game_data: &GameData, skill_name: &SkillName) -> Result<(Target, Arc<[EffectNode]>, u32, Vec<SkillTag>)>` - 查詢技能的目標與效果資料
-- `pub(crate) fn get_reaction_skill_data(game_data: &GameData, skill_name: &SkillName) -> Result<(TriggeringSource, Arc<[EffectNode]>, u32, Vec<SkillTag>)>` - 查詢反應技能的觸發源與效果資料
+- `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
+- `pub(crate) fn get_active_skill_data(game_data: &GameData, skill_name: &SkillName) -> Result<ActiveSkillData>` - 查詢主動技能資料
+- `pub(crate) fn get_reaction_skill_data(game_data: &GameData, skill_name: &SkillName) -> Result<ReactionSkillData>` - 查詢反應技能資料
 - `pub(crate) fn read_attribute_bundle(entity_ref: &EntityRef) -> Result<AttributeBundle>` - 讀取實體的屬性集合
 - `pub(crate) fn build_objects_on_board(world: &mut World) -> HashMap<Position, ObjectOnBoard>` - 建構棋盤上的物件映射
 - `pub(crate) fn build_unit_stats_on_board(world: &mut World, faction_to_alliance: &HashMap<ID, ID>) -> Result<HashMap<Position, CombatStats>>` - 建構棋盤上的單位戰鬥統計映射
-- `pub(crate) fn get_resource_mut<'a, T: Resource>(world: &'a mut World, note: &str) -> Result<Mut<'a, T>>` - 取得可變 World Resource（帶錯誤提示）
 - `pub fn get_skill_targeting(world: &World) -> Result<&SkillTargeting>` - 查詢當前技能選目標狀態供 UI 渲染與確認施放
 - `pub fn get_battle_log(world: &World) -> Result<&[LogEvent]>` - 查詢戰鬥 log 事件序列供前端讀取渲染
 
@@ -255,8 +265,6 @@ core/board/
 
 ### ecs_logic/skill.rs
 
-- `pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool>` - 查詢當前單位是否可使用技能
-- `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 - `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
 - `pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Result<()>` - 開始技能選目標流程並建立暫存
@@ -265,7 +273,23 @@ core/board/
 - `pub fn preview_skill_effect(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 預覽技能強制命中（非爆擊）的效果供 UI 顯示預期傷害
 - `pub fn preview_hit_probabilities(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<Option<HitPreview>>` - 預覽技能對目標的命中機率與判定明細供 UI 顯示
 - `pub fn execute_skill(world: &mut World, skill_name: &SkillName, target_positions: &[Position]) -> Result<Vec<EffectEntry>>` - 執行技能並產生效果
+
+### ecs_logic/skill/availability.rs
+
+- `pub struct AvailableSkill` - 可供當前單位使用的技能資訊
+- `pub fn can_use_skill_current_unit(world: &mut World) -> Result<bool>` - 查詢當前單位是否可使用技能
+- `pub fn get_available_skills(world: &mut World) -> Result<Vec<AvailableSkill>>` - 取得當前行動單位的所有主動技能及其可用狀態
+
+### ecs_logic/skill/apply.rs
+
 - `pub(crate) fn apply_effect_entries(world: &mut World, entries: &[EffectEntry], used_ids: &mut HashSet<ID>) -> Result<()>` - 應用效果條目到遊戲世界
+
+### ecs_logic/skill/context.rs
+
+- `pub fn read(world: &World) -> Result<Self>` (ActiveCasterSnapshot 方法) - 讀取當前施放者快照
+- `pub fn unit_info(&self, alliance_id: ID) -> UnitInfo` - 取得指定聯盟的單位資訊
+- `pub fn combat_stats(&self, alliance_id: ID) -> CombatStats` - 取得指定聯盟的戰鬥統計
+- `pub fn unit_id(&self) -> Result<ID>` - 取得施放單位 ID
 
 ### ecs_logic/battle_log.rs
 

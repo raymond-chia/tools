@@ -1,6 +1,6 @@
-use super::constants::{OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
+use super::constants::{EQUIPMENTS_TOML, OBJECTS_TOML, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML};
 use bevy_ecs::prelude::{Entity, Without, World};
-use board::ecs_logic::loader::parse_and_insert_game_data;
+use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::spawner::spawn_level;
 use board::ecs_types::components::{
     BlocksSight, BlocksSound, CurrentHp, MaxHp, Object, Occupant, OccupantTypeName, Position, Unit,
@@ -30,8 +30,16 @@ fn test_spawn_level_without_object() {
     .expect("LevelBuilder::to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
 
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
 
@@ -61,11 +69,11 @@ fn test_spawn_level_without_object() {
     );
     assert_eq!(type_name.0, UNIT_TYPE_WARRIOR, "Unit name 應為 warrior");
     assert_eq!(
-        max_hp.0, 100,
-        "warrior MaxHp 應為 100（來自 warrior-passive 技能）"
+        max_hp.0, 120,
+        "warrior MaxHp 應為 120（warrior-passive 技能 + 防具效果）"
     );
     assert_eq!(
-        current_hp.0, 100,
+        current_hp.0, 120,
         "warrior CurrentHp 應等於 MaxHp（初始狀態）"
     );
     assert_eq!(position.x, 4, "warrior 位置 x 應為 4");
@@ -91,8 +99,16 @@ fn test_spawn_level_with_object() {
     .expect("LevelBuilder::to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
 
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
 
@@ -141,8 +157,16 @@ fn test_spawn_level_occupant_ids_are_unique() {
     .expect("LevelBuilder::to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
 
     spawn_level(&mut world, &level_toml, "test-level").expect("spawn_level 應成功");
 
@@ -175,8 +199,16 @@ fn test_spawn_level_again_resets_occupant_index_and_keeps_observers() {
     .expect("LevelBuilder::to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
     spawn_level(&mut world, &level_toml, "first-level").expect("第一次 spawn_level 應成功");
 
     let first_level_entities: std::collections::HashSet<Entity> = world
@@ -229,8 +261,15 @@ fn test_spawn_level_again_resets_occupant_index_and_keeps_observers() {
 fn test_parse_and_insert_game_data_invalid_toml() {
     let mut world = World::new();
 
-    let result =
-        parse_and_insert_game_data(&mut world, "not valid toml ][", SKILLS_TOML, OBJECTS_TOML);
+    let result = parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: "not valid toml ][",
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    );
     assert!(result.is_err(), "無效 TOML 應回傳錯誤");
 
     let error = result.expect_err("應有錯誤");
@@ -294,8 +333,16 @@ fn test_spawn_level_with_unknown_unit_type_returns_error() {
     .expect("LevelBuilder::to_toml 應成功");
 
     let mut world = World::new();
-    parse_and_insert_game_data(&mut world, UNITS_TOML, SKILLS_TOML, OBJECTS_TOML)
-        .expect("parse_and_insert_game_data 應成功");
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("parse_and_insert_game_data 應成功");
 
     let result = spawn_level(&mut world, &level_toml, "test-level");
     assert!(result.is_err(), "引用不存在的 unit_type_name 應回傳錯誤");
