@@ -96,36 +96,6 @@ impl EditorItem for SkillType {
     }
 }
 
-/// 從 effects 頂層挑出最大的 Area 寫回 target.area
-fn derive_target_area(effects: &[EffectNode]) -> Area {
-    effects
-        .iter()
-        .filter_map(|node| match node {
-            EffectNode::Area { area, .. } => Some(area.clone()),
-            _ => None,
-        })
-        .max_by_key(|area| (area_size(area), area_variant_rank(area)))
-        .unwrap_or(Area::Single)
-}
-
-fn area_size(area: &Area) -> Coord {
-    match area {
-        Area::Single => 1,
-        Area::Diamond { radius } => *radius,
-        Area::Cross { length } => *length,
-        Area::Line { length } => *length,
-    }
-}
-
-fn area_variant_rank(area: &Area) -> u8 {
-    match area {
-        Area::Diamond { .. } => 3,
-        Area::Cross { .. } => 2,
-        Area::Line { .. } => 1,
-        Area::Single => 0,
-    }
-}
-
 // ==================== 驗證函數 ====================
 
 fn validate_area(area: &Area) -> Result<(), String> {
@@ -925,6 +895,36 @@ fn render_effect_condition(ui: &mut egui::Ui, condition: &mut EffectCondition, i
 }
 
 // ==================== 通用輔助函數 ====================
+
+/// 從 effects 頂層挑出最大的 Area 寫回 target.area
+fn derive_target_area(effects: &[EffectNode]) -> Area {
+    effects
+        .iter()
+        .filter_map(|node| match node {
+            EffectNode::Area { area, .. } => Some(area.clone()),
+            _ => None,
+        })
+        .max_by_key(|area| (area_size(area), area_variant_rank(area)))
+        .unwrap_or(Area::Single)
+}
+
+fn area_size(area: &Area) -> Coord {
+    match area {
+        Area::Single => 1,
+        Area::Diamond { radius } => *radius,
+        Area::Cross { length } => *length,
+        Area::Line { length } => *length,
+    }
+}
+
+fn area_variant_rank(area: &Area) -> u8 {
+    match area {
+        Area::Diamond { .. } => 3,
+        Area::Cross { .. } => 2,
+        Area::Line { .. } => 1,
+        Area::Single => 0,
+    }
+}
 
 /// 通用 enum 下拉選單，使用 Display 比較 discriminant
 fn enum_combo_box<E>(ui: &mut egui::Ui, label: &str, current: &mut E, id_salt: &str)

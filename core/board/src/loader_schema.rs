@@ -27,6 +27,16 @@ pub struct EquipmentType {
     pub granted_skills: Vec<SkillName>,
 }
 
+impl Default for EquipmentType {
+    fn default() -> Self {
+        Self {
+            name: TypeName::default(),
+            typ: EquipmentKind::Weapon,
+            granted_skills: Vec::new(),
+        }
+    }
+}
+
 // ============================================================================
 // 物件系統 (Object System)
 // ============================================================================

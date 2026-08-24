@@ -8,13 +8,14 @@ mod edit;
 use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::{GenericEditorState, MessageState};
 use crate::generic_io::save_file;
+use crate::tabs::reference;
 use bevy_ecs::world::World;
 use board::domain::alias::{SkillName, TypeName};
 use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{LevelOutcome, OutcomeBranches, SkillType};
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
-use board::loader_schema::{LevelType, ObjectType, UnitType};
+use board::loader_schema::{EquipmentType, LevelType, ObjectType, UnitType};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -75,6 +76,8 @@ pub struct LevelTabUIState {
     pub available_units: Vec<UnitType>,
     /// 可選的技能類型（完整資料，供部署時序列化用）
     pub available_skills: Vec<SkillType>,
+    /// 可選的裝備類型（完整資料，供部署時序列化用）
+    pub available_equipments: Vec<EquipmentType>,
     /// 可選的物件類型（完整資料，供部署時序列化用）
     pub available_objects: Vec<ObjectType>,
 
@@ -250,7 +253,72 @@ pub fn file_name() -> &'static str {
     "levels"
 }
 
+/// 是否存在已被刪除的單位或物件配置。
+pub fn has_invalid_references(state: &GenericEditorState<LevelType>) -> bool {
+    state
+        .items
+        .iter()
+        .any(|level| has_invalid_reference(level, &state.ui_state))
+}
+
+/// 是否存在已被刪除的單位或物件配置。
+pub fn has_invalid_reference(level: &LevelType, ui_state: &LevelTabUIState) -> bool {
+    let valid_references = ValidLevelReferences::from_ui_state(ui_state);
+
+    reference::has_invalid(
+        level
+            .unit_placements
+            .iter()
+            .map(|placement| &placement.unit_type_name),
+        &valid_references.units,
+    ) || reference::has_invalid(
+        level
+            .object_placements
+            .iter()
+            .map(|placement| &placement.object_type_name),
+        &valid_references.objects,
+    )
+}
+
+/// 清除所有關卡中已失效的單位與物件配置。
+pub fn clear_invalid_references(state: &mut GenericEditorState<LevelType>) {
+    let valid_references = ValidLevelReferences::from_ui_state(&state.ui_state);
+
+    for level in &mut state.items {
+        level
+            .unit_placements
+            .retain(|placement| valid_references.units.contains(&placement.unit_type_name));
+        level.object_placements.retain(|placement| {
+            valid_references
+                .objects
+                .contains(&placement.object_type_name)
+        });
+    }
+}
+
 // ==================== 本地輔助函數 ====================
+
+struct ValidLevelReferences {
+    units: HashSet<TypeName>,
+    objects: HashSet<TypeName>,
+}
+
+impl ValidLevelReferences {
+    fn from_ui_state(ui_state: &LevelTabUIState) -> Self {
+        Self {
+            units: ui_state
+                .available_units
+                .iter()
+                .map(|unit| unit.name.clone())
+                .collect(),
+            objects: ui_state
+                .available_objects
+                .iter()
+                .map(|object| object.name.clone())
+                .collect(),
+        }
+    }
+}
 
 fn validate_outcome_conditions(label: &str, branches: &OutcomeBranches) -> Result<(), String> {
     if branches.is_empty() {

@@ -11,8 +11,8 @@ use board::domain::core_types::{EndLevelCondition, OutcomeBranches, SkillType};
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
 use board::loader_schema::{
-    Faction, LevelType, ObjectPlacement, ObjectType, ObjectsToml, SkillsToml, UnitPlacement,
-    UnitType, UnitsToml,
+    EquipmentType, EquipmentsToml, Faction, LevelType, ObjectPlacement, ObjectType, ObjectsToml,
+    SkillsToml, UnitPlacement, UnitType, UnitsToml,
 };
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -174,6 +174,7 @@ fn render_start_deploy_button(
             level,
             &ui_state.available_units,
             &ui_state.available_skills,
+            &ui_state.available_equipments,
             &ui_state.available_objects,
         ) {
             Ok(world) => {
@@ -725,6 +726,7 @@ fn initialize_world(
     level: &LevelType,
     units: &[UnitType],
     skills: &[SkillType],
+    equipments: &[EquipmentType],
     objects: &[ObjectType],
 ) -> Result<World, String> {
     let units_toml = toml::to_string_pretty(&UnitsToml {
@@ -735,6 +737,10 @@ fn initialize_world(
         skills: skills.to_vec(),
     })
     .map_err(|e| format!("序列化技能資料失敗：{}", e))?;
+    let equipments_toml = toml::to_string_pretty(&EquipmentsToml {
+        equipments: equipments.to_vec(),
+    })
+    .map_err(|e| format!("序列化裝備資料失敗：{}", e))?;
     let objects_toml = toml::to_string_pretty(&ObjectsToml {
         objects: objects.to_vec(),
     })
@@ -745,9 +751,12 @@ fn initialize_world(
     let mut world = World::new();
     board::ecs_logic::loader::parse_and_insert_game_data(
         &mut world,
-        &units_toml,
-        &skills_toml,
-        &objects_toml,
+        board::ecs_logic::loader::GameDataToml {
+            units: &units_toml,
+            skills: &skills_toml,
+            equipments: &equipments_toml,
+            objects: &objects_toml,
+        },
     )
     .map_err(|e| format!("載入遊戲資料失敗：{:?}", e))?;
 

@@ -57,7 +57,7 @@ define_attributes!(
 ///
 /// `loader_schema` 內的定義型別一律以 `Type` 結尾（`UnitType`、`ObjectType`、`LevelType`），
 /// 其他名稱與該檔命名風格不符。維持同名 + 單一別名的成本低於破壞命名一致性。
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Display, EnumIter)]
 pub enum EquipmentType {
     Weapon,
     Armor,

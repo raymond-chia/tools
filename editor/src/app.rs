@@ -7,8 +7,8 @@ use crate::generic_editor::{EditMode, GenericEditorState, MessageState};
 use crate::tabs;
 use crate::utils::dnd::render_dnd_handle;
 use crate::utils::search::{match_search_query, render_search_input};
-use board::domain::core_types::SkillType;
-use board::loader_schema::{LevelType, ObjectType, UnitType};
+use board::domain::core_types::{EquipmentType as EquipmentKind, SkillType};
+use board::loader_schema::{EquipmentType, LevelType, ObjectType, UnitType};
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
@@ -27,6 +27,12 @@ define_editors! {
         field: skill_editor,
         type: SkillType,
         file_fn: tabs::skill_tab::file_name,
+    },
+    Equipment => {
+        display: "裝備",
+        field: equipment_editor,
+        type: EquipmentType,
+        file_fn: tabs::equipment_tab::file_name,
     },
     Unit => {
         display: "單位",
@@ -58,6 +64,7 @@ impl eframe::App for EditorApp {
                 &mut self.object_editor,
                 tabs::object_tab::file_name(),
                 tabs::object_tab::render_form,
+                None,
             ),
             EditorTab::Skill => {
                 self.skill_editor.ui_state.available_objects = self
@@ -72,45 +79,72 @@ impl eframe::App for EditorApp {
                     &mut self.skill_editor,
                     tabs::skill_tab::file_name(),
                     tabs::skill_tab::render_form,
+                    None,
                 )
             }
-            EditorTab::Unit => {
-                let existing_skill_names: std::collections::HashSet<String> = self
-                    .skill_editor
-                    .items
-                    .iter()
-                    .map(|skill| skill.name().to_string())
-                    .collect();
-
-                self.unit_editor.ui_state.available_skills = self
+            EditorTab::Equipment => {
+                self.equipment_editor.ui_state.available_skills = self
                     .skill_editor
                     .items
                     .iter()
                     .map(|skill| skill.name().clone())
                     .collect();
 
-                for unit in &mut self.unit_editor.items {
-                    unit.skills
-                        .retain(|s| existing_skill_names.contains(s.as_str()));
-                }
+                render_editor_ui(
+                    ui,
+                    &mut self.equipment_editor,
+                    tabs::equipment_tab::file_name(),
+                    tabs::equipment_tab::render_form,
+                    Some(ReferenceCleanup {
+                        has_invalid: tabs::equipment_tab::has_invalid_references,
+                        has_invalid_item: tabs::equipment_tab::has_invalid_reference,
+                        clear_invalid: tabs::equipment_tab::clear_invalid_references,
+                    }),
+                )
+            }
+            EditorTab::Unit => {
+                self.unit_editor.ui_state.available_skills = self
+                    .skill_editor
+                    .items
+                    .iter()
+                    .map(|skill| skill.name().clone())
+                    .collect();
+                self.unit_editor.ui_state.available_weapons =
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentKind::Weapon);
+                self.unit_editor.ui_state.available_armors =
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentKind::Armor);
+                self.unit_editor.ui_state.available_accessories =
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentKind::Accessory);
 
                 render_editor_ui(
                     ui,
                     &mut self.unit_editor,
                     tabs::unit_tab::file_name(),
                     tabs::unit_tab::render_form,
+                    Some(ReferenceCleanup {
+                        has_invalid: tabs::unit_tab::has_invalid_references,
+                        has_invalid_item: tabs::unit_tab::has_invalid_reference,
+                        clear_invalid: tabs::unit_tab::clear_invalid_references,
+                    }),
                 )
             }
             EditorTab::Level => {
                 self.level_editor.ui_state.available_objects = self.object_editor.items.clone();
                 self.level_editor.ui_state.available_units = self.unit_editor.items.clone();
                 self.level_editor.ui_state.available_skills = self.skill_editor.items.clone();
+                self.level_editor.ui_state.available_equipments =
+                    self.equipment_editor.items.clone();
 
                 render_editor_ui(
                     ui,
                     &mut self.level_editor,
                     tabs::level_tab::file_name(),
                     tabs::level_tab::render_form,
+                    Some(ReferenceCleanup {
+                        has_invalid: tabs::level_tab::has_invalid_references,
+                        has_invalid_item: tabs::level_tab::has_invalid_reference,
+                        clear_invalid: tabs::level_tab::clear_invalid_references,
+                    }),
                 )
             }
         });
@@ -123,6 +157,7 @@ fn render_editor_ui<T: EditorItem>(
     state: &mut GenericEditorState<T>,
     data_key: &str,
     render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState, &mut MessageState),
+    reference_cleanup: Option<ReferenceCleanup<T>>,
 ) {
     ui.heading(format!("{}編輯器", T::type_name()));
     ui.add_space(SPACING_MEDIUM);
@@ -130,7 +165,7 @@ fn render_editor_ui<T: EditorItem>(
     let file_path =
         PathBuf::from(DATA_DIRECTORY_PATH).join(format!("{}{}", data_key, FILE_EXTENSION_TOML));
 
-    render_file_operations_bar(ui, state, &file_path, data_key);
+    render_file_operations_bar(ui, state, &file_path, data_key, reference_cleanup.as_ref());
     ui.add_space(SPACING_MEDIUM);
 
     // 主內容區域
@@ -140,7 +175,7 @@ fn render_editor_ui<T: EditorItem>(
         render_item_list(ui, state, LIST_PANEL_WIDTH, height);
         ui.separator();
         // 右側：編輯區域
-        render_edit_area(ui, state, render_form);
+        render_edit_area(ui, state, render_form, reference_cleanup.as_ref());
     });
 }
 
@@ -150,13 +185,24 @@ fn render_file_operations_bar<T: EditorItem>(
     state: &mut GenericEditorState<T>,
     file_path: &Path,
     data_key: &str,
+    reference_cleanup: Option<&ReferenceCleanup<T>>,
 ) {
     ui.horizontal(|ui| {
         if ui.button("載入").clicked() {
             T::load(state, file_path, data_key);
         }
         if ui.button("儲存").clicked() {
-            T::save(state, file_path, data_key);
+            if reference_cleanup.is_some_and(|cleanup| (cleanup.has_invalid)(state)) {
+                state
+                    .message_state
+                    .set_error("存在失效引用，請先清除後再儲存");
+            } else {
+                T::save(state, file_path, data_key);
+            }
+        }
+
+        if let Some(cleanup) = reference_cleanup {
+            render_clear_invalid_references_button(ui, state, cleanup);
         }
 
         ui.add_space(SPACING_MEDIUM);
@@ -301,6 +347,7 @@ fn render_edit_area<T: EditorItem>(
     ui: &mut egui::Ui,
     state: &mut GenericEditorState<T>,
     render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState, &mut MessageState),
+    reference_cleanup: Option<&ReferenceCleanup<T>>,
 ) {
     ui.vertical(|ui| {
         let is_editable = state.is_editing();
@@ -310,7 +357,21 @@ fn render_edit_area<T: EditorItem>(
             // 先放置確認/取消按鈕，保持可見
             ui.horizontal(|ui| {
                 if ui.button("確認").clicked() {
-                    state.confirm_edit();
+                    let has_invalid_reference =
+                        reference_cleanup.is_some_and(|cleanup| match &state.edit_mode {
+                            EditMode::Creating(item) | EditMode::Editing(_, item) => {
+                                (cleanup.has_invalid_item)(item, &state.ui_state)
+                            }
+                            EditMode::None => false,
+                        });
+
+                    if has_invalid_reference {
+                        state
+                            .message_state
+                            .set_error("存在失效引用，請先清除後再確認");
+                    } else {
+                        state.confirm_edit();
+                    }
                 }
                 if ui.button("取消").clicked() {
                     state.cancel_edit();
@@ -361,6 +422,39 @@ fn render_edit_area<T: EditorItem>(
                     T::type_name()
                 ));
             }
+        }
+    });
+}
+
+// ==================== 本地輔助函數 ====================
+
+fn equipment_names_by_kind(
+    equipments: &[EquipmentType],
+    kind: EquipmentKind,
+) -> Vec<board::domain::alias::TypeName> {
+    equipments
+        .iter()
+        .filter(|equipment| equipment.typ == kind)
+        .map(|equipment| equipment.name.clone())
+        .collect()
+}
+
+struct ReferenceCleanup<T: EditorItem> {
+    has_invalid: fn(&GenericEditorState<T>) -> bool,
+    has_invalid_item: fn(&T, &T::UIState) -> bool,
+    clear_invalid: fn(&mut GenericEditorState<T>),
+}
+
+fn render_clear_invalid_references_button<T: EditorItem>(
+    ui: &mut egui::Ui,
+    state: &mut GenericEditorState<T>,
+    cleanup: &ReferenceCleanup<T>,
+) {
+    let has_invalid_references = !state.is_editing() && (cleanup.has_invalid)(state);
+
+    ui.add_enabled_ui(has_invalid_references, |ui| {
+        if ui.button("清除失效引用").clicked() {
+            (cleanup.clear_invalid)(state);
         }
     });
 }
