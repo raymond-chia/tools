@@ -1,10 +1,10 @@
 //! 裝備編輯器 tab
 
-use crate::constants::{SPACING_MEDIUM, SPACING_SMALL};
+use crate::constants::SPACING_SMALL;
 use crate::editor_item::EditorItem;
 use crate::generic_editor::{GenericEditorState, MessageState};
 use crate::tabs::reference;
-use crate::utils::search::{filter_by_search, render_search_input};
+use crate::tabs::skill_selection::{render_selected_skills_summary, render_skill_selector};
 use board::domain::alias::SkillName;
 use board::domain::core_types::EquipmentType as EquipmentKind;
 use board::loader_schema::EquipmentType;
@@ -55,58 +55,38 @@ pub fn render_form(
     _message_state: &mut MessageState,
 ) {
     ui.horizontal(|ui| {
-        ui.label("名稱：");
-        ui.text_edit_singleline(&mut equipment.name);
-    });
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.label("名稱：");
+                ui.text_edit_singleline(&mut equipment.name);
+            });
 
-    ui.horizontal(|ui| {
-        ui.label("類型：");
-        for kind in EquipmentKind::iter() {
-            ui.selectable_value(&mut equipment.typ, kind, kind.to_string());
-        }
+            ui.horizontal(|ui| {
+                ui.label("類型：");
+                for kind in EquipmentKind::iter() {
+                    ui.selectable_value(&mut equipment.typ, kind, kind.to_string());
+                }
+            });
+        });
+
+        ui.separator();
+
+        // 與名稱並排顯示，修改名稱時可直接確認裝備授予的技能。
+        ui.vertical(|ui| {
+            render_selected_skills_summary(ui, &equipment.granted_skills);
+        });
     });
 
     ui.add_space(SPACING_SMALL);
     ui.separator();
     ui.heading("授予技能");
 
-    if ui_state.available_skills.is_empty() {
-        ui.label("（尚未定義任何技能，請先到「技能」tab 創建技能）");
-    } else {
-        render_search_input(ui, &mut ui_state.skill_search_query);
-        ui.add_space(SPACING_SMALL);
-
-        egui::ScrollArea::vertical()
-            .auto_shrink([false; 2])
-            .show(ui, |ui| {
-                let visible_skills =
-                    filter_by_search(&ui_state.available_skills, &ui_state.skill_search_query);
-
-                if visible_skills.is_empty() && !ui_state.skill_search_query.is_empty() {
-                    ui.label("找不到符合的技能");
-                } else {
-                    for skill_name in visible_skills {
-                        let mut selected = equipment.granted_skills.contains(skill_name);
-                        if ui.checkbox(&mut selected, skill_name).changed() {
-                            if selected {
-                                equipment.granted_skills.push(skill_name.clone());
-                            } else {
-                                equipment.granted_skills.retain(|name| name != skill_name);
-                            }
-                        }
-                    }
-                }
-            });
-    }
-
-    ui.separator();
-    ui.label(format!("已選擇：{} 個技能", equipment.granted_skills.len()));
-    ui.horizontal_wrapped(|ui| {
-        for skill_name in &equipment.granted_skills {
-            ui.label(skill_name);
-            ui.add_space(SPACING_MEDIUM);
-        }
-    });
+    render_skill_selector(
+        ui,
+        &ui_state.available_skills,
+        &mut ui_state.skill_search_query,
+        &mut equipment.granted_skills,
+    );
 }
 
 // ==================== 本地輔助函數 ====================

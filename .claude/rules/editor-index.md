@@ -50,7 +50,10 @@ editor/
 │       ├── mod.rs           - 標籤頁模組定義
 │       ├── object_tab.rs    - 物件編輯器
 │       ├── skill_tab.rs     - 技能編輯器
+│       ├── skill_selection.rs - 裝備與單位共用的技能選擇元件
+│       ├── equipment_tab.rs - 裝備編輯器
 │       ├── unit_tab.rs      - 單位編輯器
+│       ├── reference.rs     - 資料引用檢查與清除工具
 │       ├── level_tab.rs     - 關卡編輯器主邏輯
 │       └── level_tab/
 │           ├── mod.rs       - 關卡編輯子模組定義
@@ -142,6 +145,26 @@ GenericEditorState 的方法：
 - `pub struct UnitTabUIState` - 單位編輯頁面的 UI 狀態
 - `pub fn file_name() -> &'static str` - 取得單位檔案名稱
 - `pub fn render_form(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTabUIState, _message_state: &mut MessageState)` - 渲染單位編輯表單
+
+### editor/tabs/equipment_tab.rs
+
+- `pub struct EquipmentTabUIState` - 裝備編輯頁面的 UI 狀態
+- `pub fn file_name() -> &'static str` - 取得裝備的檔案名稱
+- `pub fn render_form(ui: &mut egui::Ui, equipment: &mut EquipmentType, ui_state: &mut EquipmentTabUIState, _message_state: &mut MessageState)` - 渲染裝備編輯表單
+- `pub fn has_invalid_references(state: &GenericEditorState<EquipmentType>) -> bool` - 檢查是否存在失效的技能引用
+- `pub fn has_invalid_reference(equipment: &EquipmentType, ui_state: &EquipmentTabUIState) -> bool` - 檢查裝備是否存在失效的技能引用
+- `pub fn clear_invalid_references(state: &mut GenericEditorState<EquipmentType>)` - 清除所有裝備中的失效技能引用
+
+### editor/tabs/skill_selection.rs
+
+- `pub(crate) fn render_selected_skills_summary(ui: &mut egui::Ui, selected_skills: &[SkillName])` - 渲染已選技能摘要
+- `pub(crate) fn render_skill_selector(ui: &mut egui::Ui, available_skills: &[SkillName], search_query: &mut SkillName, selected_skills: &mut Vec<SkillName>)` - 渲染可搜尋的技能選擇清單
+
+### editor/tabs/reference.rs
+
+- `pub(crate) fn has_invalid<'a, T>(mut references: impl Iterator<Item = &'a T>, valid_names: &HashSet<T>) -> bool` - 檢查引用是否包含無效名稱
+- `pub(crate) fn retain_valid<T>(references: &mut Vec<T>, valid_names: &HashSet<T>)` - 保留有效引用
+- `pub(crate) fn clear_invalid_option<T>(reference: &mut Option<T>, valid_names: &HashSet<T>)` - 清除無效的選用引用
 
 ### editor/tabs/skill_tab.rs
 

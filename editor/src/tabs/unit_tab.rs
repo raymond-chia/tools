@@ -1,14 +1,23 @@
 //! 單位編輯器 tab
 
-use crate::constants::{CLEAR_LABEL, SPACING_MEDIUM, SPACING_SMALL};
+use crate::constants::{CLEAR_LABEL, SPACING_SMALL};
 use crate::editor_item::EditorItem;
 use crate::generic_editor::{GenericEditorState, MessageState};
 use crate::tabs::reference;
+use crate::tabs::skill_selection::{render_selected_skills_summary, render_skill_selector};
 use crate::utils::search::{combobox_with_dynamic_height, filter_by_search, render_search_input};
 use board::domain::alias::{SkillName, TypeName};
 use board::ecs_types::components::EquippedItems;
 use board::loader_schema::UnitType;
 use std::collections::HashSet;
+
+/// 單位表單目前顯示的子分頁。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum UnitFormSubtab {
+    #[default]
+    Skills,
+    Equipments,
+}
 
 /// 單位編輯器的 UI 狀態
 #[derive(Debug, Default)]
@@ -22,6 +31,8 @@ pub struct UnitTabUIState {
     pub weapon_search_query: TypeName,
     pub armor_search_query: TypeName,
     pub accessory_search_query: TypeName,
+
+    active_subtab: UnitFormSubtab,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -69,55 +80,52 @@ pub fn render_form(
     ui.horizontal(|ui| {
         ui.label("名稱：");
         ui.text_edit_singleline(&mut unit.name);
-    });
 
-    ui.add_space(SPACING_SMALL);
-    ui.separator();
-    ui.heading("技能選擇");
-
-    if ui_state.available_skills.is_empty() {
-        ui.label("（尚未定義任何技能，請先到「技能」tab 創建技能）");
-    } else {
-        // 搜尋框
-        render_search_input(ui, &mut ui_state.skill_search_query);
-        ui.add_space(SPACING_SMALL);
-
-        egui::ScrollArea::vertical()
-            .auto_shrink([false; 2])
-            .show(ui, |ui| {
-                let visible_skills =
-                    filter_by_search(&ui_state.available_skills, &ui_state.skill_search_query);
-
-                if visible_skills.is_empty() && !ui_state.skill_search_query.is_empty() {
-                    ui.label("找不到符合的技能");
-                } else {
-                    for skill_name in visible_skills {
-                        let mut selected = unit.skills.contains(skill_name);
-                        if ui.checkbox(&mut selected, skill_name).changed() {
-                            if selected {
-                                unit.skills.push(skill_name.clone());
-                            } else {
-                                unit.skills.retain(|s| s != skill_name);
-                            }
-                        }
-                    }
-                }
-            });
-    }
-
-    ui.separator();
-
-    // 依儲存順序列出技能總數與已選技能名稱，方便快速檢視
-    ui.label(format!("已選擇：{} 個技能", unit.skills.len()));
-    ui.horizontal_wrapped(|ui| {
-        for skill_name in &unit.skills {
-            ui.label(skill_name);
-            ui.add_space(SPACING_MEDIUM);
+        if ui_state.active_subtab == UnitFormSubtab::Skills {
+            ui.separator();
+            // 與裝備頁相同，讓已選技能摘要位於名稱欄右側。
+            ui.vertical(|ui| render_selected_skills_summary(ui, &unit.skills));
         }
     });
 
     ui.add_space(SPACING_SMALL);
     ui.separator();
+
+    ui.horizontal(|ui| {
+        ui.selectable_value(&mut ui_state.active_subtab, UnitFormSubtab::Skills, "技能");
+        ui.selectable_value(
+            &mut ui_state.active_subtab,
+            UnitFormSubtab::Equipments,
+            "裝備",
+        );
+    });
+
+    ui.add_space(SPACING_SMALL);
+    ui.separator();
+
+    match ui_state.active_subtab {
+        UnitFormSubtab::Skills => render_skill_subtab(ui, unit, ui_state),
+        UnitFormSubtab::Equipments => render_equipment_subtab(ui, unit, ui_state),
+    }
+}
+
+/// 渲染技能子分頁。
+fn render_skill_subtab(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTabUIState) {
+    ui.heading("技能選擇");
+
+    ui.add_space(SPACING_SMALL);
+    ui.separator();
+
+    render_skill_selector(
+        ui,
+        &ui_state.available_skills,
+        &mut ui_state.skill_search_query,
+        &mut unit.skills,
+    );
+}
+
+/// 渲染裝備子分頁。
+fn render_equipment_subtab(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mut UnitTabUIState) {
     ui.heading("預設裝備");
 
     render_equipment_selector(
