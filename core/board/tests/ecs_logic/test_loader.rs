@@ -5,6 +5,7 @@ use super::constants::{
 use bevy_ecs::prelude::World;
 use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_types::resources::GameData;
+use board::loader_schema::UnitsToml;
 
 #[test]
 fn test_parse_and_insert_game_data_sets_resource() {
@@ -68,4 +69,16 @@ fn test_parse_and_insert_game_data_sets_resource() {
         game_data.object_type_map.contains_key(OBJECT_TYPE_SWAMP),
         "object_type_map 應包含 {OBJECT_TYPE_SWAMP}"
     );
+}
+
+#[test]
+fn test_unit_type_missing_configuration_fields_fails() {
+    let source = r#"
+[[units]]
+name = "missing-configuration-fields"
+"#;
+
+    let result = toml::from_str::<UnitsToml>(source);
+
+    assert!(result.is_err(), "UnitType 缺少設定欄位時應該反序列化失敗");
 }

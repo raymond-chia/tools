@@ -1,10 +1,17 @@
 use super::constants::{
-    EQUIPMENTS_TOML, OBJECTS_TOML, SKILL_RUBY_BURST, SKILLS_TOML, UNIT_TYPE_WARRIOR, UNITS_TOML,
+    EQUIPMENT_GREAT_SWORD, EQUIPMENT_IRON_SWORD, EQUIPMENT_STEEL_SWORD, EQUIPMENT_WOODEN_SHIELD,
+    EQUIPMENTS_TOML, OBJECTS_TOML, OFF_HAND_UNITS_TOML, SKILL_IRON_SLASH, SKILL_RUBY_BURST,
+    SKILLS_TOML, UNIT_TYPE_DUAL_WIELDER, UNIT_TYPE_KNIGHT, UNIT_TYPE_SWORD_USER, UNIT_TYPE_WARRIOR,
+    UNITS_TOML,
 };
 use bevy_ecs::prelude::{Entity, World};
+use board::domain::core_types::{EquipmentType, OffHandPermission};
 use board::ecs_logic::loader::{GameDataToml, parse_and_insert_game_data};
 use board::ecs_logic::spawner::spawn_level;
-use board::ecs_types::components::{MaxHp, Occupant, PhysicalAttack, Position, Skills};
+use board::ecs_types::components::{
+    EquippedItems, MaxHp, Occupant, PhysicalAttack, Position, Skills,
+};
+use board::ecs_types::resources::GameData;
 use board::test_helpers::level_builder::LevelBuilder;
 
 fn setup_world(level_toml: &str) -> World {
@@ -41,6 +48,193 @@ fn entity_of(world: &mut World, occupant: Occupant) -> Entity {
         .expect("指定 Occupant 應對應至 Entity")
 }
 
+fn parse_off_hand_game_data() -> World {
+    let mut world = World::new();
+    parse_and_insert_game_data(
+        &mut world,
+        GameDataToml {
+            units: OFF_HAND_UNITS_TOML,
+            skills: SKILLS_TOML,
+            equipments: EQUIPMENTS_TOML,
+            objects: OBJECTS_TOML,
+        },
+    )
+    .expect("副手裝備資料應能載入");
+    world
+}
+
+// ==================================================
+// 載入裝備資料
+// ==================================================
+
+#[test]
+fn test_loader_preserves_equipment_types_and_off_hand_permissions() {
+    let world = parse_off_hand_game_data();
+    let game_data = world
+        .get_resource::<GameData>()
+        .expect("應建立 GameData resource");
+
+    let test_data = [
+        (
+            UNIT_TYPE_SWORD_USER,
+            OffHandPermission::None,
+            Some(EQUIPMENT_IRON_SWORD),
+            None,
+            EquipmentType::Weapon,
+        ),
+        (
+            "great-sword-user",
+            OffHandPermission::None,
+            Some(EQUIPMENT_GREAT_SWORD),
+            None,
+            EquipmentType::TwoHandedWeapon,
+        ),
+        (
+            UNIT_TYPE_DUAL_WIELDER,
+            OffHandPermission::Weapon,
+            Some(EQUIPMENT_IRON_SWORD),
+            Some(EQUIPMENT_STEEL_SWORD),
+            EquipmentType::Weapon,
+        ),
+        (
+            UNIT_TYPE_KNIGHT,
+            OffHandPermission::Shield,
+            Some(EQUIPMENT_IRON_SWORD),
+            Some(EQUIPMENT_WOODEN_SHIELD),
+            EquipmentType::Weapon,
+        ),
+    ];
+
+    for (
+        unit_name,
+        expected_permission,
+        expected_main_hand,
+        expected_off_hand,
+        expected_main_hand_type,
+    ) in test_data
+    {
+        let unit = game_data
+            .unit_type_map
+            .get(unit_name)
+            .expect("單位類型應存在");
+
+        assert_eq!(unit.off_hand_permission, expected_permission);
+        assert_eq!(unit.equipment.main_hand.as_deref(), expected_main_hand);
+        assert_eq!(unit.equipment.off_hand.as_deref(), expected_off_hand);
+        assert_eq!(
+            game_data
+                .equipment_type_map
+                .get(expected_main_hand.expect("測試單位應有主手裝備"))
+                .expect("主手裝備類型應存在")
+                .typ,
+            expected_main_hand_type,
+        );
+    }
+
+    assert_eq!(
+        game_data
+            .equipment_type_map
+            .get(EQUIPMENT_WOODEN_SHIELD)
+            .expect("盾牌裝備類型應存在")
+            .typ,
+        EquipmentType::Shield,
+    );
+}
+
+#[test]
+fn test_loader_rejects_off_hand_equipment_disallowed_by_unit_permission() {
+    let invalid_units_tomls = [
+        r#"
+[[units]]
+name = "none-off-hand-user"
+skills = []
+off_hand_permission = "None"
+
+[units.equipment]
+main_hand = "iron-sword"
+off_hand = "steel-sword"
+"#,
+        r#"
+[[units]]
+name = "none-off-hand-user"
+skills = []
+off_hand_permission = "None"
+
+[units.equipment]
+main_hand = "iron-sword"
+off_hand = "wooden-shield"
+"#,
+        r#"
+[[units]]
+name = "weapon-off-hand-user"
+skills = []
+off_hand_permission = "Weapon"
+
+[units.equipment]
+main_hand = "iron-sword"
+off_hand = "wooden-shield"
+"#,
+        r#"
+[[units]]
+name = "shield-off-hand-user"
+skills = []
+off_hand_permission = "Shield"
+
+[units.equipment]
+main_hand = "iron-sword"
+off_hand = "steel-sword"
+"#,
+        r#"
+[[units]]
+name = "two-handed-with-off-hand-user"
+skills = []
+off_hand_permission = "Shield"
+
+[units.equipment]
+main_hand = "great-sword"
+off_hand = "wooden-shield"
+"#,
+    ];
+
+    for units in invalid_units_tomls {
+        let mut world = World::new();
+        let result = parse_and_insert_game_data(
+            &mut world,
+            GameDataToml {
+                units,
+                skills: SKILLS_TOML,
+                equipments: EQUIPMENTS_TOML,
+                objects: OBJECTS_TOML,
+            },
+        );
+
+        assert!(result.is_err(), "副手裝備權限不符時應拒絕載入");
+    }
+}
+
+// ==================================================
+// 生成單位
+// ==================================================
+
+#[test]
+fn test_spawn_level_copies_main_and_off_hand_equipment_to_unit() {
+    let level_toml = LevelBuilder::from_ascii("K")
+        .unit("K", UNIT_TYPE_KNIGHT, 0)
+        .to_toml()
+        .expect("關卡 TOML 應能序列化");
+    let mut world = parse_off_hand_game_data();
+    spawn_level(&mut world, &level_toml, "off-hand-test").expect("關卡應能生成");
+
+    let equipment = world
+        .query::<&EquippedItems>()
+        .iter(&world)
+        .next()
+        .expect("已生成單位應有裝備元件");
+
+    assert_eq!(equipment.main_hand.as_deref(), Some(EQUIPMENT_IRON_SWORD));
+    assert_eq!(equipment.off_hand.as_deref(), Some(EQUIPMENT_WOODEN_SHIELD));
+}
+
 #[test]
 fn test_spawn_level_applies_default_equipment_effects_and_skills() {
     let level_toml = LevelBuilder::from_ascii("W")
@@ -66,7 +260,10 @@ fn test_spawn_level_applies_default_equipment_effects_and_skills() {
         "預設武器的物理攻擊效果應在生成時套用"
     );
     let skills = &entity_ref.get::<Skills>().expect("單位應有 Skills").0;
-    assert!(skills.contains(&"iron-slash".to_string()), "武器應授予技能");
+    assert!(
+        skills.contains(&SKILL_IRON_SLASH.to_string()),
+        "武器應授予技能"
+    );
     assert!(
         skills.contains(&SKILL_RUBY_BURST.to_string()),
         "飾品應授予技能"

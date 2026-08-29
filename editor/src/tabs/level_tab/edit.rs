@@ -965,9 +965,12 @@ fn try_duplicate(
         return; // 懸停格是空格，靜默不動作
     }
 
-    let Some(new_pos) = find_nearest_empty(level, origin, board) else {
-        message_state.set_error("附近三格內沒有空格可放置複製品".to_string());
-        return;
+    let new_pos = match find_nearest_empty(level, origin, board) {
+        Some(new_pos) => new_pos,
+        None => {
+            message_state.set_error("附近三格內沒有空格可放置複製品".to_string());
+            return;
+        }
     };
 
     match dragged {

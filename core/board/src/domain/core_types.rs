@@ -60,8 +60,19 @@ define_attributes!(
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Display, EnumIter)]
 pub enum EquipmentType {
     Weapon,
+    TwoHandedWeapon,
+    Shield,
     Armor,
     Accessory,
+}
+
+/// 單位副手欄允許裝備的類型。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, Display, EnumIter)]
+pub enum OffHandPermission {
+    #[default]
+    None,
+    Weapon,
+    Shield,
 }
 
 // ============================================================================

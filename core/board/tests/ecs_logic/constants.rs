@@ -8,15 +8,23 @@ pub const SKILL_SUMMON_WALL_AOE: &str = "summon-wall-aoe";
 pub const SKILL_WARRIOR_REACTION: &str = "warrior-reaction";
 pub const SKILL_WARRIOR_REACTION_2: &str = "warrior-reaction-2";
 pub const SKILL_WARRIOR_COUNTER: &str = "warrior-counter";
+pub const SKILL_IRON_SLASH: &str = "iron-slash";
 pub const UNIT_TYPE_WARRIOR: &str = "warrior";
 pub const UNIT_TYPE_WARRIOR_B: &str = "warrior-b";
 pub const UNIT_TYPE_WARRIOR_COUNTER_ONLY: &str = "warrior-counter-only";
 pub const UNIT_TYPE_MAGE: &str = "mage";
+pub const UNIT_TYPE_SWORD_USER: &str = "sword-user";
+pub const UNIT_TYPE_DUAL_WIELDER: &str = "dual-wielder";
+pub const UNIT_TYPE_KNIGHT: &str = "knight";
 pub const OBJECT_TYPE_WALL: &str = "wall";
 pub const OBJECT_TYPE_SPIKE: &str = "spike";
 pub const OBJECT_TYPE_SWAMP: &str = "swamp";
 pub const OBJECT_TYPE_FOG: &str = "fog";
+pub const EQUIPMENT_IRON_SWORD: &str = "iron-sword";
 pub const EQUIPMENT_STEEL_SWORD: &str = "steel-sword";
+pub const EQUIPMENT_WOODEN_BOW: &str = "wooden-bow";
+pub const EQUIPMENT_WOODEN_SHIELD: &str = "wooden-shield";
+pub const EQUIPMENT_GREAT_SWORD: &str = "great-sword";
 pub const EQUIPMENT_LEATHER_ARMOR: &str = "leather-armor";
 pub const EQUIPMENT_GIANT_ARMOR: &str = "giant-armor";
 pub const EQUIPMENT_RUBY_RING: &str = "ruby-ring";
@@ -329,23 +337,70 @@ pub const UNITS_TOML: &str = r#"
 [[units]]
 name = "warrior"
 skills = ["warrior-passive", "melee-attack", "warrior-active-2", "warrior-active-4", "warrior-reaction", "warrior-counter"]
+off_hand_permission = "None"
 
 [units.equipment]
-weapon = "iron-sword"
+main_hand = "iron-sword"
 armor = "leather-armor"
 first_accessory = "ruby-ring"
 
 [[units]]
 name = "warrior-b"
 skills = ["warrior-passive", "melee-attack", "warrior-reaction", "warrior-reaction-2"]
+off_hand_permission = "None"
+
+[units.equipment]
 
 [[units]]
 name = "mage"
 skills = ["mage-passive", "melee-attack", "diamond-aoe-1", "summon-wall-aoe"]
+off_hand_permission = "None"
+
+[units.equipment]
 
 [[units]]
 name = "warrior-counter-only"
 skills = ["warrior-passive", "warrior-counter"]
+off_hand_permission = "None"
+
+[units.equipment]
+"#;
+
+/// 副手裝備規則測試用的單位資料。
+pub const OFF_HAND_UNITS_TOML: &str = r#"
+[[units]]
+name = "sword-user"
+skills = []
+off_hand_permission = "None"
+
+[units.equipment]
+main_hand = "iron-sword"
+
+[[units]]
+name = "dual-wielder"
+skills = []
+off_hand_permission = "Weapon"
+
+[units.equipment]
+main_hand = "iron-sword"
+off_hand = "steel-sword"
+
+[[units]]
+name = "knight"
+skills = []
+off_hand_permission = "Shield"
+
+[units.equipment]
+main_hand = "iron-sword"
+off_hand = "wooden-shield"
+
+[[units]]
+name = "great-sword-user"
+skills = []
+off_hand_permission = "None"
+
+[units.equipment]
+main_hand = "great-sword"
 "#;
 
 pub const EQUIPMENTS_TOML: &str = r#"
@@ -358,6 +413,21 @@ granted_skills = ["iron-slash"]
 name = "steel-sword"
 typ = "Weapon"
 granted_skills = ["steel-slash"]
+
+[[equipments]]
+name = "wooden-bow"
+typ = "Weapon"
+granted_skills = []
+
+[[equipments]]
+name = "wooden-shield"
+typ = "Shield"
+granted_skills = []
+
+[[equipments]]
+name = "great-sword"
+typ = "TwoHandedWeapon"
+granted_skills = []
 
 [[equipments]]
 name = "leather-armor"

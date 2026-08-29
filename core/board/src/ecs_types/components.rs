@@ -74,7 +74,8 @@ pub struct Skills(pub Vec<SkillName>);
 /// 單位目前穿戴的裝備名稱；兩個飾品欄固定存在。
 #[derive(Debug, Clone, Default, Component, Serialize, Deserialize)]
 pub struct EquippedItems {
-    pub weapon: Option<TypeName>,
+    pub main_hand: Option<TypeName>,
+    pub off_hand: Option<TypeName>,
     pub armor: Option<TypeName>,
     pub first_accessory: Option<TypeName>,
     pub second_accessory: Option<TypeName>,

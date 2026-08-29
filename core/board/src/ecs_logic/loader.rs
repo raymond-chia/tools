@@ -1,6 +1,10 @@
+use crate::domain::core_types::{EquipmentType, OffHandPermission};
 use crate::ecs_types::resources::GameData;
-use crate::error::{LoadError, Result};
-use crate::loader_schema::{EquipmentsToml, ObjectsToml, SkillsToml, UnitsToml};
+use crate::error::{DataError, LoadError, Result};
+use crate::loader_schema::{
+    EquipmentType as EquipmentDefinition, EquipmentsToml, ObjectsToml, SkillsToml, UnitType,
+    UnitsToml,
+};
 use bevy_ecs::prelude::World;
 use std::collections::HashMap;
 
@@ -44,16 +48,20 @@ pub fn parse_and_insert_game_data(world: &mut World, source: GameDataToml<'_>) -
         .map(|skill| (skill.name().clone(), skill))
         .collect::<HashMap<_, _>>();
 
-    let unit_type_map = parsed_units
-        .units
-        .into_iter()
-        .map(|unit| (unit.name.clone(), unit))
-        .collect::<HashMap<_, _>>();
-
     let equipment_type_map = parsed_equipments
         .equipments
         .into_iter()
         .map(|equipment| (equipment.name.clone(), equipment))
+        .collect::<HashMap<_, _>>();
+
+    for unit in &parsed_units.units {
+        validate_equipment(unit, &equipment_type_map)?;
+    }
+
+    let unit_type_map = parsed_units
+        .units
+        .into_iter()
+        .map(|unit| (unit.name.clone(), unit))
         .collect::<HashMap<_, _>>();
 
     let object_type_map = parsed_objects
@@ -69,5 +77,59 @@ pub fn parse_and_insert_game_data(world: &mut World, source: GameDataToml<'_>) -
         object_type_map,
     });
 
+    Ok(())
+}
+
+fn validate_equipment(
+    unit: &UnitType,
+    equipment_type_map: &HashMap<String, EquipmentDefinition>,
+) -> Result<()> {
+    if let Some(equipment_name) = &unit.equipment.main_hand {
+        let equipment = equipment_type_map.get(equipment_name).ok_or_else(|| {
+            DataError::EquipmentTypeNotFound {
+                equipment_name: equipment_name.clone(),
+            }
+        })?;
+        if !matches!(
+            equipment.typ,
+            EquipmentType::Weapon | EquipmentType::TwoHandedWeapon
+        ) {
+            return Err(LoadError::ParseError(format!(
+                "單位類型 {} 的主手不允許裝備: {}",
+                unit.name, equipment_name
+            ))
+            .into());
+        }
+    }
+
+    let equipment_name = match &unit.equipment.off_hand {
+        Some(equipment_name) => equipment_name,
+        None => return Ok(()),
+    };
+    let equipment =
+        equipment_type_map
+            .get(equipment_name)
+            .ok_or_else(|| DataError::EquipmentTypeNotFound {
+                equipment_name: equipment_name.clone(),
+            })?;
+    let main_hand_is_two_handed = unit
+        .equipment
+        .main_hand
+        .as_ref()
+        .and_then(|name| equipment_type_map.get(name))
+        .is_some_and(|equipment| equipment.typ == EquipmentType::TwoHandedWeapon);
+    let is_allowed = !main_hand_is_two_handed
+        && matches!(
+            (unit.off_hand_permission, equipment.typ),
+            (OffHandPermission::Weapon, EquipmentType::Weapon)
+                | (OffHandPermission::Shield, EquipmentType::Shield)
+        );
+    if !is_allowed {
+        return Err(LoadError::ParseError(format!(
+            "單位類型 {} 的副手不允許裝備: {}",
+            unit.name, equipment_name
+        ))
+        .into());
+    }
     Ok(())
 }

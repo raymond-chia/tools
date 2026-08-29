@@ -1,7 +1,9 @@
 //! Loader 相關的資料結構定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
-use crate::domain::core_types::{EquipmentType as EquipmentKind, OutcomeBranches, SkillType};
+use crate::domain::core_types::{
+    EquipmentType as EquipmentKind, OffHandPermission, OutcomeBranches, SkillType,
+};
 use crate::ecs_types::components::{EquippedItems, Position};
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +16,7 @@ use serde::{Deserialize, Serialize};
 pub struct UnitType {
     pub name: TypeName,
     pub skills: Vec<SkillName>,
-    #[serde(default)]
+    pub off_hand_permission: OffHandPermission,
     pub equipment: EquippedItems,
 }
 
@@ -23,7 +25,6 @@ pub struct UnitType {
 pub struct EquipmentType {
     pub name: TypeName,
     pub typ: EquipmentKind,
-    #[serde(default)]
     pub granted_skills: Vec<SkillName>,
 }
 

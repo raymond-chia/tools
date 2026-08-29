@@ -68,8 +68,9 @@ fn calculate_unit_data(
 
 fn equipped_item_names(equipped_items: &EquippedItems) -> impl Iterator<Item = &TypeName> {
     equipped_items
-        .weapon
+        .main_hand
         .iter()
+        .chain(equipped_items.off_hand.iter())
         .chain(equipped_items.armor.iter())
         .chain(equipped_items.first_accessory.iter())
         .chain(equipped_items.second_accessory.iter())
