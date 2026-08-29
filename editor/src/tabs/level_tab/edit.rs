@@ -11,8 +11,8 @@ use board::domain::core_types::{EndLevelCondition, OutcomeBranches, SkillType};
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
 use board::loader_schema::{
-    EquipmentType, EquipmentsToml, Faction, LevelType, ObjectPlacement, ObjectType, ObjectsToml,
-    SkillsToml, UnitPlacement, UnitType, UnitsToml,
+    EquipmentTomlType, EquipmentsToml, Faction, LevelType, ObjectPlacement, ObjectType,
+    ObjectsToml, SkillsToml, UnitPlacement, UnitType, UnitsToml,
 };
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -726,7 +726,7 @@ fn initialize_world(
     level: &LevelType,
     units: &[UnitType],
     skills: &[SkillType],
-    equipments: &[EquipmentType],
+    equipments: &[EquipmentTomlType],
     objects: &[ObjectType],
 ) -> Result<World, String> {
     let units_toml = toml::to_string_pretty(&UnitsToml {

@@ -5,7 +5,7 @@ use crate::domain::battle_log::LogEvent;
 use crate::domain::core_types::{OutcomeBranches, PendingReaction, SkillType};
 use crate::domain::turn::TurnEntry;
 use crate::ecs_types::components::{Occupant, Position};
-use crate::loader_schema::{EquipmentType, Faction, ObjectType, UnitType};
+use crate::loader_schema::{EquipmentTomlType, Faction, ObjectType, UnitType};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::Resource;
 use std::collections::{HashMap, HashSet};
@@ -19,7 +19,7 @@ pub struct OccupantIndex(pub HashMap<Occupant, Entity>);
 pub struct GameData {
     pub skill_map: HashMap<SkillName, SkillType>,
     pub unit_type_map: HashMap<TypeName, UnitType>,
-    pub equipment_type_map: HashMap<TypeName, EquipmentType>,
+    pub equipment_type_map: HashMap<TypeName, EquipmentTomlType>,
     pub object_type_map: HashMap<TypeName, ObjectType>,
 }
 

@@ -2,8 +2,7 @@ use crate::domain::core_types::{EquipmentType, OffHandPermission};
 use crate::ecs_types::resources::GameData;
 use crate::error::{DataError, LoadError, Result};
 use crate::loader_schema::{
-    EquipmentType as EquipmentDefinition, EquipmentsToml, ObjectsToml, SkillsToml, UnitType,
-    UnitsToml,
+    EquipmentTomlType, EquipmentsToml, ObjectsToml, SkillsToml, UnitType, UnitsToml,
 };
 use bevy_ecs::prelude::World;
 use std::collections::HashMap;
@@ -82,7 +81,7 @@ pub fn parse_and_insert_game_data(world: &mut World, source: GameDataToml<'_>) -
 
 fn validate_equipment(
     unit: &UnitType,
-    equipment_type_map: &HashMap<String, EquipmentDefinition>,
+    equipment_type_map: &HashMap<String, EquipmentTomlType>,
 ) -> Result<()> {
     if let Some(equipment_name) = &unit.equipment.main_hand {
         let equipment = equipment_type_map.get(equipment_name).ok_or_else(|| {

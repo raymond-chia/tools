@@ -22,13 +22,8 @@ pub const OBJECT_TYPE_SWAMP: &str = "swamp";
 pub const OBJECT_TYPE_FOG: &str = "fog";
 pub const EQUIPMENT_IRON_SWORD: &str = "iron-sword";
 pub const EQUIPMENT_STEEL_SWORD: &str = "steel-sword";
-pub const EQUIPMENT_WOODEN_BOW: &str = "wooden-bow";
 pub const EQUIPMENT_WOODEN_SHIELD: &str = "wooden-shield";
 pub const EQUIPMENT_GREAT_SWORD: &str = "great-sword";
-pub const EQUIPMENT_LEATHER_ARMOR: &str = "leather-armor";
-pub const EQUIPMENT_GIANT_ARMOR: &str = "giant-armor";
-pub const EQUIPMENT_RUBY_RING: &str = "ruby-ring";
-pub const EQUIPMENT_ECHO_CHARM: &str = "echo-charm";
 
 pub const SKILLS_TOML: &str = r#"
 [[skills]]

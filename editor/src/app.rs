@@ -7,8 +7,8 @@ use crate::generic_editor::{EditMode, GenericEditorState, MessageState};
 use crate::tabs;
 use crate::utils::dnd::render_dnd_handle;
 use crate::utils::search::{match_search_query, render_search_input};
-use board::domain::core_types::{EquipmentType as EquipmentKind, SkillType};
-use board::loader_schema::{EquipmentType, LevelType, ObjectType, UnitType};
+use board::domain::core_types::{EquipmentType, SkillType};
+use board::loader_schema::{EquipmentTomlType, LevelType, ObjectType, UnitType};
 use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
@@ -31,7 +31,7 @@ define_editors! {
     Equipment => {
         display: "裝備",
         field: equipment_editor,
-        type: EquipmentType,
+        type: EquipmentTomlType,
         file_fn: tabs::equipment_tab::file_name,
     },
     Unit => {
@@ -109,12 +109,20 @@ impl eframe::App for EditorApp {
                     .iter()
                     .map(|skill| skill.name().clone())
                     .collect();
-                self.unit_editor.ui_state.available_weapons =
-                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentKind::Weapon);
+                self.unit_editor.ui_state.available_main_hand_weapons =
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentType::Weapon);
+                self.unit_editor.ui_state.available_two_handed_weapons = equipment_names_by_kind(
+                    &self.equipment_editor.items,
+                    EquipmentType::TwoHandedWeapon,
+                );
+                self.unit_editor.ui_state.available_off_hand_weapons =
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentType::Weapon);
+                self.unit_editor.ui_state.available_shields =
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentType::Shield);
                 self.unit_editor.ui_state.available_armors =
-                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentKind::Armor);
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentType::Armor);
                 self.unit_editor.ui_state.available_accessories =
-                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentKind::Accessory);
+                    equipment_names_by_kind(&self.equipment_editor.items, EquipmentType::Accessory);
 
                 render_editor_ui(
                     ui,
@@ -429,8 +437,8 @@ fn render_edit_area<T: EditorItem>(
 // ==================== 本地輔助函數 ====================
 
 fn equipment_names_by_kind(
-    equipments: &[EquipmentType],
-    kind: EquipmentKind,
+    equipments: &[EquipmentTomlType],
+    kind: EquipmentType,
 ) -> Vec<board::domain::alias::TypeName> {
     equipments
         .iter()

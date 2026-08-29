@@ -15,7 +15,7 @@ use board::domain::constants::PLAYER_FACTION_ID;
 use board::domain::core_types::{LevelOutcome, OutcomeBranches, SkillType};
 use board::ecs_types::components::{Occupant, Position};
 use board::ecs_types::resources::Board;
-use board::loader_schema::{EquipmentType, LevelType, ObjectType, UnitType};
+use board::loader_schema::{EquipmentTomlType, LevelType, ObjectType, UnitType};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -77,7 +77,7 @@ pub struct LevelTabUIState {
     /// 可選的技能類型（完整資料，供部署時序列化用）
     pub available_skills: Vec<SkillType>,
     /// 可選的裝備類型（完整資料，供部署時序列化用）
-    pub available_equipments: Vec<EquipmentType>,
+    pub available_equipments: Vec<EquipmentTomlType>,
     /// 可選的物件類型（完整資料，供部署時序列化用）
     pub available_objects: Vec<ObjectType>,
 

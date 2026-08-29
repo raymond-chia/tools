@@ -325,7 +325,7 @@ fn test_equip_unit_replaces_specified_accessory_position() {
     equip_unit(
         &mut world,
         occupant,
-        &EQUIPMENT_ECHO_CHARM.to_string(),
+        &"echo-charm".to_string(),
         EquipmentPosition::FirstAccessory,
     )
     .expect("飾品應成功替換指定格位");
@@ -357,7 +357,7 @@ fn test_unequip_unit_clamps_current_hp_to_new_max_hp() {
     equip_unit(
         &mut world,
         occupant,
-        &EQUIPMENT_GIANT_ARMOR.to_string(),
+        &"giant-armor".to_string(),
         EquipmentPosition::Armor,
     )
     .expect("防具應成功裝備");
@@ -367,7 +367,7 @@ fn test_unequip_unit_clamps_current_hp_to_new_max_hp() {
     equip_unit(
         &mut world,
         occupant,
-        &EQUIPMENT_LEATHER_ARMOR.to_string(),
+        &"leather-armor".to_string(),
         EquipmentPosition::Armor,
     )
     .expect("防具應成功替換");
@@ -409,14 +409,14 @@ fn test_same_equipment_name_in_both_accessory_positions_grants_skill_once() {
     equip_unit(
         &mut world,
         occupant,
-        &EQUIPMENT_RUBY_RING.to_string(),
+        &"ruby-ring".to_string(),
         EquipmentPosition::FirstAccessory,
     )
     .expect("第一飾品欄應成功裝備");
     equip_unit(
         &mut world,
         occupant,
-        &EQUIPMENT_RUBY_RING.to_string(),
+        &"ruby-ring".to_string(),
         EquipmentPosition::SecondAccessory,
     )
     .expect("同名飾品應可裝在第二飾品欄");
@@ -449,7 +449,7 @@ fn test_equipment_granting_existing_unit_skill_counts_effect_once() {
     equip_unit(
         &mut world,
         occupant,
-        &EQUIPMENT_ECHO_CHARM.to_string(),
+        &"echo-charm".to_string(),
         EquipmentPosition::FirstAccessory,
     )
     .expect("飾品應成功裝備");

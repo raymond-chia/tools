@@ -1,9 +1,7 @@
 //! Loader 相關的資料結構定義
 
 use crate::domain::alias::{Coord, ID, MovementCost, SkillName, TypeName};
-use crate::domain::core_types::{
-    EquipmentType as EquipmentKind, OffHandPermission, OutcomeBranches, SkillType,
-};
+use crate::domain::core_types::{EquipmentType, OffHandPermission, OutcomeBranches, SkillType};
 use crate::ecs_types::components::{EquippedItems, Position};
 use serde::{Deserialize, Serialize};
 
@@ -22,17 +20,17 @@ pub struct UnitType {
 
 /// 裝備類型定義。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EquipmentType {
+pub struct EquipmentTomlType {
     pub name: TypeName,
-    pub typ: EquipmentKind,
+    pub typ: EquipmentType,
     pub granted_skills: Vec<SkillName>,
 }
 
-impl Default for EquipmentType {
+impl Default for EquipmentTomlType {
     fn default() -> Self {
         Self {
             name: TypeName::default(),
-            typ: EquipmentKind::Weapon,
+            typ: EquipmentType::Weapon,
             granted_skills: Vec::new(),
         }
     }
@@ -115,7 +113,7 @@ pub struct UnitsToml {
 /// 裝備 TOML 根結構。
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EquipmentsToml {
-    pub equipments: Vec<EquipmentType>,
+    pub equipments: Vec<EquipmentTomlType>,
 }
 
 /// 物件 TOML 頂層結構
