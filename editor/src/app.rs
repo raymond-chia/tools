@@ -180,7 +180,13 @@ fn render_editor_ui<T: EditorItem>(
     let height = ui.available_height();
     ui.horizontal(|ui| {
         // 左側：項目列表
-        render_item_list(ui, state, LIST_PANEL_WIDTH, height);
+        render_item_list(
+            ui,
+            state,
+            LIST_PANEL_WIDTH,
+            height,
+            reference_cleanup.as_ref(),
+        );
         ui.separator();
         // 右側：編輯區域
         render_edit_area(ui, state, render_form, reference_cleanup.as_ref());
@@ -240,6 +246,7 @@ fn render_item_list<T: EditorItem>(
     state: &mut GenericEditorState<T>,
     width: f32,
     height: f32,
+    reference_cleanup: Option<&ReferenceCleanup<T>>,
 ) {
     ui.vertical(|ui| {
         ui.set_width(width);
@@ -254,7 +261,7 @@ fn render_item_list<T: EditorItem>(
         render_search_input(ui, &mut state.search_query);
         ui.add_space(SPACING_SMALL);
 
-        render_items_scroll_area(ui, state);
+        render_items_scroll_area(ui, state, reference_cleanup);
     });
 }
 
@@ -291,7 +298,11 @@ fn render_action_buttons<T: EditorItem>(ui: &mut egui::Ui, state: &mut GenericEd
 /// 渲染搜尋框
 
 /// 渲染可捲動的項目列表
-fn render_items_scroll_area<T: EditorItem>(ui: &mut egui::Ui, state: &mut GenericEditorState<T>) {
+fn render_items_scroll_area<T: EditorItem>(
+    ui: &mut egui::Ui,
+    state: &mut GenericEditorState<T>,
+    reference_cleanup: Option<&ReferenceCleanup<T>>,
+) {
     egui::ScrollArea::vertical()
         .id_salt("item_list_scroll")
         .auto_shrink([false; 2])
@@ -301,20 +312,30 @@ fn render_items_scroll_area<T: EditorItem>(ui: &mut egui::Ui, state: &mut Generi
             let query_lower = state.search_query.to_lowercase();
 
             // 提前收集符合搜尋條件的項目（索引和名稱），避免借用衝突
-            let visible_items: Vec<(usize, String)> = state
+            let visible_items: Vec<(usize, String, bool)> = state
                 .items
                 .iter()
                 .enumerate()
                 .filter(|(_, item)| match_search_query(item.name(), &query_lower))
-                .map(|(idx, item)| (idx, item.name().to_string()))
+                .map(|(idx, item)| {
+                    let has_invalid_reference = reference_cleanup
+                        .is_some_and(|cleanup| (cleanup.has_invalid_item)(item, &state.ui_state));
+                    (idx, item.name().to_string(), has_invalid_reference)
+                })
                 .collect();
 
-            for (original_index, item_name) in visible_items {
+            for (original_index, item_name, has_invalid_reference) in visible_items {
                 let is_selected = Some(original_index) == state.selected_index;
 
-                if let Some((from, to)) =
-                    render_list_item(ui, state, original_index, &item_name, is_selected, can_drag)
-                {
+                if let Some((from, to)) = render_list_item(
+                    ui,
+                    state,
+                    original_index,
+                    &item_name,
+                    is_selected,
+                    can_drag,
+                    has_invalid_reference,
+                ) {
                     state.move_item(from, to);
                 }
             }
@@ -329,6 +350,7 @@ fn render_list_item<T: EditorItem>(
     item_name: &str,
     is_selected: bool,
     can_drag: bool,
+    has_invalid_reference: bool,
 ) -> Option<(usize, usize)> {
     let mut dnd_result = None;
 
@@ -342,7 +364,12 @@ fn render_list_item<T: EditorItem>(
         }
 
         // 項目標籤：點擊選取
-        if ui.selectable_label(is_selected, item_name).clicked() {
+        let item_label = if has_invalid_reference {
+            egui::RichText::new(item_name).color(egui::Color32::RED)
+        } else {
+            egui::RichText::new(item_name)
+        };
+        if ui.selectable_label(is_selected, item_label).clicked() {
             state.selected_index = Some(original_index);
         }
     });
