@@ -1,19 +1,15 @@
-use super::{BattleAction, DragState, DraggedObject, LevelTabMode, LevelTabUIState, battlefield};
+use super::{DragState, DraggedObject, LevelTabUIState, battlefield};
 use crate::constants::*;
 use crate::generic_editor::MessageState;
 use crate::utils::search::{
     combobox_with_dynamic_height, filter_by_search, render_filtered_options, render_search_input,
 };
-use bevy_ecs::world::World;
 use board::domain::alias::{Coord, ID, TypeName};
 use board::domain::constants::{PLAYER_ALLIANCE_ID, PLAYER_FACTION_ID};
-use board::domain::core_types::{EndLevelCondition, OutcomeBranches, SkillType};
+use board::domain::core_types::{EndLevelCondition, OutcomeBranches};
 use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
-use board::loader_schema::{
-    EquipmentTomlType, EquipmentsToml, Faction, LevelType, ObjectPlacement, ObjectType,
-    ObjectsToml, SkillsToml, UnitPlacement, UnitType, UnitsToml,
-};
+use board::loader_schema::{Faction, LevelType, ObjectPlacement, UnitPlacement};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
@@ -48,19 +44,6 @@ pub fn render_form(
                 .range(1..=Coord::MAX),
         );
     });
-
-    ui.add_space(SPACING_MEDIUM);
-    ui.separator();
-
-    // 上方部署按鈕（部署返回後免去重新捲動到底部）
-    if ui
-        .push_id("start_deploy_top", |ui| {
-            render_start_deploy_button(ui, level, ui_state, message_state)
-        })
-        .inner
-    {
-        return;
-    }
 
     ui.add_space(SPACING_MEDIUM);
     ui.separator();
@@ -160,37 +143,6 @@ pub fn render_form(
 
     // 戰場預覽區
     render_battlefield(ui, level, ui_state, message_state);
-}
-
-/// 渲染「開始部署」按鈕，回傳是否已進入部署模式
-fn render_start_deploy_button(
-    ui: &mut egui::Ui,
-    level: &mut LevelType,
-    ui_state: &mut LevelTabUIState,
-    message_state: &mut MessageState,
-) -> bool {
-    if ui.button("開始部署").clicked() {
-        match initialize_world(
-            level,
-            &ui_state.available_units,
-            &ui_state.available_skills,
-            &ui_state.available_equipments,
-            &ui_state.available_objects,
-        ) {
-            Ok(world) => {
-                ui_state.world = world;
-                ui_state.selected_left_pos = None;
-                ui_state.selected_right_pos = None;
-                ui_state.battle_action = BattleAction::Normal;
-                ui_state.mode = LevelTabMode::Deploy;
-                return true;
-            }
-            Err(msg) => {
-                message_state.set_error(format!("進入部署模式失敗：{}", msg));
-            }
-        }
-    }
-    false
 }
 
 /// 渲染陣營列表
@@ -609,15 +561,7 @@ fn render_battlefield(
         height: level.board_height,
     };
 
-    ui.horizontal(|ui| {
-        ui.heading("戰場預覽");
-        ui.add_space(SPACING_MEDIUM);
-        // 下方部署按鈕
-        ui.push_id("start_deploy_bottom", |ui| {
-            render_start_deploy_button(ui, level, ui_state, message_state)
-        })
-        .inner;
-    });
+    ui.heading("戰場預覽");
 
     let scroll_output = egui::ScrollArea::both()
         .auto_shrink([false; 2])
@@ -717,53 +661,6 @@ pub fn dump_levels_split(levels: &[LevelType], levels_file_path: &Path) -> Resul
     }
 
     Ok(())
-}
-
-// ==================== 輔助函數 ====================
-
-/// 序列化資料並初始化 ECS World
-fn initialize_world(
-    level: &LevelType,
-    units: &[UnitType],
-    skills: &[SkillType],
-    equipments: &[EquipmentTomlType],
-    objects: &[ObjectType],
-) -> Result<World, String> {
-    let units_toml = toml::to_string_pretty(&UnitsToml {
-        units: units.to_vec(),
-    })
-    .map_err(|e| format!("序列化單位資料失敗：{}", e))?;
-    let skills_toml = toml::to_string_pretty(&SkillsToml {
-        skills: skills.to_vec(),
-    })
-    .map_err(|e| format!("序列化技能資料失敗：{}", e))?;
-    let equipments_toml = toml::to_string_pretty(&EquipmentsToml {
-        equipments: equipments.to_vec(),
-    })
-    .map_err(|e| format!("序列化裝備資料失敗：{}", e))?;
-    let objects_toml = toml::to_string_pretty(&ObjectsToml {
-        objects: objects.to_vec(),
-    })
-    .map_err(|e| format!("序列化物件資料失敗：{}", e))?;
-    let level_toml =
-        toml::to_string_pretty(level).map_err(|e| format!("序列化關卡資料失敗：{}", e))?;
-
-    let mut world = World::new();
-    board::ecs_logic::loader::parse_and_insert_game_data(
-        &mut world,
-        board::ecs_logic::loader::GameDataToml {
-            units: &units_toml,
-            skills: &skills_toml,
-            equipments: &equipments_toml,
-            objects: &objects_toml,
-        },
-    )
-    .map_err(|e| format!("載入遊戲資料失敗：{:?}", e))?;
-
-    board::ecs_logic::spawner::spawn_level(&mut world, &level_toml, &level.name)
-        .map_err(|e| format!("生成關卡失敗：{:?}", e))?;
-
-    Ok(world)
 }
 
 /// 識別被拖曳的物體及其索引

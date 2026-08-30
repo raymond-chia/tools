@@ -1,15 +1,9 @@
-//! 戰場共用邏輯：網格渲染、快照查詢、詳情面板
+//! 關卡編輯器的戰場網格渲染
 
 use crate::constants::*;
-use bevy_ecs::world::World;
-use board::domain::alias::{Coord, ID};
-use board::domain::constants::PLAYER_ALLIANCE_ID;
-use board::ecs_logic::query::{ObjectQueryResult, get_all_objects, get_all_units, get_resource};
-use board::ecs_types::components::{Position, UnitBundle};
-use board::ecs_types::resources::{Board, DeploymentConfig, LevelConfig};
-use board::error::Result as CResult;
-use board::loader_schema::Faction;
-use std::collections::{HashMap, HashSet};
+use board::domain::alias::Coord;
+use board::ecs_types::components::Position;
+use board::ecs_types::resources::Board;
 
 // ==================== 資料型別 ====================
 
@@ -25,35 +19,6 @@ pub struct VisibleGridRange {
 pub struct CellHighlight {
     pub border: Option<egui::Color32>,
     pub bg: Option<egui::Color32>,
-}
-
-/// 戰場模式所需的所有關卡查詢結果
-pub struct Snapshot {
-    pub board: Board,
-    pub max_player_units: usize,
-    pub deployment_positions: HashSet<Position>,
-    pub level_config: LevelConfig,
-    pub unit_map: HashMap<Position, UnitBundle>,
-    pub object_map: HashMap<Position, ObjectQueryResult>,
-}
-
-// ==================== 快照查詢 ====================
-
-/// 一次查詢部署/戰鬥模式所需的所有關卡資料
-pub fn query_snapshot(world: &mut World) -> CResult<Snapshot> {
-    let unit_map = get_all_units(world)?;
-    let object_map = get_all_objects(world)?;
-    let board = *get_resource::<Board>(world, "棋盤尺寸未初始化")?;
-    let deployment_config = get_resource::<DeploymentConfig>(world, "部署設定未初始化")?.clone();
-    let level_config = get_resource::<LevelConfig>(world, "關卡設定未初始化")?.clone();
-    Ok(Snapshot {
-        board,
-        max_player_units: deployment_config.max_player_units,
-        deployment_positions: deployment_config.deployment_positions,
-        level_config,
-        unit_map,
-        object_map,
-    })
 }
 
 // ==================== 座標轉換 ====================
@@ -117,78 +82,6 @@ pub fn compute_hover_pos(
         .hover_pos()
         // and_then 拆 option，避免 nested option
         .and_then(|p| screen_to_board_pos(p, rect, board))
-}
-
-// ==================== 格子資訊 ====================
-
-pub fn get_cell_info(
-    snapshot: &Snapshot,
-) -> impl Fn(Position) -> (String, egui::Color32, egui::Color32) {
-    |pos: Position| -> (String, egui::Color32, egui::Color32) {
-        if snapshot.deployment_positions.contains(&pos) {
-            if let Some(bundle) = snapshot.unit_map.get(&pos) {
-                let faction_color =
-                    get_faction_color(&snapshot.level_config.factions, bundle.unit_faction.0);
-                let abbrev = get_unit_abbr(&bundle.occupant_type_name.0);
-                (abbrev, faction_color, BATTLEFIELD_COLOR_DEPLOYMENT)
-            } else {
-                (
-                    "".to_string(),
-                    BATTLEFIELD_COLOR_DEPLOYMENT,
-                    BATTLEFIELD_COLOR_DEPLOYMENT,
-                )
-            }
-        } else if let Some(bundle) = snapshot.unit_map.get(&pos) {
-            let faction_color =
-                get_faction_color(&snapshot.level_config.factions, bundle.unit_faction.0);
-            let abbrev = get_unit_abbr(&bundle.occupant_type_name.0);
-            (abbrev, faction_color, BATTLEFIELD_COLOR_UNIT)
-        } else if let Some(obj) = snapshot.object_map.get(&pos) {
-            let abbrev = get_unit_abbr(&obj.bundle.occupant_type_name.0);
-            (abbrev, egui::Color32::BLACK, BATTLEFIELD_COLOR_OBJECT)
-        } else {
-            (
-                "".to_string(),
-                BATTLEFIELD_COLOR_EMPTY,
-                BATTLEFIELD_COLOR_EMPTY,
-            )
-        }
-    }
-}
-
-pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String {
-    |pos| -> String {
-        if snapshot.deployment_positions.contains(&pos) {
-            if let Some(bundle) = snapshot.unit_map.get(&pos) {
-                format!(
-                    "({}, {})\n部署點：{}\nHP：{} / {}",
-                    pos.x,
-                    pos.y,
-                    bundle.occupant_type_name.0,
-                    bundle.attributes.current_hp.0,
-                    bundle.attributes.max_hp.0
-                )
-            } else {
-                format!("({}, {})\n空部署點", pos.x, pos.y)
-            }
-        } else if let Some(bundle) = snapshot.unit_map.get(&pos) {
-            format!(
-                "({}, {})\n單位 {}\nHP：{} / {}",
-                pos.x,
-                pos.y,
-                bundle.occupant_type_name.0,
-                bundle.attributes.current_hp.0,
-                bundle.attributes.max_hp.0
-            )
-        } else if let Some(obj) = snapshot.object_map.get(&pos) {
-            format!(
-                "({}, {})\n物件 {}",
-                pos.x, pos.y, obj.bundle.occupant_type_name.0
-            )
-        } else {
-            format!("({}, {})", pos.x, pos.y)
-        }
-    }
 }
 
 // ==================== 渲染層 ====================
@@ -291,75 +184,6 @@ pub fn render_hover_tooltip(
     tooltip_painter.galley(tooltip_pos, galley, egui::Color32::BLACK);
 }
 
-pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapshot) {
-    ui.heading(format!("詳情 ({}, {})", pos.x, pos.y));
-    ui.add_space(SPACING_SMALL);
-
-    if let Some(bundle) = snapshot.unit_map.get(&pos) {
-        render_unit_details(ui, bundle, &snapshot.level_config.factions);
-    }
-
-    ui.add_space(SPACING_MEDIUM);
-    ui.separator();
-    ui.add_space(SPACING_MEDIUM);
-
-    if let Some(obj) = snapshot.object_map.get(&pos) {
-        render_object_details(ui, obj);
-    }
-}
-
-fn render_unit_details(ui: &mut egui::Ui, bundle: &UnitBundle, factions: &HashMap<ID, Faction>) {
-    ui.label(format!("類型：單位"));
-    ui.label(format!("名稱：{}", bundle.occupant_type_name.0));
-
-    let faction_name = factions
-        .get(&bundle.unit_faction.0)
-        .map(|f| f.name.as_str())
-        .unwrap_or("未知");
-    ui.label(format!("陣營：{}", faction_name));
-
-    ui.add_space(SPACING_SMALL);
-    ui.separator();
-    ui.label("屬性：");
-
-    let attrs = &bundle.attributes;
-    ui.label(format!("HP：{} / {}", attrs.current_hp.0, attrs.max_hp.0));
-    ui.label(format!("MP：{} / {}", attrs.current_mp.0, attrs.max_mp.0));
-    ui.label(format!("先攻：{}", attrs.initiative.0));
-    ui.label(format!("移動：{}", attrs.movement_point.0));
-    ui.label(format!("物攻：{}", attrs.physical_attack.0));
-    ui.label(format!("魔攻：{}", attrs.magical_attack.0));
-    ui.label(format!("物理命中：{}", attrs.physical_accuracy.0));
-    ui.label(format!("魔法命中：{}", attrs.magical_accuracy.0));
-    ui.label(format!("剛毅：{}", attrs.fortitude.0));
-    ui.label(format!("敏捷：{}", attrs.agility.0));
-    ui.label(format!("意志：{}", attrs.will.0));
-    ui.label(format!("格擋：{}", attrs.block.0));
-    ui.label(format!("格擋減傷：{}", attrs.block_protection.0));
-    ui.label(format!("反應：{}", attrs.reaction_point.0));
-
-    if !bundle.skills.0.is_empty() {
-        ui.add_space(SPACING_SMALL);
-        ui.separator();
-        ui.label("技能：");
-        for skill in &bundle.skills.0 {
-            ui.label(format!("  • {}", skill));
-        }
-    }
-}
-
-fn render_object_details(ui: &mut egui::Ui, obj: &ObjectQueryResult) {
-    ui.label(format!("類型：物件"));
-    ui.label(format!("名稱：{}", obj.bundle.occupant_type_name.0));
-
-    ui.add_space(SPACING_SMALL);
-    ui.separator();
-
-    ui.label(format!("移動花費：{}", obj.bundle.terrain_movement_cost.0));
-    ui.label(format!("阻擋視線：{}", obj.blocks_sight));
-    ui.label(format!("阻擋聲音：{}", obj.blocks_sound));
-}
-
 /// 渲染戰場圖例
 pub fn render_battlefield_legend(ui: &mut egui::Ui) {
     ui.group(|ui| {
@@ -397,32 +221,4 @@ pub fn render_battlefield_legend(ui: &mut egui::Ui) {
             ui.label("物件");
         });
     });
-}
-
-// ==================== 輔助函數 ====================
-
-/// 取得敵方單位
-pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle> {
-    let enemy_faction_ids: HashSet<ID> = snapshot
-        .level_config
-        .factions
-        .values()
-        .filter(|f| f.alliance != PLAYER_ALLIANCE_ID)
-        .map(|f| f.id)
-        .collect();
-    snapshot
-        .unit_map
-        .values()
-        .filter(move |bundle| enemy_faction_ids.contains(&bundle.unit_faction.0))
-}
-
-pub fn get_faction_color(factions: &HashMap<ID, Faction>, unit_faction_id: ID) -> egui::Color32 {
-    factions
-        .get(&unit_faction_id)
-        .map(|f| egui::Color32::from_rgb(f.color[0], f.color[1], f.color[2]))
-        .unwrap_or(egui::Color32::BLACK)
-}
-
-pub fn get_unit_abbr(unit_name: &str) -> String {
-    unit_name.chars().take(2).collect()
 }

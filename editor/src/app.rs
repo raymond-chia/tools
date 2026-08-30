@@ -181,9 +181,6 @@ impl eframe::App for EditorApp {
             EditorTab::Level => {
                 self.level_editor.ui_state.available_objects = self.object_editor.items.clone();
                 self.level_editor.ui_state.available_units = self.unit_editor.items.clone();
-                self.level_editor.ui_state.available_skills = self.skill_editor.items.clone();
-                self.level_editor.ui_state.available_equipments =
-                    self.equipment_editor.items.clone();
 
                 render_editor_ui(
                     ui,

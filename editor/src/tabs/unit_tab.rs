@@ -168,21 +168,23 @@ fn render_equipment_subtab(ui: &mut egui::Ui, unit: &mut UnitType, ui_state: &mu
         unit.equipment.off_hand = None;
     }
 
-    if main_hand_is_two_handed {
-        ui.add_enabled_ui(false, |ui| {
-            render_equipment_selector(
-                ui,
-                "副手：",
-                "unit_off_hand",
-                &mut unit.equipment.off_hand,
-                &[],
-                &mut ui_state.off_hand_search_query,
-            );
-        });
-        ui.label("主手裝備雙手武器時，不能裝備副手。");
-    } else {
-        render_off_hand_selector(ui, unit, ui_state);
-    }
+    ui.horizontal(|ui| {
+        if main_hand_is_two_handed {
+            ui.add_enabled_ui(false, |ui| {
+                render_equipment_selector(
+                    ui,
+                    "副手：",
+                    "unit_off_hand",
+                    &mut unit.equipment.off_hand,
+                    &[],
+                    &mut ui_state.off_hand_search_query,
+                );
+            });
+            ui.label("主手裝備雙手武器時，不能裝備副手。");
+        } else {
+            render_off_hand_selector(ui, unit, ui_state);
+        }
+    });
 
     render_equipment_selector(
         ui,

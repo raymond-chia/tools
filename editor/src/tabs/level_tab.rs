@@ -1,21 +1,18 @@
 //! 關卡編輯器 tab
 
-mod battle;
 mod battlefield;
-mod deployment;
 mod edit;
 
 use crate::editor_item::{EditorItem, validate_name};
 use crate::generic_editor::{GenericEditorState, MessageState};
 use crate::generic_io::save_file;
 use crate::tabs::reference;
-use bevy_ecs::world::World;
-use board::domain::alias::{SkillName, TypeName};
+use board::domain::alias::TypeName;
 use board::domain::constants::PLAYER_FACTION_ID;
-use board::domain::core_types::{LevelOutcome, OutcomeBranches, SkillType};
-use board::ecs_types::components::{Occupant, Position};
+use board::domain::core_types::OutcomeBranches;
+use board::ecs_types::components::Position;
 use board::ecs_types::resources::Board;
-use board::loader_schema::{EquipmentTomlType, LevelType, ObjectType, UnitType};
+use board::loader_schema::{LevelType, ObjectType, UnitType};
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -33,52 +30,11 @@ pub struct DragState {
     pub object: DraggedObject,
 }
 
-/// 反應決策草稿：玩家安排的執行順序 + 每人選的技能（None = 跳過）
-#[derive(Debug, Default)]
-pub struct ReactionDecisionState {
-    pub decisions: Vec<(Occupant, Option<SkillName>)>,
-}
-
-/// 戰鬥模式底部面板的動作狀態
-#[derive(Debug, Default, PartialEq)]
-pub enum BattleAction {
-    #[default]
-    Normal,
-    Delaying,
-    /// 技能模式：彈窗一直開著、戰場可互動預覽 targetable/AOE/picked
-    /// 實際選中的技能與 picked 由 core 的 SkillTargeting resource 持有（未選技能時 resource 不存在）
-    SkillMode,
-}
-
-/// 右側面板顯示模式
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
-pub enum RightPanelView {
-    #[default]
-    Details,
-    Log,
-}
-
-/// 關卡編輯器的模式
-#[derive(Debug, Default)]
-pub enum LevelTabMode {
-    #[default]
-    Edit,
-    Deploy,
-    Battle,
-}
-
-// ==================== 重要 ====================
-/// 禁止存放 UI 與 world 以外的資料，確保邏輯都在 board crate 中實現
-// ==================== 重要 ====================
 #[derive(Debug, Default)]
 pub struct LevelTabUIState {
-    /// 可選的單位類型（完整資料，供部署時序列化用）
+    /// 可選的單位類型
     pub available_units: Vec<UnitType>,
-    /// 可選的技能類型（完整資料，供部署時序列化用）
-    pub available_skills: Vec<SkillType>,
-    /// 可選的裝備類型（完整資料，供部署時序列化用）
-    pub available_equipments: Vec<EquipmentTomlType>,
-    /// 可選的物件類型（完整資料，供部署時序列化用）
+    /// 可選的物件類型
     pub available_objects: Vec<ObjectType>,
 
     pub unit_search_query: TypeName,
@@ -86,30 +42,6 @@ pub struct LevelTabUIState {
 
     pub drag_state: Option<DragState>,
     pub scroll_offset: egui::Vec2,
-
-    /// 模擬戰鬥專用：統一在 tabs\level_tab\edit.rs 初始化
-    /// ECS World，模擬模式時存放所有 entity
-    pub world: World,
-    /// 左鍵選中
-    pub selected_left_pos: Option<Position>,
-    /// 右鍵選中
-    pub selected_right_pos: Option<Position>,
-    /// 底部操作面板的當前動作狀態
-    pub battle_action: BattleAction,
-    /// 延遲置中：下一幀 render_battlefield 時消費
-    pub pending_center_pos: Option<Position>,
-
-    /// 右側面板顯示模式（單位詳情 / 戰鬥 log）
-    pub right_panel_view: RightPanelView,
-
-    /// 反應決策草稿（pending 為空時 decisions 也為空）
-    pub reaction_decision: ReactionDecisionState,
-
-    /// 關卡結局字幕：切換模式時清為 Undetermined，非 Undetermined 時在戰場上方顯示
-    pub level_outcome: LevelOutcome,
-
-    /// 當前標籤頁的模式
-    pub mode: LevelTabMode,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -375,25 +307,5 @@ pub fn render_form(
     ui_state: &mut LevelTabUIState,
     message_state: &mut MessageState,
 ) {
-    type RenderFn = fn(&mut egui::Ui, &mut LevelTabUIState, &mut MessageState);
-    let (window_name, render_fn): (&str, RenderFn) = match &ui_state.mode {
-        LevelTabMode::Edit => return edit::render_form(ui, level, ui_state, message_state),
-        // 根據模式決定窗口標題和渲染函數
-        LevelTabMode::Deploy => ("單位部署", deployment::render_form),
-        LevelTabMode::Battle => ("模擬戰鬥", battle::render_form),
-    };
-
-    // 繪製半透明遮罩，完全遮蔽背景
-    let viewport = ui.ctx().viewport_rect();
-    ui.painter()
-        .rect_filled(viewport, 0.0, egui::Color32::from_black_alpha(200));
-
-    egui::Window::new(window_name)
-        .fixed_pos(viewport.min)
-        .fixed_size(viewport.size())
-        .resizable(false)
-        .collapsible(false)
-        .show(ui.ctx(), |ui| {
-            render_fn(ui, ui_state, message_state);
-        });
+    edit::render_form(ui, level, ui_state, message_state);
 }
