@@ -104,4 +104,4 @@
 
 ### Godot 專案規則檔
 
-- 處理 `godot/` 或 `godot_bind/` 相關功能前，必須先閱讀「相對於專案根目錄」的 `.claude/rules/godot.md`。
+- 處理工作區內任何 Godot 專案或 Godot 整合功能前，必須先閱讀「相對於專案根目錄」的 `.claude/rules/godot.md`。

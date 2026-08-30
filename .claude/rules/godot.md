@@ -2,7 +2,15 @@
 paths:
   - "godot/**/*"
   - "godot_bind/**/*"
+  - "**/project.godot"
+  - "**/*.gd"
+  - "**/*.tscn"
+  - "**/*.tres"
 ---
+
+## 測試
+
+- 所有 Godot 專案的功能修改不撰寫測試，也不適用 `AGENTS.md` 的測試驅動開發流程。
 
 ## Rust GDExtension 整合規則
 
