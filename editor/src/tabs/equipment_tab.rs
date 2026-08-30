@@ -16,6 +16,10 @@ use strum::IntoEnumIterator;
 pub struct EquipmentTabUIState {
     pub available_skills: Vec<SkillName>,
     pub skill_search_query: SkillName,
+    /// 等待 app 開啟的同名技能編輯請求。
+    pub same_name_skill_request: Option<SkillName>,
+    /// 目前由裝備頁發起、尚未完成的同名技能編輯流程。
+    pub active_same_name_skill: Option<SkillName>,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -81,12 +85,59 @@ pub fn render_form(
     ui.separator();
     ui.heading("授予技能");
 
+    render_same_name_skill_toggle(ui, equipment, ui_state);
+
+    ui.add_space(SPACING_SMALL);
+    ui.separator();
+
     render_skill_selector(
         ui,
         &ui_state.available_skills,
         &mut ui_state.skill_search_query,
         &mut equipment.granted_skills,
     );
+}
+
+/// 渲染是否授予同名技能的切換與編輯入口。
+fn render_same_name_skill_toggle(
+    ui: &mut egui::Ui,
+    equipment: &mut EquipmentTomlType,
+    ui_state: &mut EquipmentTabUIState,
+) {
+    let skill_name = equipment.name.clone();
+    let has_name = !skill_name.trim().is_empty();
+    let mut uses_same_name_skill = equipment.granted_skills.contains(&skill_name);
+
+    ui.horizontal(|ui| {
+        let response = ui.add_enabled(
+            has_name,
+            egui::Checkbox::new(&mut uses_same_name_skill, "使用同名技能"),
+        );
+
+        if response.changed() {
+            if uses_same_name_skill {
+                ui_state.same_name_skill_request = Some(skill_name.clone());
+            } else {
+                equipment.granted_skills.retain(|name| name != &skill_name);
+            }
+        }
+
+        if uses_same_name_skill {
+            let skill_exists = ui_state.available_skills.contains(&skill_name);
+            let button_label = if skill_exists {
+                "編輯同名技能"
+            } else {
+                "建立同名技能"
+            };
+            if ui.button(button_label).clicked() {
+                ui_state.same_name_skill_request = Some(skill_name.clone());
+            }
+        }
+    });
+
+    if !has_name {
+        ui.label("請先輸入裝備名稱，才能使用同名技能。");
+    }
 }
 
 // ==================== 本地輔助函數 ====================

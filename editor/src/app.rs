@@ -13,6 +13,11 @@ use std::path::{Path, PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 
+enum EditResult {
+    Confirmed(String),
+    Cancelled,
+}
+
 define_editors! {
     default: Object,
 
@@ -52,20 +57,33 @@ impl eframe::App for EditorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("tabs").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                let is_same_name_skill_editing = self
+                    .equipment_editor
+                    .ui_state
+                    .active_same_name_skill
+                    .is_some();
+
                 EditorTab::iter().for_each(|tab: EditorTab| {
-                    ui.selectable_value(&mut self.current_tab, tab, tab.to_string());
+                    ui.add_enabled_ui(
+                        !is_same_name_skill_editing || tab == EditorTab::Skill,
+                        |ui| {
+                            ui.selectable_value(&mut self.current_tab, tab, tab.to_string());
+                        },
+                    );
                 });
             });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| match self.current_tab {
-            EditorTab::Object => render_editor_ui(
-                ui,
-                &mut self.object_editor,
-                tabs::object_tab::file_name(),
-                tabs::object_tab::render_form,
-                None,
-            ),
+            EditorTab::Object => {
+                render_editor_ui(
+                    ui,
+                    &mut self.object_editor,
+                    tabs::object_tab::file_name(),
+                    tabs::object_tab::render_form,
+                    None,
+                );
+            }
             EditorTab::Skill => {
                 self.skill_editor.ui_state.available_objects = self
                     .object_editor
@@ -74,13 +92,28 @@ impl eframe::App for EditorApp {
                     .map(|obj| obj.name().to_string())
                     .collect();
 
-                render_editor_ui(
+                let edit_result = render_editor_ui(
                     ui,
                     &mut self.skill_editor,
                     tabs::skill_tab::file_name(),
                     tabs::skill_tab::render_form,
                     None,
-                )
+                );
+
+                if self
+                    .equipment_editor
+                    .ui_state
+                    .active_same_name_skill
+                    .is_some()
+                {
+                    match edit_result {
+                        Some(EditResult::Confirmed(name)) => {
+                            self.finish_same_name_skill_edit(&name);
+                        }
+                        Some(EditResult::Cancelled) => self.cancel_same_name_skill_edit(),
+                        None => {}
+                    }
+                }
             }
             EditorTab::Equipment => {
                 self.equipment_editor.ui_state.available_skills = self
@@ -100,7 +133,16 @@ impl eframe::App for EditorApp {
                         has_invalid_item: tabs::equipment_tab::has_invalid_reference,
                         clear_invalid: tabs::equipment_tab::clear_invalid_references,
                     }),
-                )
+                );
+
+                if let Some(skill_name) = self
+                    .equipment_editor
+                    .ui_state
+                    .same_name_skill_request
+                    .take()
+                {
+                    self.start_same_name_skill_edit(skill_name);
+                }
             }
             EditorTab::Unit => {
                 self.unit_editor.ui_state.available_skills = self
@@ -134,7 +176,7 @@ impl eframe::App for EditorApp {
                         has_invalid_item: tabs::unit_tab::has_invalid_reference,
                         clear_invalid: tabs::unit_tab::clear_invalid_references,
                     }),
-                )
+                );
             }
             EditorTab::Level => {
                 self.level_editor.ui_state.available_objects = self.object_editor.items.clone();
@@ -153,9 +195,81 @@ impl eframe::App for EditorApp {
                         has_invalid_item: tabs::level_tab::has_invalid_reference,
                         clear_invalid: tabs::level_tab::clear_invalid_references,
                     }),
-                )
+                );
             }
         });
+    }
+}
+
+impl EditorApp {
+    /// 從裝備編輯流程開啟同名技能；既有技能進入編輯，否則建立新技能。
+    fn start_same_name_skill_edit(&mut self, skill_name: String) {
+        if self.skill_editor.is_editing() {
+            self.equipment_editor
+                .message_state
+                .set_error("技能編輯器有尚未確認的內容，請先確認或取消該次編輯。");
+            return;
+        }
+
+        let existing_index = self
+            .skill_editor
+            .items
+            .iter()
+            .position(|skill| skill.name() == &skill_name);
+
+        match existing_index {
+            Some(index) => self.skill_editor.start_editing(index),
+            None => {
+                let mut skill = SkillType::default();
+                skill.set_name(skill_name.clone());
+                self.skill_editor.edit_mode = EditMode::Creating(skill);
+            }
+        }
+
+        self.skill_editor.ui_state.locked_name = Some(skill_name.clone());
+        self.equipment_editor.ui_state.active_same_name_skill = Some(skill_name);
+        self.current_tab = EditorTab::Skill;
+    }
+
+    /// 技能確認成功後，將技能加入原本仍在編輯的同名裝備。
+    fn finish_same_name_skill_edit(&mut self, skill_name: &str) {
+        match &mut self.equipment_editor.edit_mode {
+            EditMode::Creating(equipment) | EditMode::Editing(_, equipment) => {
+                if equipment.name == skill_name {
+                    if !equipment
+                        .granted_skills
+                        .iter()
+                        .any(|name| name == skill_name)
+                    {
+                        equipment.granted_skills.push(skill_name.to_string());
+                    }
+                    self.equipment_editor
+                        .message_state
+                        .set_success(format!("已確認並授予同名技能：{}", skill_name));
+                } else {
+                    self.equipment_editor
+                        .message_state
+                        .set_error("裝備名稱已變更，無法自動授予剛才編輯的同名技能。");
+                }
+            }
+            EditMode::None => {
+                self.equipment_editor
+                    .message_state
+                    .set_error("原本的裝備編輯已取消，無法自動授予同名技能。");
+            }
+        }
+
+        self.clear_same_name_skill_workflow();
+    }
+
+    fn cancel_same_name_skill_edit(&mut self) {
+        self.clear_same_name_skill_workflow();
+    }
+
+    fn clear_same_name_skill_workflow(&mut self) {
+        self.skill_editor.ui_state.locked_name = None;
+        self.equipment_editor.ui_state.active_same_name_skill = None;
+        self.current_tab = EditorTab::Equipment;
     }
 }
 
@@ -166,7 +280,7 @@ fn render_editor_ui<T: EditorItem>(
     data_key: &str,
     render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState, &mut MessageState),
     reference_cleanup: Option<ReferenceCleanup<T>>,
-) {
+) -> Option<EditResult> {
     ui.heading(format!("{}編輯器", T::type_name()));
     ui.add_space(SPACING_MEDIUM);
 
@@ -189,8 +303,9 @@ fn render_editor_ui<T: EditorItem>(
         );
         ui.separator();
         // 右側：編輯區域
-        render_edit_area(ui, state, render_form, reference_cleanup.as_ref());
-    });
+        render_edit_area(ui, state, render_form, reference_cleanup.as_ref())
+    })
+    .inner
 }
 
 /// 渲染檔案操作列（載入、儲存、訊息）
@@ -383,8 +498,9 @@ fn render_edit_area<T: EditorItem>(
     state: &mut GenericEditorState<T>,
     render_form: fn(&mut egui::Ui, &mut T, &mut T::UIState, &mut MessageState),
     reference_cleanup: Option<&ReferenceCleanup<T>>,
-) {
+) -> Option<EditResult> {
     ui.vertical(|ui| {
+        let mut edit_result = None;
         let is_editable = state.is_editing();
 
         if is_editable {
@@ -405,11 +521,14 @@ fn render_edit_area<T: EditorItem>(
                             .message_state
                             .set_error("存在失效引用，請先清除後再確認");
                     } else {
-                        state.confirm_edit();
+                        if let Some(name) = state.confirm_edit() {
+                            edit_result = Some(EditResult::Confirmed(name));
+                        }
                     }
                 }
                 if ui.button("取消").clicked() {
                     state.cancel_edit();
+                    edit_result = Some(EditResult::Cancelled);
                 }
             });
 
@@ -458,7 +577,9 @@ fn render_edit_area<T: EditorItem>(
                 ));
             }
         }
-    });
+        edit_result
+    })
+    .inner
 }
 
 // ==================== 本地輔助函數 ====================

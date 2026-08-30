@@ -95,13 +95,13 @@ impl<T: EditorItem> GenericEditorState<T> {
     }
 
     /// 確認編輯
-    pub fn confirm_edit(&mut self) {
+    pub fn confirm_edit(&mut self) -> Option<String> {
         // Fail Fast: 提取編輯模式和項目（直接取出所有權，避免 clone）
         let edit_mode = std::mem::take(&mut self.edit_mode);
         let (editing_index, item) = match edit_mode {
             EditMode::None => {
                 self.message_state.set_error("目前不在編輯模式");
-                return;
+                return None;
             }
             EditMode::Creating(item) => (None, item),
             EditMode::Editing(idx, item) => (Some(idx), item),
@@ -115,7 +115,7 @@ impl<T: EditorItem> GenericEditorState<T> {
                 None => EditMode::Creating(item),
                 Some(idx) => EditMode::Editing(idx, item),
             };
-            return;
+            return None;
         }
 
         // 驗證通過後的鉤子（如排序、正規化等）
@@ -131,6 +131,7 @@ impl<T: EditorItem> GenericEditorState<T> {
                 self.message_state
                     .set_success(format!("成功新增{}：{}", T::type_name(), name));
                 self.selected_index = Some(self.items.len() - 1);
+                Some(name)
             }
             Some(index) => {
                 // Editing
@@ -138,7 +139,7 @@ impl<T: EditorItem> GenericEditorState<T> {
                 if index >= self.items.len() {
                     self.message_state
                         .set_error(format!("無效的索引：{}", index));
-                    return;
+                    return None;
                 }
 
                 let name = confirmed_item.name().to_string();
@@ -146,6 +147,7 @@ impl<T: EditorItem> GenericEditorState<T> {
                 self.message_state
                     .set_success(format!("成功編輯{}：{}", T::type_name(), name));
                 self.selected_index = Some(index);
+                Some(name)
             }
         }
     }

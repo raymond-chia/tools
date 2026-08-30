@@ -23,6 +23,8 @@ use strum::IntoEnumIterator;
 pub struct SkillTabUIState {
     pub available_objects: Vec<TypeName>,
     pub object_search_query: String,
+    /// 從其他編輯流程進入時，固定技能名稱並停用名稱輸入。
+    pub locked_name: Option<String>,
 }
 
 // ==================== EditorItem 實作 ====================
@@ -295,12 +297,24 @@ pub fn render_form(
     ui.add_space(SPACING_SMALL);
 
     // 共用欄位：名稱
-    let mut name = skill.name().clone();
-    ui.horizontal(|ui| {
-        ui.label("名稱：");
-        ui.text_edit_singleline(&mut name);
-    });
-    skill.set_name(name);
+    match &ui_state.locked_name {
+        Some(locked_name) => {
+            skill.set_name(locked_name.clone());
+            let mut displayed_name = locked_name.clone();
+            ui.horizontal(|ui| {
+                ui.label("名稱：");
+                ui.add_enabled(false, egui::TextEdit::singleline(&mut displayed_name));
+            });
+        }
+        None => {
+            let mut name = skill.name().clone();
+            ui.horizontal(|ui| {
+                ui.label("名稱：");
+                ui.text_edit_singleline(&mut name);
+            });
+            skill.set_name(name);
+        }
+    }
 
     // 共用欄位：tags
     render_skill_tags(ui, skill);
