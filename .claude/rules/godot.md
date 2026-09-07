@@ -8,10 +8,6 @@ paths:
   - "**/*.tres"
 ---
 
-## 測試
-
-- 所有 Godot 專案的功能修改不撰寫測試，也不適用 `AGENTS.md` 的測試驅動開發流程。
-
 ## Rust GDExtension 整合規則
 
 - `godot_bind` 應負責包裝 `ecs_logic` 的功能。

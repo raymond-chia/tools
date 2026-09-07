@@ -109,6 +109,121 @@ core/board/
 
 ## Function 集
 
+### loader_schema.rs
+
+- `pub struct UnitType` - 單位類型載入資料
+- `pub struct EquipmentTomlType` - 裝備類型載入資料
+- `pub struct ObjectType` - 物件類型載入資料
+- `pub struct Faction` - 陣營載入資料
+- `pub struct UnitPlacement` - 單位配置載入資料
+- `pub struct ObjectPlacement` - 物件配置載入資料
+- `pub struct LevelType` - 關卡載入資料
+- `pub struct SkillsToml` - 技能 TOML 根結構
+- `pub struct UnitsToml` - 單位 TOML 根結構
+- `pub struct EquipmentsToml` - 裝備 TOML 根結構
+- `pub struct ObjectsToml` - 物件 TOML 根結構
+
+### domain/core_types.rs
+
+- `pub enum Attribute` - 單位屬性類型
+- `pub enum EquipmentType` - 裝備類型
+- `pub enum OffHandPermission` - 副手裝備限制
+- `pub enum SkillTag` - 技能標籤
+- `pub enum DefenseType` - 防禦判定類型
+- `pub enum AccuracySource` - 命中值來源
+- `pub enum CasterOrTarget` - 效果來源或目標
+- `pub enum TargetFilter` - 技能目標篩選條件
+- `pub enum MoveDirection` - 強制位移方向
+- `pub enum Area` - 技能範圍形狀
+- `pub enum TargetSelection` - 技能目標選擇方式
+- `pub enum ReactionTrigger` - 反應觸發類型
+- `pub struct EffectCondition` - 技能效果判定條件
+- `pub enum EndCondition` - Buff 結束條件
+- `pub enum PerceptionType` - 感知類型
+- `pub enum LightType` - 光源類型
+- `pub struct Target` - 主動技能目標設定
+- `pub struct TriggeringSource` - 反應技能觸發來源
+- `pub struct Scaling` - 屬性倍率設定
+- `pub enum EffectNode` - 技能效果樹節點
+- `pub enum Effect` - 技能效果
+- `pub enum ContinuousEffect` - 持續性效果
+- `pub enum SkillType` - 技能類型
+- `pub struct BuffType` - Buff 定義
+- `pub struct PendingReaction` - 待處理反應
+- `pub enum EndLevelCondition` - 關卡結局條件
+- `pub enum LevelOutcome` - 關卡結局
+- `pub struct AccuracyBreakdown` - 命中值組成明細
+- `pub struct EvasionBreakdown` - 閃避值組成明細
+- `pub struct BlockBreakdown` - 格擋值組成明細
+- `pub struct HitCheckBreakdowns` - 命中判定組成明細
+- `pub fn name(&self) -> &SkillName` (SkillType 方法) - 取得技能名稱
+
+### domain/battle_log.rs
+
+- `pub enum LogTarget` - 戰鬥紀錄目標
+- `pub enum LogCheck` - 戰鬥紀錄判定結果
+- `pub struct LogCheckDetail` - 戰鬥紀錄判定明細
+- `pub enum LogEffect` - 戰鬥紀錄效果
+- `pub enum LogEvent` - 戰鬥紀錄事件
+
+### domain/turn.rs
+
+- `pub struct TurnEntry` - 回合順序項目
+
+### ecs_types/components.rs
+
+- `pub struct Position` - 棋盤位置
+- `pub struct OccupantTypeName` - 佔據者類型名稱
+- `pub struct Unit` - 單位標記 Component
+- `pub struct Object` - 物件標記 Component
+- `pub enum Occupant` - 棋盤佔據者
+- `pub struct Skills` - 單位技能清單
+- `pub struct EquippedItems` - 單位裝備欄位
+- `pub struct UnitFaction` - 單位陣營
+- `pub struct MaxHp` - 最大 HP 屬性
+- `pub struct CurrentHp` - 目前 HP 屬性
+- `pub struct MaxMp` - 最大 MP 屬性
+- `pub struct CurrentMp` - 目前 MP 屬性
+- `pub struct Initiative` - 先攻屬性
+- `pub struct PhysicalAttack` - 物理攻擊屬性
+- `pub struct MagicalAttack` - 魔法攻擊屬性
+- `pub struct PhysicalAccuracy` - 物理命中屬性
+- `pub struct MagicalAccuracy` - 魔法命中屬性
+- `pub struct Fortitude` - 強韌屬性
+- `pub struct Agility` - 敏捷屬性
+- `pub struct Block` - 格擋屬性
+- `pub struct BlockProtection` - 格擋減傷屬性
+- `pub struct Will` - 意志屬性
+- `pub struct MovementPoint` - 移動點數屬性
+- `pub struct MaxReactionPoint` - 最大反應點數屬性
+- `pub struct ReactionPoint` - 目前反應點數屬性
+- `pub struct FlankingAccuracyBonus` - 側翼命中加成屬性
+- `pub struct AttributeBundle` - 單位屬性集合
+- `pub enum ActionState` - 單位行動狀態
+- `pub struct ObjectMovementCost` - 物件移動花費
+- `pub struct BlocksSight` - 阻擋視線標記 Component
+- `pub struct BlocksSound` - 阻擋聲音標記 Component
+- `pub struct Hazardous` - 危險地面標記 Component
+- `pub struct ContactEffects` - 物件接觸效果
+- `pub struct AppliedBuff` - 已套用 Buff
+- `pub struct UnitBundle` - 單位 Entity 資料集合
+- `pub struct ObjectBundle` - 物件 Entity 資料集合
+- `pub fn attribute_fields(bundle: &AttributeBundle) -> [(&'static str, i32); ATTRIBUTE_COUNT]` - 取得屬性集合的欄位名稱與數值
+
+### ecs_types/resources.rs
+
+- `pub struct OccupantIndex` - 佔據者與 Entity 索引
+- `pub struct GameData` - 遊戲基礎資料
+- `pub struct Board` - 棋盤設定
+- `pub struct LevelConfig` - 關卡設定
+- `pub struct DeploymentConfig` - 部署設定
+- `pub struct TurnOrder` - 回合順序狀態
+- `pub struct MovementPlan` - 移動計畫
+- `pub struct SkillTargeting` - 技能選目標狀態
+- `pub struct ReactionState` - 反應處理狀態
+- `pub struct BattleLog` - 戰鬥紀錄
+- `pub struct EndConditionConfig` - 關卡結局條件設定
+
 ### logic/board.rs
 
 - `pub fn is_valid_position(board: Board, pos: Position) -> bool` - 驗證位置在棋盤邊界內
@@ -175,12 +290,10 @@ core/board/
 
 - `pub(crate) fn short_type_name<T: ?Sized>() -> String` - 取得泛型型別的短名稱
 
-### domain/core_types.rs
-
-- `pub fn name(&self) -> &SkillName` (SkillType 方法) - 取得技能名稱
-
 ### test_helpers/level_builder.rs
 
+- `pub struct MarkerEntry` - ASCII 標記解析結果
+- `pub struct LevelBuilder` - 測試關卡建構器
 - `pub fn load_from_ascii(ascii: &str) -> Result<(Board, HashMap<String, Vec<Position>>)>` - 從 ASCII 格式載入棋盤
 - `pub fn from_ascii(ascii: &str) -> Self` - 以 ASCII art 初始化關卡建構器
 - `pub fn unit(mut self, marker: &str, type_name: &str, faction_id: u32) -> Self` - 設定標記對應的單位類型與陣營
@@ -194,6 +307,7 @@ core/board/
 
 ### ecs_logic/loader.rs
 
+- `pub struct GameDataToml<'a>` - 遊戲資料 TOML 來源集合
 - `pub fn parse_and_insert_game_data(world: &mut World, source: GameDataToml<'_>) -> Result<()>` - 反序列化 TOML 並存入 World Resource
 
 ### ecs_logic/spawner.rs
@@ -213,6 +327,7 @@ core/board/
 
 ### ecs_logic/unit_data.rs
 
+- `pub(crate) struct InitialUnitData` - 單位初始裝備、技能與屬性資料
 - `pub(crate) fn initial_unit_data(unit_type: &UnitType, game_data: &GameData) -> Result<InitialUnitData>` - 建立單位的初始裝備、技能與屬性
 
 ### ecs_logic/level_outcome.rs
@@ -239,6 +354,8 @@ core/board/
 
 ### ecs_logic/movement.rs
 
+- `pub enum AdvanceMoveResult` - 移動計畫推進結果
+- `pub struct MovePathPreview` - 移動路徑預覽
 - `pub fn get_reachable_positions(world: &mut World, occupant: Occupant) -> Result<HashMap<Position, ReachableInfo>>` - 計算單位可到達的所有位置
 - `pub fn preview_move_reactions(world: &mut World, target: Position) -> Result<CollectMoveReactionsResult>` - 預覽當前單位移動到目標格會觸發的藉機攻擊
 - `pub fn preview_move_path(world: &mut World, target: Position) -> Result<MovePathPreview>` - 預覽當前單位移動到目標格的整條路徑警示（藉機攻擊與危險地面）
@@ -253,18 +370,21 @@ core/board/
 - `pub fn end_current_turn(world: &mut World) -> Result<()>` - 結束當前單位的回合，推進到下一個
 - `pub fn can_delay_current_unit(world: &mut World) -> Result<bool>` - 檢查當前單位是否可被延遲
 - `pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<()>` - 延後當前單位到指定位置
-- `pub fn resolve_deaths(world: &mut World) -> Result<()>` - 掃描並移除全場死亡單位、同步回合表與反應面板、產生死亡 log
+- `pub fn resolve_deaths(world: &mut World) -> Result<Vec<ID>>` - 掃描並移除全場死亡單位、同步回合表與反應面板、產生死亡 log，並回傳死亡單位 ID
 - `pub fn get_turn_order(world: &World) -> Result<&TurnOrder>` - 查詢當前回合狀態
 - `pub fn end_battle(world: &mut World) -> Result<()>` - 結束戰鬥
 
 ### ecs_logic/reaction.rs
 
+- `pub enum ProcessReactionResult` - 反應處理結果
 - `pub fn get_pending_reactions(world: &World) -> Vec<PendingReaction>` - 取得所有待處理的反應
 - `pub fn set_reactions(world: &mut World, decisions: Vec<(Occupant, SkillName)>) -> Result<()>` - 設定單位的反應決策
 - `pub fn process_reactions(world: &mut World) -> Result<ProcessReactionResult>` - 處理並執行所有待決的反應
 
 ### ecs_logic/skill.rs
 
+- `pub struct PreviewAffectedPositions` - 技能影響位置預覽
+- `pub struct HitPreview` - 技能命中預覽
 - `pub fn get_skill_targetable_positions(world: &mut World, skill_name: &SkillName) -> Result<Vec<Position>>` - 計算指定技能的可攻擊位置
 - `pub fn get_skill_affected_positions(world: &mut World, skill_name: &SkillName, target_pos: Position) -> Result<PreviewAffectedPositions>` - 計算指定技能在目標位置的影響範圍預覽
 - `pub fn start_skill_targeting(world: &mut World, skill_name: &SkillName) -> Result<()>` - 開始技能選目標流程並建立暫存
@@ -291,6 +411,50 @@ core/board/
 - `pub fn combat_stats(&self, alliance_id: ID) -> CombatStats` - 取得指定聯盟的戰鬥統計
 - `pub fn unit_id(&self) -> Result<ID>` - 取得施放單位 ID
 
+### ecs_logic/query.rs 資料型別
+
+- `pub struct ObjectQueryResult` - 物件查詢結果
+- `pub(crate) struct ActiveSkillData` - 主動技能查詢資料
+- `pub(crate) struct ReactionSkillData` - 反應技能查詢資料
+
+### logic/movement.rs 資料型別
+
+- `pub enum Direction` - 棋盤移動方向
+- `pub struct Mover` - 移動者資料
+- `pub struct ReachableInfo` - 可到達位置資訊
+
+### logic/turn_order.rs 資料型別
+
+- `pub struct TurnOrderInput` - 回合順序計算輸入
+
+### logic/skill/mod.rs 資料型別
+
+- `pub struct UnitInfo` - 技能判定用單位資料
+- `pub struct CasterInfo` - 技能施放者資料
+
+### logic/skill/skill_check.rs 資料型別
+
+- `pub enum HitCheckResult` - 命中檢定結果
+- `pub struct HitResult` - 命中解析結果
+- `pub struct HitProbabilities` - 命中機率
+
+### logic/skill/skill_execution.rs 資料型別
+
+- `pub struct CombatStats` - 技能結算用戰鬥數值
+- `pub struct ObjectOnBoard` - 技能結算用棋盤物件資料
+- `pub enum CheckTarget` - 效果判定目標
+- `pub enum CheckResult` - 效果判定結果
+- `pub enum ResolvedEffect` - 已解析效果
+- `pub struct CheckDetail` - 效果判定明細
+- `pub struct EffectEntry` - 技能效果條目
+
+### logic/skill/skill_reaction.rs 資料型別
+
+- `pub struct ReactionUnitInfo<'a>` - 反應判定用單位資料
+- `pub struct MoveReaction` - 移動反應資料
+- `pub struct CollectMoveReactionsResult` - 移動反應收集結果
+- `pub struct TakesDamageUnitInfo` - 受傷反應判定用單位資料
+
 ### ecs_logic/battle_log.rs
 
 - `pub fn append_skill_log(world: &mut World, entries: &[EffectEntry]) -> Result<()>` - 將技能執行的效果條目轉成技能 log 事件並 append 到 BattleLog
@@ -300,4 +464,13 @@ core/board/
 
 Error 的方法：
 
+- `pub struct Error` - 頂層錯誤
+- `pub enum ErrorKind` - 錯誤種類
+- `pub enum LoadError` - 載入錯誤
+- `pub enum DataError` - 資料錯誤
+- `pub enum BoardError` - 棋盤錯誤
+- `pub enum DeploymentError` - 部署錯誤
+- `pub enum ReactionError` - 反應錯誤
+- `pub enum UnitError` - 單位錯誤
+- `pub fn create_backtrace(debug_mode: bool) -> Option<Backtrace>` - 依除錯模式建立 backtrace
 - `pub fn kind(&self) -> &ErrorKind` - 取得錯誤種類

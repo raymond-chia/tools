@@ -1,5 +1,7 @@
 target/
 
+__pycache__/
+
 bash.exe.stackdump
 
 ignore-*

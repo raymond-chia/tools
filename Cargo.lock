@@ -1702,7 +1702,16 @@ dependencies = [
  "bevy_ecs",
  "board",
  "godot",
+ "godot_bind_wrapper_macros",
  "toml",
+]
+
+[[package]]
+name = "godot_bind_wrapper_macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]

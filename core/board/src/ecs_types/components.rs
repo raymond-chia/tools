@@ -99,6 +99,16 @@ macro_rules! define_attribute_components {
         pub struct AttributeBundle {
             $(pub $field: $Type,)*
         }
+
+        /// 依欄位順序迭代所有屬性的名稱與數值
+        ///
+        /// 回傳的欄位名視為對外契約，呼叫端可能直接以此名稱作為輸出的鍵值
+        pub fn attribute_fields(bundle: &AttributeBundle) -> [(&'static str, i32); ATTRIBUTE_COUNT] {
+            [$((stringify!($field), bundle.$field.0),)*]
+        }
+
+        /// 屬性欄位總數
+        pub const ATTRIBUTE_COUNT: usize = [$(stringify!($field),)*].len();
     };
 }
 

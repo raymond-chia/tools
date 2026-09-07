@@ -1,7 +1,7 @@
 ---
 name: plan
-description: 透過來回討論產生實作計畫並寫入指定檔案。當用戶要規劃新功能、設計架構、討論實作方案、或在動手前需要釐清需求與設計決策時，應使用此 skill。
-disable-model-invocation: false
+description: 禁止自動使用本技能
+disable-model-invocation: true
 argument-hint: <output-file> [topic]
 ---
 

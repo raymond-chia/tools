@@ -1,3 +1,8 @@
+# 重要指令
+
+- uv run .\scripts\godot.py
+  - 編譯、跑 godot 模擬遊戲
+
 # 檢查
 
 - `(?<!\.wrap_context\(func\))\?` 確認是否都有攜帶 function 名稱
@@ -10,12 +15,6 @@
 2. 點「編輯系統環境變數」
 3. 在「系統變數」找 Path，點「編輯」
 4. 點「新增」，輸入 binary 的實際路徑
-
-# Claude Code
-
-- Skills
-  - 取代 Commands
-  - https://code.claude.com/docs/en/skills
 
 # Character
 

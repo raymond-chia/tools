@@ -14,11 +14,19 @@ use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
+pub fn create_backtrace(debug_mode: bool) -> Option<Backtrace> {
+    if debug_mode {
+        Some(Backtrace::force_capture())
+    } else {
+        None
+    }
+}
+
 /// 頂層錯誤，包含原始錯誤和 backtrace
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,
-    backtrace: Backtrace,
+    backtrace: Option<Backtrace>,
 }
 
 /// 錯誤種類
@@ -165,7 +173,13 @@ impl Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\n{}", self.kind, self.backtrace)
+        write!(f, "{}", self.kind)?;
+
+        if let Some(backtrace) = &self.backtrace {
+            write!(f, "\n{backtrace}")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -173,7 +187,7 @@ impl<E: Into<ErrorKind>> From<E> for Error {
     fn from(error: E) -> Self {
         Self {
             kind: error.into(),
-            backtrace: Backtrace::force_capture(),
+            backtrace: create_backtrace(cfg!(debug_assertions)),
         }
     }
 }

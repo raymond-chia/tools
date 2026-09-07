@@ -58,16 +58,10 @@ editor/
 │       └── level_tab/
 │           ├── mod.rs       - 關卡編輯子模組定義
 │           ├── edit.rs      - 編輯模式 UI
-│           ├── deployment.rs - 部署模式 UI
-│           ├── battle.rs    - 戰鬥模式 UI
 │           └── battlefield.rs - 戰場網格與詳情面板渲染
 ```
 
 ## Function 集
-
-### editor/main.rs
-
-- `pub fn main() -> Result<(), eframe::Error>` - 程式進入點，初始化字體和視覺主題和編輯器
 
 ### editor/app.rs
 
@@ -110,7 +104,7 @@ GenericEditorState 的方法：
 - `pub fn start_creating(&mut self)` - 開始新增項目
 - `pub fn start_editing(&mut self, index: usize)` - 開始編輯項目
 - `pub fn start_copying(&mut self, index: usize)` - 複製項目
-- `pub fn confirm_edit(&mut self)` - 確認編輯（含驗證與後處理）
+- `pub fn confirm_edit(&mut self) -> Option<String>` - 確認編輯（含驗證與後處理），失敗時回傳錯誤訊息
 - `pub fn cancel_edit(&mut self)` - 取消編輯
 - `pub fn delete_item(&mut self, index: usize)` - 刪除項目
 - `pub fn is_editing(&self) -> bool` - 判斷是否在編輯模式
@@ -150,10 +144,10 @@ GenericEditorState 的方法：
 
 - `pub struct EquipmentTabUIState` - 裝備編輯頁面的 UI 狀態
 - `pub fn file_name() -> &'static str` - 取得裝備的檔案名稱
-- `pub fn render_form(ui: &mut egui::Ui, equipment: &mut EquipmentType, ui_state: &mut EquipmentTabUIState, _message_state: &mut MessageState)` - 渲染裝備編輯表單
-- `pub fn has_invalid_references(state: &GenericEditorState<EquipmentType>) -> bool` - 檢查是否存在失效的技能引用
-- `pub fn has_invalid_reference(equipment: &EquipmentType, ui_state: &EquipmentTabUIState) -> bool` - 檢查裝備是否存在失效的技能引用
-- `pub fn clear_invalid_references(state: &mut GenericEditorState<EquipmentType>)` - 清除所有裝備中的失效技能引用
+- `pub fn render_form(ui: &mut egui::Ui, equipment: &mut EquipmentTomlType, ui_state: &mut EquipmentTabUIState, _message_state: &mut MessageState)` - 渲染裝備編輯表單
+- `pub fn has_invalid_references(state: &GenericEditorState<EquipmentTomlType>) -> bool` - 檢查是否存在失效的技能引用
+- `pub fn has_invalid_reference(equipment: &EquipmentTomlType, ui_state: &EquipmentTabUIState) -> bool` - 檢查裝備是否存在失效的技能引用
+- `pub fn clear_invalid_references(state: &mut GenericEditorState<EquipmentTomlType>)` - 清除所有裝備中的失效技能引用
 
 ### editor/tabs/skill_selection.rs
 
@@ -176,41 +170,24 @@ GenericEditorState 的方法：
 
 - `pub enum DraggedObject` - 戰場拖曳中的物件類型
 - `pub struct DragState` - 戰場拖曳狀態
-- `pub struct ReactionDecisionState` - 反應決策狀態
-- `pub enum BattleAction` - 戰鬥操作類型
-- `pub enum RightPanelView` - 右側面板顯示類型
-- `pub enum LevelTabMode` - 關卡編輯模式
 - `pub struct LevelTabUIState` - 關卡頁面的 UI 狀態
 - `pub fn file_name() -> &'static str` - 取得關卡檔案名稱
+- `pub fn has_invalid_references(state: &GenericEditorState<LevelType>) -> bool` - 檢查是否存在失效的資料引用
+- `pub fn has_invalid_reference(level: &LevelType, ui_state: &LevelTabUIState) -> bool` - 檢查關卡是否存在失效的資料引用
+- `pub fn clear_invalid_references(state: &mut GenericEditorState<LevelType>)` - 清除所有關卡中的失效資料引用
 - `pub fn render_form(ui: &mut egui::Ui, level: &mut LevelType, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 根據模式渲染關卡編輯表單
 
 ### editor/tabs/level_tab/battlefield.rs
 
 - `pub struct VisibleGridRange` - 戰場網格的可見範圍
-- `pub fn query_snapshot(world: &mut World) -> CResult<Snapshot>` - 一次查詢所有關卡資料
+- `pub struct CellHighlight` - 單一格子的邊框與背景高亮
 - `pub fn calculate_grid_dimensions(board: Board) -> egui::Vec2` - 計算棋盤預覽的總尺寸
 - `pub fn calculate_visible_range(scroll_offset: egui::Vec2, viewport_size: egui::Vec2, board: Board) -> VisibleGridRange` - 計算可見範圍內的格子索引
 - `pub fn screen_to_board_pos(screen_pos: egui::Pos2, rect: egui::Rect, board: Board) -> Option<Position>` - 將螢幕座標轉換為棋盤座標
 - `pub fn compute_hover_pos(response: &egui::Response, rect: egui::Rect, board: Board) -> Option<Position>` - 計算滑鼠懸停時的棋盤座標
-- `pub fn get_cell_info(snapshot: &Snapshot) -> impl Fn(Position) -> (String, egui::Color32, egui::Color32)` - 取得格子顯示資訊
-- `pub struct CellHighlight` - 單一格子的邊框與背景高亮
-- `pub struct Snapshot` - 戰場顯示所需的快照資料
-- `pub fn get_tooltip_info(snapshot: &Snapshot) -> impl Fn(Position) -> String` - 取得懸停提示資訊
 - `pub fn render_grid(ui: &mut egui::Ui, rect: egui::Rect, board: Board, scroll_offset: egui::Vec2, get_cell_info: impl Fn(Position) -> (String, egui::Color32, egui::Color32), get_cell_highlight: impl Fn(Position) -> CellHighlight)` - 繪製棋盤格子
 - `pub fn render_hover_tooltip(ui: &mut egui::Ui, rect: egui::Rect, hovered_pos: Position, get_tooltip_info: impl Fn(Position) -> String)` - 渲染懸停提示
-- `pub fn render_details_panel(ui: &mut egui::Ui, pos: Position, snapshot: &Snapshot)` - 渲染詳情面板
 - `pub fn render_battlefield_legend(ui: &mut egui::Ui)` - 渲染戰場圖例
-- `pub fn enemy_units(snapshot: &Snapshot) -> impl Iterator<Item = &UnitBundle>` - 取得敵方單位
-- `pub fn get_faction_color(factions: &HashMap<ID, Faction>, unit_faction_id: ID) -> egui::Color32` - 取得陣營顏色
-- `pub fn get_unit_abbr(unit_name: &str) -> String` - 取得單位名稱縮寫
-
-### editor/tabs/level_tab/deployment.rs
-
-- `pub fn render_form(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染單位部署模式表單
-
-### editor/tabs/level_tab/battle.rs
-
-- `pub fn render_form(ui: &mut egui::Ui, ui_state: &mut LevelTabUIState, message_state: &mut MessageState)` - 渲染戰鬥模式表單
 
 ### editor/tabs/level_tab/edit.rs
 

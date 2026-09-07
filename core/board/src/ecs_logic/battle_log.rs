@@ -25,7 +25,7 @@ use bevy_ecs::prelude::{With, World};
 ///
 /// 施放者名稱快照由本函數從 entry 的 caster ID 查 World 取得，呼叫端無需預先查。
 ///
-/// 由呼叫端（editor）在 `execute_skill` 之後明確呼叫，core 不自動 append。
+/// 由呼叫端在 `execute_skill` 之後明確呼叫，core 不自動 append。
 pub fn append_skill_log(world: &mut World, entries: &[EffectEntry]) -> Result<()> {
     let events = entries
         .iter()
@@ -51,7 +51,7 @@ pub fn append_skill_log(world: &mut World, entries: &[EffectEntry]) -> Result<()
 /// reactor 名稱快照由本函數從 entry 的 caster ID 查 World 取得（反應者即 caster）；
 /// trigger 不在 `EffectEntry` 內，由呼叫端以 `Occupant` 傳入身分、本函數查其名稱。
 ///
-/// 由呼叫端（editor）在 `process_reactions` 回傳 `Executed` 之後明確呼叫，
+/// 由呼叫端在 `process_reactions` 回傳 `Executed` 之後明確呼叫，
 /// trigger 取自 `Executed { trigger }`。core 不自動 append。
 pub fn append_reaction_log(
     world: &mut World,

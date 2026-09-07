@@ -4,6 +4,11 @@
 
 - 程式碼註解、文件說明與協作回覆優先使用繁體中文。
 
+## 暫存檔案
+
+- 需要建立暫存檔案或暫存目錄時，只能寫入專案根目錄下的 `tmp/`。
+- 不得將本專案工作產生的暫存內容寫入系統暫存目錄、使用者目錄或專案外的其他位置。
+
 ## 實作前確認
 
 當需求存在兩個以上合理實作方式，或選擇會影響 API、資料格式、架構、檔案範圍、相容性、效能、使用者可見行為或操作方式時，修改檔案前必須：
@@ -51,12 +56,9 @@
 
 - 不使用 `let else` 語法。
 
-### Editor
-
-- `editor/` 的功能修改不撰寫測試，也不適用下方的測試驅動開發流程。
-
 ### 測試驅動開發
 
+- 只有 rust board crate 撰寫測試，其他部分禁止撰寫測試，除非使用者明確要求撰寫
 - 新增或修改行為時，先撰寫能描述預期行為的失敗測試；完成測試後，必須等待使用者人工檢查並明確同意，才可實作使其通過。
 - 修正 bug 時，先加入能重現該 bug 的測試；完成測試後，必須等待使用者人工檢查並明確同意，才可進行修正。
 - 完成實作後，執行與變更範圍相符的測試，確認全部通過。
@@ -71,6 +73,15 @@
 - ECS 的 Component 與 Resource 僅能承載資料，禁止實作 method。
 
 ## Godot
+
+### 測試替身
+
+- Godot 測試禁止使用 mock 類別、節點或服務；只允許使用專用 TOML 測試資料，並以真實場景、實際類別與全域服務完成驗證。
+
+### AI Review 習慣
+
+- 使用者通常會要求 AI 完整 review 整個 `godot_bind/`，因此不要只為了縮小 AI 單次讀取的 context 而拆分檔案。
+- `godot_bind/` 目前優先讓同一功能的 Godot API、流程與轉換維持在容易一次完整閱讀的範圍；只有職責邊界或檔案規模本身足以支持拆分時，才提出拆檔方案。
 
 ### 核心 ECS 與 Godot FFI 責任邊界
 
@@ -105,3 +116,11 @@
 ### Godot 專案規則檔
 
 - 處理工作區內任何 Godot 專案或 Godot 整合功能前，必須先閱讀「相對於專案根目錄」的 `.claude/rules/godot.md`。
+
+### AI 呼叫 Godot Headless 的崩潰原因與解法
+
+Godot 4.7.1 在 Codex 沙箱內無法使用預設日誌位置，或 `--log-file` 指向不存在的目錄時，可能以 signal 11（`0xc0000005`）崩潰。Godot 的相對日誌路徑以 `project.godot` 所在目錄為基準，因此不得使用 `--log-file tmp/...`；也不要以 `--disable-file-logging` 迴避。
+
+Headless 驗證應將日誌寫到工作區根目錄既有 `ignore-tmp/` 的絕對路徑。此處記載的相對路徑是 `ignore-tmp/`（相對於本 `AGENTS.md` 所在目錄），不是 `godot/ignore-tmp/`。
+
+需要實際視窗、渲染或桌面輸入時，不使用 `--headless`，並在取得核准後於沙箱外啟動。參考：[Godot 命令列文件](https://docs.godotengine.org/en/stable/tutorials/editor/command_line_tutorial.html)、[Godot issue #118354](https://github.com/godotengine/godot/issues/118354)。

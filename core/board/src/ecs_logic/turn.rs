@@ -1,7 +1,7 @@
 //! 回合順序 ECS 操作函數
 
 use super::{get_component, get_component_mut};
-use crate::domain::alias::TypeName;
+use crate::domain::alias::{ID, TypeName};
 use crate::domain::battle_log::LogEvent;
 use crate::domain::constants::PLAYER_FACTION_ID;
 use crate::ecs_logic::query::{find_entity_by_occupant, get_resource, get_resource_mut};
@@ -223,12 +223,15 @@ pub fn delay_current_unit(world: &mut World, target_index: usize) -> Result<()> 
 
 /// 掃描全場 HP≤0 的單位、批次移出 TurnOrder 並 despawn，產生死亡 log
 ///
+/// 回傳本次移除的單位 ID：死者 despawn 後即無法再從 World 查得，
+/// 呼叫端（如前端 view 層）需要這份清單才能移除對應的呈現物件。
+///
 /// 批次語意：先收集所有死者，全部移除後**只判一次**是否全員行動完畢、
 /// 要不要開新一輪。逐個移除各判一次會在 AOE 多死時提前誤開新一輪。
 ///
 /// 對「無 `ReactionState`」（如 `execute_skill` 後）安全處理：沒有 pending
 /// 可剔除就只做移除；有則一併把死者剔出 pending，避免死者出現在反應面板。
-pub fn resolve_deaths(world: &mut World) -> Result<()> {
+pub fn resolve_deaths(world: &mut World) -> Result<Vec<ID>> {
     // === 讀取階段：收集死者（Entity、Occupant、名稱快照）===
     let dead_units: Vec<(bevy_ecs::entity::Entity, Occupant, TypeName)> = world
         .query_filtered::<(
@@ -243,7 +246,7 @@ pub fn resolve_deaths(world: &mut World) -> Result<()> {
         .collect();
 
     if dead_units.is_empty() {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     // 移除前的當前單位，用於判斷遞補後當前單位是否改變（改變才跑回合開始）
@@ -314,7 +317,19 @@ pub fn resolve_deaths(world: &mut World) -> Result<()> {
         begin_unit_turn(world, new_current);
     }
 
-    Ok(())
+    // 死者取自 `With<Unit>` 過濾的查詢，理應皆為 Unit occupant；
+    // 若持有 Object 則代表 Component 組裝錯誤，視為資料錯誤而非靜默略過。
+    dead_occupants
+        .into_iter()
+        .map(|occupant| match occupant {
+            Occupant::Unit(id) => Ok(id),
+            Occupant::Object(id) => Err(DataError::InvalidComponent {
+                name: "Occupant".to_string(),
+                note: format!("帶有 Unit 標記的死者必須持有 Unit occupant，實際持有 Object({id})"),
+            }
+            .into()),
+        })
+        .collect()
 }
 
 /// 查詢當前回合狀態
