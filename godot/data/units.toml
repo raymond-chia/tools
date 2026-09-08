@@ -1,0 +1,46 @@
+[[units]]
+name = "fighter"
+skills = [
+    "melee",
+    "human",
+]
+off_hand_permission = "Shield"
+
+[units.equipment]
+main_hand = "sword"
+armor = "breast-plate"
+
+[[units]]
+name = "cleric"
+skills = [
+    "melee",
+    "heal",
+    "human",
+]
+off_hand_permission = "None"
+
+[units.equipment]
+main_hand = "staff"
+
+[[units]]
+name = "archer"
+skills = [
+    "archery",
+    "human",
+]
+off_hand_permission = "None"
+
+[units.equipment]
+main_hand = "bow"
+armor = "leather-armor"
+
+[[units]]
+name = "wolf"
+skills = [
+    "melee",
+    "wolf",
+    "flank",
+]
+off_hand_permission = "None"
+
+[units.equipment]

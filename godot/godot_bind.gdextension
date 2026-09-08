@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = "4.3"
+
+[libraries]
+windows.debug.editor.x86_64 = "res://../target/release/godot_bind.dll"
+windows.debug.x86_64 = "res://../target/debug/godot_bind.dll"
+windows.release.x86_64 = "res://../target/release/godot_bind.dll"

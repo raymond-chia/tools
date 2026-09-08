@@ -1,0 +1,433 @@
+[[skills]]
+
+[skills.Active]
+name = "===Active"
+tags = []
+cost = 0
+effects = []
+
+[skills.Active.target]
+range = [
+    0,
+    0,
+]
+selection = "Unit"
+selectable_filter = "Any"
+count = 1
+allow_same_target = false
+area = "Single"
+
+[[skills]]
+
+[skills.Active]
+name = "melee"
+tags = [
+    "Flankable",
+    "AllowedDuringGrabbing",
+]
+cost = 0
+
+[skills.Active.target]
+range = [
+    1,
+    1,
+]
+selection = "Unit"
+selectable_filter = "Any"
+count = 1
+allow_same_target = false
+area = "Single"
+
+[[skills.Active.effects]]
+
+[skills.Active.effects.Branch]
+on_failure = []
+
+[skills.Active.effects.Branch.condition]
+defense_type = "AgilityAndBlock"
+accuracy_source = "Physical"
+accuracy_bonus = 0
+crit_bonus = 5
+
+[[skills.Active.effects.Branch.on_success]]
+
+[skills.Active.effects.Branch.on_success.Leaf]
+who = "Target"
+
+[skills.Active.effects.Branch.on_success.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = -100
+
+[[skills]]
+
+[skills.Active]
+name = "archery"
+tags = ["AccuracyPenaltyWhenEnemyAdjacent"]
+cost = 0
+
+[skills.Active.target]
+range = [
+    1,
+    4,
+]
+selection = "Unit"
+selectable_filter = "Any"
+count = 1
+allow_same_target = false
+area = "Single"
+
+[[skills.Active.effects]]
+
+[skills.Active.effects.Branch]
+on_failure = []
+
+[skills.Active.effects.Branch.condition]
+defense_type = "AgilityAndBlock"
+accuracy_source = "Physical"
+accuracy_bonus = 0
+crit_bonus = 5
+
+[[skills.Active.effects.Branch.on_success]]
+
+[skills.Active.effects.Branch.on_success.Leaf]
+who = "Target"
+
+[skills.Active.effects.Branch.on_success.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = -100
+
+[[skills]]
+
+[skills.Active]
+name = "heal"
+tags = []
+cost = 5
+
+[skills.Active.target]
+range = [
+    0,
+    3,
+]
+selection = "Unit"
+selectable_filter = "Any"
+count = 1
+allow_same_target = false
+area = "Single"
+
+[[skills.Active.effects]]
+
+[skills.Active.effects.Leaf]
+who = "Target"
+
+[skills.Active.effects.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "MagicalAttack"
+value_percent = 80
+
+[[skills]]
+
+[skills.Reaction]
+name = "===Reaction"
+tags = []
+cost = 0
+effects = []
+
+[skills.Reaction.triggering_unit]
+source_range = [
+    0,
+    0,
+]
+source_filter = "Any"
+trigger = "AttackOfOpportunity"
+
+[[skills]]
+
+[skills.Passive]
+name = "===Passive"
+tags = []
+effects = []
+
+[[skills]]
+
+[skills.Passive]
+name = "human"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Hp"
+value = 50
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Mp"
+value = 20
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Initiative"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 10
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MagicalAttack"
+value = 10
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAccuracy"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MagicalAccuracy"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Fortitude"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Agility"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Block"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "BlockProtection"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Will"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MovementPoint"
+value = 50
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "ReactionPoint"
+value = 1
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "FlankingAccuracyBonus"
+value = 10
+
+[[skills]]
+
+[skills.Passive]
+name = "wolf"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Hp"
+value = 20
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Mp"
+value = 10
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Initiative"
+value = 7
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 10
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MagicalAttack"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAccuracy"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MagicalAccuracy"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Fortitude"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Agility"
+value = 20
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Block"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "BlockProtection"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Will"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MovementPoint"
+value = 70
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "ReactionPoint"
+value = 1
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "FlankingAccuracyBonus"
+value = 10
+
+[[skills]]
+
+[skills.Passive]
+name = "flank"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "FlankingAccuracyBonus"
+value = 10
+
+[[skills]]
+
+[skills.Passive]
+name = "===Item"
+tags = []
+effects = []
+
+[[skills]]
+
+[skills.Passive]
+name = "sword"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 3
+
+[[skills]]
+
+[skills.Passive]
+name = "bow"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 3
+
+[[skills]]
+
+[skills.Passive]
+name = "staff"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MagicalAttack"
+value = 2
+
+[[skills]]
+
+[skills.Passive]
+name = "leather-armor"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Block"
+value = 50
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "BlockProtection"
+value = 10
+
+[[skills]]
+
+[skills.Passive]
+name = "breast-plate"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Block"
+value = 50
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "BlockProtection"
+value = 20

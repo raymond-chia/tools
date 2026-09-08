@@ -1,0 +1,6 @@
+[[objects]]
+name = "rock-wall"
+movement_cost = 10000
+blocks_sight = true
+blocks_sound = true
+hazardous = false

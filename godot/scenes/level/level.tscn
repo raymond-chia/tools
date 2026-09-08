@@ -1,0 +1,191 @@
+[gd_scene load_steps=4 format=3 uid="uid://wsjxta8mrque"]
+
+[ext_resource type="Script" uid="uid://byamnnrdui3nv" path="res://scenes/level/level.gd" id="1_level"]
+[ext_resource type="PackedScene" path="res://scenes/level/level_board.tscn" id="2_board"]
+[ext_resource type="Script" path="res://scenes/ui/controls/drag_scroll_container.gd" id="3_drag_scroll"]
+
+[node name="Level" type="Node2D" unique_id=815099609]
+script = ExtResource("1_level")
+
+[node name="LevelBoard" parent="." instance=ExtResource("2_board")]
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="SkillPanel" type="PanelContainer" parent="Hud"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = -96.0
+offset_right = 0.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_type_variation = &"SidebarPanel"
+
+[node name="Content" type="HBoxContainer" parent="Hud/SkillPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CurrentUnitPortrait" type="TextureButton" parent="Hud/SkillPanel/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="SkillButtons" type="HBoxContainer" parent="Hud/SkillPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Spacer" type="Control" parent="Hud/SkillPanel/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="EndTurnButton" type="Button" parent="Hud/SkillPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "BATTLE_END_TURN"
+
+[node name="PromptLabel" type="Label" parent="Hud"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -40.0
+offset_right = 300.0
+offset_bottom = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+autowrap_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="ErrorDialog" type="AcceptDialog" parent="Hud"]
+unique_name_in_owner = true
+
+[node name="MoveCostLabel" type="Label" parent="Hud"]
+unique_name_in_owner = true
+layout_mode = 0
+mouse_filter = 2
+theme_type_variation = &"SidebarPanel"
+text = ""
+
+[node name="TurnOrderScroll" type="ScrollContainer" parent="Hud"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 0.0
+anchor_right = 0.0
+anchor_top = 0.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 92.0
+offset_bottom = -116.0
+grow_vertical = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+script = ExtResource("3_drag_scroll")
+
+[node name="TurnOrderItems" type="VBoxContainer" parent="Hud/TurnOrderScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+alignment = 2
+theme_override_constants/separation = 8
+mouse_filter = 2
+
+[node name="DelayTurnButton" type="Button" parent="Hud"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 96.0
+offset_top = -156.0
+offset_right = 176.0
+offset_bottom = -124.0
+grow_vertical = 0
+toggle_mode = true
+text = "BATTLE_DELAY_TURN"
+
+[node name="Ui" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="RightSidebar" type="VBoxContainer" parent="Hud/Ui"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -350.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -116.0
+grow_horizontal = 0
+grow_vertical = 2
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+
+[node name="UnitPanel" type="PanelContainer" parent="Hud/Ui/RightSidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"SidebarPanel"
+
+[node name="Content" type="VBoxContainer" parent="Hud/Ui/RightSidebar/UnitPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Hud/Ui/RightSidebar/UnitPanel/Content"]
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "DEPLOYMENT_UNIT_DETAILS"
+
+[node name="DetailsScroll" type="ScrollContainer" parent="Hud/Ui/RightSidebar/UnitPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+script = ExtResource("3_drag_scroll")
+
+[node name="DetailsContent" type="VBoxContainer" parent="Hud/Ui/RightSidebar/UnitPanel/Content/DetailsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="UnitDetailsLabel" type="Label" parent="Hud/Ui/RightSidebar/UnitPanel/Content/DetailsScroll/DetailsContent"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+mouse_filter = 2
+text = ""
+
+[connection signal="target_selected" from="LevelBoard" to="." method="_on_target_selected"]
+[connection signal="skill_targeting_cancelled" from="LevelBoard" to="." method="_on_skill_targeting_cancelled"]
+[connection signal="skill_target_hovered" from="LevelBoard" to="." method="_on_skill_target_hovered"]
+[connection signal="skill_target_hover_cleared" from="LevelBoard" to="." method="_on_skill_target_hover_cleared"]
+[connection signal="movement_preview_changed" from="LevelBoard" to="." method="_on_movement_preview_changed"]
+[connection signal="movement_preview_cleared" from="LevelBoard" to="." method="_on_movement_preview_cleared"]
+[connection signal="unit_selected" from="LevelBoard" to="." method="_on_unit_selected"]
+[connection signal="toggled" from="Hud/DelayTurnButton" to="." method="_on_delay_turn_toggled"]
+[connection signal="pressed" from="Hud/SkillPanel/Content/EndTurnButton" to="." method="_on_end_turn_pressed"]

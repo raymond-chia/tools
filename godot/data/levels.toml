@@ -1,0 +1,435 @@
+[[levels]]
+name = "lv1"
+board_width = 33
+board_height = 7
+max_player_units = 0
+deployment_positions = []
+victory_conditions = [[
+    "OUTCOME_VICTORY_FACTION_ELIMINATED",
+    [{ EliminateFaction = 1 }],
+]]
+defeat_conditions = [[
+    "OUTCOME_DEFEAT_PLAYER_ELIMINATED",
+    [{ EliminateFaction = 0 }],
+]]
+
+[[levels.factions]]
+id = 0
+name = "player"
+alliance = 0
+color = [
+    0,
+    0,
+    255,
+]
+
+[[levels.factions]]
+id = 1
+name = "wild"
+alliance = 1
+color = [
+    255,
+    0,
+    0,
+]
+
+[[levels.unit_placements]]
+unit_type_name = "archer"
+faction_id = 0
+
+[levels.unit_placements.position]
+x = 9
+y = 3
+
+[[levels.unit_placements]]
+unit_type_name = "cleric"
+faction_id = 0
+
+[levels.unit_placements.position]
+x = 10
+y = 4
+
+[[levels.unit_placements]]
+unit_type_name = "fighter"
+faction_id = 0
+
+[levels.unit_placements.position]
+x = 11
+y = 3
+
+[[levels.unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[levels.unit_placements.position]
+x = 25
+y = 2
+
+[[levels.unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[levels.unit_placements.position]
+x = 25
+y = 4
+
+[[levels.unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[levels.unit_placements.position]
+x = 27
+y = 3
+
+[[levels.unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[levels.unit_placements.position]
+x = 28
+y = 5
+
+[[levels.unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[levels.unit_placements.position]
+x = 29
+y = 2
+
+[[levels.unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[levels.unit_placements.position]
+x = 30
+y = 4
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 0
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 0
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 1
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 1
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 2
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 2
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 3
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 3
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 4
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 4
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 5
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 5
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 6
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 6
+y = 5
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 6
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 7
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 7
+y = 4
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 7
+y = 5
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 7
+y = 6
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 8
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 8
+y = 2
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 9
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 9
+y = 1
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 9
+y = 2
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 10
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 11
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 12
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 13
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 14
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 15
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 16
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 17
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 18
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 19
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 20
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 21
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 22
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 23
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 24
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 25
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 26
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 27
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 28
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 29
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 30
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 31
+y = 0
+
+[[levels.object_placements]]
+object_type_name = "rock-wall"
+
+[levels.object_placements.position]
+x = 32
+y = 0

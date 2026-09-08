@@ -1,0 +1,84 @@
+[[skills]]
+
+[skills.Passive]
+name = "first-unit"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Hp"
+value = 100
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Initiative"
+value = 100
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 10
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MovementPoint"
+value = 50
+
+[[skills]]
+
+[skills.Passive]
+name = "second-unit"
+tags = []
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Hp"
+value = 100
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "Initiative"
+value = 0
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "PhysicalAttack"
+value = 10
+
+[[skills.Passive.effects]]
+
+[skills.Passive.effects.AttributeFlat]
+attribute = "MovementPoint"
+value = 50
+
+[[skills]]
+
+[skills.Active]
+name = "melee"
+tags = []
+cost = 0
+
+[skills.Active.target]
+range = [1, 1]
+selection = "Unit"
+selectable_filter = "Enemy"
+count = 1
+allow_same_target = false
+area = "Single"
+
+[[skills.Active.effects]]
+
+[skills.Active.effects.Leaf]
+who = "Target"
+
+[skills.Active.effects.Leaf.effect.HpEffect.scaling]
+source = "Caster"
+source_attribute = "PhysicalAttack"
+value_percent = -100

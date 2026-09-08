@@ -1,0 +1,67 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/credits/credits_overlay.gd" id="1_script"]
+
+[node name="CreditsOverlay" type="CanvasLayer"]
+layer = 100
+script = ExtResource("1_script")
+
+[node name="Dimmer" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 0
+color = Color(0, 0, 0, 0.65)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 1
+
+[node name="Panel" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(460, 0)
+layout_mode = 2
+theme_type_variation = &"OverlayPanel"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="CenterContainer/Panel/Content"]
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "CREDITS_TITLE"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="CenterContainer/Panel/Content"]
+custom_minimum_size = Vector2(0, 320)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ScrollContent" type="VBoxContainer" parent="CenterContainer/Panel/Content/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="MusicHeading" type="Label" parent="CenterContainer/Panel/Content/Scroll/ScrollContent"]
+layout_mode = 2
+text = "CREDITS_MUSIC_HEADING"
+
+[node name="MusicBody" type="Label" parent="CenterContainer/Panel/Content/Scroll/ScrollContent"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.8, 0.9, 1)
+text = "CREDITS_MUSIC_BODY"
+autowrap_mode = 3
+
+[node name="BackButton" type="Button" parent="CenterContainer/Panel/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+text = "UI_BACK"
+
+[connection signal="pressed" from="CenterContainer/Panel/Content/BackButton" to="." method="_on_back_pressed"]

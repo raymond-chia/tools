@@ -1,0 +1,83 @@
+keys,en,zh_TW
+BATTLE_NO_SKILLS,No available skills,沒有可用技能
+BATTLE_NO_TARGETS,No valid targets,沒有合法目標
+BATTLE_ERROR_TITLE,Error,錯誤
+BATTLE_VICTORY,Victory,勝利
+BATTLE_DEFEAT,Defeat,失敗
+BATTLE_RETURN_TO_MENU,Main Menu,主選單
+BATTLE_END_TURN,End Turn,結束回合
+BATTLE_DELAY_TURN,Delay,延後
+BATTLE_DELAY_PROMPT,Choose a later unit; the current unit will act after it.,選擇後續單位；目前單位將在它之後行動。
+BATTLE_MOVE_COST,Move Cost: %d,移動消耗：%d
+GAME_TITLE,Game Title,遊戲標題
+UI_BACK,Back,返回
+UI_OK,OK,確定
+MENU_CONTINUE,Continue,繼續
+MENU_NEW_GAME,New Game,新遊戲
+MENU_LOAD,Load,載入
+MENU_OPTIONS,Options,選項
+MENU_CREDITS,Credits,製作人員
+MENU_QUIT,Quit Game,離開遊戲
+OPTIONS_TITLE,Options,選項
+OPTIONS_LANGUAGE,Language,語言
+OPTIONS_RESOLUTION,Resolution,解析度
+OPTIONS_FULLSCREEN,Fullscreen,全螢幕
+OPTIONS_APPLY,Apply,套用
+OPTIONS_UNSAVED,You have unapplied changes. What would you like to do?,尚有未套用的變更，要怎麼處理？
+OPTIONS_DISCARD,Discard,放棄變更
+CREDITS_TITLE,Credits,製作人員
+CREDITS_MUSIC_HEADING,Music,音樂
+CREDITS_MUSIC_BODY,"PeriTune
+Some tracks have been arranged from the originals.","PeriTune
+部分曲目為原曲改編。"
+DEPLOYMENT_TITLE,Deployment,部署
+DEPLOYMENT_VICTORY,Victory Conditions,勝利條件
+DEPLOYMENT_DEFEAT,Defeat Conditions,失敗條件
+DEPLOYMENT_UNIT_DETAILS,Unit Details,單位屬性
+DEPLOYMENT_UNIT_NAME,Name,名稱
+DEPLOYMENT_FACTION,Faction,陣營
+DEPLOYMENT_START_BATTLE,Start Battle,開始戰鬥
+DEPLOYMENT_MENU,Menu,選單
+STAT_INITIATIVE,Initiative,先攻
+STAT_PHYSICAL_ATTACK,Physical Attack,物理攻擊
+STAT_MAGICAL_ATTACK,Magical Attack,魔法攻擊
+STAT_PHYSICAL_ACCURACY,Physical Accuracy,物理命中
+STAT_MAGICAL_ACCURACY,Magical Accuracy,魔法命中
+STAT_FORTITUDE,Fortitude,強韌
+STAT_AGILITY,Agility,敏捷
+STAT_BLOCK,Block,格擋
+STAT_BLOCK_PROTECTION,Block Protection,格擋減傷
+STAT_WILL,Will,意志
+STAT_MOVEMENT,Movement,移動力
+STAT_REACTION,Reaction Points,反應點
+STAT_FLANKING_ACCURACY,Flanking Accuracy Bonus,夾擊命中加成
+OUTCOME_VICTORY_FACTION_ELIMINATED,Victory: target faction eliminated,勝利：目標陣營已殲滅
+OUTCOME_DEFEAT_PLAYER_ELIMINATED,Defeat: player faction eliminated,失敗：玩家陣營已全滅
+ERROR_UNKNOWN,An unexpected error occurred,發生未預期錯誤
+ERROR_InvalidPosition,The selected position is invalid,選擇的位置無效
+ERROR_FileReadError,Unable to read a required game file,無法讀取必要的遊戲檔案
+ERROR_NoActiveSession,No active game session,沒有進行中的遊戲
+ERROR_ParseError,Game data could not be parsed,無法解析遊戲資料
+ERROR_DeserializeError,Game data has an invalid format,遊戲資料格式無效
+ERROR_SerializeError,Game data could not be serialized,無法序列化遊戲資料
+ERROR_OutOfBoard,The selected position is outside the board,選擇的位置位於棋盤外
+ERROR_Unreachable,The selected position cannot be reached,選擇的位置無法抵達
+ERROR_NoActiveUnit,There is no active unit,目前沒有行動中的單位
+ERROR_InvalidDelay,The current unit cannot delay to that position,目前單位無法延後到該順位
+ERROR_InvalidSkillTarget,The selected target is invalid for this skill,選擇的目標不符合技能條件
+ERROR_WrongTargetCount,The skill requires a different number of targets,技能需要不同數量的目標
+ERROR_OutOfRange,The selected target is out of range,選擇的目標超出範圍
+ERROR_NoLineOfSight,The selected target is not in line of sight,選擇的目標不在視線範圍內
+ERROR_TargetFilterMismatch,The selected target does not match the skill target type,選擇的目標不符合技能目標類型
+ERROR_NoUnitAtTarget,There is no unit at the selected position,選擇的位置沒有單位
+ERROR_DuplicateTarget,The same target cannot be selected more than once,不能重複選擇相同目標
+ERROR_TargetCountFull,The skill already has enough targets,此技能已選擇足夠的目標
+ERROR_PositionNotDeployable,The selected position cannot deploy a unit,選擇的位置無法部署單位
+ERROR_MaxPlayerUnitsReached,The maximum number of player units has been reached,已達玩家單位數量上限
+ERROR_NothingToUndeploy,There is no deployed unit at the selected position,選擇的位置沒有已部署的單位
+ERROR_SkillNotFound,The selected skill does not exist,選擇的技能不存在
+ERROR_InsufficientActionPoint,Not enough action points,行動點數不足
+ERROR_InsufficientMp,Not enough MP,MP 不足
+ERROR_InsufficientReactionPoint,Not enough reaction points,反應點數不足
+ERROR_NoPendingReactions,There are no pending reactions,沒有待處理的反應
+PLACEHOLDER_PREFIX,Placeholder,暫時功能

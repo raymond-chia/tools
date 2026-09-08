@@ -1,0 +1,39 @@
+[[equipments]]
+name = "===weapon"
+typ = "Weapon"
+granted_skills = []
+
+[[equipments]]
+name = "sword"
+typ = "Weapon"
+granted_skills = ["sword"]
+
+[[equipments]]
+name = "bow"
+typ = "TwoHandedWeapon"
+granted_skills = ["bow"]
+
+[[equipments]]
+name = "staff"
+typ = "TwoHandedWeapon"
+granted_skills = ["staff"]
+
+[[equipments]]
+name = "===armor"
+typ = "Armor"
+granted_skills = []
+
+[[equipments]]
+name = "leather-armor"
+typ = "Armor"
+granted_skills = ["leather-armor"]
+
+[[equipments]]
+name = "breast-plate"
+typ = "Armor"
+granted_skills = ["breast-plate"]
+
+[[equipments]]
+name = "===accessory"
+typ = "Accessory"
+granted_skills = []

@@ -1,0 +1,122 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/level/level_deployment.gd" id="1_deployment"]
+[ext_resource type="PackedScene" path="res://scenes/level/level_board.tscn" id="2_board"]
+[ext_resource type="Script" path="res://scenes/ui/controls/drag_scroll_container.gd" id="4_drag_scroll"]
+
+[node name="LevelDeployment" type="Node2D"]
+script = ExtResource("1_deployment")
+
+[node name="LevelBoard" parent="." instance=ExtResource("2_board")]
+
+[node name="Hud" type="CanvasLayer" parent="."]
+layer = 1
+
+[node name="Ui" type="Control" parent="Hud"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="RightSidebar" type="VBoxContainer" parent="Hud/Ui"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -350.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_constants/separation = 20
+mouse_filter = 0
+mouse_force_pass_scroll_events = false
+
+[node name="InfoPanel" type="PanelContainer" parent="Hud/Ui/RightSidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"SidebarPanel"
+
+[node name="Content" type="VBoxContainer" parent="Hud/Ui/RightSidebar/InfoPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="VictoryLabel" type="Label" parent="Hud/Ui/RightSidebar/InfoPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="DefeatLabel" type="Label" parent="Hud/Ui/RightSidebar/InfoPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="UnitPanel" type="PanelContainer" parent="Hud/Ui/RightSidebar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"SidebarPanel"
+
+[node name="Content" type="VBoxContainer" parent="Hud/Ui/RightSidebar/UnitPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="Hud/Ui/RightSidebar/UnitPanel/Content"]
+layout_mode = 2
+theme_type_variation = &"Title"
+text = "DEPLOYMENT_UNIT_DETAILS"
+
+[node name="DetailsScroll" type="ScrollContainer" parent="Hud/Ui/RightSidebar/UnitPanel/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+script = ExtResource("4_drag_scroll")
+
+[node name="DetailsContent" type="VBoxContainer" parent="Hud/Ui/RightSidebar/UnitPanel/Content/DetailsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+
+[node name="UnitDetailsLabel" type="Label" parent="Hud/Ui/RightSidebar/UnitPanel/Content/DetailsScroll/DetailsContent"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+mouse_filter = 2
+text = ""
+
+[node name="MenuButton" type="Button" parent="Hud/Ui"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 1
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 170.0
+offset_bottom = 60.0
+text = "DEPLOYMENT_MENU"
+
+[node name="StatusLabel" type="Label" parent="Hud/Ui"]
+unique_name_in_owner = true
+layout_mode = 1
+offset_left = 182.0
+offset_top = 20.0
+offset_right = 520.0
+offset_bottom = 60.0
+vertical_alignment = 1
+
+[node name="StartBattleButton" type="Button" parent="Hud/Ui/RightSidebar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+text = "DEPLOYMENT_START_BATTLE"
+
+[connection signal="level_loaded" from="LevelBoard" to="." method="_on_level_loaded"]
+[connection signal="unit_selected" from="LevelBoard" to="." method="_on_unit_selected"]
+[connection signal="pressed" from="Hud/Ui/MenuButton" to="." method="_on_menu_pressed"]
+[connection signal="pressed" from="Hud/Ui/RightSidebar/StartBattleButton" to="." method="_on_start_battle_pressed"]

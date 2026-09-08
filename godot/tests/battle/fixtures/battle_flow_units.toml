@@ -1,0 +1,13 @@
+[[units]]
+name = "fighter"
+skills = ["first-unit", "melee"]
+off_hand_permission = "None"
+
+[units.equipment]
+
+[[units]]
+name = "wolf"
+skills = ["second-unit", "melee"]
+off_hand_permission = "None"
+
+[units.equipment]

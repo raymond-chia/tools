@@ -1,0 +1,36 @@
+name = "battle-flow-test"
+board_width = 6
+board_height = 3
+max_player_units = 0
+deployment_positions = []
+object_placements = []
+victory_conditions = []
+defeat_conditions = []
+
+[[factions]]
+id = 0
+name = "player"
+alliance = 0
+color = [0, 0, 255]
+
+[[factions]]
+id = 1
+name = "enemy"
+alliance = 1
+color = [255, 0, 0]
+
+[[unit_placements]]
+unit_type_name = "fighter"
+faction_id = 0
+
+[unit_placements.position]
+x = 1
+y = 1
+
+[[unit_placements]]
+unit_type_name = "wolf"
+faction_id = 1
+
+[unit_placements.position]
+x = 4
+y = 1

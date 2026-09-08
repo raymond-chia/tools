@@ -1,0 +1,20 @@
+[gd_resource type="TileSet" load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/level/level_tiles.svg" id="1_tiles"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_tiles"]
+texture = ExtResource("1_tiles")
+texture_region_size = Vector2i(96, 48)
+0:0/0 = 0
+1:0/0 = 0
+2:0/0 = 0
+3:0/0 = 0
+4:0/0 = 0
+5:0/0 = 0
+6:0/0 = 0
+
+[resource]
+tile_shape = 1
+tile_size = Vector2i(96, 48)
+tile_layout = 4
+sources/0 = SubResource("TileSetAtlasSource_tiles")

@@ -1,0 +1,68 @@
+[gd_resource type="Theme" load_steps=5 format=3]
+
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSans.ttf" id="1_font"]
+
+[sub_resource type="StyleBoxFlat" id="MainMenuPanelStyle"]
+bg_color = Color(0.08, 0.1, 0.16, 0.96)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.35, 0.52, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 48.0
+content_margin_top = 40.0
+content_margin_right = 48.0
+content_margin_bottom = 40.0
+
+[sub_resource type="StyleBoxFlat" id="OverlayPanelStyle"]
+bg_color = Color(0.08, 0.1, 0.16, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.35, 0.52, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 40.0
+content_margin_top = 32.0
+content_margin_right = 40.0
+content_margin_bottom = 32.0
+
+[sub_resource type="StyleBoxFlat" id="SidebarPanelStyle"]
+bg_color = Color(0.08, 0.1, 0.16, 0.94)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.35, 0.52, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 18.0
+content_margin_top = 18.0
+content_margin_right = 18.0
+content_margin_bottom = 18.0
+
+[resource]
+default_font = ExtResource("1_font")
+default_font_size = 22
+MainMenuPanel/base_type = &"PanelContainer"
+MainMenuPanel/styles/panel = SubResource("MainMenuPanelStyle")
+OverlayPanel/base_type = &"PanelContainer"
+OverlayPanel/styles/panel = SubResource("OverlayPanelStyle")
+SidebarPanel/base_type = &"PanelContainer"
+SidebarPanel/styles/panel = SubResource("SidebarPanelStyle")
+Title/base_type = &"Label"
+Title/font_sizes/font_size = 32
+DamagePopup/base_type = &"Label"
+DamagePopup/colors/font_color = Color(1, 0.384, 0.369, 1)
+DamagePopup/colors/font_outline_color = Color(0.16, 0.035, 0.035, 1)
+DamagePopup/constants/outline_size = 7
+DamagePopup/font_sizes/font_size = 34
