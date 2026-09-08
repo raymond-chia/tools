@@ -1,0 +1,10 @@
+[application]
+config/name="奇幻小隊戰棋"
+run/main_scene="res://features/battle/battle.tscn"
+[display]
+window/size/viewport_width=1040
+window/size/viewport_height=720
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.0627, 0.0941, 0.1529, 1)

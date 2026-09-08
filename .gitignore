@@ -1,6 +1,12 @@
-target/
+/target/
+/ignore-tmp/
+/godot/.godot/
+/godot/bin/*.dll
+/godot/bin/*.so
+/godot/bin/*.dylib
 
 __pycache__/
+*.pyc
 
 bash.exe.stackdump
 

@@ -1,0 +1,10 @@
+[package]
+name="godot-bridge"
+version.workspace=true
+edition.workspace=true
+[lib]
+crate-type=["cdylib"]
+[dependencies]
+game-core={path="../game-core"}
+godot={version="0.5.4",features=["api-4-7"]}
+serde_json.workspace=true
