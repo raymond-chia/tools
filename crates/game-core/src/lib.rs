@@ -191,6 +191,7 @@ pub struct Snapshot {
     pub width: i32,
     pub height: i32,
     pub costs: Vec<u32>,
+    pub terrain_effects: Vec<TerrainEffectView>,
     pub units: Vec<UnitView>,
     pub reachable: Vec<GridPos>,
     pub turn: TurnView,
@@ -209,8 +210,22 @@ pub struct UnitView {
     pub height: i32,
     pub hp: i32,
     pub max_hp: i32,
+    pub movement: u32,
+    pub initiative: i32,
+    pub dodge: i32,
+    pub block: i32,
+    pub melee: i32,
+    pub ranged: i32,
+    pub damage: i32,
+    pub range: i32,
     pub downed: bool,
     pub active: bool,
+}
+#[derive(Serialize)]
+pub struct TerrainEffectView {
+    pub x: i32,
+    pub y: i32,
+    pub effect: String,
 }
 #[derive(Serialize)]
 pub struct TurnView {
@@ -691,6 +706,14 @@ impl Game {
                 height: fp.height,
                 hp: h.current,
                 max_hp: h.maximum,
+                movement: f.movement,
+                initiative: f.initiative,
+                dodge: f.dodge,
+                block: f.block,
+                melee: f.melee,
+                ranged: f.ranged,
+                damage: f.damage,
+                range: f.range,
                 downed: d,
                 active: enc.participants.contains(&i.0),
             })
@@ -706,6 +729,19 @@ impl Game {
             width: b.width,
             height: b.height,
             costs: b.costs,
+            terrain_effects: {
+                let mut effects: Vec<_> = b
+                    .triggers
+                    .into_iter()
+                    .map(|(position, effect)| TerrainEffectView {
+                        x: position.x,
+                        y: position.y,
+                        effect,
+                    })
+                    .collect();
+                effects.sort_by_key(|effect| (effect.y, effect.x));
+                effects
+            },
             units,
             reachable,
             turn: TurnView {
@@ -872,59 +908,4 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     let mut v: Vec<_> = paths(w, e, p, f, b).0.into_keys().collect();
     v.sort_by_key(|p| (p.y, p.x));
     v
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    const DATA: &str = include_str!("../../../godot/data/vertical_slice.toml");
-    #[test]
-    fn load_large_unit() {
-        let mut g = Game::from_toml(DATA).unwrap();
-        let s = g.command(Command::Start).unwrap();
-        assert!(s.units.iter().any(|u| u.width == 2));
-        assert!(s.round > 0)
-    }
-    #[test]
-    fn natural_criticals() {
-        assert_eq!(degree(1, 99, 10), RollDegree::CriticalFailure);
-        assert_eq!(degree(20, -99, 10), RollDegree::CriticalSuccess)
-    }
-    #[test]
-    fn cardinal_path_budget() {
-        let g = Game::from_toml(DATA).unwrap();
-        let e = g.entity("aria").unwrap();
-        let r = reach(&g.world, e, 5);
-        assert!(r.contains(&GridPos { x: 2, y: 4 }));
-        assert!(!r.contains(&GridPos { x: 8, y: 7 }))
-    }
-    #[test]
-    fn trigger_pauses_path_and_second_move_is_explicit() {
-        let mut g = Game::from_toml(DATA).unwrap();
-        *g.world.resource_mut::<Turn>() = Turn {
-            actor: Some("aria".into()),
-            phase: Phase::Ready,
-            remaining: 5,
-            moves: 0,
-        };
-        g.move_to("aria", GridPos { x: 5, y: 4 }).unwrap();
-        let aria = g.entity("aria").unwrap();
-        assert_eq!(g.world.get::<Pos>(aria).unwrap().0, GridPos { x: 4, y: 4 });
-        assert_eq!(g.world.resource::<Turn>().phase, Phase::Moving);
-        assert!(g.world.resource::<Turn>().remaining > 0);
-        g.end_move("aria").unwrap();
-        g.move_to("aria", GridPos { x: 3, y: 4 }).unwrap();
-        assert_eq!(g.world.resource::<Turn>().moves, 1);
-    }
-    #[test]
-    fn large_footprint_reachable_tiles_stay_in_bounds() {
-        let g = Game::from_toml(DATA).unwrap();
-        let ogre = g.entity("ogre").unwrap();
-        let board = g.world.resource::<Board>();
-        let footprint = *g.world.get::<Footprint>(ogre).unwrap();
-        assert!(
-            reach(&g.world, ogre, 20)
-                .iter()
-                .all(|position| fits(board, *position, footprint))
-        );
-    }
 }

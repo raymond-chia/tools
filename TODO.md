@@ -22,6 +22,7 @@
 - [ ] 感知系統 - 視線 (Bresenham) + 聽覺感知、阻擋物件
 - [ ] 地圖物件 - 即死、阻止通過、阻擋視線/聲音
 - [ ] 關卡設計 - 勝利/失敗條件邏輯
+- [ ] 發行前確認 `godot/assets/fonts/NotoSans.ttf` 的來源，並取得及隨遊戲附上對應的 SIL Open Font License 1.1 授權文件
 
 📋 建議優先順序
 
