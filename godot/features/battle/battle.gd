@@ -116,7 +116,9 @@ func _gui_input(event: InputEvent) -> void:
 	if not event is InputEventMouseButton or not event.pressed or state.is_empty(): return
 	var mouse: Vector2 = event.position
 	if event.button_index == MOUSE_BUTTON_RIGHT:
-		if pending_action != "":
+		if mouse.x >= PANEL_X or mouse.y >= BOTTOM_Y: return
+		var inspected_unit := unit_at_point(mouse)
+		if pending_action != "" and (inspected_unit.is_empty() or unit_occupies_cell(inspected_unit, inspected_cell)):
 			pending_action = ""
 			status = "已取消技能。"
 			queue_redraw()
@@ -152,12 +154,9 @@ func _gui_input(event: InputEvent) -> void:
 func inspect_at(mouse: Vector2) -> void:
 	if mouse.x >= PANEL_X or mouse.y >= BOTTOM_Y: return
 	var cell := point_to_cell(mouse)
-	var ordered: Array = state.units.duplicate()
-	ordered.sort_custom(func(a,b): return footprint_center(a).y > footprint_center(b).y)
-	for unit in ordered:
-		if unit_base_has_point(unit, mouse):
-			cell = Vector2i(unit.x, unit.y)
-			break
+	var unit := unit_at_point(mouse)
+	if not unit.is_empty():
+		cell = Vector2i(unit.x, unit.y)
 	if not is_cell_on_board(cell): return
 	if inspected_cell == cell:
 		inspected_cell = Vector2i(-1, -1)
@@ -165,6 +164,14 @@ func inspect_at(mouse: Vector2) -> void:
 		inspected_cell = cell
 	sync_unit_sprites()
 	queue_redraw()
+
+func unit_at_point(point: Vector2) -> Dictionary:
+	var ordered: Array = state.units.duplicate()
+	ordered.sort_custom(func(a,b): return footprint_center(a).y > footprint_center(b).y)
+	for unit in ordered:
+		if unit_base_has_point(unit, point):
+			return unit
+	return {}
 
 func is_cell_on_board(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < state.width and cell.y < state.height
