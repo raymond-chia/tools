@@ -26,6 +26,9 @@ var state: Dictionary = {}
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
 var hovered := Vector2i(-1, -1)
+var first_move_path: Array = []
+var second_move_path: Array = []
+var move_preview_interrupted := false
 var status := "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 var unit_nodes := {}
 
@@ -61,6 +64,7 @@ func send(command: Dictionary) -> bool:
 		queue_redraw()
 		return false
 	state = value; status = ""; sync_unit_sprites()
+	update_move_preview()
 	queue_redraw()
 	return true
 
@@ -111,7 +115,10 @@ func unit_base_has_point(unit: Dictionary, point: Vector2) -> bool:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		hovered = point_to_cell(event.position) if event.position.x < PANEL_X and event.position.y < BOTTOM_Y else Vector2i(-1,-1)
+		var next_hovered := point_to_cell(event.position) if event.position.x < PANEL_X and event.position.y < BOTTOM_Y else Vector2i(-1,-1)
+		if hovered != next_hovered:
+			hovered = next_hovered
+			update_move_preview()
 		queue_redraw(); return
 	if not event is InputEventMouseButton or not event.pressed or state.is_empty(): return
 	var mouse: Vector2 = event.position
@@ -182,8 +189,8 @@ func is_inspecting() -> bool:
 func handle_buttons(mouse: Vector2) -> void:
 	if state.turn.actor == null: return
 	var actor: String = state.turn.actor
-	if MELEE_RECT.has_point(mouse): select_action("melee")
-	elif RANGED_RECT.has_point(mouse): select_action("ranged")
+	if MELEE_RECT.has_point(mouse): select_action("melee_attack")
+	elif RANGED_RECT.has_point(mouse): select_action("ranged_attack")
 	elif POWER_STRIKE_RECT.has_point(mouse): select_action("power_strike")
 	elif AIMED_SHOT_RECT.has_point(mouse): select_action("aimed_shot")
 	elif END_MOVE_RECT.has_point(mouse): pending_action = ""; send({"type":"end_move","actor":actor})
@@ -191,16 +198,13 @@ func handle_buttons(mouse: Vector2) -> void:
 
 func select_action(action: String) -> void:
 	pending_action = action
+	clear_move_preview()
 	status = "請選擇技能目標。"
 	queue_redraw()
 
 func use_pending_action(target: String) -> void:
 	var actor: String = state.turn.actor
-	var succeeded := false
-	if pending_action == "melee": succeeded = send({"type":"attack","actor":actor,"target":target,"ranged":false})
-	elif pending_action == "ranged": succeeded = send({"type":"attack","actor":actor,"target":target,"ranged":true})
-	elif pending_action == "power_strike": succeeded = send({"type":"skill","actor":actor,"target":target,"skill":"power_strike"})
-	elif pending_action == "aimed_shot": succeeded = send({"type":"skill","actor":actor,"target":target,"skill":"aimed_shot"})
+	var succeeded := send({"type":"skill","actor":actor,"target":target,"skill":pending_action})
 	if succeeded:
 		pending_action = ""
 		queue_redraw()
@@ -208,13 +212,57 @@ func use_pending_action(target: String) -> void:
 func diamond(center: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([center+Vector2(0,-16),center+Vector2(32,0),center+Vector2(0,16),center+Vector2(-32,0)])
 
-func draw_marker(cell: Vector2i, fill: Color, edge: Color) -> void:
-	var points := diamond(cell_center(cell)); draw_colored_polygon(points,fill); points.append(points[0]); draw_polyline(points,edge,2,true)
+func draw_marker(cell: Vector2i, fill: Color, edge: Color, edge_width := 2.0) -> void:
+	var points := diamond(cell_center(cell)); draw_colored_polygon(points,fill); points.append(points[0]); draw_polyline(points,edge,edge_width,true)
+
+func selected_skill_range() -> Array:
+	if pending_action == "": return []
+	for skill_range in state.skill_ranges:
+		if skill_range.id == pending_action: return skill_range.cells
+	return []
+
+func clear_move_preview() -> void:
+	first_move_path.clear()
+	second_move_path.clear()
+	move_preview_interrupted = false
+
+func update_move_preview() -> void:
+	clear_move_preview()
+	if pending_action != "" or state.is_empty() or state.turn.actor == null or not is_cell_on_board(hovered): return
+	var preview = JSON.parse_string(core.preview_move(state.turn.actor, hovered.x, hovered.y))
+	if preview.has("error"): return
+	first_move_path = preview.first
+	second_move_path = preview.second
+	move_preview_interrupted = preview.interrupted
+
+func draw_move_path(path: Array, color: Color) -> void:
+	for index in range(1, path.size()):
+		var from := cell_center(Vector2i(path[index - 1].x, path[index - 1].y))
+		var to := cell_center(Vector2i(path[index].x, path[index].y))
+		draw_dashed_line(from,to,color,3.0,8.0,true,true)
+
+func draw_move_preview() -> void:
+	draw_move_path(first_move_path,Color("9debff"))
+	draw_move_path(second_move_path,Color("78a8ff"))
+	if not first_move_path.is_empty() and not second_move_path.is_empty():
+		var split = first_move_path.back()
+		draw_circle(cell_center(Vector2i(split.x,split.y)),5.0,Color.WHITE)
+	var destination = null
+	if not second_move_path.is_empty(): destination = second_move_path.back()
+	elif not first_move_path.is_empty(): destination = first_move_path.back()
+	if destination != null:
+		var fill := Color(0.9,0.08,0.06,0.38) if move_preview_interrupted else Color(1.0,0.84,0.42,0.18)
+		var edge := Color("ff3b30") if move_preview_interrupted else Color("ffd76a")
+		draw_marker(Vector2i(destination.x,destination.y),fill,edge,3.0)
 
 func _draw() -> void:
 	if state.is_empty(): draw_string(UI_FONT,Vector2(30,50),status,HORIZONTAL_ALIGNMENT_LEFT,-1,20); return
 	draw_string(UI_FONT,Vector2(26,44),"灰燼谷伏擊",HORIZONTAL_ALIGNMENT_LEFT,-1,36,Color("f2d49b"))
-	for p in state.reachable: draw_marker(Vector2i(p.x,p.y),Color(0.22,0.9,0.57,0.22),Color(0.35,1,0.69,0.7))
+	if pending_action == "":
+		for p in state.second_reachable: draw_marker(Vector2i(p.x,p.y),Color(0.04,0.15,0.42,0.38),Color(0.12,0.32,0.72,0.9))
+		for p in state.reachable: draw_marker(Vector2i(p.x,p.y),Color(0.12,0.48,0.95,0.3),Color(0.3,0.68,1.0,0.92))
+	for p in selected_skill_range(): draw_marker(Vector2i(p.x,p.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)
+	draw_move_preview()
 	if hovered.x >= 0 and hovered.y >= 0 and hovered.x < state.width and hovered.y < state.height: draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_inspecting(): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
 	var grease := cell_center(Vector2i(4,4)); draw_set_transform(grease,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,20,Color(0.6,0.3,0.85,0.72)); draw_set_transform(Vector2.ZERO)
@@ -235,7 +283,7 @@ func draw_bottom_bar() -> void:
 	draw_string(UI_FONT,Vector2(26,639),actor,HORIZONTAL_ALIGNMENT_LEFT,250,27)
 	draw_string(UI_FONT,Vector2(26,672),"剩餘移動 %s" % state.turn.move_remaining,HORIZONTAL_ALIGNMENT_LEFT,250,18,Color("b6c6d8"))
 	draw_string(UI_FONT,Vector2(300,579),"攻擊與技能",HORIZONTAL_ALIGNMENT_LEFT,610,16,Color("8fa7c0"))
-	action_button(MELEE_RECT,"近戰攻擊","melee"); action_button(RANGED_RECT,"遠程攻擊","ranged"); action_button(POWER_STRIKE_RECT,"強力一擊","power_strike"); action_button(AIMED_SHOT_RECT,"瞄準射擊","aimed_shot")
+	action_button(MELEE_RECT,"近戰攻擊","melee_attack"); action_button(RANGED_RECT,"遠程攻擊","ranged_attack"); action_button(POWER_STRIKE_RECT,"強力一擊","power_strike"); action_button(AIMED_SHOT_RECT,"瞄準射擊","aimed_shot")
 	button(END_MOVE_RECT,"結束移動"); button(END_TURN_RECT,"結束回合")
 	draw_string(UI_FONT,Vector2(300,680),status,HORIZONTAL_ALIGNMENT_LEFT,770,17,Color("f1c982"))
 

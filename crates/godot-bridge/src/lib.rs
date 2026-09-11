@@ -1,4 +1,4 @@
-use game_core::{Command, Game};
+use game_core::{Command, Game, GridPos};
 use godot::prelude::*;
 use std::sync::Mutex;
 #[derive(GodotClass)]
@@ -39,6 +39,17 @@ impl TacticalGame {
         match lock.as_mut() {
             Some(game) => match game.command(command) {
                 Ok(s) => GString::from(&serde_json::to_string(&s).unwrap()),
+                Err(e) => error(e),
+            },
+            None => error("尚未載入定義".into()),
+        }
+    }
+    #[func]
+    fn preview_move(&self, actor: GString, x: i32, y: i32) -> GString {
+        let lock = self.game.lock().unwrap();
+        match lock.as_ref() {
+            Some(game) => match game.preview_move(&actor.to_string(), GridPos { x, y }) {
+                Ok(preview) => GString::from(&serde_json::to_string(&preview).unwrap()),
                 Err(e) => error(e),
             },
             None => error("尚未載入定義".into()),

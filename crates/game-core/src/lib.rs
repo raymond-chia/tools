@@ -119,7 +119,7 @@ struct SkillDef {
     ranged: bool,
     attack_bonus: i32,
     damage_bonus: i32,
-    range: i32,
+    range: Option<i32>,
 }
 #[derive(Deserialize)]
 struct MapDef {
@@ -172,11 +172,6 @@ pub enum Command {
     EndMove {
         actor: String,
     },
-    Attack {
-        actor: String,
-        target: String,
-        ranged: bool,
-    },
     Skill {
         actor: String,
         target: String,
@@ -194,10 +189,23 @@ pub struct Snapshot {
     pub terrain_effects: Vec<TerrainEffectView>,
     pub units: Vec<UnitView>,
     pub reachable: Vec<GridPos>,
+    pub second_reachable: Vec<GridPos>,
+    pub skill_ranges: Vec<SkillRangeView>,
     pub turn: TurnView,
     pub round: u32,
     pub outcome: Outcome,
     pub log: Vec<String>,
+}
+#[derive(Serialize)]
+pub struct SkillRangeView {
+    pub id: String,
+    pub cells: Vec<GridPos>,
+}
+#[derive(Serialize)]
+pub struct MovePreview {
+    pub first: Vec<GridPos>,
+    pub second: Vec<GridPos>,
+    pub interrupted: bool,
 }
 #[derive(Serialize)]
 pub struct UnitView {
@@ -238,6 +246,13 @@ pub struct TurnView {
 
 pub struct Game {
     world: World,
+}
+struct MovePlan {
+    entity: Entity,
+    turn: Turn,
+    first_budget: u32,
+    second_budget: u32,
+    path: Vec<GridPos>,
 }
 impl Game {
     pub fn from_toml(s: &str) -> Result<Self, String> {
@@ -327,11 +342,6 @@ impl Game {
             Command::Start => self.start(),
             Command::Move { actor, x, y } => self.move_to(&actor, GridPos { x, y }),
             Command::EndMove { actor } => self.end_move(&actor),
-            Command::Attack {
-                actor,
-                target,
-                ranged,
-            } => self.attack(&actor, &target, ranged, None),
             Command::Skill {
                 actor,
                 target,
@@ -344,7 +354,7 @@ impl Game {
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| format!("unknown skill: {skill}"))?;
-                self.attack(&actor, &target, definition.ranged, Some(definition))
+                self.use_skill(&actor, &target, definition)
             }
             Command::EndTurn { actor } => {
                 self.ensure(&actor)?;
@@ -355,6 +365,43 @@ impl Game {
         self.enemy_turns()?;
         self.outcome();
         Ok(self.snapshot())
+    }
+    pub fn preview_move(&self, actor: &str, end: GridPos) -> Result<MovePreview, String> {
+        let MovePlan {
+            entity: _,
+            turn: _,
+            first_budget,
+            second_budget: _,
+            path,
+        } = self.move_plan(actor, end)?;
+        let board = self.world.resource::<Board>();
+        let interrupted = path
+            .last()
+            .is_some_and(|position| board.triggers.contains_key(position));
+        let mut first = Vec::new();
+        let mut second = Vec::new();
+        let mut spent = 0;
+        if first_budget == 0 {
+            second.push(path[0]);
+        } else {
+            first.push(path[0]);
+        }
+        for position in path.into_iter().skip(1) {
+            spent += cost(board, position);
+            if spent <= first_budget {
+                first.push(position);
+            } else {
+                if second.is_empty() {
+                    second.push(*first.last().unwrap());
+                }
+                second.push(position);
+            }
+        }
+        Ok(MovePreview {
+            first,
+            second,
+            interrupted,
+        })
     }
     fn start(&mut self) -> Result<(), String> {
         if self.world.resource::<Encounter>().round > 0 {
@@ -447,29 +494,14 @@ impl Game {
         Ok(())
     }
     fn move_to(&mut self, a: &str, end: GridPos) -> Result<(), String> {
-        self.ensure(a)?;
-        let phase = self.world.resource::<Turn>().phase;
-        if phase == Phase::AfterMove {
-            let e = self.entity(a).unwrap();
-            let allowance = self.world.get::<Fighter>(e).unwrap().movement;
-            let mut t = self.world.resource_mut::<Turn>();
-            if t.moves >= 2 {
-                return Err("已使用兩次 Move Action".into());
-            }
-            t.remaining = allowance;
-            t.phase = Phase::Moving
-        } else if phase == Phase::Ready {
-            self.world.resource_mut::<Turn>().phase = Phase::Moving
-        } else if phase != Phase::Moving {
-            return Err("目前不能移動".into());
-        }
-        let e = self.entity(a).unwrap();
-        let start = self.world.get::<Pos>(e).unwrap().0;
-        let fp = *self.world.get::<Footprint>(e).unwrap();
-        let budget = self.world.resource::<Turn>().remaining;
-        let path = find_path(&self.world, e, start, end, fp, budget).ok_or("目的地不可達")?;
+        let MovePlan {
+            entity: e,
+            turn,
+            first_budget,
+            second_budget,
+            path,
+        } = self.move_plan(a, end)?;
         let mut spent = 0;
-        let mut stopped = false;
         for p in path.into_iter().skip(1) {
             spent += cost(self.world.resource::<Board>(), p);
             self.world.get_mut::<Pos>(e).unwrap().0 = p;
@@ -479,19 +511,63 @@ impl Game {
                     .resource_mut::<Log>()
                     .0
                     .push(format!("{a} 觸發 {k}，路徑暫停"));
-                stopped = true;
                 break;
             }
         }
         let mut t = self.world.resource_mut::<Turn>();
-        t.remaining -= spent;
+        if turn.moves == 0 && spent <= first_budget {
+            t.remaining = first_budget - spent;
+        } else if turn.moves == 0 {
+            t.moves = 1;
+            t.remaining = second_budget - (spent - first_budget);
+        } else {
+            t.remaining = second_budget - spent;
+        }
         if t.remaining == 0 {
             t.moves += 1;
-            t.phase = Phase::AfterMove
-        } else if stopped {
-            t.phase = Phase::Moving
+            t.phase = Phase::AfterMove;
+        } else {
+            t.phase = Phase::Moving;
         }
         Ok(())
+    }
+    fn move_plan(&self, actor: &str, end: GridPos) -> Result<MovePlan, String> {
+        self.ensure(actor)?;
+        let entity = self.entity(actor).unwrap();
+        let allowance = self.world.get::<Fighter>(entity).unwrap().movement;
+        let turn = self.world.resource::<Turn>().clone();
+        if !matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove) || turn.moves >= 2
+        {
+            return Err("目前不能移動".into());
+        }
+        let start = self.world.get::<Pos>(entity).unwrap().0;
+        let footprint = *self.world.get::<Footprint>(entity).unwrap();
+        let first_budget = if turn.moves == 0 { turn.remaining } else { 0 };
+        let second_budget = allowance;
+        let mut path = find_path(
+            &self.world,
+            entity,
+            start,
+            end,
+            footprint,
+            first_budget + second_budget,
+        )
+        .ok_or("目的地不可達")?;
+        if let Some(trigger_index) = path.iter().skip(1).position(|position| {
+            self.world
+                .resource::<Board>()
+                .triggers
+                .contains_key(position)
+        }) {
+            path.truncate(trigger_index + 2);
+        }
+        Ok(MovePlan {
+            entity,
+            turn,
+            first_budget,
+            second_budget,
+            path,
+        })
     }
     fn reveal(&mut self, mover: Entity) {
         let p = self.world.get::<Pos>(mover).unwrap().0;
@@ -516,13 +592,7 @@ impl Game {
                 .push("新敵群加入；下一輪擲先攻。".into())
         }
     }
-    fn attack(
-        &mut self,
-        a: &str,
-        target: &str,
-        ranged: bool,
-        skill: Option<SkillDef>,
-    ) -> Result<(), String> {
+    fn use_skill(&mut self, a: &str, target: &str, skill: SkillDef) -> Result<(), String> {
         self.ensure(a)?;
         if !matches!(
             self.world.resource::<Turn>().phase,
@@ -541,17 +611,12 @@ impl Game {
             return Err("不能攻擊友軍".into());
         }
         let range = skill
-            .as_ref()
-            .map(|definition| definition.range)
-            .unwrap_or(if ranged { af.range } else { 1 });
+            .range
+            .unwrap_or(if skill.ranged { af.range } else { 1 });
         if entity_distance(&self.world, ae, te) > range {
             return Err("目標超出射程".into());
         }
-        let modifier = if ranged { af.ranged } else { af.melee }
-            + skill
-                .as_ref()
-                .map(|definition| definition.attack_bonus)
-                .unwrap_or(0);
+        let modifier = if skill.ranged { af.ranged } else { af.melee } + skill.attack_bonus;
         let natural = die(&mut self.world, 20) as i32;
         let degree = degree(natural, modifier, 10 + tf.dodge);
         let result = if matches!(degree, RollDegree::Failure | RollDegree::CriticalFailure) {
@@ -562,10 +627,7 @@ impl Game {
             AttackResult::Hit
         };
         let base = af.damage
-            + skill
-                .as_ref()
-                .map(|definition| definition.damage_bonus)
-                .unwrap_or(0)
+            + skill.damage_bonus
             + if degree == RollDegree::CriticalSuccess {
                 af.damage
             } else {
@@ -587,10 +649,7 @@ impl Game {
                     .remove(target);
             }
         }
-        let action = skill
-            .as_ref()
-            .map(|definition| definition.name.as_str())
-            .unwrap_or("攻擊");
+        let action = skill.name;
         self.world.resource_mut::<Log>().0.push(format!(
             "{} 使用 {} 對 {}：{:?}，{} 傷害",
             af.name, action, tf.name, result, damage
@@ -633,7 +692,14 @@ impl Game {
             }
             if entity_distance(&self.world, e, t) <= 1 {
                 let id = self.world.get::<Id>(t).unwrap().0.clone();
-                self.attack(&a, &id, false, None)?
+                let skill = self
+                    .world
+                    .resource::<Skills>()
+                    .0
+                    .get("melee_attack")
+                    .cloned()
+                    .ok_or("找不到 melee_attack 技能")?;
+                self.use_skill(&a, &id, skill)?
             } else {
                 self.finish()
             }
@@ -719,11 +785,17 @@ impl Game {
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
-        let reachable = turn
+        let movement_ranges = turn
             .actor
             .as_ref()
             .and_then(|a| self.entity(a))
-            .map(|e| reach(&self.world, e, turn.remaining))
+            .map(|entity| movement_ranges(&self.world, entity, &turn));
+        let (reachable, second_reachable) = movement_ranges.unwrap_or_default();
+        let skill_ranges = turn
+            .actor
+            .as_ref()
+            .and_then(|actor| self.entity(actor))
+            .map(|entity| skill_ranges(&self.world, entity))
             .unwrap_or_default();
         Snapshot {
             width: b.width,
@@ -744,6 +816,8 @@ impl Game {
             },
             units,
             reachable,
+            second_reachable,
+            skill_ranges,
             turn: TurnView {
                 actor: turn.actor,
                 phase: format!("{:?}", turn.phase).to_lowercase(),
@@ -808,11 +882,14 @@ fn entity_distance(w: &World, a: Entity, b: Entity) -> i32 {
     let af = *w.get::<Footprint>(a).unwrap();
     let bp = w.get::<Pos>(b).unwrap().0;
     let bf = *w.get::<Footprint>(b).unwrap();
-    let dx = (bp.x - (ap.x + af.width - 1))
-        .max(ap.x - (bp.x + bf.width - 1))
+    footprint_distance(ap, af, bp, bf)
+}
+fn footprint_distance(a: GridPos, af: Footprint, b: GridPos, bf: Footprint) -> i32 {
+    let dx = (b.x - (a.x + af.width - 1))
+        .max(a.x - (b.x + bf.width - 1))
         .max(0);
-    let dy = (bp.y - (ap.y + af.height - 1))
-        .max(ap.y - (bp.y + bf.height - 1))
+    let dy = (b.y - (a.y + af.height - 1))
+        .max(a.y - (b.y + bf.height - 1))
         .max(0);
     dx + dy
 }
@@ -908,4 +985,62 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     let mut v: Vec<_> = paths(w, e, p, f, b).0.into_keys().collect();
     v.sort_by_key(|p| (p.y, p.x));
     v
+}
+fn movement_ranges(w: &World, e: Entity, turn: &Turn) -> (Vec<GridPos>, Vec<GridPos>) {
+    if turn.moves >= 2 {
+        return (Vec::new(), Vec::new());
+    }
+    let allowance = w.get::<Fighter>(e).unwrap().movement;
+    let first_budget = if turn.moves == 0 { turn.remaining } else { 0 };
+    let reachable = if first_budget > 0 {
+        reach(w, e, first_budget)
+    } else {
+        Vec::new()
+    };
+    let first_cells: HashSet<_> = reachable.iter().copied().collect();
+    let second_reachable = reach(w, e, first_budget + allowance)
+        .into_iter()
+        .filter(|cell| !first_cells.contains(cell))
+        .collect();
+    (reachable, second_reachable)
+}
+fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
+    let board = w.resource::<Board>();
+    let position = w.get::<Pos>(e).unwrap().0;
+    let footprint = *w.get::<Footprint>(e).unwrap();
+    let fighter = w.get::<Fighter>(e).unwrap();
+    let mut ranges: Vec<_> = w
+        .resource::<Skills>()
+        .0
+        .values()
+        .map(|skill| {
+            let range = skill
+                .range
+                .unwrap_or(if skill.ranged { fighter.range } else { 1 });
+            let mut cells = Vec::new();
+            for y in 0..board.height {
+                for x in 0..board.width {
+                    let cell = GridPos { x, y };
+                    let cell_distance = footprint_distance(
+                        position,
+                        footprint,
+                        cell,
+                        Footprint {
+                            width: 1,
+                            height: 1,
+                        },
+                    );
+                    if cell_distance > 0 && cell_distance <= range {
+                        cells.push(cell);
+                    }
+                }
+            }
+            SkillRangeView {
+                id: skill.id.clone(),
+                cells,
+            }
+        })
+        .collect();
+    ranges.sort_by(|a, b| a.id.cmp(&b.id));
+    ranges
 }
