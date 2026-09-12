@@ -100,7 +100,7 @@ struct Turn {
 #[derive(Resource)]
 struct Random(u64);
 #[derive(Resource, Default)]
-struct Log(Vec<String>);
+struct Log(Vec<CombatLogEvent>);
 #[derive(Resource)]
 struct ResultState(Outcome);
 #[derive(Resource)]
@@ -195,7 +195,37 @@ pub struct Snapshot {
     pub turn: TurnView,
     pub round: u32,
     pub outcome: Outcome,
-    pub log: Vec<String>,
+    pub log: Vec<CombatLogEvent>,
+}
+#[derive(Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CombatLogEvent {
+    NewRound {
+        round: u32,
+    },
+    Skill {
+        actor: String,
+        actor_team: Team,
+        skill: String,
+        target: String,
+        target_team: Team,
+        roll: i32,
+        attack_modifier: i32,
+        attack_total: i32,
+        dodge_target: i32,
+        block_target: i32,
+        result: AttackResult,
+        critical: bool,
+        damage: i32,
+        remaining_hp: i32,
+        max_hp: i32,
+        downed: bool,
+    },
+    StatusApplied {
+        target: String,
+        target_team: Team,
+        status: String,
+    },
 }
 #[derive(Serialize)]
 pub struct SkillRangeView {
@@ -427,10 +457,6 @@ impl Game {
             .resource_mut::<Encounter>()
             .participants
             .extend(ids);
-        self.world
-            .resource_mut::<Log>()
-            .0
-            .push("遭遇開始：狼群撲了上來！".into());
         self.roll_round();
         Ok(())
     }
@@ -454,6 +480,11 @@ impl Game {
             e.order = rolled.into_iter().map(|(_, i)| i).collect();
             e.cursor = 0;
         }
+        let round = self.world.resource::<Encounter>().round;
+        self.world
+            .resource_mut::<Log>()
+            .0
+            .push(CombatLogEvent::NewRound { round });
         self.begin()
     }
     fn begin(&mut self) {
@@ -516,10 +547,17 @@ impl Game {
             self.world.get_mut::<Pos>(e).unwrap().0 = p;
             self.reveal(e);
             if let Some(k) = self.world.resource::<Board>().triggers.get(&p).cloned() {
+                let fighter = self.world.get::<Fighter>(e).unwrap();
+                let target = fighter.name.clone();
+                let target_team = fighter.team;
                 self.world
                     .resource_mut::<Log>()
                     .0
-                    .push(format!("{a} 觸發 {k}，路徑暫停"));
+                    .push(CombatLogEvent::StatusApplied {
+                        target,
+                        target_team,
+                        status: k,
+                    });
                 break;
             }
         }
@@ -595,10 +633,6 @@ impl Game {
                 .resource_mut::<Encounter>()
                 .participants
                 .extend(add);
-            self.world
-                .resource_mut::<Log>()
-                .0
-                .push("新敵群加入；下一輪擲先攻。".into())
         }
     }
     fn use_skill(&mut self, a: &str, target: &str, skill: SkillDef) -> Result<(), String> {
@@ -647,10 +681,12 @@ impl Game {
             AttackResult::Block => (base - 2).max(0),
             AttackResult::Hit => base,
         };
+        let mut downed = false;
         if damage > 0 {
             let mut hp = self.world.get_mut::<Hp>(te).unwrap();
             hp.current = (hp.current - damage).max(0);
             if hp.current == 0 {
+                downed = true;
                 self.world.entity_mut(te).insert(Downed);
                 self.world
                     .resource_mut::<Encounter>()
@@ -658,11 +694,30 @@ impl Game {
                     .remove(target);
             }
         }
-        let action = skill.name;
-        self.world.resource_mut::<Log>().0.push(format!(
-            "{} 使用 {} 對 {}：{:?}，{} 傷害",
-            af.name, action, tf.name, result, damage
-        ));
+        let hp = self.world.get::<Hp>(te).unwrap();
+        let remaining_hp = hp.current;
+        let max_hp = hp.maximum;
+        self.world
+            .resource_mut::<Log>()
+            .0
+            .push(CombatLogEvent::Skill {
+                actor: af.name,
+                actor_team: af.team,
+                skill: skill.name,
+                target: tf.name,
+                target_team: tf.team,
+                roll: natural,
+                attack_modifier: modifier,
+                attack_total: natural + modifier,
+                dodge_target: 10 + tf.dodge,
+                block_target: 10 + tf.dodge + tf.block,
+                result,
+                critical: degree == RollDegree::CriticalSuccess,
+                damage,
+                remaining_hp,
+                max_hp,
+                downed,
+            });
         self.finish();
         Ok(())
     }
@@ -862,15 +917,7 @@ impl Game {
             },
             round: enc.round,
             outcome: self.world.resource::<ResultState>().0,
-            log: self
-                .world
-                .resource::<Log>()
-                .0
-                .iter()
-                .rev()
-                .take(8)
-                .cloned()
-                .collect(),
+            log: self.world.resource::<Log>().0.iter().cloned().collect(),
         }
     }
 }

@@ -5,6 +5,10 @@ signal end_move_requested
 signal end_turn_requested
 signal inspection_closed
 
+const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
+const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
+const CRITICAL_STYLE := "[color=#ff7043]暴擊[/color]"
+
 @onready var root: Control = $Root
 @onready var info_panel: Panel = $Root/InfoPanel
 @onready var unit_details: VBoxContainer = $Root/InfoPanel/Margin/Content/UnitDetails
@@ -25,6 +29,7 @@ signal inspection_closed
 @onready var actor_name: Label = $Root/BottomBar/Margin/Layout/Actor/Name
 @onready var movement: Label = $Root/BottomBar/Margin/Layout/Actor/Movement
 @onready var status: Label = $Root/BottomBar/Margin/Layout/Actions/Status
+@onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
 @onready var action_buttons := {
 	"melee_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Melee,
 	"ranged_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Ranged,
@@ -46,9 +51,12 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	status.text = status_text
 	if snapshot.is_empty():
 		return
+	var formatted_log := format_log(snapshot.log)
+	if battle_log.text != formatted_log:
+		battle_log.text = formatted_log
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
 	actor_name.text = actor.name if not actor.is_empty() else "—"
-	movement.text = "剩餘移動 %s" % snapshot.turn.move_remaining
+	movement.text = "剩餘移動 %d" % int(snapshot.turn.move_remaining)
 	for action in action_buttons:
 		action_buttons[action].button_pressed = action == pending_action
 	var inspected := is_cell_on_board(snapshot, inspected_cell)
@@ -60,18 +68,42 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	if not unit.is_empty():
 		unit_name.text = unit.name
 		detail_values.team.text = "我方" if unit.team == "player" else "敵方"
-		detail_values.hp.text = "%s / %s" % [unit.hp, unit.max_hp]
+		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
 		detail_values.size.text = "大型" if unit.width > 1 or unit.height > 1 else "一般"
-		detail_values.movement.text = str(unit.movement)
-		detail_values.initiative.text = str(unit.initiative)
-		detail_values.defense.text = "%s / %s" % [unit.dodge, unit.block]
-		detail_values.attack.text = "%s / %s" % [unit.melee, unit.ranged]
-		detail_values.power.text = "%s / %s" % [unit.damage, unit.range]
+		detail_values.movement.text = "%d" % int(unit.movement)
+		detail_values.initiative.text = "%d" % int(unit.initiative)
+		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
+		detail_values.attack.text = "%d / %d" % [int(unit.melee), int(unit.ranged)]
+		detail_values.power.text = "%d / %d" % [int(unit.damage), int(unit.range)]
 	var terrain := terrain_at(snapshot.terrain_cells, inspected_cell)
 	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面"}
 	terrain_name.text = terrain_names[terrain.kind]
-	terrain_cost.text = str(terrain.cost)
+	terrain_cost.text = "%d" % int(terrain.cost)
 	terrain_effect.text = terrain.effect
+
+func format_log(events: Array) -> String:
+	var entries: Array[String] = []
+	for event in events:
+		match event.type:
+			"new_round":
+				entries.append("── 第 %d 輪 ──" % int(event.round))
+			"skill":
+				entries.append("%s 使用「%s」影響 %s" % [colored_unit(event.actor, event.actor_team), event.skill, colored_unit(event.target, event.target_team)])
+				entries.append("D20 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.roll), int(event.attack_modifier), int(event.attack_total)])
+				entries.append("目標防禦：閃避門檻 %d／格擋門檻 %d" % [int(event.dodge_target), int(event.block_target)])
+				var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
+				var result: String = RESULT_STYLE % result_names[event.result]
+				var critical := "，%s" % CRITICAL_STYLE if event.critical else ""
+				entries.append("結果：%s%s，%d 傷害，HP %d/%d" % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+				if event.downed:
+					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
+			"status_applied":
+				var status_names := {"grease": "油脂"}
+				entries.append("%s 受到「%s」狀態影響" % [colored_unit(event.target, event.target_team), status_names[event.status]])
+	return "\n".join(entries)
+
+func colored_unit(unit: String, team: String) -> String:
+	return "[color=%s]%s[/color]" % [TEAM_COLORS[team], unit]
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)

@@ -1,0 +1,13 @@
+[gd_resource type="Theme" format=3]
+
+[resource]
+default_font_size = 26
+Button/font_sizes/font_size = 28
+Label/font_sizes/font_size = 26
+RichTextLabel/font_sizes/normal_font_size = 26
+HeadingLabel/base_type = &"Label"
+HeadingLabel/font_sizes/font_size = 30
+ActorNameLabel/base_type = &"Label"
+ActorNameLabel/font_sizes/font_size = 40
+PrimaryButton/base_type = &"Button"
+PrimaryButton/font_sizes/font_size = 30
