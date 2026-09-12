@@ -73,6 +73,22 @@ func test_ignored_right_click_inputs() -> void:
 		assert_str(battle.pending_action).override_failure_message("%s：不應改變技能狀態" % test_case.name).is_empty()
 		assert_dict(battle.state).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
 
+# 驗證單位詳情可從標題列以左鍵拖曳，且放開左鍵後即停止移動。
+func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
+	prepare_case(battle, "unit:aria")
+	var info_panel: Panel = battle.ui.info_panel
+	var header: Control = info_panel.get_node("Margin/Content/Header")
+	var initial_position := info_panel.position
+	var drag_offset := Vector2(-120.0, 80.0)
+	var header_center := header.global_position + header.size / 2.0
+
+	push_left_drag(header, header_center, header_center + drag_offset)
+
+	assert_vector(info_panel.position).override_failure_message("左鍵拖曳後詳情面板應跟著移動，實際位置：%s" % info_panel.position).is_equal(initial_position + drag_offset)
+	var released_position := info_panel.position
+	emit_mouse_motion(header, header_center + drag_offset * 2.0)
+	assert_vector(info_panel.position).override_failure_message("放開左鍵後詳情面板應停止移動").is_equal(released_position)
+
 func prepare_case(battle, initial_target: String) -> void:
 	load_test_definition(battle)
 	battle.inspected_cell = target_cell(battle, initial_target)
@@ -142,3 +158,20 @@ func push_mouse_button(battle, local_position: Vector2, pressed: bool) -> void:
 		runner.simulate_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	else:
 		runner.simulate_mouse_button_release(MOUSE_BUTTON_RIGHT)
+
+func push_left_drag(control: Control, from: Vector2, to: Vector2) -> void:
+	emit_mouse_button(control, from, true)
+	emit_mouse_motion(control, to)
+	emit_mouse_button(control, to, false)
+
+func emit_mouse_button(control: Control, global_position: Vector2, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.pressed = pressed
+	event.global_position = global_position
+	control.gui_input.emit(event)
+
+func emit_mouse_motion(control: Control, global_position: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.global_position = global_position
+	control.gui_input.emit(event)
