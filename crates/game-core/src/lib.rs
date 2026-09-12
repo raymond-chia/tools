@@ -218,6 +218,8 @@ pub enum CombatLogEvent {
         block_target: i32,
         result: AttackResult,
         critical: bool,
+        raw_damage: i32,
+        damage_reduction: i32,
         damage: i32,
         remaining_hp: i32,
         max_hp: i32,
@@ -736,6 +738,7 @@ impl Game {
             AttackResult::Block => (base - 2).max(0),
             AttackResult::Hit => base,
         };
+        let damage_reduction = base - damage;
         let mut downed = false;
         if damage > 0 {
             let mut hp = self.world.get_mut::<Hp>(te).unwrap();
@@ -768,6 +771,8 @@ impl Game {
                 block_target: 10 + tf.dodge + tf.block,
                 result,
                 critical: degree == RollDegree::CriticalSuccess,
+                raw_damage: base,
+                damage_reduction,
                 damage,
                 remaining_hp,
                 max_hp,

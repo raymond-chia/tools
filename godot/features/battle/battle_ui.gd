@@ -124,7 +124,11 @@ func format_log(events: Array) -> String:
 				var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
 				var result: String = RESULT_STYLE % result_names[event.result]
 				var critical := "，%s" % CRITICAL_STYLE if event.critical else ""
-				entries.append("結果：%s%s，%d 傷害，HP %d/%d" % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+				if event.result == "block":
+					entries.append("結果：%s%s" % [result, critical])
+					entries.append("傷害：原始 %d − 格擋 %d = %d，HP %d/%d" % [int(event.raw_damage), int(event.damage_reduction), int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+				else:
+					entries.append("結果：%s%s，%d 傷害，HP %d/%d" % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
 				if event.downed:
 					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
 			"status_applied":
