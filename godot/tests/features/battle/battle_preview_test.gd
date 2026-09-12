@@ -9,30 +9,30 @@ var runner: GdUnitSceneRunner
 func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
 	await runner.simulate_frames(1)
-	battle = runner.scene().get_node("Content")
+	battle = runner.scene()
 
 # 驗證四種技能的施放範圍邊界正確，且選擇技能會隱藏移動範圍並清除路徑預覽。
 func test_skill_range_preview() -> void:
 	var test_data := [
-		{"name": "近戰攻擊", "action": "melee_attack", "rect": battle.MELEE_RECT, "range": 1},
-		{"name": "遠程攻擊", "action": "ranged_attack", "rect": battle.RANGED_RECT, "range": 3},
-		{"name": "強力一擊", "action": "power_strike", "rect": battle.POWER_STRIKE_RECT, "range": 1},
-		{"name": "瞄準射擊", "action": "aimed_shot", "rect": battle.AIMED_SHOT_RECT, "range": 4},
+		{"name": "近戰攻擊", "action": "melee_attack", "button": battle.ui.action_buttons.melee_attack, "range": 1},
+		{"name": "遠程攻擊", "action": "ranged_attack", "button": battle.ui.action_buttons.ranged_attack, "range": 3},
+		{"name": "強力一擊", "action": "power_strike", "button": battle.ui.action_buttons.power_strike, "range": 1},
+		{"name": "瞄準射擊", "action": "aimed_shot", "button": battle.ui.action_buttons.aimed_shot, "range": 4},
 	]
 	for test_case in test_data:
 		prepare_case(battle)
 		var actor_cell := actor_cell(battle)
-		push_mouse_motion(battle, battle.cell_center(actor_cell + Vector2i(3, 0)))
-		assert_bool(battle.first_move_path.is_empty()).override_failure_message("%s：選擇技能前應有移動路徑預覽" % test_case.name).is_false()
+		push_mouse_motion(battle.world, battle.world.cell_center(actor_cell + Vector2i(3, 0)))
+		assert_bool(battle.world.first_move_path.is_empty()).override_failure_message("%s：選擇技能前應有移動路徑預覽" % test_case.name).is_false()
 
-		push_left_click(battle, test_case.rect.get_center())
+		push_control_click(test_case.button)
 
-		var preview_cells := cells_from_values(battle.selected_skill_range())
+		var preview_cells := cells_from_values(battle.world.selected_skill_range())
 		assert_bool(preview_cells.has(actor_cell + Vector2i(test_case.range, 0))).override_failure_message("%s：射程邊界格應包含在預覽" % test_case.name).is_true()
 		assert_bool(preview_cells.has(actor_cell + Vector2i(test_case.range + 1, 0))).override_failure_message("%s：射程外一格不應包含在預覽" % test_case.name).is_false()
-		assert_bool(battle.first_move_path.is_empty() and battle.second_move_path.is_empty()).override_failure_message("%s：選擇技能後移動路徑應消失" % test_case.name).is_true()
-		push_mouse_motion(battle, battle.cell_center(actor_cell + Vector2i(2, 0)))
-		assert_bool(battle.first_move_path.is_empty() and battle.second_move_path.is_empty()).override_failure_message("%s：技能待選時不應重新產生移動路徑" % test_case.name).is_true()
+		assert_bool(battle.world.first_move_path.is_empty() and battle.world.second_move_path.is_empty()).override_failure_message("%s：選擇技能後移動路徑應消失" % test_case.name).is_true()
+		push_mouse_motion(battle.world, battle.world.cell_center(actor_cell + Vector2i(2, 0)))
+		assert_bool(battle.world.first_move_path.is_empty() and battle.world.second_move_path.is_empty()).override_failure_message("%s：技能待選時不應重新產生移動路徑" % test_case.name).is_true()
 
 # 驗證移動範圍會區分第一段、第二段與兩段外的格子。
 func test_two_stage_movement_range_preview() -> void:
@@ -59,9 +59,9 @@ func test_movement_path_preview() -> void:
 	for test_case in test_data:
 		prepare_case(battle)
 		var origin := actor_cell(battle)
-		push_mouse_motion(battle, battle.cell_center(origin + test_case.offset))
-		assert_array(path_x_offsets(battle.first_move_path, origin)).override_failure_message("%s：第一段路徑應正確" % test_case.name).is_equal(test_case.first)
-		assert_array(path_x_offsets(battle.second_move_path, origin)).override_failure_message("%s：第二段路徑應正確" % test_case.name).is_equal(test_case.second)
+		push_mouse_motion(battle.world, battle.world.cell_center(origin + test_case.offset))
+		assert_array(path_x_offsets(battle.world.first_move_path, origin)).override_failure_message("%s：第一段路徑應正確" % test_case.name).is_equal(test_case.first)
+		assert_array(path_x_offsets(battle.world.second_move_path, origin)).override_failure_message("%s：第二段路徑應正確" % test_case.name).is_equal(test_case.second)
 
 # 驗證單次點擊可抵達第一段或第二段目的地，並正確扣除兩段移動力。
 func test_single_click_movement() -> void:
@@ -73,26 +73,26 @@ func test_single_click_movement() -> void:
 		prepare_case(battle)
 		var destination: Vector2i = actor_cell(battle) + Vector2i(test_case.offset)
 
-		push_left_click(battle, battle.cell_center(destination))
+		push_left_click(battle.world, battle.world.cell_center(destination))
 
 		assert_vector(actor_cell(battle)).override_failure_message("%s：角色應以單次點擊抵達目的地" % test_case.name).is_equal(destination)
 		assert_float(battle.state.turn.move_remaining).override_failure_message("%s：剩餘移動力應正確" % test_case.name).is_equal(test_case.remaining)
 		assert_str(battle.state.turn.phase).override_failure_message("%s：移動階段應正確" % test_case.name).is_equal(test_case.phase)
 
 func prepare_case(battle) -> void:
-	for child in battle.units_layer.get_children():
+	for child in battle.world.units_layer.get_children():
 		child.free()
-	battle.unit_nodes.clear()
+	battle.world.unit_nodes.clear()
 	battle.pending_action = ""
-	battle.hovered = Vector2i(-1, -1)
-	battle.clear_move_preview()
+	battle.world.hovered = Vector2i(-1, -1)
+	battle.world.clear_move_preview()
 
 	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
 	var loaded = JSON.parse_string(battle.core.load_definition(definition))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"): return
 	battle.state = loaded
-	battle.setup_native_tilemap()
+	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
 
 func actor_cell(battle) -> Vector2i:
@@ -123,3 +123,6 @@ func push_left_click(battle, local_position: Vector2) -> void:
 	var screen_position: Vector2 = battle.get_viewport().get_screen_transform() * battle.get_global_transform_with_canvas() * local_position
 	runner.set_mouse_position(screen_position)
 	runner.simulate_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+
+func push_control_click(control: Control) -> void:
+	control.pressed.emit()

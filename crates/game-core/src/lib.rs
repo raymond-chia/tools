@@ -187,6 +187,7 @@ pub struct Snapshot {
     pub height: i32,
     pub costs: Vec<u32>,
     pub terrain_effects: Vec<TerrainEffectView>,
+    pub terrain_cells: Vec<TerrainCellView>,
     pub units: Vec<UnitView>,
     pub reachable: Vec<GridPos>,
     pub second_reachable: Vec<GridPos>,
@@ -233,6 +234,14 @@ pub struct UnitView {
 pub struct TerrainEffectView {
     pub x: i32,
     pub y: i32,
+    pub effect: String,
+}
+#[derive(Serialize)]
+pub struct TerrainCellView {
+    pub x: i32,
+    pub y: i32,
+    pub kind: String,
+    pub cost: u32,
     pub effect: String,
 }
 #[derive(Serialize)]
@@ -797,6 +806,30 @@ impl Game {
             .and_then(|actor| self.entity(actor))
             .map(|entity| skill_ranges(&self.world, entity))
             .unwrap_or_default();
+        let terrain_cells = (0..b.height)
+            .flat_map(|y| {
+                let board = &b;
+                (0..b.width).map(move |x| {
+                    let position = GridPos { x, y };
+                    let cost = board.costs[(y * board.width + x) as usize];
+                    let effect = board.triggers.get(&position).cloned().unwrap_or_default();
+                    let kind = if effect == "grease" {
+                        "grease"
+                    } else if cost > 1 {
+                        "rough"
+                    } else {
+                        "plain"
+                    };
+                    TerrainCellView {
+                        x,
+                        y,
+                        kind: kind.to_string(),
+                        cost,
+                        effect,
+                    }
+                })
+            })
+            .collect();
         Snapshot {
             width: b.width,
             height: b.height,
@@ -814,6 +847,7 @@ impl Game {
                 effects.sort_by_key(|effect| (effect.y, effect.x));
                 effects
             },
+            terrain_cells,
             units,
             reachable,
             second_reachable,
