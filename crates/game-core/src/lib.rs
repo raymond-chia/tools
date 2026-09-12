@@ -203,6 +203,7 @@ pub struct Snapshot {
 pub enum CombatLogEvent {
     NewRound {
         round: u32,
+        initiative_rolls: Vec<InitiativeRollLog>,
     },
     Skill {
         actor: String,
@@ -236,6 +237,14 @@ pub enum CombatLogEvent {
         max_hp: i32,
         downed: bool,
     },
+}
+#[derive(Clone, Serialize)]
+pub struct InitiativeRollLog {
+    pub unit: String,
+    pub team: Team,
+    pub roll: i32,
+    pub modifier: i32,
+    pub total: i32,
 }
 #[derive(Serialize)]
 pub struct SkillRangeView {
@@ -480,24 +489,42 @@ impl Game {
             .query::<(&Id, &Fighter, Has<Downed>)>()
             .iter(&self.world)
             .filter(|(i, _, d)| active.contains(&i.0) && !*d)
-            .map(|(i, f, _)| (i.0.clone(), f.initiative))
+            .map(|(i, f, _)| (i.0.clone(), f.name.clone(), f.team, f.initiative))
             .collect();
         let mut rolled: Vec<_> = entries
             .into_iter()
-            .map(|(id, m)| (die(&mut self.world, 20) as i32 + m, id))
+            .map(|(id, name, team, modifier)| {
+                let roll = die(&mut self.world, 20) as i32;
+                (roll + modifier, id, name, team, roll, modifier)
+            })
             .collect();
         rolled.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        let initiative_rolls = rolled
+            .iter()
+            .map(
+                |(total, _id, unit, team, roll, modifier)| InitiativeRollLog {
+                    unit: unit.clone(),
+                    team: *team,
+                    roll: *roll,
+                    modifier: *modifier,
+                    total: *total,
+                },
+            )
+            .collect();
         {
             let mut e = self.world.resource_mut::<Encounter>();
             e.round += 1;
-            e.order = rolled.into_iter().map(|(_, i)| i).collect();
+            e.order = rolled.into_iter().map(|(_, id, _, _, _, _)| id).collect();
             e.cursor = 0;
         }
         let round = self.world.resource::<Encounter>().round;
         self.world
             .resource_mut::<Log>()
             .0
-            .push(CombatLogEvent::NewRound { round });
+            .push(CombatLogEvent::NewRound {
+                round,
+                initiative_rolls,
+            });
         self.begin()
     }
     fn begin(&mut self) {

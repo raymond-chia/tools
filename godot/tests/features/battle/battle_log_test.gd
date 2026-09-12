@@ -19,6 +19,37 @@ func test_new_round_log() -> void:
 	assert_int(int(event.round)).override_failure_message("新回合事件應記錄目前輪數").is_equal(1)
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示整數回合數").contains("── 第 1 輪 ──")
 
+# 驗證新回合事件提供已排序的先攻擲骰明細，且總值等於擲骰與加值之和。
+func test_new_round_log_contains_initiative_rolls() -> void:
+	var event := find_last_event("new_round")
+	assert_array(event.initiative_rolls).override_failure_message("新回合事件應提供先攻擲骰明細").is_not_empty()
+	assert_int(event.initiative_rolls.size()).is_equal(1)
+	var initiative_roll: Dictionary = event.initiative_rolls[0]
+	assert_str(initiative_roll.unit).is_equal("測試劍士")
+	assert_str(initiative_roll.team).is_equal("player")
+	assert_int(int(initiative_roll.modifier)).is_equal(100)
+	assert_int(int(initiative_roll.total)).is_equal(int(initiative_roll.roll) + 100)
+
+# 驗證每筆紀錄依事件類型決定預設展開狀態。
+func test_log_entries_use_event_default_expansion() -> void:
+	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合與先攻紀錄應預設摺疊").is_false()
+	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	var skill_index := find_last_event_index("skill")
+	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應預設展開").is_true()
+
+# 驗證切換一筆紀錄只改變該筆狀態，且新增紀錄後保留既有狀態。
+func test_log_entries_preserve_independent_expansion_states() -> void:
+	battle.ui.toggle_log_entry(0)
+	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合紀錄應可獨立展開").is_true()
+	assert_str(battle.ui.battle_log.text).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
+	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	var skill_index := find_last_event_index("skill")
+	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新增紀錄後應保留既有展開狀態").is_true()
+	battle.ui.toggle_log_entry(skill_index)
+	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("切換技能紀錄不應影響新回合紀錄").is_true()
+	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應可獨立摺疊").is_false()
+	assert_str(battle.ui.battle_log.text).override_failure_message("摺疊技能紀錄應隱藏攻擊判定明細").not_contains("攻擊加值 104")
+
 # 驗證技能紀錄包含判定雙方數值、結果、暴擊、傷害與剩餘生命，且 UI 以整數顯示其意義。
 func test_skill_resolution_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
@@ -98,6 +129,12 @@ func find_last_event(type: String) -> Dictionary:
 		if event.type == type:
 			return event
 	return {}
+
+func find_last_event_index(type: String) -> int:
+	for index in range(battle.state.log.size() - 1, -1, -1):
+		if battle.state.log[index].type == type:
+			return index
+	return -1
 
 func terrain_at(cell: Vector2i) -> Dictionary:
 	for terrain in battle.state.terrain_cells:

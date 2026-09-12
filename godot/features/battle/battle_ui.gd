@@ -40,10 +40,13 @@ const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 }
 var dragging_info_panel := false
 var drag_offset := Vector2.ZERO
+var log_entry_expanded_states: Dictionary = {}
+var presented_log_events: Array = []
 
 func _ready() -> void:
 	$Root/InfoPanel/Margin/Content/Header.gui_input.connect(_on_header_gui_input)
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
+	battle_log.meta_clicked.connect(_on_battle_log_meta_clicked)
 	for action in action_buttons:
 		action_buttons[action].pressed.connect(_on_action_pressed.bind(action))
 	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
@@ -52,7 +55,9 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	status.text = status_text
 	if snapshot.is_empty():
 		return
-	var formatted_log := format_log(snapshot.log)
+	update_log_entry_states(snapshot.log)
+	presented_log_events = snapshot.log.duplicate(true)
+	var formatted_log := format_log(presented_log_events)
 	if battle_log.text != formatted_log:
 		battle_log.text = formatted_log
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
@@ -100,12 +105,20 @@ func present_move_cost(total_cost, pointer_position: Vector2) -> void:
 
 func format_log(events: Array) -> String:
 	var entries: Array[String] = []
-	for event in events:
+	for index in events.size():
+		var event = events[index]
+		var expanded: bool = log_entry_expanded_states[index]
+		var marker := "▼" if expanded else "▶"
 		match event.type:
 			"new_round":
-				entries.append("── 第 %d 輪 ──" % int(event.round))
+				entries.append("[url=log_entry:%d]%s ── 第 %d 輪 ──[/url]" % [index, marker, int(event.round)])
+				if expanded:
+					for initiative_roll in event.initiative_rolls:
+						entries.append("%s：D20 擲骰 %d + 先攻加值 %d = 先攻總值 %d" % [colored_unit(initiative_roll.unit, initiative_roll.team), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
 			"skill":
-				entries.append("%s 使用「%s」影響 %s" % [colored_unit(event.actor, event.actor_team), event.skill, colored_unit(event.target, event.target_team)])
+				entries.append("[url=log_entry:%d]%s %s 使用「%s」影響 %s[/url]" % [index, marker, colored_unit(event.actor, event.actor_team), event.skill, colored_unit(event.target, event.target_team)])
+				if not expanded:
+					continue
 				entries.append("D20 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.roll), int(event.attack_modifier), int(event.attack_total)])
 				entries.append("目標防禦：閃避門檻 %d／格擋門檻 %d" % [int(event.dodge_target), int(event.block_target)])
 				var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
@@ -116,13 +129,39 @@ func format_log(events: Array) -> String:
 					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
 			"status_applied":
 				var status_names := {"grease": "油脂"}
-				entries.append("%s 受到「%s」狀態影響" % [colored_unit(event.target, event.target_team), status_names[event.status]])
+				entries.append("[url=log_entry:%d]%s 狀態變化[/url]" % [index, marker])
+				if expanded:
+					entries.append("%s 受到「%s」狀態影響" % [colored_unit(event.target, event.target_team), status_names[event.status]])
 			"terrain_damage":
 				var terrain_names := {"spikes": "地刺"}
-				entries.append("%s 踩到「%s」，受到 %d 點傷害，HP %d/%d" % [colored_unit(event.target, event.target_team), terrain_names[event.terrain], int(event.damage), int(event.remaining_hp), int(event.max_hp)])
-				if event.downed:
-					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
+				entries.append("[url=log_entry:%d]%s %s 踩到「%s」[/url]" % [index, marker, colored_unit(event.target, event.target_team), terrain_names[event.terrain]])
+				if expanded:
+					entries.append("%s 踩到「%s」，受到 %d 點傷害，HP %d/%d" % [colored_unit(event.target, event.target_team), terrain_names[event.terrain], int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+					if event.downed:
+						entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
 	return "\n".join(entries)
+
+func update_log_entry_states(events: Array) -> void:
+	var unchanged_count := 0
+	var comparable_count: int = mini(events.size(), presented_log_events.size())
+	while unchanged_count < comparable_count and events[unchanged_count] == presented_log_events[unchanged_count]:
+		unchanged_count += 1
+	for index in range(unchanged_count, presented_log_events.size()):
+		log_entry_expanded_states.erase(index)
+	for index in range(unchanged_count, events.size()):
+		if not log_entry_expanded_states.has(index):
+			log_entry_expanded_states[index] = events[index].type != "new_round"
+
+func toggle_log_entry(index: int) -> void:
+	if not log_entry_expanded_states.has(index):
+		return
+	log_entry_expanded_states[index] = not log_entry_expanded_states[index]
+	battle_log.text = format_log(presented_log_events)
+
+func _on_battle_log_meta_clicked(meta: Variant) -> void:
+	var parts := str(meta).split(":")
+	if parts.size() == 2 and parts[0] == "log_entry":
+		toggle_log_entry(int(parts[1]))
 
 func colored_unit(unit: String, team: String) -> String:
 	return "[color=%s]%s[/color]" % [TEAM_COLORS[team], unit]
