@@ -13,7 +13,7 @@ costs=[
 [[map.triggers]]
 x=4
 y=4
-kind="grease"
+kind="spikes"
 [[skills]]
 id="melee_attack"
 name="近戰攻擊"

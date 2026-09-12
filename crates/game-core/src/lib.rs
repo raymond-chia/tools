@@ -160,6 +160,10 @@ struct UnitDef {
 fn one() -> i32 {
     1
 }
+
+fn terrain_damage(kind: &str) -> i32 {
+    if kind == "spikes" { 3 } else { 0 }
+}
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
@@ -223,6 +227,15 @@ pub enum CombatLogEvent {
         target_team: Team,
         status: String,
     },
+    TerrainDamage {
+        target: String,
+        target_team: Team,
+        terrain: String,
+        damage: i32,
+        remaining_hp: i32,
+        max_hp: i32,
+        downed: bool,
+    },
 }
 #[derive(Serialize)]
 pub struct SkillRangeView {
@@ -263,6 +276,7 @@ pub struct TerrainEffectView {
     pub x: i32,
     pub y: i32,
     pub effect: String,
+    pub damage: i32,
 }
 #[derive(Serialize)]
 pub struct TerrainCellView {
@@ -271,6 +285,7 @@ pub struct TerrainCellView {
     pub kind: String,
     pub cost: u32,
     pub effect: String,
+    pub damage: i32,
 }
 #[derive(Serialize)]
 pub struct TurnView {
@@ -537,14 +552,42 @@ impl Game {
                 let fighter = self.world.get::<Fighter>(e).unwrap();
                 let target = fighter.name.clone();
                 let target_team = fighter.team;
-                self.world
-                    .resource_mut::<Log>()
-                    .0
-                    .push(CombatLogEvent::StatusApplied {
-                        target,
-                        target_team,
-                        status: k,
-                    });
+                let damage = terrain_damage(&k);
+                if damage > 0 {
+                    let mut hp = self.world.get_mut::<Hp>(e).unwrap();
+                    hp.current = (hp.current - damage).max(0);
+                    let remaining_hp = hp.current;
+                    let max_hp = hp.maximum;
+                    let downed = remaining_hp == 0;
+                    if downed {
+                        self.world.entity_mut(e).insert(Downed);
+                        self.world
+                            .resource_mut::<Encounter>()
+                            .participants
+                            .remove(a);
+                    }
+                    self.world
+                        .resource_mut::<Log>()
+                        .0
+                        .push(CombatLogEvent::TerrainDamage {
+                            target,
+                            target_team,
+                            terrain: k,
+                            damage,
+                            remaining_hp,
+                            max_hp,
+                            downed,
+                        });
+                } else {
+                    self.world
+                        .resource_mut::<Log>()
+                        .0
+                        .push(CombatLogEvent::StatusApplied {
+                            target,
+                            target_team,
+                            status: k,
+                        });
+                }
                 break;
             }
         }
@@ -854,8 +897,8 @@ impl Game {
                     let position = GridPos { x, y };
                     let cost = board.costs[(y * board.width + x) as usize];
                     let effect = board.triggers.get(&position).cloned().unwrap_or_default();
-                    let kind = if effect == "grease" {
-                        "grease"
+                    let kind = if effect == "grease" || effect == "spikes" {
+                        effect.as_str()
                     } else if cost > 1 {
                         "rough"
                     } else {
@@ -866,6 +909,7 @@ impl Game {
                         y,
                         kind: kind.to_string(),
                         cost,
+                        damage: terrain_damage(&effect),
                         effect,
                     }
                 })
@@ -882,6 +926,7 @@ impl Game {
                     .map(|(position, effect)| TerrainEffectView {
                         x: position.x,
                         y: position.y,
+                        damage: terrain_damage(&effect),
                         effect,
                     })
                     .collect();

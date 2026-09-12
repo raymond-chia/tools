@@ -63,6 +63,21 @@ func test_movement_path_preview() -> void:
 		assert_array(path_x_offsets(battle.world.first_move_path, origin)).override_failure_message("%s：第一段路徑應正確" % test_case.name).is_equal(test_case.first)
 		assert_array(path_x_offsets(battle.world.second_move_path, origin)).override_failure_message("%s：第二段路徑應正確" % test_case.name).is_equal(test_case.second)
 
+# 驗證移動路徑碰到地刺時會在觸發格截斷，並啟用危險路徑警示狀態。
+func test_spikes_interrupt_movement_preview() -> void:
+	prepare_case(battle)
+	var spikes := Vector2i(1, 2)
+	var destination := Vector2i(1, 1)
+	var preview = JSON.parse_string(battle.core.preview_move(battle.state.turn.actor, destination.x, destination.y))
+	push_mouse_motion(battle.world, battle.world.cell_center(destination))
+
+	assert_bool(preview.interrupted).override_failure_message("核心應標記路徑受到地刺中斷").is_true()
+	assert_int(preview.first.size()).override_failure_message("預覽路徑應截斷於第一個地刺格").is_equal(2)
+	assert_vector(Vector2i(preview.first[-1].x, preview.first[-1].y)).is_equal(spikes)
+	assert_bool(battle.world.move_preview_interrupted).override_failure_message("戰鬥畫面應啟用紅色危險路徑狀態").is_true()
+	assert_int(battle.world.first_move_path.size()).is_equal(2)
+	assert_vector(Vector2i(battle.world.first_move_path[-1].x, battle.world.first_move_path[-1].y)).override_failure_message("危險路徑落點應為地刺格").is_equal(spikes)
+
 # 驗證移動模式懸停可達地格時會在游標旁顯示整條路徑的總消耗，離開移動模式後則隱藏。
 func test_hovered_tile_movement_total_cost() -> void:
 	var test_data := [

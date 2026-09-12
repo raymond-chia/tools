@@ -55,15 +55,26 @@ func test_downed_unit_log() -> void:
 	assert_int(int(event.remaining_hp)).override_failure_message("倒下目標的剩餘生命應為零").is_zero()
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]脆弱木樁[/color] 倒下")
 
-# 驗證踩到油脂地格會記錄受影響單位與狀態名稱。
-func test_status_applied_log() -> void:
-	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 0, "y": 2})).override_failure_message("移動到油脂地格應成功").is_true()
-	var event := find_last_event("status_applied")
-	assert_dict(event).override_failure_message("應產生狀態生效事件").is_not_empty()
+# 驗證踩到地刺會停止移動、扣除固定傷害，並記錄完整的地形傷害結果。
+func test_spikes_damage_log() -> void:
+	var terrain := terrain_at(Vector2i(0, 2))
+	assert_str(terrain.kind).override_failure_message("測試地格應標記為地刺").is_equal("spikes")
+	assert_int(int(terrain.damage)).override_failure_message("地刺資訊應由核心提供固定傷害").is_equal(3)
+	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 0, "y": 2})).override_failure_message("移動到地刺地格應成功").is_true()
+	var event := find_last_event("terrain_damage")
+	assert_dict(event).override_failure_message("應產生地形傷害事件").is_not_empty()
 	assert_str(event.target).is_equal("測試劍士")
 	assert_str(event.target_team).is_equal("player")
-	assert_str(event.status).is_equal("grease")
-	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應以我方顏色顯示狀態生效單位").contains("[color=#63a9ff]測試劍士[/color] 受到「油脂」狀態影響")
+	assert_str(event.terrain).is_equal("spikes")
+	assert_int(int(event.damage)).is_equal(3)
+	assert_int(int(event.remaining_hp)).is_equal(47)
+	assert_int(int(event.max_hp)).is_equal(50)
+	assert_bool(event.downed).is_false()
+	var actor := unit_with_id("aria")
+	assert_int(int(actor.hp)).override_failure_message("踩到地刺後 snapshot 應反映剩餘生命").is_equal(47)
+	assert_int(int(actor.x)).is_equal(0)
+	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
+	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]測試劍士[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50")
 
 func load_test_definition() -> void:
 	for child in battle.world.units_layer.get_children():
@@ -86,4 +97,16 @@ func find_last_event(type: String) -> Dictionary:
 		var event: Dictionary = battle.state.log[index]
 		if event.type == type:
 			return event
+	return {}
+
+func terrain_at(cell: Vector2i) -> Dictionary:
+	for terrain in battle.state.terrain_cells:
+		if terrain.x == cell.x and terrain.y == cell.y:
+			return terrain
+	return {}
+
+func unit_with_id(id: String) -> Dictionary:
+	for unit in battle.state.units:
+		if unit.id == id:
+			return unit
 	return {}

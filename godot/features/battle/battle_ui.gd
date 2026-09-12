@@ -78,10 +78,10 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.attack.text = "%d / %d" % [int(unit.melee), int(unit.ranged)]
 		detail_values.power.text = "%d / %d" % [int(unit.damage), int(unit.range)]
 	var terrain := terrain_at(snapshot.terrain_cells, inspected_cell)
-	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面"}
+	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面", "spikes": "地刺"}
 	terrain_name.text = terrain_names[terrain.kind]
 	terrain_cost.text = "%d" % int(terrain.cost)
-	terrain_effect.text = terrain.effect
+	terrain_effect.text = "造成 %d 點傷害" % int(terrain.damage) if terrain.damage > 0 else terrain.effect
 
 func present_move_cost(total_cost, pointer_position: Vector2) -> void:
 	move_cost_popup.visible = total_cost != null
@@ -117,6 +117,11 @@ func format_log(events: Array) -> String:
 			"status_applied":
 				var status_names := {"grease": "油脂"}
 				entries.append("%s 受到「%s」狀態影響" % [colored_unit(event.target, event.target_team), status_names[event.status]])
+			"terrain_damage":
+				var terrain_names := {"spikes": "地刺"}
+				entries.append("%s 踩到「%s」，受到 %d 點傷害，HP %d/%d" % [colored_unit(event.target, event.target_team), terrain_names[event.terrain], int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+				if event.downed:
+					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
 	return "\n".join(entries)
 
 func colored_unit(unit: String, team: String) -> String:

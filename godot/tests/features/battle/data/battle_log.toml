@@ -6,7 +6,7 @@ costs=[
 1,1,1,1,
 1,1,1,1]
 triggers=[
-{x=0,y=2,kind="grease"}]
+{x=0,y=2,kind="spikes"}]
 
 [[skills]]
 id="precise_strike"

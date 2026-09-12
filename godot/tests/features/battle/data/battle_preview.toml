@@ -9,6 +9,8 @@ costs=[
 1,1,1,2,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1]
+triggers=[
+{x=1,y=2,kind="spikes"}]
 
 [[skills]]
 id="melee_attack"

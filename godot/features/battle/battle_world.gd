@@ -186,6 +186,13 @@ func draw_move_path(path: Array, color: Color) -> void:
 		var to := cell_center(Vector2i(path[index].x, path[index].y))
 		draw_dashed_line(from,to,color,3.0,8.0,true,true)
 
+func draw_spikes(cell: Vector2i) -> void:
+	var center := cell_center(cell)
+	var spike_color := Color("d9d5ca")
+	for offset_x in [-18.0, -6.0, 6.0, 18.0]:
+		var base := center + Vector2(offset_x, 5.0)
+		draw_colored_polygon(PackedVector2Array([base + Vector2(-5.0, 0.0), base + Vector2(5.0, 0.0), base + Vector2(0.0, -18.0)]), spike_color)
+
 func _draw() -> void:
 	if state.is_empty():
 		return
@@ -194,11 +201,19 @@ func _draw() -> void:
 		for cell in state.second_reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.04,0.15,0.42,0.38),Color(0.12,0.32,0.72,0.9))
 		for cell in state.reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.12,0.48,0.95,0.3),Color(0.3,0.68,1.0,0.92))
 	for cell in selected_skill_range(): draw_marker(Vector2i(cell.x,cell.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)
-	draw_move_path(first_move_path,Color("9debff")); draw_move_path(second_move_path,Color("78a8ff"))
+	var first_path_color := Color("ff5b4d") if move_preview_interrupted else Color("9debff")
+	var second_path_color := Color("ff5b4d") if move_preview_interrupted else Color("78a8ff")
+	draw_move_path(first_move_path,first_path_color); draw_move_path(second_move_path,second_path_color)
+	if move_preview_interrupted:
+		var interrupted_path: Array = second_move_path if not second_move_path.is_empty() else first_move_path
+		if not interrupted_path.is_empty():
+			draw_marker(Vector2i(interrupted_path[-1].x,interrupted_path[-1].y),Color(0.9,0.05,0.02,0.34),Color("ff4938"),4.0)
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
 	for effect in state.terrain_effects:
-		if effect.effect == "grease":
+		if effect.effect == "spikes":
+			draw_spikes(Vector2i(effect.x, effect.y))
+		elif effect.effect == "grease":
 			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,20,Color(0.6,0.3,0.85,0.72)); draw_set_transform(Vector2.ZERO)
 	for unit in state.units:
 		var center := footprint_center(unit)
