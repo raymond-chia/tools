@@ -167,11 +167,6 @@ size_flags_vertical = 3
 text = "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 vertical_alignment = 1
 
-[node name="EndMove" type="Button" parent="UI/Root/BottomBar/Margin/Layout"]
-custom_minimum_size = Vector2(170, 64)
-layout_mode = 2
-text = "結束移動"
-
 [node name="EndTurn" type="Button" parent="UI/Root/BottomBar/Margin/Layout"]
 custom_minimum_size = Vector2(180, 72)
 layout_mode = 2

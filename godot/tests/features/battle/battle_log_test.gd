@@ -39,7 +39,7 @@ func test_skill_resolution_log() -> void:
 	assert_int(int(event.damage)).is_equal(expected_damage)
 	assert_int(int(event.remaining_hp)).is_equal(10000 - expected_damage)
 	assert_int(int(event.max_hp)).is_equal(10000)
-	var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
+	var result_names := {"dodge": "[color=#f0c96a]閃避[/color]", "block": "[color=#f0c96a]格擋[/color]", "hit": "[color=#f0c96a]命中[/color]"}
 	var critical_text := "，暴擊" if event.critical else ""
 	var log_text: String = battle.ui.battle_log.text
 	assert_str(log_text).contains("[color=#63a9ff]測試劍士[/color] 使用「精準斬擊」影響 [color=#ff6868]測試木樁[/color]")

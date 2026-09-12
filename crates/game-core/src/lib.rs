@@ -169,9 +169,6 @@ pub enum Command {
         x: i32,
         y: i32,
     },
-    EndMove {
-        actor: String,
-    },
     Skill {
         actor: String,
         target: String,
@@ -380,7 +377,6 @@ impl Game {
         match c {
             Command::Start => self.start(),
             Command::Move { actor, x, y } => self.move_to(&actor, GridPos { x, y }),
-            Command::EndMove { actor } => self.end_move(&actor),
             Command::Skill {
                 actor,
                 target,
@@ -522,17 +518,6 @@ impl Game {
             Ok(())
         }
     }
-    fn end_move(&mut self, a: &str) -> Result<(), String> {
-        self.ensure(a)?;
-        let mut t = self.world.resource_mut::<Turn>();
-        if !matches!(t.phase, Phase::Moving) {
-            return Err("尚未開始 Move Action".into());
-        }
-        t.remaining = 0;
-        t.moves += 1;
-        t.phase = Phase::AfterMove;
-        Ok(())
-    }
     fn move_to(&mut self, a: &str, end: GridPos) -> Result<(), String> {
         let MovePlan {
             entity: e,
@@ -637,10 +622,8 @@ impl Game {
     }
     fn use_skill(&mut self, a: &str, target: &str, skill: SkillDef) -> Result<(), String> {
         self.ensure(a)?;
-        if !matches!(
-            self.world.resource::<Turn>().phase,
-            Phase::Ready | Phase::Moving | Phase::AfterMove
-        ) {
+        let turn = self.world.resource::<Turn>();
+        if !can_use_skill(turn) {
             return Err("目前不能使用 Skill".into());
         }
         let ae = self.entity(a).ok_or("找不到攻擊者")?;
@@ -861,6 +844,7 @@ impl Game {
             .and_then(|actor| self.entity(actor))
             .map(|entity| skill_ranges(&self.world, entity))
             .unwrap_or_default();
+        let can_skill = can_use_skill(&turn);
         let terrain_cells = (0..b.height)
             .flat_map(|y| {
                 let board = &b;
@@ -913,13 +897,17 @@ impl Game {
                 move_remaining: turn.remaining,
                 can_move: matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
                     && turn.moves < 2,
-                can_skill: matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove),
+                can_skill,
             },
             round: enc.round,
             outcome: self.world.resource::<ResultState>().0,
             log: self.world.resource::<Log>().0.iter().cloned().collect(),
         }
     }
+}
+fn can_use_skill(turn: &Turn) -> bool {
+    matches!(turn.phase, Phase::Ready | Phase::Moving) && turn.moves == 0
+        || matches!(turn.phase, Phase::AfterMove) && turn.moves == 1
 }
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
     if n == 1 {

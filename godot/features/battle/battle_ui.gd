@@ -1,7 +1,6 @@
 extends CanvasLayer
 
 signal action_selected(action: String)
-signal end_move_requested
 signal end_turn_requested
 signal inspection_closed
 
@@ -44,7 +43,6 @@ func _ready() -> void:
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
 	for action in action_buttons:
 		action_buttons[action].pressed.connect(_on_action_pressed.bind(action))
-	$Root/BottomBar/Margin/Layout/EndMove.pressed.connect(func(): end_move_requested.emit())
 	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 
 func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, status_text: String) -> void:
@@ -59,6 +57,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	movement.text = "剩餘移動 %d" % int(snapshot.turn.move_remaining)
 	for action in action_buttons:
 		action_buttons[action].button_pressed = action == pending_action
+		action_buttons[action].disabled = not snapshot.turn.can_skill
 	var inspected := is_cell_on_board(snapshot, inspected_cell)
 	info_panel.visible = inspected
 	if not inspected:

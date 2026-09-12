@@ -79,6 +79,25 @@ func test_single_click_movement() -> void:
 		assert_float(battle.state.turn.move_remaining).override_failure_message("%s：剩餘移動力應正確" % test_case.name).is_equal(test_case.remaining)
 		assert_str(battle.state.turn.phase).override_failure_message("%s：移動階段應正確" % test_case.name).is_equal(test_case.phase)
 
+# 驗證未移動或只完成一段移動時可施放技能，完成兩段移動後則不可施放。
+func test_skill_availability_after_movement() -> void:
+	var test_data := [
+		{"name": "未移動", "destinations": [], "can_skill": true},
+		{"name": "完成一段移動", "destinations": [Vector2i(3, 3)], "can_skill": true},
+		{"name": "開始第二段移動", "destinations": [Vector2i(3, 3), Vector2i(4, 3)], "can_skill": false},
+		{"name": "完成兩段移動", "destinations": [Vector2i(3, 3), Vector2i(5, 3)], "can_skill": false},
+		{"name": "單次開始第二段移動", "destinations": [Vector2i(4, 3)], "can_skill": false},
+		{"name": "單次走完兩段移動", "destinations": [Vector2i(5, 3)], "can_skill": false},
+	]
+	for test_case in test_data:
+		prepare_case(battle)
+		for destination in test_case.destinations:
+			assert_bool(battle.send({"type": "move", "actor": "aria", "x": destination.x, "y": destination.y})).override_failure_message("%s：測試移動應成功" % test_case.name).is_true()
+
+		assert_bool(battle.state.turn.can_skill).override_failure_message("%s：技能可用狀態應正確" % test_case.name).is_equal(test_case.can_skill)
+		assert_bool(battle.ui.action_buttons.aimed_shot.disabled).override_failure_message("%s：技能按鈕狀態應正確" % test_case.name).is_equal(not test_case.can_skill)
+		assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "ogre", "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
+
 func prepare_case(battle) -> void:
 	for child in battle.world.units_layer.get_children():
 		child.free()

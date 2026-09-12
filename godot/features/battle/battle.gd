@@ -13,7 +13,6 @@ func _ready() -> void:
 	world.primary_clicked.connect(_on_primary_clicked)
 	world.inspection_clicked.connect(_on_inspection_clicked)
 	ui.action_selected.connect(select_action)
-	ui.end_move_requested.connect(_on_end_move_requested)
 	ui.end_turn_requested.connect(_on_end_turn_requested)
 	ui.inspection_closed.connect(_close_inspection)
 	core = TacticalGame.new()
@@ -79,12 +78,6 @@ func use_pending_action(target: String) -> void:
 	if succeeded:
 		pending_action = ""
 		present()
-
-func _on_end_move_requested() -> void:
-	if state.is_empty() or state.turn.actor == null:
-		return
-	pending_action = ""
-	send({"type": "end_move", "actor": state.turn.actor})
 
 func _on_end_turn_requested() -> void:
 	if state.is_empty() or state.turn.actor == null:
