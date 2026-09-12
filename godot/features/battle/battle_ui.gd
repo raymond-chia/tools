@@ -7,6 +7,7 @@ signal inspection_closed
 const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
 const CRITICAL_STYLE := "[color=#ff7043]暴擊[/color]"
+const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 
 @onready var root: Control = $Root
 @onready var info_panel: Panel = $Root/InfoPanel
@@ -29,6 +30,8 @@ const CRITICAL_STYLE := "[color=#ff7043]暴擊[/color]"
 @onready var movement: Label = $Root/BottomBar/Margin/Layout/Actor/Movement
 @onready var status: Label = $Root/BottomBar/Margin/Layout/Actions/Status
 @onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
+@onready var move_cost_popup: PanelContainer = $Root/MoveCostPopup
+@onready var move_cost_label: Label = $Root/MoveCostPopup/Label
 @onready var action_buttons := {
 	"melee_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Melee,
 	"ranged_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Ranged,
@@ -79,6 +82,21 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	terrain_name.text = terrain_names[terrain.kind]
 	terrain_cost.text = "%d" % int(terrain.cost)
 	terrain_effect.text = terrain.effect
+
+func present_move_cost(total_cost, pointer_position: Vector2) -> void:
+	move_cost_popup.visible = total_cost != null
+	if total_cost == null:
+		return
+	move_cost_label.text = "移動消耗 %d" % int(total_cost)
+	move_cost_popup.reset_size()
+	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
+	var popup_position: Vector2 = pointer_position + MOVE_COST_POPUP_OFFSET
+	if popup_position.x + move_cost_popup.size.x > viewport_rect.end.x:
+		popup_position.x = pointer_position.x - MOVE_COST_POPUP_OFFSET.x - move_cost_popup.size.x
+	if popup_position.y + move_cost_popup.size.y > viewport_rect.end.y:
+		popup_position.y = pointer_position.y - MOVE_COST_POPUP_OFFSET.y - move_cost_popup.size.y
+	var maximum_position: Vector2 = viewport_rect.end - move_cost_popup.size
+	move_cost_popup.position = popup_position.clamp(viewport_rect.position, maximum_position)
 
 func format_log(events: Array) -> String:
 	var entries: Array[String] = []

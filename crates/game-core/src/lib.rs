@@ -234,6 +234,7 @@ pub struct MovePreview {
     pub first: Vec<GridPos>,
     pub second: Vec<GridPos>,
     pub interrupted: bool,
+    pub total_cost: u32,
 }
 #[derive(Serialize)]
 pub struct UnitView {
@@ -436,6 +437,7 @@ impl Game {
             first,
             second,
             interrupted,
+            total_cost: spent,
         })
     }
     fn start(&mut self) -> Result<(), String> {

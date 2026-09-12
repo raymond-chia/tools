@@ -12,6 +12,7 @@ var status := "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 func _ready() -> void:
 	world.primary_clicked.connect(_on_primary_clicked)
 	world.inspection_clicked.connect(_on_inspection_clicked)
+	world.move_preview_changed.connect(ui.present_move_cost)
 	ui.action_selected.connect(select_action)
 	ui.end_turn_requested.connect(_on_end_turn_requested)
 	ui.inspection_closed.connect(_close_inspection)

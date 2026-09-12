@@ -63,6 +63,59 @@ func test_movement_path_preview() -> void:
 		assert_array(path_x_offsets(battle.world.first_move_path, origin)).override_failure_message("%s：第一段路徑應正確" % test_case.name).is_equal(test_case.first)
 		assert_array(path_x_offsets(battle.world.second_move_path, origin)).override_failure_message("%s：第二段路徑應正確" % test_case.name).is_equal(test_case.second)
 
+# 驗證移動模式懸停可達地格時會在游標旁顯示整條路徑的總消耗，離開移動模式後則隱藏。
+func test_hovered_tile_movement_total_cost() -> void:
+	var test_data := [
+		{"name": "第一段一般地格", "offset": Vector2i(2, 0), "expected": 2},
+		{"name": "第二段高消耗地格", "offset": Vector2i(2, 1), "expected": 4},
+	]
+	for test_case in test_data:
+		prepare_case(battle)
+		var destination: Vector2i = actor_cell(battle) + test_case.offset
+		var preview = JSON.parse_string(battle.core.preview_move(battle.state.turn.actor, destination.x, destination.y))
+
+		push_mouse_motion(battle.world, battle.world.cell_center(destination))
+
+		assert_int(int(preview.get("total_cost"))).override_failure_message("%s：核心預覽應提供移動總消耗" % test_case.name).is_equal(test_case.expected)
+		var popup: Control = battle.ui.get_node_or_null("Root/MoveCostPopup")
+		assert_that(popup).override_failure_message("%s：應建立游標旁的移動消耗浮動面板" % test_case.name).is_not_null()
+		if popup != null:
+			assert_bool(popup.visible).override_failure_message("%s：hover tile 應顯示移動總消耗" % test_case.name).is_true()
+			assert_str(popup.get_node("Label").text).override_failure_message("%s：浮動文字應顯示整條路徑的總消耗" % test_case.name).is_equal("移動消耗 %d" % test_case.expected)
+
+	prepare_case(battle)
+	var destination := actor_cell(battle) + Vector2i(2, 0)
+	push_mouse_motion(battle.world, battle.world.cell_center(destination))
+	push_control_click(battle.ui.action_buttons.melee_attack)
+	var skill_mode_popup: Control = battle.ui.get_node_or_null("Root/MoveCostPopup")
+	assert_that(skill_mode_popup).override_failure_message("應建立游標旁的移動消耗浮動面板").is_not_null()
+	if skill_mode_popup != null:
+		assert_bool(skill_mode_popup.visible).override_failure_message("技能模式不應顯示移動總消耗").is_false()
+
+# 驗證游標靠近邊界時，移動消耗浮動面板會移至指定象限且不超出 viewport。
+func test_movement_cost_popup_uses_available_quadrant() -> void:
+	prepare_case(battle)
+	var popup: Control = battle.ui.get_node_or_null("Root/MoveCostPopup")
+	assert_that(popup).override_failure_message("應建立游標旁的移動消耗浮動面板").is_not_null()
+	if popup == null:
+		return
+	var viewport_rect: Rect2 = battle.get_viewport().get_visible_rect()
+	var test_data := [
+		{"name": "滑鼠位於中央", "pointer": viewport_rect.get_center(), "horizontal": 1, "vertical": 1},
+		{"name": "滑鼠位於左上", "pointer": viewport_rect.position + Vector2(1.0, 1.0), "horizontal": 1, "vertical": 1},
+		{"name": "滑鼠位於左下", "pointer": Vector2(viewport_rect.position.x + 1.0, viewport_rect.end.y - 1.0), "horizontal": 1, "vertical": - 1},
+		{"name": "滑鼠位於右上", "pointer": Vector2(viewport_rect.end.x - 1.0, viewport_rect.position.y + 1.0), "horizontal": - 1, "vertical": 1},
+		{"name": "滑鼠位於右下", "pointer": viewport_rect.end - Vector2(1.0, 1.0), "horizontal": - 1, "vertical": - 1},
+	]
+	for test_case in test_data:
+		var pointer_position: Vector2 = test_case.pointer
+		battle.ui.present_move_cost(4, pointer_position)
+
+		assert_bool(popup.visible).override_failure_message("%s：邊界附近仍應顯示移動總消耗" % test_case.name).is_true()
+		assert_bool((popup.position.x - pointer_position.x) * test_case.horizontal > 0.0).override_failure_message("%s：浮動面板的左右位置應正確" % test_case.name).is_true()
+		assert_bool((popup.position.y - pointer_position.y) * test_case.vertical > 0.0).override_failure_message("%s：浮動面板的上下位置應正確" % test_case.name).is_true()
+		assert_bool(viewport_rect.encloses(popup.get_rect())).override_failure_message("%s：浮動面板應完整位於 viewport 可視範圍內" % test_case.name).is_true()
+
 # 驗證單次點擊可抵達第一段或第二段目的地，並正確扣除兩段移動力。
 func test_single_click_movement() -> void:
 	var test_data := [

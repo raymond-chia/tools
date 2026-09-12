@@ -37,6 +37,18 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("4")
 
+[node name="MoveCostPopup" type="PanelContainer" parent="UI/Root"]
+visible = false
+custom_minimum_size = Vector2(160, 48)
+layout_mode = 0
+mouse_filter = 2
+
+[node name="Label" type="Label" parent="UI/Root/MoveCostPopup"]
+layout_mode = 2
+text = "移動消耗 0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="LogPanel" type="Panel" parent="UI/Root"]
 layout_mode = 1
 anchors_preset = 9

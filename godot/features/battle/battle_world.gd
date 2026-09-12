@@ -2,6 +2,7 @@ extends Node2D
 
 signal primary_clicked(unit_id: String, cell: Vector2i)
 signal inspection_clicked(unit_id: String, cell: Vector2i)
+signal move_preview_changed(total_cost, pointer_position: Vector2)
 
 const TILE_SIZE := Vector2i(64, 32)
 const UI_FONT := preload("res://assets/fonts/NotoSans.ttf")
@@ -22,6 +23,7 @@ var hovered := Vector2i(-1, -1)
 var first_move_path: Array = []
 var second_move_path: Array = []
 var move_preview_interrupted := false
+var move_preview_total_cost = null
 var core
 var unit_nodes := {}
 
@@ -63,6 +65,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			hovered = next_hovered
 			update_move_preview()
 			queue_redraw()
+		else:
+			move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 		return
 	if not local_event is InputEventMouseButton or not local_event.pressed:
 		return
@@ -153,17 +157,22 @@ func clear_move_preview() -> void:
 	first_move_path.clear()
 	second_move_path.clear()
 	move_preview_interrupted = false
+	move_preview_total_cost = null
 
 func update_move_preview() -> void:
 	clear_move_preview()
 	if pending_action != "" or core == null or state.is_empty() or state.turn.actor == null or not is_cell_on_board(hovered):
+		move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 		return
 	var preview = JSON.parse_string(core.preview_move(state.turn.actor, hovered.x, hovered.y))
 	if preview.has("error"):
+		move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 		return
 	first_move_path = preview.first
 	second_move_path = preview.second
 	move_preview_interrupted = preview.interrupted
+	move_preview_total_cost = preview.total_cost
+	move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 
 func diamond(center: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([center+Vector2(0,-16),center+Vector2(32,0),center+Vector2(0,16),center+Vector2(-32,0)])
