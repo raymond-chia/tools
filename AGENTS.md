@@ -47,6 +47,7 @@
 
 - 除非使用者明確要求，否則禁止撰寫或修改測試。
 - 每個測試案例都必須以一行註解簡短說明其測試行為；修改測試時，也必須同步更新該說明。
+- 測試只能載入位於測試目錄內的專用測試資料；禁止使用正式遊戲、範例或其他非測試資料。
 
 ### 驗證責任
 
@@ -59,6 +60,13 @@
 - `crates/game-core`：核心規則，只依賴 `bevy_ecs`、Serde 與 TOML；Godot 不參與規則運算。
 - `crates/godot-bridge`：薄 GDExtension，將 JSON command 交給核心，並回傳 presentation snapshot。
 - Godot 的 `features/battle`：僅負責輸入、繪圖和 UI。
+
+### Godot 禁止承載遊戲規則
+
+- 凡是根據遊戲資料進行計算、比較、合法性判斷或結果分類，一律由 `game-core` 負責；不因用途是執行、預覽或顯示而例外。
+- Godot 只處理輸入、純介面狀態，以及核心已決定資料的排版、繪製與效果；不得從 snapshot 原始值重建規則。
+- Godot 需要衍生資訊時，先擴充 `game-core` 的 command、query 或 presentation snapshot；`godot-bridge` 只轉換輸入輸出，不得解讀或補算規則。
+- 修改 GDScript 前必須檢查上述邊界；發現規則推導時，先移回 `game-core`。
 
 ## 暫存檔案
 

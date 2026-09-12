@@ -7,8 +7,9 @@ import sys
 ROOT_DIRECTORY = Path(__file__).resolve().parents[1]
 PROJECT_DIRECTORY = ROOT_DIRECTORY / "godot"
 BRIDGE_LIBRARY = "godot_bridge.dll"
-GODOT_TEST_SCRIPT = "res://tests/run.gd"
+GDUNIT_TEST_SCRIPT = "res://addons/gdUnit4/bin/GdUnitCmdTool.gd"
 GODOT_TEST_LOG = ROOT_DIRECTORY / "ignore-tmp" / "godot-tests.log"
+GDUNIT_REPORT_DIRECTORY = ROOT_DIRECTORY / "ignore-tmp" / "gdunit4-reports"
 
 
 def build_bridge() -> int:
@@ -33,16 +34,21 @@ def run_game() -> int:
 
 def run_godot_tests() -> int:
     GODOT_TEST_LOG.parent.mkdir(exist_ok=True)
+    GDUNIT_REPORT_DIRECTORY.mkdir(exist_ok=True)
     result = subprocess.run(
         [
             "godot.cmd",
-            "--headless",
             "--path",
             str(PROJECT_DIRECTORY),
             "--log-file",
             str(GODOT_TEST_LOG),
             "--script",
-            GODOT_TEST_SCRIPT,
+            GDUNIT_TEST_SCRIPT,
+            "--add",
+            "res://tests",
+            "--continue",
+            "--report-directory",
+            str(GDUNIT_REPORT_DIRECTORY),
         ]
     )
     return result.returncode

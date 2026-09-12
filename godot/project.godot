@@ -1,6 +1,10 @@
 [application]
 config/name="奇幻小隊戰棋"
 run/main_scene="res://features/battle/battle.tscn"
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg")
+
 [display]
 window/size/viewport_width=1920
 window/size/viewport_height=1080

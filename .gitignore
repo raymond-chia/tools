@@ -4,6 +4,7 @@
 /godot/bin/*.dll
 /godot/bin/*.so
 /godot/bin/*.dylib
+addons/
 
 __pycache__/
 *.pyc
