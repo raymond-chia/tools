@@ -7,6 +7,7 @@ var core
 var state: Dictionary = {}
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
+var inspected_skill := ""
 var status := "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 
 func _ready() -> void:
@@ -16,6 +17,7 @@ func _ready() -> void:
 	ui.action_selected.connect(select_action)
 	ui.end_turn_requested.connect(_on_end_turn_requested)
 	ui.inspection_closed.connect(_close_inspection)
+	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	core = TacticalGame.new()
 	var file := FileAccess.open("res://data/vertical_slice.toml", FileAccess.READ)
 	if file == null:
@@ -40,7 +42,7 @@ func send(command: Dictionary) -> bool:
 
 func present() -> void:
 	world.present(state, pending_action, inspected_cell, core)
-	ui.present(state, pending_action, inspected_cell, status)
+	ui.present(state, pending_action, inspected_cell, inspected_skill, status)
 
 func select_action(action: String) -> void:
 	pending_action = action
@@ -70,11 +72,18 @@ func _on_inspection_clicked(unit_id: String, cell: Vector2i) -> void:
 		return
 	if not world.is_cell_on_board(cell):
 		return
+	inspected_skill = ""
 	inspected_cell = Vector2i(-1, -1) if inspected_cell == cell else cell
 	present()
 
 func _close_inspection() -> void:
 	inspected_cell = Vector2i(-1, -1)
+	inspected_skill = ""
+	present()
+
+func _on_skill_inspection_requested(skill_id: String) -> void:
+	inspected_cell = Vector2i(-1, -1)
+	inspected_skill = "" if inspected_skill == skill_id else skill_id
 	present()
 
 func use_pending_action(target: String, cell: Vector2i) -> void:

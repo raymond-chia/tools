@@ -12,6 +12,11 @@ window/size/window_width_override=1280
 window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
+
+[internationalization]
+
+locale/fallback="zh_TW"
+locale/translations=PackedStringArray("res://translations/skills.zh_TW.translation", "res://translations/skills.en.translation")
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

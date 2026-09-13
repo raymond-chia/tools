@@ -3,6 +3,7 @@ extends CanvasLayer
 signal action_selected(action: String)
 signal end_turn_requested
 signal inspection_closed
+signal skill_inspection_requested(skill_id: String)
 
 const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
@@ -11,6 +12,7 @@ const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 
 @onready var root: Control = $Root
 @onready var info_panel: Panel = $Root/InfoPanel
+@onready var info_title: Label = $Root/InfoPanel/Margin/Content/Header/Title
 @onready var unit_details: VBoxContainer = $Root/InfoPanel/Margin/Content/UnitDetails
 @onready var unit_name: Label = $Root/InfoPanel/Margin/Content/UnitDetails/UnitName
 @onready var detail_values := {
@@ -26,12 +28,20 @@ const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 @onready var terrain_name: Label = $Root/InfoPanel/Margin/Content/TerrainRows/TerrainValue
 @onready var terrain_cost: Label = $Root/InfoPanel/Margin/Content/TerrainRows/CostValue
 @onready var terrain_effect: Label = $Root/InfoPanel/Margin/Content/TerrainRows/EffectValue
+@onready var terrain_title: Label = $Root/InfoPanel/Margin/Content/TerrainTitle
+@onready var terrain_rows: GridContainer = $Root/InfoPanel/Margin/Content/TerrainRows
+@onready var inspected_skill_details: VBoxContainer = $Root/InfoPanel/Margin/Content/SkillDetails
+@onready var inspected_skill_name: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Name
+@onready var inspected_skill_description: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Details
 @onready var actor_name: Label = $Root/BottomBar/Margin/Layout/Actor/Name
 @onready var movement: Label = $Root/BottomBar/Margin/Layout/Actor/Movement
 @onready var status: Label = $Root/BottomBar/Margin/Layout/Actions/Status
 @onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
 @onready var move_cost_popup: PanelContainer = $Root/MoveCostPopup
 @onready var move_cost_label: Label = $Root/MoveCostPopup/Label
+@onready var hovered_skill_card: PanelContainer = $Root/HoveredSkill
+@onready var hovered_skill_title: Label = $Root/HoveredSkill/Margin/Content/Title
+@onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
 @onready var action_buttons := {
 	"melee_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Melee,
 	"ranged_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Ranged,
@@ -45,6 +55,8 @@ var drag_offset := Vector2.ZERO
 var log_entry_expanded_states: Dictionary = {}
 var presented_log_events: Array = []
 var dragging_battle_log := false
+var presented_skills: Array = []
+var hovered_skill_id := ""
 
 func _ready() -> void:
 	$Root/InfoPanel/Margin/Content/Header.gui_input.connect(_on_header_gui_input)
@@ -53,9 +65,12 @@ func _ready() -> void:
 	battle_log.gui_input.connect(_on_battle_log_gui_input)
 	for action in action_buttons:
 		action_buttons[action].pressed.connect(_on_action_pressed.bind(action))
+		action_buttons[action].mouse_entered.connect(_on_skill_mouse_entered.bind(action))
+		action_buttons[action].mouse_exited.connect(_on_skill_mouse_exited.bind(action))
+		action_buttons[action].gui_input.connect(_on_skill_gui_input.bind(action))
 	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 
-func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, status_text: String) -> void:
+func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, inspected_skill_id: String, status_text: String) -> void:
 	status.text = status_text
 	if snapshot.is_empty():
 		return
@@ -67,15 +82,37 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
 	actor_name.text = actor.name if not actor.is_empty() else "—"
 	movement.text = "剩餘移動 %d" % int(snapshot.turn.move_remaining)
+	presented_skills = snapshot.skill_ranges
+	if not hovered_skill_id.is_empty() and skill_with_id(presented_skills, hovered_skill_id).is_empty():
+		hovered_skill_id = ""
 	for action in action_buttons:
 		var available := skill_is_available(snapshot.skill_ranges, action)
 		action_buttons[action].visible = available
+		var skill := skill_with_id(presented_skills, action)
+		if not skill.is_empty():
+			action_buttons[action].text = localized_skill_name(skill)
 		action_buttons[action].button_pressed = action == pending_action
 		action_buttons[action].disabled = not snapshot.turn.can_skill or not available
+	present_hovered_skill()
+	var inspected_skill := skill_with_id(presented_skills, inspected_skill_id)
+	if not inspected_skill.is_empty():
+		info_panel.visible = true
+		info_title.text = "技能"
+		unit_details.visible = false
+		terrain_title.visible = false
+		terrain_rows.visible = false
+		inspected_skill_details.visible = true
+		inspected_skill_name.text = localized_skill_name(inspected_skill)
+		inspected_skill_description.text = localized_skill_details(inspected_skill)
+		return
 	var inspected := is_cell_on_board(snapshot, inspected_cell)
 	info_panel.visible = inspected
 	if not inspected:
 		return
+	info_title.text = "詳情"
+	inspected_skill_details.visible = false
+	terrain_title.visible = true
+	terrain_rows.visible = true
 	var unit := unit_at_cell(snapshot.units, inspected_cell)
 	unit_details.visible = not unit.is_empty()
 	if not unit.is_empty():
@@ -204,6 +241,45 @@ func skill_is_available(skill_ranges: Array, skill_id: String) -> bool:
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)
+
+func _on_skill_mouse_entered(action: String) -> void:
+	hovered_skill_id = action
+	present_hovered_skill()
+
+func _on_skill_mouse_exited(action: String) -> void:
+	if hovered_skill_id == action:
+		hovered_skill_id = ""
+		present_hovered_skill()
+
+func _on_skill_gui_input(event: InputEvent, action: String) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		skill_inspection_requested.emit(action)
+		action_buttons[action].accept_event()
+
+func present_hovered_skill() -> void:
+	var hovered := skill_with_id(presented_skills, hovered_skill_id)
+	hovered_skill_card.visible = not hovered.is_empty()
+	if not hovered.is_empty():
+		hovered_skill_title.text = localized_skill_name(hovered)
+		hovered_skill_details.text = localized_skill_details(hovered)
+
+func localized_skill_name(skill: Dictionary) -> String:
+	return tr(skill.name_key)
+
+func localized_skill_details(skill: Dictionary) -> String:
+	var lines: Array[String] = []
+	for detail in skill.details:
+		var line := tr(detail.text_key)
+		if detail.value != null:
+			line %= int(detail.value)
+		lines.append(line)
+	return "\n".join(lines)
+
+func skill_with_id(skills: Array, skill_id: String) -> Dictionary:
+	for skill in skills:
+		if skill.id == skill_id:
+			return skill
+	return {}
 
 func _on_header_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:

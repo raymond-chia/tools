@@ -294,8 +294,15 @@ pub struct InitiativeRollLog {
 #[derive(Serialize)]
 pub struct SkillRangeView {
     pub id: String,
+    pub name_key: String,
+    pub details: Vec<SkillDetailView>,
     pub cell_targeted: bool,
     pub cells: Vec<GridPos>,
+}
+#[derive(Serialize)]
+pub struct SkillDetailView {
+    pub text_key: String,
+    pub value: Option<i32>,
 }
 #[derive(Serialize)]
 pub struct MovePreview {
@@ -1575,6 +1582,8 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
             }
             SkillRangeView {
                 id: skill.id.clone(),
+                name_key: format!("SKILL_{}_NAME", skill.id.to_ascii_uppercase()),
+                details: skill_details(skill, range),
                 cell_targeted: skill.effect == SkillEffect::Mire,
                 cells,
             }
@@ -1582,4 +1591,42 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         .collect();
     ranges.sort_by(|a, b| a.id.cmp(&b.id));
     ranges
+}
+
+fn skill_details(skill: &SkillDef, range: i32) -> Vec<SkillDetailView> {
+    let target_key = if skill.effect == SkillEffect::Mire {
+        "SKILL_TARGET_CELL"
+    } else {
+        "SKILL_TARGET_ENEMY"
+    };
+    let type_key = if skill.ranged {
+        "SKILL_TYPE_RANGED"
+    } else {
+        "SKILL_TYPE_MELEE"
+    };
+    let mut details = vec![
+        skill_detail(target_key, None),
+        skill_detail(type_key, None),
+        skill_detail("SKILL_RANGE", Some(range)),
+    ];
+    if skill.effect != SkillEffect::Mire {
+        details.push(skill_detail("SKILL_ATTACK_BONUS", Some(skill.attack_bonus)));
+        details.push(skill_detail("SKILL_DAMAGE_BONUS", Some(skill.damage_bonus)));
+    }
+    match skill.effect {
+        SkillEffect::Attack => {}
+        SkillEffect::Push => details.push(skill_detail("SKILL_EFFECT_PUSH", None)),
+        SkillEffect::Mire => details.push(skill_detail(
+            "SKILL_EFFECT_MIRE",
+            skill.duration.map(|duration| duration as i32),
+        )),
+    }
+    details
+}
+
+fn skill_detail(text_key: &str, value: Option<i32>) -> SkillDetailView {
+    SkillDetailView {
+        text_key: text_key.into(),
+        value,
+    }
 }
