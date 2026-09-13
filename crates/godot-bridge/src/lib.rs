@@ -45,6 +45,12 @@ impl TacticalGame {
         }
     }
     #[func]
+    fn set_random_seed(&self, seed: i64) {
+        if let Some(game) = self.game.lock().unwrap().as_mut() {
+            game.set_random_seed(seed as u64);
+        }
+    }
+    #[func]
     fn preview_move(&self, actor: GString, x: i32, y: i32) -> GString {
         let lock = self.game.lock().unwrap();
         match lock.as_ref() {

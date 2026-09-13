@@ -496,6 +496,9 @@ impl Game {
         self.outcome();
         Ok(self.snapshot())
     }
+    pub fn set_random_seed(&mut self, seed: u64) {
+        self.world.resource_mut::<Random>().0 = seed;
+    }
     pub fn preview_move(&self, actor: &str, end: GridPos) -> Result<MovePreview, String> {
         let MovePlan {
             entity: _,

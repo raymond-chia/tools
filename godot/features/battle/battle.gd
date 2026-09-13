@@ -23,6 +23,7 @@ func _ready() -> void:
 		present()
 		return
 	state = JSON.parse_string(core.load_definition(file.get_as_text()))
+	core.set_random_seed(randi())
 	world.setup_map(state)
 	send({"type": "start"})
 
