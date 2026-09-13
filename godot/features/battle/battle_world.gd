@@ -10,6 +10,7 @@ const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
 const UNIT_ART := {
 	"aria": preload("res://assets/units/fighter.svg"), "lyra": preload("res://assets/units/archer.svg"),
+	"mira": preload("res://assets/units/archer.svg"),
 	"wolf_a": preload("res://assets/units/wolf.svg"), "wolf_b": preload("res://assets/units/wolf.svg"),
 	"ogre": preload("res://assets/units/ogre.svg"),
 }
@@ -70,10 +71,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not local_event is InputEventMouseButton or not local_event.pressed:
 		return
-	var unit := unit_at_point(local_event.position)
 	var cell := point_to_cell(local_event.position)
-	if not unit.is_empty():
-		cell = Vector2i(unit.x, unit.y)
+	var unit := unit_at_cell(cell)
 	var unit_id: String = unit.id if not unit.is_empty() else ""
 	if local_event.button_index == MOUSE_BUTTON_LEFT:
 		primary_clicked.emit(unit_id, cell)
@@ -89,6 +88,13 @@ func point_to_cell(point: Vector2) -> Vector2i:
 	return ground.local_to_map(point - ground.position)
 
 func sync_unit_sprites() -> void:
+	var current_unit_ids := {}
+	for unit in state.units:
+		current_unit_ids[unit.id] = true
+	for unit_id in unit_nodes.keys():
+		if not current_unit_ids.has(unit_id):
+			unit_nodes[unit_id].queue_free()
+			unit_nodes.erase(unit_id)
 	for unit in state.units:
 		var node: Node2D
 		if not unit_nodes.has(unit.id):
@@ -122,14 +128,9 @@ func footprint_center(unit: Dictionary) -> Vector2:
 	var last := cell_center(Vector2i(unit.x + unit.width - 1, unit.y + unit.height - 1))
 	return (first + last) * 0.5
 
-func unit_at_point(point: Vector2) -> Dictionary:
-	var ordered: Array = state.units.duplicate()
-	ordered.sort_custom(func(a,b): return footprint_center(a).y > footprint_center(b).y)
-	for unit in ordered:
-		var center := footprint_center(unit)
-		var radius := Vector2(61, 20) if unit.width > 1 else Vector2(36, 12)
-		var offset := point - center
-		if offset.x * offset.x / (radius.x * radius.x) + offset.y * offset.y / (radius.y * radius.y) <= 1.0:
+func unit_at_cell(cell: Vector2i) -> Dictionary:
+	for unit in state.units:
+		if unit_occupies_cell(unit, cell):
 			return unit
 	return {}
 
@@ -152,6 +153,12 @@ func selected_skill_range() -> Array:
 		if skill_range.id == pending_action:
 			return skill_range.cells
 	return []
+
+func pending_action_targets_cell() -> bool:
+	for skill_range in state.skill_ranges:
+		if skill_range.id == pending_action:
+			return skill_range.cell_targeted
+	return false
 
 func clear_move_preview() -> void:
 	first_move_path.clear()
@@ -215,6 +222,8 @@ func _draw() -> void:
 			draw_spikes(Vector2i(effect.x, effect.y))
 		elif effect.effect == "grease":
 			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,20,Color(0.6,0.3,0.85,0.72)); draw_set_transform(Vector2.ZERO)
+		elif effect.effect == "mire":
+			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,23,Color(0.2,0.55,0.28,0.76)); draw_circle(Vector2(-9,1),5,Color(0.58,0.86,0.38,0.72)); draw_set_transform(Vector2.ZERO)
 	for unit in state.units:
 		var center := footprint_center(unit)
 		var width: float = 96 if unit.width > 1 else 60

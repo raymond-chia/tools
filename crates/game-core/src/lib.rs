@@ -1,6 +1,8 @@
 //! Godot 無關的權威戰棋核心。
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
+
+mod gameplay_config;
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
@@ -32,7 +34,7 @@ pub enum RollDegree {
     Success,
     CriticalSuccess,
 }
-#[derive(Clone, Copy, Debug, Serialize)]
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AttackResult {
     Dodge,
@@ -66,6 +68,7 @@ struct Fighter {
     ranged: i32,
     damage: i32,
     range: i32,
+    skills: Vec<String>,
 }
 #[derive(Component)]
 struct Downed;
@@ -76,6 +79,13 @@ struct Board {
     costs: Vec<u32>,
     triggers: HashMap<GridPos, String>,
 }
+#[derive(Clone)]
+struct TemporaryTerrain {
+    kind: String,
+    expires_after_round: u32,
+}
+#[derive(Resource, Default, Clone)]
+struct TemporaryTerrains(HashMap<GridPos, TemporaryTerrain>);
 #[derive(Resource, Default, Clone)]
 struct Encounter {
     participants: HashSet<String>,
@@ -120,6 +130,17 @@ struct SkillDef {
     attack_bonus: i32,
     damage_bonus: i32,
     range: Option<i32>,
+    duration: Option<u32>,
+    #[serde(default)]
+    effect: SkillEffect,
+}
+#[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum SkillEffect {
+    #[default]
+    Attack,
+    Push,
+    Mire,
 }
 #[derive(Deserialize)]
 struct MapDef {
@@ -156,13 +177,19 @@ struct UnitDef {
     ranged: i32,
     damage: i32,
     range: i32,
+    #[serde(default)]
+    skills: Vec<String>,
 }
 fn one() -> i32 {
     1
 }
 
 fn terrain_damage(kind: &str) -> i32 {
-    if kind == "spikes" { 3 } else { 0 }
+    if kind == "spikes" {
+        gameplay_config::SPIKES_DAMAGE
+    } else {
+        0
+    }
 }
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -176,6 +203,14 @@ pub enum Command {
     Skill {
         actor: String,
         target: String,
+        x: i32,
+        y: i32,
+        skill: String,
+    },
+    CellSkill {
+        actor: String,
+        x: i32,
+        y: i32,
         skill: String,
     },
     EndTurn {
@@ -224,6 +259,14 @@ pub enum CombatLogEvent {
         remaining_hp: i32,
         max_hp: i32,
         downed: bool,
+        pushed: bool,
+        collision_damage: i32,
+    },
+    TerrainCreated {
+        actor: String,
+        actor_team: Team,
+        skill: String,
+        terrain: String,
     },
     StatusApplied {
         target: String,
@@ -251,6 +294,7 @@ pub struct InitiativeRollLog {
 #[derive(Serialize)]
 pub struct SkillRangeView {
     pub id: String,
+    pub cell_targeted: bool,
     pub cells: Vec<GridPos>,
 }
 #[derive(Serialize)]
@@ -288,6 +332,7 @@ pub struct TerrainEffectView {
     pub y: i32,
     pub effect: String,
     pub damage: i32,
+    pub remaining_rounds: Option<u32>,
 }
 #[derive(Serialize)]
 pub struct TerrainCellView {
@@ -297,6 +342,7 @@ pub struct TerrainCellView {
     pub cost: u32,
     pub effect: String,
     pub damage: i32,
+    pub remaining_rounds: Option<u32>,
 }
 #[derive(Serialize)]
 pub struct TurnView {
@@ -343,6 +389,7 @@ impl Game {
             triggers,
         });
         w.insert_resource(Encounter::default());
+        w.insert_resource(TemporaryTerrains::default());
         w.insert_resource(Turn {
             actor: None,
             phase: Phase::Ended,
@@ -354,11 +401,15 @@ impl Game {
         w.insert_resource(ResultState(Outcome::Ongoing));
         let mut skills = HashMap::new();
         for skill in d.skills {
+            if skill.duration == Some(0) {
+                return Err(format!("{} 的 duration 必須大於 0", skill.id));
+            }
             if skills.insert(skill.id.clone(), skill).is_some() {
                 return Err("duplicate skill id".into());
             }
         }
         w.insert_resource(Skills(skills));
+        let all_skill_ids: Vec<_> = w.resource::<Skills>().0.keys().cloned().collect();
         let mut ids = HashSet::new();
         for u in d.units {
             if !ids.insert(u.id.clone()) {
@@ -392,6 +443,11 @@ impl Game {
                     ranged: u.ranged,
                     damage: u.damage,
                     range: u.range,
+                    skills: if u.skills.is_empty() {
+                        all_skill_ids.clone()
+                    } else {
+                        u.skills
+                    },
                 },
             ));
         }
@@ -407,6 +463,8 @@ impl Game {
             Command::Skill {
                 actor,
                 target,
+                x,
+                y,
                 skill,
             } => {
                 let definition = self
@@ -416,7 +474,17 @@ impl Game {
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| format!("unknown skill: {skill}"))?;
-                self.use_skill(&actor, &target, definition)
+                self.use_skill(&actor, &target, GridPos { x, y }, definition)
+            }
+            Command::CellSkill { actor, x, y, skill } => {
+                let definition = self
+                    .world
+                    .resource::<Skills>()
+                    .0
+                    .get(&skill)
+                    .cloned()
+                    .ok_or_else(|| format!("unknown skill: {skill}"))?;
+                self.use_cell_skill(&actor, GridPos { x, y }, definition)
             }
             Command::EndTurn { actor } => {
                 self.ensure(&actor)?;
@@ -436,10 +504,10 @@ impl Game {
             second_budget: _,
             path,
         } = self.move_plan(actor, end)?;
-        let board = self.world.resource::<Board>();
         let interrupted = path
             .last()
-            .is_some_and(|position| board.triggers.contains_key(position));
+            .and_then(|position| terrain_at(&self.world, *position))
+            .is_some_and(|kind| kind != "mire");
         let mut first = Vec::new();
         let mut second = Vec::new();
         let mut spent = 0;
@@ -449,7 +517,7 @@ impl Game {
             first.push(path[0]);
         }
         for position in path.into_iter().skip(1) {
-            spent += cost(board, position);
+            spent += movement_cost(&self.world, position);
             if spent <= first_budget {
                 first.push(position);
             } else {
@@ -485,6 +553,11 @@ impl Game {
         Ok(())
     }
     fn roll_round(&mut self) {
+        let next_round = self.world.resource::<Encounter>().round + 1;
+        self.world
+            .resource_mut::<TemporaryTerrains>()
+            .0
+            .retain(|_, terrain| terrain.expires_after_round >= next_round);
         let active = self.world.resource::<Encounter>().participants.clone();
         let entries: Vec<_> = self
             .world
@@ -496,7 +569,7 @@ impl Game {
         let mut rolled: Vec<_> = entries
             .into_iter()
             .map(|(id, name, team, modifier)| {
-                let roll = die(&mut self.world, 20) as i32;
+                let roll = die(&mut self.world, gameplay_config::INITIATIVE_DIE_SIDES) as i32;
                 (roll + modifier, id, name, team, roll, modifier)
             })
             .collect();
@@ -574,10 +647,13 @@ impl Game {
         } = self.move_plan(a, end)?;
         let mut spent = 0;
         for p in path.into_iter().skip(1) {
-            spent += cost(self.world.resource::<Board>(), p);
+            spent += movement_cost(&self.world, p);
             self.world.get_mut::<Pos>(e).unwrap().0 = p;
             self.reveal(e);
-            if let Some(k) = self.world.resource::<Board>().triggers.get(&p).cloned() {
+            if let Some(k) = terrain_at(&self.world, p) {
+                if k == "mire" {
+                    continue;
+                }
                 let fighter = self.world.get::<Fighter>(e).unwrap();
                 let target = fighter.name.clone();
                 let target_team = fighter.team;
@@ -660,10 +736,7 @@ impl Game {
         )
         .ok_or("目的地不可達")?;
         if let Some(trigger_index) = path.iter().skip(1).position(|position| {
-            self.world
-                .resource::<Board>()
-                .triggers
-                .contains_key(position)
+            terrain_at(&self.world, *position).is_some_and(|kind| kind != "mire")
         }) {
             path.truncate(trigger_index + 2);
         }
@@ -683,7 +756,9 @@ impl Game {
             .query::<(&Id, &Pos, &Fighter)>()
             .iter(&self.world)
             .filter(|(i, q, f)| {
-                f.team == Team::Enemy && !active.contains(&i.0) && distance(p, q.0) <= 4
+                f.team == Team::Enemy
+                    && !active.contains(&i.0)
+                    && distance(p, q.0) <= gameplay_config::ENEMY_REVEAL_RANGE
             })
             .map(|(i, _, _)| i.0.clone())
             .collect();
@@ -694,7 +769,13 @@ impl Game {
                 .extend(add);
         }
     }
-    fn use_skill(&mut self, a: &str, target: &str, skill: SkillDef) -> Result<(), String> {
+    fn use_skill(
+        &mut self,
+        a: &str,
+        target: &str,
+        target_cell: GridPos,
+        skill: SkillDef,
+    ) -> Result<(), String> {
         self.ensure(a)?;
         let turn = self.world.resource::<Turn>();
         if !can_use_skill(turn) {
@@ -705,23 +786,58 @@ impl Game {
         if self.world.get::<Downed>(te).is_some() {
             return Err("目標已倒下".into());
         }
+        let target_position = self.world.get::<Pos>(te).unwrap().0;
+        let target_footprint = *self.world.get::<Footprint>(te).unwrap();
+        if !overlap(
+            target_cell,
+            Footprint {
+                width: 1,
+                height: 1,
+            },
+            target_position,
+            target_footprint,
+        ) {
+            return Err("所選格不屬於目標".into());
+        }
         let af = self.world.get::<Fighter>(ae).unwrap().clone();
         let tf = self.world.get::<Fighter>(te).unwrap().clone();
+        if !af.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
+            return Err("此角色不能使用這個技能".into());
+        }
         if af.team == tf.team {
             return Err("不能攻擊友軍".into());
         }
-        let range = skill
-            .range
-            .unwrap_or(if skill.ranged { af.range } else { 1 });
-        if entity_distance(&self.world, ae, te) > range {
+        let range = skill.range.unwrap_or(if skill.ranged {
+            af.range
+        } else {
+            gameplay_config::DEFAULT_MELEE_RANGE
+        });
+        let attacker_position = self.world.get::<Pos>(ae).unwrap().0;
+        let attacker_footprint = *self.world.get::<Footprint>(ae).unwrap();
+        if footprint_distance(
+            attacker_position,
+            attacker_footprint,
+            target_cell,
+            Footprint {
+                width: 1,
+                height: 1,
+            },
+        ) > range
+        {
             return Err("目標超出射程".into());
         }
         let modifier = if skill.ranged { af.ranged } else { af.melee } + skill.attack_bonus;
-        let natural = die(&mut self.world, 20) as i32;
-        let degree = degree(natural, modifier, 10 + tf.dodge);
+        let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
+        let target_dodge = effective_dodge(&self.world, te);
+        let target_block = effective_block(&self.world, te);
+        let degree = degree(
+            natural,
+            modifier,
+            gameplay_config::BASE_DEFENSE + target_dodge,
+        );
         let result = if matches!(degree, RollDegree::Failure | RollDegree::CriticalFailure) {
             AttackResult::Dodge
-        } else if natural + modifier < 10 + tf.dodge + tf.block {
+        } else if natural + modifier < gameplay_config::BASE_DEFENSE + target_dodge + target_block {
             AttackResult::Block
         } else {
             AttackResult::Hit
@@ -735,7 +851,7 @@ impl Game {
             };
         let damage = match result {
             AttackResult::Dodge => 0,
-            AttackResult::Block => (base - 2).max(0),
+            AttackResult::Block => (base - gameplay_config::BLOCK_DAMAGE_REDUCTION).max(0),
             AttackResult::Hit => base,
         };
         let damage_reduction = base - damage;
@@ -750,6 +866,35 @@ impl Game {
                     .resource_mut::<Encounter>()
                     .participants
                     .remove(target);
+            }
+        }
+        let mut pushed = false;
+        let mut collision_damage = 0;
+        if skill.effect == SkillEffect::Push && result == AttackResult::Hit && !downed {
+            let direction = push_direction(&self.world, ae, target_cell);
+            let current = self.world.get::<Pos>(te).unwrap().0;
+            let footprint = *self.world.get::<Footprint>(te).unwrap();
+            let destination = GridPos {
+                x: current.x + direction.x,
+                y: current.y + direction.y,
+            };
+            let can_push = fits(self.world.resource::<Board>(), destination, footprint)
+                && !occupied(&self.world, te, destination, footprint);
+            if can_push {
+                self.world.get_mut::<Pos>(te).unwrap().0 = destination;
+                pushed = true;
+            } else {
+                collision_damage = gameplay_config::COLLISION_DAMAGE;
+                let mut hp = self.world.get_mut::<Hp>(te).unwrap();
+                hp.current = (hp.current - collision_damage).max(0);
+                if hp.current == 0 {
+                    downed = true;
+                    self.world.entity_mut(te).insert(Downed);
+                    self.world
+                        .resource_mut::<Encounter>()
+                        .participants
+                        .remove(target);
+                }
             }
         }
         let hp = self.world.get::<Hp>(te).unwrap();
@@ -767,8 +912,8 @@ impl Game {
                 roll: natural,
                 attack_modifier: modifier,
                 attack_total: natural + modifier,
-                dodge_target: 10 + tf.dodge,
-                block_target: 10 + tf.dodge + tf.block,
+                dodge_target: gameplay_config::BASE_DEFENSE + target_dodge,
+                block_target: gameplay_config::BASE_DEFENSE + target_dodge + target_block,
                 result,
                 critical: degree == RollDegree::CriticalSuccess,
                 raw_damage: base,
@@ -777,6 +922,103 @@ impl Game {
                 remaining_hp,
                 max_hp,
                 downed,
+                pushed,
+                collision_damage,
+            });
+        if pushed {
+            self.apply_pushed_terrain(te, target);
+        }
+        self.finish();
+        Ok(())
+    }
+    fn apply_pushed_terrain(&mut self, entity: Entity, id: &str) {
+        let position = self.world.get::<Pos>(entity).unwrap().0;
+        let terrain = terrain_at(&self.world, position);
+        let terrain = match terrain {
+            Some(value) => value,
+            None => return,
+        };
+        let damage = terrain_damage(&terrain);
+        if damage == 0 {
+            return;
+        }
+        let fighter = self.world.get::<Fighter>(entity).unwrap();
+        let target = fighter.name.clone();
+        let target_team = fighter.team;
+        let mut hp = self.world.get_mut::<Hp>(entity).unwrap();
+        hp.current = (hp.current - damage).max(0);
+        let remaining_hp = hp.current;
+        let max_hp = hp.maximum;
+        let downed = remaining_hp == 0;
+        if downed {
+            self.world.entity_mut(entity).insert(Downed);
+            self.world
+                .resource_mut::<Encounter>()
+                .participants
+                .remove(id);
+        }
+        self.world
+            .resource_mut::<Log>()
+            .0
+            .push(CombatLogEvent::TerrainDamage {
+                target,
+                target_team,
+                terrain,
+                damage,
+                remaining_hp,
+                max_hp,
+                downed,
+            });
+    }
+    fn use_cell_skill(
+        &mut self,
+        actor: &str,
+        position: GridPos,
+        skill: SkillDef,
+    ) -> Result<(), String> {
+        self.ensure(actor)?;
+        if !can_use_skill(self.world.resource::<Turn>()) {
+            return Err("現在不能使用技能".into());
+        }
+        let entity = self.entity(actor).ok_or("找不到行動角色")?;
+        let fighter = self.world.get::<Fighter>(entity).unwrap().clone();
+        if !fighter.skills.contains(&skill.id) || skill.effect != SkillEffect::Mire {
+            return Err("此角色不能使用這個技能".into());
+        }
+        let board = self.world.resource::<Board>();
+        if !fits(
+            board,
+            position,
+            Footprint {
+                width: 1,
+                height: 1,
+            },
+        ) {
+            return Err("目標格超出地圖".into());
+        }
+        let origin = self.world.get::<Pos>(entity).unwrap().0;
+        if distance(origin, position) > skill.range.unwrap_or(gameplay_config::DEFAULT_MIRE_RANGE) {
+            return Err("目標超出技能範圍".into());
+        }
+        let current_round = self.world.resource::<Encounter>().round;
+        let duration = skill
+            .duration
+            .unwrap_or(gameplay_config::DEFAULT_MIRE_DURATION);
+        self.world.resource_mut::<TemporaryTerrains>().0.insert(
+            position,
+            TemporaryTerrain {
+                kind: "mire".into(),
+                expires_after_round: current_round + duration - 1,
+            },
+        );
+        self.world
+            .resource_mut::<Log>()
+            .0
+            .push(CombatLogEvent::TerrainCreated {
+                actor: fighter.name,
+                actor_team: fighter.team,
+                skill: skill.name,
+                terrain: "mire".into(),
             });
         self.finish();
         Ok(())
@@ -802,7 +1044,7 @@ impl Game {
                     continue;
                 }
             };
-            if entity_distance(&self.world, e, t) > 1 {
+            if entity_distance(&self.world, e, t) > gameplay_config::DEFAULT_MELEE_RANGE {
                 let goal = self.world.get::<Pos>(t).unwrap().0;
                 let start = self.world.get::<Pos>(e).unwrap().0;
                 let fp = *self.world.get::<Footprint>(e).unwrap();
@@ -814,7 +1056,7 @@ impl Game {
                     self.world.get_mut::<Pos>(e).unwrap().0 = *last
                 }
             }
-            if entity_distance(&self.world, e, t) <= 1 {
+            if entity_distance(&self.world, e, t) <= gameplay_config::DEFAULT_MELEE_RANGE {
                 let id = self.world.get::<Id>(t).unwrap().0.clone();
                 let skill = self
                     .world
@@ -823,7 +1065,8 @@ impl Game {
                     .get("melee_attack")
                     .cloned()
                     .ok_or("找不到 melee_attack 技能")?;
-                self.use_skill(&a, &id, skill)?
+                let target_cell = closest_occupied_cell(&self.world, e, t);
+                self.use_skill(&a, &id, target_cell, skill)?
             } else {
                 self.finish()
             }
@@ -871,11 +1114,13 @@ impl Game {
     }
     pub fn snapshot(&mut self) -> Snapshot {
         let b = self.world.resource::<Board>().clone();
+        let temporary_terrains = self.world.resource::<TemporaryTerrains>().clone();
         let enc = self.world.resource::<Encounter>().clone();
         let turn = self.world.resource::<Turn>().clone();
         let mut units: Vec<_> = self
             .world
             .iter_entities()
+            .filter(|entity| entity.get::<Downed>().is_none())
             .filter_map(|e| {
                 Some((
                     e.get::<Id>()?,
@@ -898,8 +1143,16 @@ impl Game {
                 max_hp: h.maximum,
                 movement: f.movement,
                 initiative: f.initiative,
-                dodge: f.dodge,
-                block: f.block,
+                dodge: if footprint_on_terrain(&b, &temporary_terrains, p.0, *fp, "mire") {
+                    (f.dodge - 3).max(0)
+                } else {
+                    f.dodge
+                },
+                block: if footprint_on_terrain(&b, &temporary_terrains, p.0, *fp, "mire") {
+                    (f.block - 3).max(0)
+                } else {
+                    f.block
+                },
                 melee: f.melee,
                 ranged: f.ranged,
                 damage: f.damage,
@@ -925,11 +1178,17 @@ impl Game {
         let terrain_cells = (0..b.height)
             .flat_map(|y| {
                 let board = &b;
+                let temporary = &temporary_terrains;
                 (0..b.width).map(move |x| {
                     let position = GridPos { x, y };
-                    let cost = board.costs[(y * board.width + x) as usize];
-                    let effect = board.triggers.get(&position).cloned().unwrap_or_default();
-                    let kind = if effect == "grease" || effect == "spikes" {
+                    let base_cost = board.costs[(y * board.width + x) as usize];
+                    let temporary_terrain = temporary.0.get(&position);
+                    let effect = temporary_terrain
+                        .map(|terrain| terrain.kind.clone())
+                        .or_else(|| board.triggers.get(&position).cloned())
+                        .unwrap_or_default();
+                    let cost = base_cost + u32::from(effect == "mire");
+                    let kind = if effect == "grease" || effect == "spikes" || effect == "mire" {
                         effect.as_str()
                     } else if cost > 1 {
                         "rough"
@@ -943,6 +1202,9 @@ impl Game {
                         cost,
                         damage: terrain_damage(&effect),
                         effect,
+                        remaining_rounds: temporary_terrain.map(|terrain| {
+                            terrain.expires_after_round.saturating_sub(enc.round) + 1
+                        }),
                     }
                 })
             })
@@ -955,13 +1217,26 @@ impl Game {
                 let mut effects: Vec<_> = b
                     .triggers
                     .into_iter()
+                    .filter(|(position, _)| !temporary_terrains.0.contains_key(position))
                     .map(|(position, effect)| TerrainEffectView {
                         x: position.x,
                         y: position.y,
                         damage: terrain_damage(&effect),
                         effect,
+                        remaining_rounds: None,
                     })
                     .collect();
+                effects.extend(temporary_terrains.0.into_iter().map(|(position, terrain)| {
+                    TerrainEffectView {
+                        x: position.x,
+                        y: position.y,
+                        damage: terrain_damage(&terrain.kind),
+                        effect: terrain.kind,
+                        remaining_rounds: Some(
+                            terrain.expires_after_round.saturating_sub(enc.round) + 1,
+                        ),
+                    }
+                }));
                 effects.sort_by_key(|effect| (effect.y, effect.x));
                 effects
             },
@@ -991,7 +1266,7 @@ fn can_use_skill(turn: &Turn) -> bool {
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
     if n == 1 {
         RollDegree::CriticalFailure
-    } else if n == 20 {
+    } else if n == gameplay_config::ATTACK_DIE_SIDES as i32 {
         RollDegree::CriticalSuccess
     } else if n + m >= t {
         RollDegree::Success
@@ -1004,8 +1279,115 @@ fn die(w: &mut World, s: u32) -> u32 {
     r.0 = r.0.wrapping_mul(6364136223846793005).wrapping_add(1);
     ((r.0 >> 32) as u32 % s) + 1
 }
-fn cost(b: &Board, p: GridPos) -> u32 {
-    b.costs[(p.y * b.width + p.x) as usize]
+fn terrain_at(w: &World, position: GridPos) -> Option<String> {
+    w.resource::<TemporaryTerrains>()
+        .0
+        .get(&position)
+        .map(|terrain| terrain.kind.clone())
+        .or_else(|| w.resource::<Board>().triggers.get(&position).cloned())
+}
+
+fn movement_cost(w: &World, position: GridPos) -> u32 {
+    let board = w.resource::<Board>();
+    let base = board.costs[(position.y * board.width + position.x) as usize];
+    base + gameplay_config::MIRE_MOVEMENT_COST_INCREASE
+        * u32::from(terrain_at(w, position).is_some_and(|kind| kind == "mire"))
+}
+
+fn effective_dodge(w: &World, entity: Entity) -> i32 {
+    let fighter = w.get::<Fighter>(entity).unwrap();
+    let position = w.get::<Pos>(entity).unwrap().0;
+    let footprint = *w.get::<Footprint>(entity).unwrap();
+    let penalty = if footprint_on_terrain(
+        w.resource::<Board>(),
+        w.resource::<TemporaryTerrains>(),
+        position,
+        footprint,
+        "mire",
+    ) {
+        gameplay_config::MIRE_STAT_PENALTY
+    } else {
+        0
+    };
+    (fighter.dodge - penalty).max(0)
+}
+
+fn effective_block(w: &World, entity: Entity) -> i32 {
+    let fighter = w.get::<Fighter>(entity).unwrap();
+    let position = w.get::<Pos>(entity).unwrap().0;
+    let footprint = *w.get::<Footprint>(entity).unwrap();
+    let penalty = if footprint_on_terrain(
+        w.resource::<Board>(),
+        w.resource::<TemporaryTerrains>(),
+        position,
+        footprint,
+        "mire",
+    ) {
+        gameplay_config::MIRE_STAT_PENALTY
+    } else {
+        0
+    };
+    (fighter.block - penalty).max(0)
+}
+
+fn footprint_on_terrain(
+    board: &Board,
+    temporary: &TemporaryTerrains,
+    position: GridPos,
+    footprint: Footprint,
+    kind: &str,
+) -> bool {
+    (position.y..position.y + footprint.height).any(|y| {
+        (position.x..position.x + footprint.width).any(|x| {
+            let cell = GridPos { x, y };
+            temporary
+                .0
+                .get(&cell)
+                .is_some_and(|terrain| terrain.kind == kind)
+                || board
+                    .triggers
+                    .get(&cell)
+                    .is_some_and(|terrain| terrain == kind)
+        })
+    })
+}
+
+fn push_direction(w: &World, attacker: Entity, target_cell: GridPos) -> GridPos {
+    let attacker_position = w.get::<Pos>(attacker).unwrap().0;
+    let attacker_footprint = *w.get::<Footprint>(attacker).unwrap();
+    if attacker_position.x + attacker_footprint.width <= target_cell.x {
+        GridPos { x: 1, y: 0 }
+    } else if target_cell.x < attacker_position.x {
+        GridPos { x: -1, y: 0 }
+    } else if attacker_position.y + attacker_footprint.height <= target_cell.y {
+        GridPos { x: 0, y: 1 }
+    } else {
+        GridPos { x: 0, y: -1 }
+    }
+}
+
+fn closest_occupied_cell(w: &World, attacker: Entity, target: Entity) -> GridPos {
+    let attacker_position = w.get::<Pos>(attacker).unwrap().0;
+    let attacker_footprint = *w.get::<Footprint>(attacker).unwrap();
+    let target_position = w.get::<Pos>(target).unwrap().0;
+    let target_footprint = *w.get::<Footprint>(target).unwrap();
+    let cells = (target_position.y..target_position.y + target_footprint.height).flat_map(|y| {
+        (target_position.x..target_position.x + target_footprint.width)
+            .map(move |x| GridPos { x, y })
+    });
+    cells
+        .min_by_key(|cell| {
+            footprint_distance(
+                attacker_position,
+                attacker_footprint,
+                *cell,
+                Footprint {
+                    width: 1,
+                    height: 1,
+                },
+            )
+        })
+        .unwrap()
 }
 fn fits(b: &Board, p: GridPos, f: Footprint) -> bool {
     p.x >= 0 && p.y >= 0 && p.x + f.width <= b.width && p.y + f.height <= b.height
@@ -1086,7 +1468,7 @@ fn paths(
             if !fits(board, n, f) || occupied(w, e, n, f) {
                 continue;
             }
-            let nc = c + cost(board, n);
+            let nc = c + movement_cost(w, n);
             if nc <= budget && nc < *dist.get(&n).unwrap_or(&u32::MAX) {
                 dist.insert(n, nc);
                 prev.insert(n, p);
@@ -1161,10 +1543,13 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         .resource::<Skills>()
         .0
         .values()
+        .filter(|skill| fighter.skills.contains(&skill.id))
         .map(|skill| {
-            let range = skill
-                .range
-                .unwrap_or(if skill.ranged { fighter.range } else { 1 });
+            let range = skill.range.unwrap_or(if skill.ranged {
+                fighter.range
+            } else {
+                gameplay_config::DEFAULT_MELEE_RANGE
+            });
             let mut cells = Vec::new();
             for y in 0..board.height {
                 for x in 0..board.width {
@@ -1178,13 +1563,16 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
                             height: 1,
                         },
                     );
-                    if cell_distance > 0 && cell_distance <= range {
+                    if cell_distance <= range
+                        && (skill.effect == SkillEffect::Mire || cell_distance > 0)
+                    {
                         cells.push(cell);
                     }
                 }
             }
             SkillRangeView {
                 id: skill.id.clone(),
+                cell_targeted: skill.effect == SkillEffect::Mire,
                 cells,
             }
         })

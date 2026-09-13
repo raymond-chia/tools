@@ -107,6 +107,35 @@ func test_spikes_damage_log() -> void:
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]測試劍士[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50")
 
+# 驗證戰鬥紀錄可從文字區任意位置以左鍵拖曳垂直捲動。
+func test_battle_log_can_be_dragged_to_scroll() -> void:
+	for index in 12:
+		assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("第 %d 次測試攻擊應成功" % index).is_true()
+	await runner.simulate_frames(2)
+	var scroll_bar: VScrollBar = battle.ui.battle_log.get_v_scroll_bar()
+	scroll_bar.value = scroll_bar.max_value
+	var initial_value: float = scroll_bar.value
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	battle.ui.battle_log.gui_input.emit(press)
+	var motion := InputEventMouseMotion.new()
+	motion.relative = Vector2(0.0, 80.0)
+	battle.ui.battle_log.gui_input.emit(motion)
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	battle.ui.battle_log.gui_input.emit(release)
+	assert_float(scroll_bar.value).override_failure_message("向下拖曳紀錄內容應向上捲動").is_less(initial_value)
+
+# 驗證無斷點的長紀錄仍會換行，且紀錄控制項不超出所屬面板。
+func test_battle_log_content_stays_inside_panel_width() -> void:
+	battle.ui.battle_log.text = "很長的戰鬥紀錄".repeat(100)
+	await runner.simulate_frames(2)
+	var panel: Control = battle.ui.get_node("Root/LogPanel")
+	assert_int(battle.ui.battle_log.get_content_width()).override_failure_message("戰鬥紀錄內容寬度不應超出控制項").is_less_equal(int(battle.ui.battle_log.size.x))
+	assert_bool(panel.get_global_rect().encloses(battle.ui.battle_log.get_global_rect())).override_failure_message("戰鬥紀錄控制項應完整位於面板內").is_true()
+
 func load_test_definition() -> void:
 	for child in battle.world.units_layer.get_children():
 		child.free()
@@ -121,7 +150,8 @@ func load_test_definition() -> void:
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
 
 func skill_command(target: String, skill: String) -> Dictionary:
-	return {"type": "skill", "actor": "aria", "target": target, "skill": skill}
+	var unit := unit_with_id(target)
+	return {"type": "skill", "actor": "aria", "target": target, "x": int(unit.x), "y": int(unit.y), "skill": skill}
 
 func find_last_event(type: String) -> Dictionary:
 	for index in range(battle.state.log.size() - 1, -1, -1):

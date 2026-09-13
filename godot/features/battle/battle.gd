@@ -43,16 +43,19 @@ func present() -> void:
 
 func select_action(action: String) -> void:
 	pending_action = action
-	status = "請選擇技能目標。"
+	status = "請選擇施法格子。" if pending_action_targets_cell() else "請選擇技能目標。"
 	present()
 
 func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
 	if pending_action != "":
+		if pending_action_targets_cell():
+			use_pending_cell_action(cell)
+			return
 		if unit_id == "":
 			status = "請選擇一個單位作為目標。"
 			present()
 			return
-		use_pending_action(unit_id)
+		use_pending_action(unit_id, cell)
 		return
 	if state.is_empty() or state.turn.actor == null or not world.is_cell_on_board(cell):
 		return
@@ -73,12 +76,29 @@ func _close_inspection() -> void:
 	inspected_cell = Vector2i(-1, -1)
 	present()
 
-func use_pending_action(target: String) -> void:
+func use_pending_action(target: String, cell: Vector2i) -> void:
 	var actor: String = state.turn.actor
-	var succeeded := send({"type": "skill", "actor": actor, "target": target, "skill": pending_action})
+	var succeeded := send({"type": "skill", "actor": actor, "target": target, "x": cell.x, "y": cell.y, "skill": pending_action})
 	if succeeded:
 		pending_action = ""
 		present()
+
+func use_pending_cell_action(cell: Vector2i) -> void:
+	if not world.is_cell_on_board(cell):
+		status = "請選擇地圖上的格子。"
+		present()
+		return
+	var actor: String = state.turn.actor
+	var succeeded := send({"type": "cell_skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action})
+	if succeeded:
+		pending_action = ""
+		present()
+
+func pending_action_targets_cell() -> bool:
+	for skill_range in state.skill_ranges:
+		if skill_range.id == pending_action:
+			return skill_range.cell_targeted
+	return false
 
 func _on_end_turn_requested() -> void:
 	if state.is_empty() or state.turn.actor == null:

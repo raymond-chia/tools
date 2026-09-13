@@ -34,12 +34,29 @@ attack_bonus=2
 damage_bonus=2
 range=1
 [[skills]]
+id="shield_bash"
+name="盾牌推擊"
+ranged=false
+attack_bonus=1
+damage_bonus=-3
+range=1
+effect="push"
+[[skills]]
 id="aimed_shot"
 name="瞄準射擊"
 ranged=true
 attack_bonus=3
 damage_bonus=0
 range=6
+[[skills]]
+id="corrosive_mire"
+name="腐蝕泥沼"
+ranged=true
+attack_bonus=0
+damage_bonus=0
+range=4
+effect="mire"
+duration=2
 [[units]]
 id="aria"
 name="亞莉亞・劍士"
@@ -56,6 +73,7 @@ melee=5
 ranged=0
 damage=5
 range=1
+skills=["melee_attack","power_strike","shield_bash"]
 [[units]]
 id="lyra"
 name="萊拉・遊俠"
@@ -72,6 +90,24 @@ melee=2
 ranged=6
 damage=4
 range=5
+skills=["ranged_attack","aimed_shot"]
+[[units]]
+id="mira"
+name="米菈・術士"
+team="player"
+group="heroes"
+x=1
+y=5
+hp=12
+movement=5
+initiative=2
+dodge=3
+block=2
+melee=1
+ranged=4
+damage=3
+range=4
+skills=["corrosive_mire"]
 [[units]]
 id="wolf_a"
 name="荒原狼 A"
@@ -88,6 +124,7 @@ melee=4
 ranged=0
 damage=3
 range=1
+skills=["melee_attack"]
 [[units]]
 id="wolf_b"
 name="荒原狼 B"
@@ -104,6 +141,7 @@ melee=4
 ranged=0
 damage=3
 range=1
+skills=["melee_attack"]
 [[units]]
 id="ogre"
 name="山丘巨魔"
@@ -122,3 +160,4 @@ melee=6
 ranged=0
 damage=7
 range=1
+skills=["melee_attack"]

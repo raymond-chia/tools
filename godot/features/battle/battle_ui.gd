@@ -37,16 +37,20 @@ const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 	"ranged_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Ranged,
 	"power_strike": $Root/BottomBar/Margin/Layout/Actions/Buttons/PowerStrike,
 	"aimed_shot": $Root/BottomBar/Margin/Layout/Actions/Buttons/AimedShot,
+	"shield_bash": $Root/BottomBar/Margin/Layout/Actions/Buttons/ShieldBash,
+	"corrosive_mire": $Root/BottomBar/Margin/Layout/Actions/Buttons/CorrosiveMire,
 }
 var dragging_info_panel := false
 var drag_offset := Vector2.ZERO
 var log_entry_expanded_states: Dictionary = {}
 var presented_log_events: Array = []
+var dragging_battle_log := false
 
 func _ready() -> void:
 	$Root/InfoPanel/Margin/Content/Header.gui_input.connect(_on_header_gui_input)
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
 	battle_log.meta_clicked.connect(_on_battle_log_meta_clicked)
+	battle_log.gui_input.connect(_on_battle_log_gui_input)
 	for action in action_buttons:
 		action_buttons[action].pressed.connect(_on_action_pressed.bind(action))
 	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
@@ -64,8 +68,10 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	actor_name.text = actor.name if not actor.is_empty() else "—"
 	movement.text = "剩餘移動 %d" % int(snapshot.turn.move_remaining)
 	for action in action_buttons:
+		var available := skill_is_available(snapshot.skill_ranges, action)
+		action_buttons[action].visible = available
 		action_buttons[action].button_pressed = action == pending_action
-		action_buttons[action].disabled = not snapshot.turn.can_skill
+		action_buttons[action].disabled = not snapshot.turn.can_skill or not available
 	var inspected := is_cell_on_board(snapshot, inspected_cell)
 	info_panel.visible = inspected
 	if not inspected:
@@ -83,10 +89,13 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.attack.text = "%d / %d" % [int(unit.melee), int(unit.ranged)]
 		detail_values.power.text = "%d / %d" % [int(unit.damage), int(unit.range)]
 	var terrain := terrain_at(snapshot.terrain_cells, inspected_cell)
-	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面", "spikes": "地刺"}
+	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面", "spikes": "地刺", "mire": "腐蝕泥沼"}
 	terrain_name.text = terrain_names[terrain.kind]
 	terrain_cost.text = "%d" % int(terrain.cost)
-	terrain_effect.text = "造成 %d 點傷害" % int(terrain.damage) if terrain.damage > 0 else terrain.effect
+	if terrain.kind == "mire":
+		terrain_effect.text = "閃避與格擋 −3，移動消耗 +1，剩餘 %d 回合" % int(terrain.remaining_rounds)
+	else:
+		terrain_effect.text = "造成 %d 點傷害" % int(terrain.damage) if terrain.damage > 0 else terrain.effect
 
 func present_move_cost(total_cost, pointer_position: Vector2) -> void:
 	move_cost_popup.visible = total_cost != null
@@ -129,8 +138,17 @@ func format_log(events: Array) -> String:
 					entries.append("傷害：原始 %d − 格擋 %d = %d，HP %d/%d" % [int(event.raw_damage), int(event.damage_reduction), int(event.damage), int(event.remaining_hp), int(event.max_hp)])
 				else:
 					entries.append("結果：%s%s，%d 傷害，HP %d/%d" % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+				if event.pushed:
+					entries.append("%s 被沿攻擊方向推動 1 格" % colored_unit(event.target, event.target_team))
+				elif int(event.collision_damage) > 0:
+					entries.append("推擊受阻，%s 額外受到 %d 點碰撞傷害" % [colored_unit(event.target, event.target_team), int(event.collision_damage)])
 				if event.downed:
 					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
+			"terrain_created":
+				var terrain_names := {"mire": "腐蝕泥沼"}
+				entries.append("[url=log_entry:%d]%s %s 使用「%s」[/url]" % [index, marker, colored_unit(event.actor, event.actor_team), event.skill])
+				if expanded:
+					entries.append("產生「%s」" % terrain_names[event.terrain])
 			"status_applied":
 				var status_names := {"grease": "油脂"}
 				entries.append("[url=log_entry:%d]%s 狀態變化[/url]" % [index, marker])
@@ -167,8 +185,22 @@ func _on_battle_log_meta_clicked(meta: Variant) -> void:
 	if parts.size() == 2 and parts[0] == "log_entry":
 		toggle_log_entry(int(parts[1]))
 
+func _on_battle_log_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		dragging_battle_log = event.pressed
+	elif event is InputEventMouseMotion and dragging_battle_log:
+		var scroll_bar := battle_log.get_v_scroll_bar()
+		scroll_bar.value -= event.relative.y
+		battle_log.accept_event()
+
 func colored_unit(unit: String, team: String) -> String:
 	return "[color=%s]%s[/color]" % [TEAM_COLORS[team], unit]
+
+func skill_is_available(skill_ranges: Array, skill_id: String) -> bool:
+	for skill_range in skill_ranges:
+		if skill_range.id == skill_id:
+			return true
+	return false
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)

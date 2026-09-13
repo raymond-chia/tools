@@ -89,6 +89,23 @@ func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
 	emit_mouse_motion(header, header_center + drag_offset * 2.0)
 	assert_vector(info_panel.position).override_failure_message("放開左鍵後詳情面板應停止移動").is_equal(released_position)
 
+# 驗證詳情面板遇到無斷點長文字時，所有可見內容仍留在左右邊界內。
+func test_inspection_content_stays_inside_panel_width() -> void:
+	prepare_case(battle, "unit:aria")
+	var info_panel: Panel = battle.ui.info_panel
+	var unit_name: Label = info_panel.get_node("Margin/Content/UnitDetails/UnitName")
+	var terrain_effect: Label = info_panel.get_node("Margin/Content/TerrainRows/EffectValue")
+	unit_name.text = "超長單位名稱".repeat(30)
+	terrain_effect.text = "超長地面效果".repeat(30)
+	await runner.simulate_frames(2)
+	var panel_rect: Rect2 = info_panel.get_global_rect()
+	for control: Control in info_panel.find_children("*", "Control", true, false):
+		if not control.is_visible_in_tree():
+			continue
+		var control_rect: Rect2 = control.get_global_rect()
+		assert_float(control_rect.position.x).override_failure_message("%s 不應超出詳情面板左側" % control.get_path()).is_greater_equal(panel_rect.position.x)
+		assert_float(control_rect.end.x).override_failure_message("%s 不應超出詳情面板右側" % control.get_path()).is_less_equal(panel_rect.end.x)
+
 func prepare_case(battle, initial_target: String) -> void:
 	load_test_definition(battle)
 	battle.inspected_cell = target_cell(battle, initial_target)

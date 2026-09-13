@@ -164,7 +164,7 @@ func test_skill_availability_after_movement() -> void:
 
 		assert_bool(battle.state.turn.can_skill).override_failure_message("%s：技能可用狀態應正確" % test_case.name).is_equal(test_case.can_skill)
 		assert_bool(battle.ui.action_buttons.aimed_shot.disabled).override_failure_message("%s：技能按鈕狀態應正確" % test_case.name).is_equal(not test_case.can_skill)
-		assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "ogre", "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
+		assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "ogre", "x": 3, "y": 1, "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
 
 func prepare_case(battle) -> void:
 	for child in battle.world.units_layer.get_children():

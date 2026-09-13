@@ -61,6 +61,7 @@ offset_right = -24.0
 offset_bottom = -249.0
 grow_horizontal = 0
 grow_vertical = 2
+clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
 [node name="Margin" type="MarginContainer" parent="UI/Root/LogPanel"]
@@ -87,6 +88,7 @@ text = "戰鬥紀錄"
 [node name="Entries" type="RichTextLabel" parent="UI/Root/LogPanel/Margin/Content"]
 layout_mode = 2
 size_flags_vertical = 3
+autowrap_mode = 1
 bbcode_enabled = true
 fit_content = false
 mouse_force_pass_scroll_events = false
@@ -173,6 +175,18 @@ layout_mode = 2
 toggle_mode = true
 text = "瞄準射擊"
 
+[node name="ShieldBash" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
+custom_minimum_size = Vector2(170, 62)
+layout_mode = 2
+toggle_mode = true
+text = "推擊"
+
+[node name="CorrosiveMire" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
+custom_minimum_size = Vector2(170, 62)
+layout_mode = 2
+toggle_mode = true
+text = "腐蝕泥沼"
+
 [node name="Status" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -192,6 +206,7 @@ offset_left = 792.0
 offset_top = 36.0
 offset_right = 1272.0
 offset_bottom = 816.0
+clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
 [node name="Margin" type="MarginContainer" parent="UI/Root/InfoPanel"]
@@ -232,9 +247,11 @@ layout_mode = 2
 theme_override_constants/separation = 10
 
 [node name="UnitName" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails"]
+custom_maximum_size = Vector2(432, -1)
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "單位"
+autowrap_mode = 2
 
 [node name="Rows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails"]
 layout_mode = 2
@@ -246,50 +263,74 @@ theme_override_constants/v_separation = 10
 layout_mode = 2
 text = "陣營"
 [node name="TeamValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="HpLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "生命"
 [node name="HpValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="SizeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "體型"
 [node name="SizeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="MovementLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "移動"
 [node name="MovementValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="InitiativeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "先攻"
 [node name="InitiativeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="DefenseLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "閃避／格擋"
 [node name="DefenseValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="AttackLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "近戰／遠程"
 [node name="AttackValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="PowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 layout_mode = 2
 text = "傷害／射程"
 [node name="PowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 
 [node name="TerrainTitle" type="Label" parent="UI/Root/InfoPanel/Margin/Content"]
 layout_mode = 2
@@ -306,17 +347,26 @@ theme_override_constants/v_separation = 10
 layout_mode = 2
 text = "地形"
 [node name="TerrainValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="CostLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
 layout_mode = 2
 text = "移動消耗"
 [node name="CostValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
 [node name="EffectLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
 layout_mode = 2
 text = "地面效果"
 [node name="EffectValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
+size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
