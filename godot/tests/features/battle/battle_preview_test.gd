@@ -11,7 +11,7 @@ func before_test() -> void:
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
-# 驗證選取技能並懸停敵人時，會顯示目標資源、各結果剩餘 HP 與目標單位金色外環。
+# 驗證選取技能並懸停敵人時，會分開顯示資源與正常傷害，並呈現血條及目標金色外環。
 func test_attack_hit_preview() -> void:
 	prepare_case(battle)
 	push_control_click(battle.ui.action_buttons.aimed_shot)
@@ -39,7 +39,8 @@ func test_attack_hit_preview() -> void:
 	assert_int(int(preview.dodge_remaining_hp)).is_equal(20)
 	assert_bool(battle.ui.attack_preview_panel.visible).override_failure_message("命中預覽面板應顯示").is_true()
 	assert_str(battle.ui.attack_preview_title.text).override_failure_message("面板標題應顯示目標名稱").contains(preview.target)
-	assert_str(battle.ui.attack_preview_resources.text).override_failure_message("面板應在目標資源旁顯示普通命中傷害").is_equal("HP 20 / 20｜MP 1｜傷害 5")
+	assert_str(battle.ui.attack_preview_resources.text).override_failure_message("資源列應只顯示目標 HP 與 MP").is_equal("HP 20 / 20｜MP 1")
+	assert_str(battle.ui.attack_preview_damage.text).override_failure_message("獨立傷害欄應顯示正常命中傷害").is_equal("傷害 5")
 	assert_str(battle.ui.attack_preview_result_labels.hit.text).override_failure_message("左欄應顯示命中機率").is_equal("命中 70%")
 	assert_str(battle.ui.attack_preview_result_labels.block.text).override_failure_message("中欄應顯示格擋機率").is_equal("格擋 20%")
 	assert_bool(battle.ui.attack_preview_health_segments.hit.visible).is_true()
@@ -68,12 +69,14 @@ func test_attack_hit_preview() -> void:
 	assert_bool(battle.ui.attack_preview_panel.visible).override_failure_message("離開敵人後應隱藏命中預覽面板").is_false()
 	assert_bool(attack_preview_ring.visible).override_failure_message("離開敵人後應隱藏金色單位外環").is_false()
 
-# 驗證預覽更新時血條依綠黃紅深色排列、連續填滿容器，且實際寬度符合 HP 比例。
+# 驗證血條比例、殘餘 HP 端點與傷害靠右排版，且數字靠近時錯開、分開後收合。
 func test_attack_preview_visual_variations() -> void:
 	prepare_case(battle)
 	# 本案例直接呈現 UI 資料，停用地圖輸入以免視窗滑鼠事件清除預覽。
 	battle.world.set_process_unhandled_input(false)
 	var test_data := [
+		# 殘餘 HP 端點靠近時，放大的數字應上下錯開而不重疊。
+		{"name": "數字靠近", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 80, "target_max_hp": 100, "hit_remaining_hp": 75, "block_remaining_hp": 77, "expected_segments": [75, 2, 3, 20]},
 		# 四色同時出現時，確認顏色順序與相鄰分段連續。
 		{"name": "四色血條", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
 		# 格擋完全吸收傷害時，黃色代表減免傷害且紅色隱藏。
@@ -109,7 +112,13 @@ func test_attack_preview_visual_variations() -> void:
 		battle.ui.present_attack_preview(preview, Vector2.ZERO)
 		await runner.simulate_frames(2)
 		var expected_segments: Array = test_case.expected_segments
-		assert_str(battle.ui.attack_preview_resources.text).override_failure_message("%s：資源列應顯示普通命中傷害" % test_case.name).is_equal("HP %d / %d｜MP 1｜傷害 %d" % [test_case.target_hp, test_case.target_max_hp, test_case.damage])
+		assert_str(battle.ui.attack_preview_resources.text).override_failure_message("%s：資源列應只顯示 HP 與 MP" % test_case.name).is_equal("HP %d / %d｜MP 1" % [test_case.target_hp, test_case.target_max_hp])
+		assert_str(battle.ui.attack_preview_damage.text).override_failure_message("%s：獨立傷害欄應顯示正常命中傷害" % test_case.name).is_equal("傷害 %d" % test_case.damage)
+		var resource_rect: Rect2 = battle.ui.attack_preview_resources.get_global_rect()
+		var damage_rect: Rect2 = battle.ui.attack_preview_damage.get_global_rect()
+		var resource_row: Control = battle.ui.attack_preview_damage.get_parent()
+		assert_bool(damage_rect.position.x - resource_rect.end.x >= 24.0).override_failure_message("%s：傷害應與資源保留間距" % test_case.name).is_true()
+		assert_bool(absf(damage_rect.end.x - resource_row.get_global_rect().end.x) <= 1.0).override_failure_message("%s：傷害欄應靠資源列右端" % test_case.name).is_true()
 		assert_str(battle.ui.attack_preview_result_labels.hit.text).override_failure_message("%s：命中率應正確顯示" % test_case.name).is_equal("命中 %d%%" % test_case.hit)
 		assert_str(battle.ui.attack_preview_result_labels.block.text).override_failure_message("%s：格擋率應正確顯示" % test_case.name).is_equal("格擋 %d%%" % test_case.block)
 		assert_int(int(preview.dodge_chance)).override_failure_message("%s：閃避率應保留在預覽資料" % test_case.name).is_equal(test_case.dodge)
@@ -119,6 +128,36 @@ func test_attack_preview_visual_variations() -> void:
 			assert_bool(segment.visible).override_failure_message("%s：血條分段可見性應正確" % test_case.name).is_equal(expected_value > 0)
 			assert_float(segment.size_flags_stretch_ratio).override_failure_message("%s：血條分段比例應正確" % test_case.name).is_equal(float(expected_value))
 		assert_attack_preview_bar(test_case.name, expected_segments, test_case.target_max_hp)
+		assert_attack_preview_markers(test_case)
+
+# 檢查真實排版中的數字內容、刻線位置、邊界與單排／雙排高度。
+func assert_attack_preview_markers(test_case: Dictionary) -> void:
+	var markers: Control = battle.ui.attack_preview_markers
+	var hit_label: Label = markers.get_node("Hit")
+	var block_label: Label = markers.get_node("Block")
+	var hit_tick: Control = markers.get_node("HitTick")
+	var block_tick: Control = markers.get_node("BlockTick")
+	var bar: Control = battle.ui.get_node("Root/AttackPreview/Margin/Content/HealthImpactBar")
+	assert_str(hit_label.text).is_equal(str(test_case.hit_remaining_hp))
+	assert_str(block_label.text).is_equal(str(test_case.block_remaining_hp))
+	assert_int(hit_label.get_theme_font_size("font_size")).is_equal(20)
+	assert_int(block_label.get_theme_font_size("font_size")).is_equal(20)
+	var has_distinct_block: bool = test_case.block > 0 and test_case.block_remaining_hp != test_case.hit_remaining_hp
+	assert_bool(block_label.visible).override_failure_message("%s：無格擋或血量相同時只顯示一個數字" % test_case.name).is_equal(has_distinct_block)
+	assert_bool(block_tick.visible).is_equal(has_distinct_block)
+	assert_bool(markers.get_rect().size.x >= hit_label.get_rect().end.x and hit_label.position.x >= 0.0).override_failure_message("%s：命中數字不得超出左右邊界" % test_case.name).is_true()
+	var expected_hit_x: float = bar.size.x * float(test_case.hit_remaining_hp) / float(test_case.target_max_hp)
+	assert_bool(absf(hit_tick.position.x - expected_hit_x) <= 1.0).override_failure_message("%s：命中刻線應對準殘餘 HP 端點" % test_case.name).is_true()
+	if has_distinct_block:
+		var expected_block_x: float = bar.size.x * float(test_case.block_remaining_hp) / float(test_case.target_max_hp)
+		assert_bool(absf(block_tick.position.x - expected_block_x) <= 1.0).override_failure_message("%s：格擋刻線應對準殘餘 HP 端點" % test_case.name).is_true()
+		assert_bool(hit_label.get_rect().intersects(block_label.get_rect())).override_failure_message("%s：殘餘 HP 數字不得重疊" % test_case.name).is_false()
+		assert_bool(block_label.position.x >= 0.0 and block_label.get_rect().end.x <= markers.size.x).is_true()
+	if test_case.name == "數字靠近":
+		assert_float(hit_label.position.y).override_failure_message("靠近時命中數字應移到下一排").is_greater(block_label.position.y)
+	elif not has_distinct_block or test_case.name in ["四色血條", "恢復四色血條"]:
+		assert_float(hit_label.position.y).override_failure_message("分開後應恢復單排").is_equal(0.0)
+	assert_bool(is_equal_approx(markers.custom_minimum_size.y, hit_label.get_rect().end.y)).override_failure_message("%s：標記區不得預留空白排" % test_case.name).is_true()
 
 func assert_attack_preview_bar(case_name: String, expected_segments: Array, max_hp: int) -> void:
 	var bar: HBoxContainer = battle.ui.get_node("Root/AttackPreview/Margin/Content/HealthImpactBar")

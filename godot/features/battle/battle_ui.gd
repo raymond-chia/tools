@@ -42,7 +42,9 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var move_cost_label: Label = $Root/MoveCostPopup/Label
 @onready var attack_preview_panel: PanelContainer = $Root/AttackPreview
 @onready var attack_preview_title: Label = $Root/AttackPreview/Margin/Content/Title
-@onready var attack_preview_resources: Label = $Root/AttackPreview/Margin/Content/Resources
+@onready var attack_preview_resources: Label = $Root/AttackPreview/Margin/Content/ResourceRow/Resources
+@onready var attack_preview_damage: Label = $Root/AttackPreview/Margin/Content/ResourceRow/Damage
+@onready var attack_preview_markers: Control = $Root/AttackPreview/Margin/Content/HealthMarkers
 @onready var attack_preview_result_labels := {
 	"hit": $Root/AttackPreview/Margin/Content/Details/Hit,
 	"block": $Root/AttackPreview/Margin/Content/Details/Block,
@@ -74,6 +76,7 @@ var presented_skills: Array = []
 var hovered_skill_id := ""
 
 func _ready() -> void:
+	$Root/AttackPreview/Margin/Content/HealthImpactBar.resized.connect(func(): position_health_markers.call_deferred())
 	$Root/InfoPanel/Margin/Content/Header.gui_input.connect(_on_header_gui_input)
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
 	battle_log.meta_clicked.connect(_on_battle_log_meta_clicked)
@@ -162,11 +165,14 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 	if preview.is_empty():
 		return
 	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % preview.target
-	attack_preview_resources.text = tr("ATTACK_PREVIEW_RESOURCES") % [int(preview.target_hp), int(preview.target_max_hp), int(preview.target_mana), int(preview.hit_damage)]
+	attack_preview_resources.text = tr("ATTACK_PREVIEW_RESOURCES") % [int(preview.target_hp), int(preview.target_max_hp), int(preview.target_mana)]
+	attack_preview_damage.text = tr("ATTACK_PREVIEW_DAMAGE") % int(preview.hit_damage)
 	var has_block := int(preview.block_chance) > 0
 	attack_preview_result_labels.hit.text = tr("ATTACK_PREVIEW_HIT") % int(preview.hit_chance)
 	attack_preview_result_labels.block.text = tr("ATTACK_PREVIEW_BLOCK") % int(preview.block_chance)
 	attack_preview_critical.text = tr("ATTACK_PREVIEW_CRITICAL") % int(preview.critical_chance)
+	attack_preview_markers.get_node("Hit").text = str(int(preview.hit_remaining_hp))
+	attack_preview_markers.get_node("Block").text = str(int(preview.block_remaining_hp))
 	var damage_start_hp := int(preview.block_remaining_hp) if has_block else int(preview.hit_remaining_hp)
 	var segment_values := {
 		"hit": int(preview.hit_remaining_hp),
@@ -180,6 +186,30 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 		segment.size_flags_stretch_ratio = float(segment_values[result])
 	attack_preview_panel.reset_size()
 	position_pointer_popup(attack_preview_panel, pointer_position, ATTACK_PREVIEW_OFFSET)
+	position_health_markers.call_deferred()
+
+func position_health_markers() -> void:
+	var hit_label: Label = attack_preview_markers.get_node("Hit")
+	var block_label: Label = attack_preview_markers.get_node("Block")
+	var hit_segment: ColorRect = attack_preview_health_segments.hit
+	var block_segment: ColorRect = attack_preview_health_segments.block
+	var hit_end := hit_segment.position.x + hit_segment.size.x if hit_segment.visible else 0.0
+	var block_end := block_segment.position.x + block_segment.size.x
+	hit_label.reset_size()
+	block_label.reset_size()
+	hit_label.position = Vector2(clampf(hit_end - hit_label.size.x / 2.0, 0.0, attack_preview_markers.size.x - hit_label.size.x), 0.0)
+	block_label.visible = block_segment.visible
+	block_label.position = Vector2(clampf(block_end - block_label.size.x / 2.0, 0.0, attack_preview_markers.size.x - block_label.size.x), 0.0)
+	var marker_height := maxf(hit_label.size.y, block_label.size.y)
+	if block_label.visible and hit_label.get_rect().grow(4.0).intersects(block_label.get_rect()):
+		hit_label.position.y = block_label.size.y + 2.0
+		marker_height = hit_label.position.y + hit_label.size.y
+	attack_preview_markers.custom_minimum_size.y = marker_height
+	attack_preview_markers.get_node("HitTick").position = Vector2(hit_end, marker_height)
+	attack_preview_markers.get_node("HitTick").size.y = 6.0
+	attack_preview_markers.get_node("BlockTick").position = Vector2(block_end, marker_height)
+	attack_preview_markers.get_node("BlockTick").size.y = 6.0
+	attack_preview_markers.get_node("BlockTick").visible = block_label.visible
 
 func position_pointer_popup(popup: Control, pointer_position: Vector2, pointer_offset: Vector2) -> void:
 	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
