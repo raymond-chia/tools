@@ -11,6 +11,143 @@ func before_test() -> void:
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
+# 驗證選取技能並懸停敵人時，會顯示目標資源、各結果剩餘 HP 與目標單位金色外環。
+func test_attack_hit_preview() -> void:
+	prepare_case(battle)
+	push_control_click(battle.ui.action_buttons.aimed_shot)
+	push_mouse_motion(battle.world, battle.world.cell_center(Vector2i(3, 1)))
+
+	var preview: Dictionary = battle.world.attack_preview
+	var target_node: Node2D = battle.world.unit_nodes[battle.world.attack_preview_unit.id]
+	var attack_preview_ring: Sprite2D = target_node.get_node("AttackPreviewRing")
+	var target_base: Sprite2D = target_node.get_node("Base")
+	assert_bool(preview.is_empty()).override_failure_message("懸停可攻擊敵人時應取得命中預覽").is_false()
+	assert_int(int(preview.dodge_chance)).is_equal(10)
+	assert_int(int(preview.block_chance)).is_equal(20)
+	assert_int(int(preview.hit_chance)).is_equal(70)
+	assert_int(int(preview.critical_chance)).is_equal(5)
+	assert_int(int(preview.dodge_damage)).is_zero()
+	assert_int(int(preview.block_damage)).is_equal(3)
+	assert_int(int(preview.critical_block_damage)).is_equal(6)
+	assert_int(int(preview.hit_damage)).is_equal(5)
+	assert_int(int(preview.critical_hit_damage)).is_equal(10)
+	assert_int(int(preview.target_hp)).is_equal(20)
+	assert_int(int(preview.target_max_hp)).is_equal(20)
+	assert_int(int(preview.target_mana)).is_equal(1)
+	assert_int(int(preview.hit_remaining_hp)).is_equal(15)
+	assert_int(int(preview.block_remaining_hp)).is_equal(17)
+	assert_int(int(preview.dodge_remaining_hp)).is_equal(20)
+	assert_bool(battle.ui.attack_preview_panel.visible).override_failure_message("命中預覽面板應顯示").is_true()
+	assert_str(battle.ui.attack_preview_title.text).override_failure_message("面板標題應顯示目標名稱").contains(preview.target)
+	assert_str(battle.ui.attack_preview_resources.text).override_failure_message("面板應在目標資源旁顯示普通命中傷害").is_equal("HP 20 / 20｜MP 1｜傷害 5")
+	assert_str(battle.ui.attack_preview_result_labels.hit.text).override_failure_message("左欄應顯示命中機率").is_equal("命中 70%")
+	assert_str(battle.ui.attack_preview_result_labels.block.text).override_failure_message("中欄應顯示格擋機率").is_equal("格擋 20%")
+	assert_bool(battle.ui.attack_preview_health_segments.hit.visible).is_true()
+	assert_bool(battle.ui.attack_preview_health_segments.block.visible).is_true()
+	assert_bool(battle.ui.attack_preview_health_segments.damage.visible).is_true()
+	assert_bool(battle.ui.attack_preview_health_segments.missing.visible).is_false()
+	assert_float(battle.ui.attack_preview_health_segments.hit.size_flags_stretch_ratio).is_equal(15.0)
+	assert_float(battle.ui.attack_preview_health_segments.block.size_flags_stretch_ratio).is_equal(2.0)
+	assert_float(battle.ui.attack_preview_health_segments.damage.size_flags_stretch_ratio).is_equal(3.0)
+	assert_float(battle.ui.attack_preview_health_segments.missing.size_flags_stretch_ratio).is_zero()
+	assert_str(battle.ui.attack_preview_critical.text).override_failure_message("爆擊率應獨立標註且不重複顯示兩倍傷害").is_equal("暴擊率 5%")
+	assert_int(battle.ui.get_node("Root/LogPanel").z_index).override_failure_message("戰鬥紀錄應位於 inspect panel 下層").is_less(battle.ui.info_panel.z_index)
+	assert_int(battle.ui.attack_preview_panel.z_index).override_failure_message("瞄準預覽應位於 inspect panel 上層").is_greater(battle.ui.info_panel.z_index)
+	assert_bool(attack_preview_ring.visible).override_failure_message("命中預覽目標應顯示金色單位外環").is_true()
+	assert_bool(attack_preview_ring.scale.x > target_base.scale.x and attack_preview_ring.scale.y > target_base.scale.y).override_failure_message("金色預覽環應套在單位原光環外側").is_true()
+	assert_bool(attack_preview_ring.modulate == Color("ffe17a")).override_failure_message("命中預覽目標外環應為金色").is_true()
+	var zero_block_preview := preview.duplicate(true)
+	zero_block_preview.block_chance = 0
+	battle.ui.present_attack_preview(zero_block_preview, Vector2.ZERO)
+	assert_str(battle.ui.attack_preview_result_labels.block.text).override_failure_message("格擋率為零時中間欄仍應顯示格擋機率").is_equal("格擋 0%")
+	assert_bool(battle.ui.attack_preview_health_segments.block.visible).override_failure_message("沒有格擋結果時不應顯示黃色情境").is_false()
+	assert_float(battle.ui.attack_preview_health_segments.block.size_flags_stretch_ratio).override_failure_message("沒有格擋結果時黃色情境應歸零").is_zero()
+
+	push_mouse_motion(battle.world, battle.world.cell_center(Vector2i(2, 2)))
+	assert_dict(battle.world.attack_preview).override_failure_message("離開敵人後應清除命中預覽").is_empty()
+	assert_bool(battle.ui.attack_preview_panel.visible).override_failure_message("離開敵人後應隱藏命中預覽面板").is_false()
+	assert_bool(attack_preview_ring.visible).override_failure_message("離開敵人後應隱藏金色單位外環").is_false()
+
+# 驗證預覽更新時血條依綠黃紅深色排列、連續填滿容器，且實際寬度符合 HP 比例。
+func test_attack_preview_visual_variations() -> void:
+	prepare_case(battle)
+	# 本案例直接呈現 UI 資料，停用地圖輸入以免視窗滑鼠事件清除預覽。
+	battle.world.set_process_unhandled_input(false)
+	var test_data := [
+		# 四色同時出現時，確認顏色順序與相鄰分段連續。
+		{"name": "四色血條", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
+		# 格擋完全吸收傷害時，黃色代表減免傷害且紅色隱藏。
+		{"name": "完全格擋", "dodge": 15, "block": 50, "hit": 35, "damage": 2, "target_hp": 20, "target_max_hp": 20, "hit_remaining_hp": 18, "block_remaining_hp": 20, "expected_segments": [18, 2, 0, 0]},
+		# 沒有格擋率時，紅色顯示普通命中傷害且深色保留既有損失生命。
+		{"name": "無格擋的高傷害命中", "dodge": 40, "block": 0, "hit": 60, "damage": 7, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 9, "block_remaining_hp": 9, "expected_segments": [9, 0, 7, 4]},
+		# 致死命中隱藏綠色後，黃色仍須從血條左端開始。
+		{"name": "致死命中", "dodge": 10, "block": 20, "hit": 70, "damage": 16, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 0, "block_remaining_hp": 2, "expected_segments": [0, 2, 14, 4]},
+		# 滿血且無傷害時，只剩綠色且仍填滿整條血條。
+		{"name": "只有綠色", "dodge": 10, "block": 20, "hit": 70, "damage": 0, "target_hp": 20, "target_max_hp": 20, "hit_remaining_hp": 20, "block_remaining_hp": 20, "expected_segments": [20, 0, 0, 0]},
+		# 已隱藏的分段重新出現時，排版與比例仍須正確。
+		{"name": "恢復四色血條", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
+	]
+	for test_case in test_data:
+		var preview := {
+			"target": "測試目標",
+			"target_hp": test_case.target_hp,
+			"target_max_hp": test_case.target_max_hp,
+			"target_mana": 1,
+			"hit_remaining_hp": test_case.hit_remaining_hp,
+			"block_remaining_hp": test_case.block_remaining_hp,
+			"dodge_remaining_hp": test_case.target_hp,
+			"dodge_chance": test_case.dodge,
+			"block_chance": test_case.block,
+			"hit_chance": test_case.hit,
+			"critical_chance": 5,
+			"dodge_damage": 0,
+			"block_damage": test_case.target_hp - test_case.block_remaining_hp,
+			"critical_block_damage": 0,
+			"hit_damage": test_case.damage,
+			"critical_hit_damage": test_case.damage * 2,
+		}
+		battle.ui.present_attack_preview(preview, Vector2.ZERO)
+		await runner.simulate_frames(2)
+		var expected_segments: Array = test_case.expected_segments
+		assert_str(battle.ui.attack_preview_resources.text).override_failure_message("%s：資源列應顯示普通命中傷害" % test_case.name).is_equal("HP %d / %d｜MP 1｜傷害 %d" % [test_case.target_hp, test_case.target_max_hp, test_case.damage])
+		assert_str(battle.ui.attack_preview_result_labels.hit.text).override_failure_message("%s：命中率應正確顯示" % test_case.name).is_equal("命中 %d%%" % test_case.hit)
+		assert_str(battle.ui.attack_preview_result_labels.block.text).override_failure_message("%s：格擋率應正確顯示" % test_case.name).is_equal("格擋 %d%%" % test_case.block)
+		assert_int(int(preview.dodge_chance)).override_failure_message("%s：閃避率應保留在預覽資料" % test_case.name).is_equal(test_case.dodge)
+		for index in battle.ui.attack_preview_health_segments.size():
+			var segment: ColorRect = battle.ui.attack_preview_health_segments.values()[index]
+			var expected_value: int = expected_segments[index]
+			assert_bool(segment.visible).override_failure_message("%s：血條分段可見性應正確" % test_case.name).is_equal(expected_value > 0)
+			assert_float(segment.size_flags_stretch_ratio).override_failure_message("%s：血條分段比例應正確" % test_case.name).is_equal(float(expected_value))
+		assert_attack_preview_bar(test_case.name, expected_segments, test_case.target_max_hp)
+
+func assert_attack_preview_bar(case_name: String, expected_segments: Array, max_hp: int) -> void:
+	var bar: HBoxContainer = battle.ui.get_node("Root/AttackPreview/Margin/Content/HealthImpactBar")
+	var segment_names := ["HitRemaining", "BlockSaved", "Damage", "Missing"]
+	var expected_colors := [Color(0.384, 0.824, 0.486, 1), Color(0.94902, 0.721569, 0.294118, 1), Color(0.937255, 0.32549, 0.313725, 1), Color(0.055, 0.067, 0.086, 1)]
+	var bar_rect := bar.get_global_rect()
+	assert_bool(bar.is_visible_in_tree()).override_failure_message("%s：血條應實際可見" % case_name).is_true()
+	assert_float(bar_rect.size.x).override_failure_message("%s：血條應有實際寬度" % case_name).is_greater(0.0)
+	assert_float(bar_rect.size.y).override_failure_message("%s：血條應有實際高度" % case_name).is_greater(0.0)
+	var next_x := bar_rect.position.x
+	for index in segment_names.size():
+		var segment: ColorRect = bar.get_node(segment_names[index])
+		var message := "%s／%s" % [case_name, segment_names[index]]
+		assert_int(segment.get_index()).override_failure_message("%s：節點順序應為綠黃紅深色" % message).is_equal(index)
+		assert_bool(segment.color.is_equal_approx(expected_colors[index])).override_failure_message("%s：分段顏色應正確" % message).is_true()
+		assert_bool(segment.modulate == Color.WHITE and segment.self_modulate == Color.WHITE).override_failure_message("%s：分段不應被額外染色" % message).is_true()
+		assert_bool(segment.is_visible_in_tree()).override_failure_message("%s：零長度分段應隱藏" % message).is_equal(expected_segments[index] > 0)
+		if expected_segments[index] == 0:
+			continue
+		var rect := segment.get_global_rect()
+		assert_bool(is_equal_approx(rect.position.x, next_x)).override_failure_message("%s：分段應接續前段，不得有空隙或重疊" % message).is_true()
+		assert_bool(is_equal_approx(rect.position.y, bar_rect.position.y) and is_equal_approx(rect.size.y, bar_rect.size.y)).override_failure_message("%s：分段應對齊並填滿血條高度" % message).is_true()
+		assert_float(rect.size.x).override_failure_message("%s：可見分段應有實際寬度" % message).is_greater(0.0)
+		# 容器以像素分配寬度，比例檢查容許一個像素的取整誤差。
+		var expected_width := bar_rect.size.x * float(expected_segments[index]) / float(max_hp)
+		assert_bool(absf(rect.size.x - expected_width) <= 1.0).override_failure_message("%s：實際寬度應符合 HP 比例" % message).is_true()
+		next_x = rect.end.x
+	assert_bool(is_equal_approx(next_x, bar_rect.end.x)).override_failure_message("%s：最後分段應抵達血條右端" % case_name).is_true()
+
 # 驗證四種技能的施放範圍邊界正確，且選擇技能會隱藏移動範圍並清除路徑預覽。
 func test_skill_range_preview() -> void:
 	var test_data := [
@@ -107,12 +244,17 @@ func test_hovered_tile_movement_total_cost() -> void:
 	if skill_mode_popup != null:
 		assert_bool(skill_mode_popup.visible).override_failure_message("技能模式不應顯示移動總消耗").is_false()
 
-# 驗證游標靠近邊界時，移動消耗浮動面板會移至指定象限且不超出 viewport。
-func test_movement_cost_popup_uses_available_quadrant() -> void:
+# 驗證游標靠近邊界時，游標浮動面板會共用象限選擇並保持在 viewport 內。
+func test_pointer_popups_use_available_quadrant() -> void:
 	prepare_case(battle)
-	var popup: Control = battle.ui.get_node_or_null("Root/MoveCostPopup")
-	assert_that(popup).override_failure_message("應建立游標旁的移動消耗浮動面板").is_not_null()
-	if popup == null:
+	push_control_click(battle.ui.action_buttons.aimed_shot)
+	push_mouse_motion(battle.world, battle.world.cell_center(Vector2i(3, 1)))
+	var preview: Dictionary = battle.world.attack_preview
+	var move_cost_popup: Control = battle.ui.get_node_or_null("Root/MoveCostPopup")
+	var attack_popup: Control = battle.ui.get_node_or_null("Root/AttackPreview")
+	assert_that(move_cost_popup).override_failure_message("應建立游標旁的移動消耗浮動面板").is_not_null()
+	assert_that(attack_popup).override_failure_message("應建立游標旁的瞄準預覽浮動面板").is_not_null()
+	if move_cost_popup == null or attack_popup == null:
 		return
 	var viewport_rect: Rect2 = battle.get_viewport().get_visible_rect()
 	var test_data := [
@@ -125,11 +267,13 @@ func test_movement_cost_popup_uses_available_quadrant() -> void:
 	for test_case in test_data:
 		var pointer_position: Vector2 = test_case.pointer
 		battle.ui.present_move_cost(4, pointer_position)
+		battle.ui.present_attack_preview(preview, pointer_position)
 
-		assert_bool(popup.visible).override_failure_message("%s：邊界附近仍應顯示移動總消耗" % test_case.name).is_true()
-		assert_bool((popup.position.x - pointer_position.x) * test_case.horizontal > 0.0).override_failure_message("%s：浮動面板的左右位置應正確" % test_case.name).is_true()
-		assert_bool((popup.position.y - pointer_position.y) * test_case.vertical > 0.0).override_failure_message("%s：浮動面板的上下位置應正確" % test_case.name).is_true()
-		assert_bool(viewport_rect.encloses(popup.get_rect())).override_failure_message("%s：浮動面板應完整位於 viewport 可視範圍內" % test_case.name).is_true()
+		for popup in [move_cost_popup, attack_popup]:
+			assert_bool(popup.visible).override_failure_message("%s：邊界附近仍應顯示游標浮動面板" % test_case.name).is_true()
+			assert_bool((popup.position.x - pointer_position.x) * test_case.horizontal > 0.0).override_failure_message("%s：浮動面板的左右位置應正確" % test_case.name).is_true()
+			assert_bool((popup.position.y - pointer_position.y) * test_case.vertical > 0.0).override_failure_message("%s：浮動面板的上下位置應正確" % test_case.name).is_true()
+			assert_bool(viewport_rect.encloses(popup.get_rect())).override_failure_message("%s：浮動面板應完整位於 viewport 可視範圍內" % test_case.name).is_true()
 
 # 驗證單次點擊可抵達第一段或第二段目的地，並正確扣除兩段移動力。
 func test_single_click_movement() -> void:

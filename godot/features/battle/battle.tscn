@@ -49,6 +49,84 @@ text = "移動消耗 0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="AttackPreview" type="PanelContainer" parent="UI/Root"]
+visible = false
+z_index = 1
+custom_minimum_size = Vector2(390, 0)
+layout_mode = 0
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/Root/AttackPreview"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="Content" type="VBoxContainer" parent="UI/Root/AttackPreview/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="UI/Root/AttackPreview/Margin/Content"]
+layout_mode = 2
+theme_type_variation = &"HeadingLabel"
+text = "攻擊預覽"
+
+[node name="Resources" type="Label" parent="UI/Root/AttackPreview/Margin/Content"]
+layout_mode = 2
+text = "HP 0 / 0｜MP 1"
+
+[node name="Details" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Hit" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "命中 0%"
+horizontal_alignment = 1
+
+[node name="Block" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "格擋 0%"
+horizontal_alignment = 1
+
+[node name="Critical" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "暴擊率 0%"
+horizontal_alignment = 1
+
+[node name="HealthImpactBar" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content"]
+custom_minimum_size = Vector2(0, 18)
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="HitRemaining" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.384, 0.824, 0.486, 1)
+
+[node name="BlockSaved" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.94902, 0.721569, 0.294118, 1)
+
+[node name="Damage" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.937255, 0.32549, 0.313725, 1)
+
+[node name="Missing" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.055, 0.067, 0.086, 1)
+
 [node name="HoveredSkill" type="PanelContainer" parent="UI/Root"]
 visible = false
 layout_mode = 1
@@ -88,6 +166,7 @@ text = "技能說明"
 autowrap_mode = 2
 
 [node name="LogPanel" type="Panel" parent="UI/Root"]
+z_index = -1
 layout_mode = 1
 anchors_preset = 9
 anchor_left = 1.0

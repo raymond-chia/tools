@@ -14,3 +14,8 @@ SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_DAMAGE_BONUS,傷害加值：%+d,Damage modifier: %+d
 SKILL_EFFECT_PUSH,效果：命中後推動目標 1 格；受阻時造成碰撞傷害,Effect: Pushes the target 1 tile on hit; obstruction deals collision damage
 SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +1，持續 %d 回合,Effect: Creates corrosive mire; movement cost +1 for %d rounds
+ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
+ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d｜傷害 %d,HP %d / %d | MP %d | Damage %d
+ATTACK_PREVIEW_HIT,命中 %d%%,Hit %d%%
+ATTACK_PREVIEW_BLOCK,格擋 %d%%,Block %d%%
+ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%

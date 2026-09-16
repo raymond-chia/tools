@@ -61,6 +61,29 @@ impl TacticalGame {
             None => error("尚未載入定義".into()),
         }
     }
+    #[func]
+    fn preview_attack(
+        &self,
+        actor: GString,
+        target: GString,
+        x: i32,
+        y: i32,
+        skill: GString,
+    ) -> GString {
+        let lock = self.game.lock().unwrap();
+        match lock.as_ref() {
+            Some(game) => match game.preview_attack(
+                &actor.to_string(),
+                &target.to_string(),
+                GridPos { x, y },
+                &skill.to_string(),
+            ) {
+                Ok(preview) => GString::from(&serde_json::to_string(&preview).unwrap()),
+                Err(e) => error(e),
+            },
+            None => error("尚未載入定義".into()),
+        }
+    }
 }
 fn error(message: String) -> GString {
     GString::from(&serde_json::json!({"error":message}).to_string())

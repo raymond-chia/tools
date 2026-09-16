@@ -3,6 +3,8 @@ use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
 mod gameplay_config;
+#[cfg(test)]
+mod tests;
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
@@ -312,6 +314,25 @@ pub struct MovePreview {
     pub total_cost: u32,
 }
 #[derive(Serialize)]
+pub struct AttackPreview {
+    pub target: String,
+    pub target_hp: i32,
+    pub target_max_hp: i32,
+    pub target_mana: i32,
+    pub hit_remaining_hp: i32,
+    pub block_remaining_hp: i32,
+    pub dodge_remaining_hp: i32,
+    pub dodge_chance: u32,
+    pub block_chance: u32,
+    pub hit_chance: u32,
+    pub critical_chance: u32,
+    pub dodge_damage: i32,
+    pub block_damage: i32,
+    pub critical_block_damage: i32,
+    pub hit_damage: i32,
+    pub critical_hit_damage: i32,
+}
+#[derive(Serialize)]
 pub struct UnitView {
     pub id: String,
     pub name: String,
@@ -542,6 +563,84 @@ impl Game {
             second,
             interrupted,
             total_cost: spent,
+        })
+    }
+    pub fn preview_attack(
+        &self,
+        actor: &str,
+        target: &str,
+        target_cell: GridPos,
+        skill_id: &str,
+    ) -> Result<AttackPreview, String> {
+        self.ensure(actor)?;
+        if !can_use_skill(self.world.resource::<Turn>()) {
+            return Err("目前不能使用 Skill".into());
+        }
+        let attacker = self.entity(actor).ok_or("找不到攻擊者")?;
+        let target_entity = self.entity(target).ok_or("找不到目標")?;
+        let skill = self
+            .world
+            .resource::<Skills>()
+            .0
+            .get(skill_id)
+            .ok_or_else(|| format!("unknown skill: {skill_id}"))?;
+        validate_attack_target(&self.world, attacker, target_entity, target_cell, skill)?;
+
+        let attacker_fighter = self.world.get::<Fighter>(attacker).unwrap();
+        let target_fighter = self.world.get::<Fighter>(target_entity).unwrap();
+        let target_hp = self.world.get::<Hp>(target_entity).unwrap();
+        let modifier = if skill.ranged {
+            attacker_fighter.ranged
+        } else {
+            attacker_fighter.melee
+        } + skill.attack_bonus;
+        let dodge_target =
+            gameplay_config::BASE_DEFENSE + effective_dodge(&self.world, target_entity);
+        let block_target = dodge_target + effective_block(&self.world, target_entity);
+        let mut dodge_count = 0;
+        let mut block_count = 0;
+        let mut hit_count = 0;
+        for natural in 1..=gameplay_config::ATTACK_DIE_SIDES as i32 {
+            match attack_result(natural, modifier, dodge_target, block_target) {
+                AttackResult::Dodge => dodge_count += 1,
+                AttackResult::Block => block_count += 1,
+                AttackResult::Hit => hit_count += 1,
+            }
+        }
+        let hit_damage = attacker_fighter.damage + skill.damage_bonus;
+        let block_damage = attack_damage(
+            hit_damage,
+            AttackResult::Block,
+            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            false,
+        );
+        Ok(AttackPreview {
+            target: target_fighter.name.clone(),
+            target_hp: target_hp.current,
+            target_max_hp: target_hp.maximum,
+            target_mana: gameplay_config::DEFAULT_MANA,
+            hit_remaining_hp: (target_hp.current - hit_damage).max(0),
+            block_remaining_hp: (target_hp.current - block_damage).max(0),
+            dodge_remaining_hp: target_hp.current,
+            dodge_chance: dodge_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
+            block_chance: block_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
+            hit_chance: hit_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
+            critical_chance: 100 / gameplay_config::ATTACK_DIE_SIDES,
+            dodge_damage: 0,
+            block_damage,
+            critical_block_damage: attack_damage(
+                hit_damage,
+                AttackResult::Block,
+                gameplay_config::BLOCK_DAMAGE_REDUCTION,
+                true,
+            ),
+            hit_damage,
+            critical_hit_damage: attack_damage(
+                hit_damage,
+                AttackResult::Hit,
+                gameplay_config::BLOCK_DAMAGE_REDUCTION,
+                true,
+            ),
         })
     }
     fn start(&mut self) -> Result<(), String> {
@@ -793,49 +892,9 @@ impl Game {
         }
         let ae = self.entity(a).ok_or("找不到攻擊者")?;
         let te = self.entity(target).ok_or("找不到目標")?;
-        if self.world.get::<Downed>(te).is_some() {
-            return Err("目標已倒下".into());
-        }
-        let target_position = self.world.get::<Pos>(te).unwrap().0;
-        let target_footprint = *self.world.get::<Footprint>(te).unwrap();
-        if !overlap(
-            target_cell,
-            Footprint {
-                width: 1,
-                height: 1,
-            },
-            target_position,
-            target_footprint,
-        ) {
-            return Err("所選格不屬於目標".into());
-        }
+        validate_attack_target(&self.world, ae, te, target_cell, &skill)?;
         let af = self.world.get::<Fighter>(ae).unwrap().clone();
         let tf = self.world.get::<Fighter>(te).unwrap().clone();
-        if !af.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
-            return Err("此角色不能使用這個技能".into());
-        }
-        if af.team == tf.team {
-            return Err("不能攻擊友軍".into());
-        }
-        let range = skill.range.unwrap_or(if skill.ranged {
-            af.range
-        } else {
-            gameplay_config::DEFAULT_MELEE_RANGE
-        });
-        let attacker_position = self.world.get::<Pos>(ae).unwrap().0;
-        let attacker_footprint = *self.world.get::<Footprint>(ae).unwrap();
-        if footprint_distance(
-            attacker_position,
-            attacker_footprint,
-            target_cell,
-            Footprint {
-                width: 1,
-                height: 1,
-            },
-        ) > range
-        {
-            return Err("目標超出射程".into());
-        }
         let modifier = if skill.ranged { af.ranged } else { af.melee } + skill.attack_bonus;
         let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
@@ -845,26 +904,27 @@ impl Game {
             modifier,
             gameplay_config::BASE_DEFENSE + target_dodge,
         );
-        let result = if matches!(degree, RollDegree::Failure | RollDegree::CriticalFailure) {
-            AttackResult::Dodge
-        } else if natural + modifier < gameplay_config::BASE_DEFENSE + target_dodge + target_block {
-            AttackResult::Block
-        } else {
-            AttackResult::Hit
-        };
-        let base = af.damage
-            + skill.damage_bonus
-            + if degree == RollDegree::CriticalSuccess {
-                af.damage
-            } else {
-                0
-            };
-        let damage = match result {
-            AttackResult::Dodge => 0,
-            AttackResult::Block => (base - gameplay_config::BLOCK_DAMAGE_REDUCTION).max(0),
-            AttackResult::Hit => base,
-        };
-        let damage_reduction = base - damage;
+        let result = attack_result(
+            natural,
+            modifier,
+            gameplay_config::BASE_DEFENSE + target_dodge,
+            gameplay_config::BASE_DEFENSE + target_dodge + target_block,
+        );
+        let base_damage = af.damage + skill.damage_bonus;
+        let critical = degree == RollDegree::CriticalSuccess;
+        let raw_damage = attack_damage(
+            base_damage,
+            AttackResult::Hit,
+            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            critical,
+        );
+        let damage = attack_damage(
+            base_damage,
+            result,
+            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            critical,
+        );
+        let damage_reduction = raw_damage - damage;
         let mut downed = false;
         if damage > 0 {
             let mut hp = self.world.get_mut::<Hp>(te).unwrap();
@@ -925,8 +985,8 @@ impl Game {
                 dodge_target: gameplay_config::BASE_DEFENSE + target_dodge,
                 block_target: gameplay_config::BASE_DEFENSE + target_dodge + target_block,
                 result,
-                critical: degree == RollDegree::CriticalSuccess,
-                raw_damage: base,
+                critical,
+                raw_damage,
                 damage_reduction,
                 damage,
                 remaining_hp,
@@ -1269,6 +1329,92 @@ impl Game {
         }
     }
 }
+fn validate_attack_target(
+    world: &World,
+    attacker: Entity,
+    target: Entity,
+    target_cell: GridPos,
+    skill: &SkillDef,
+) -> Result<(), String> {
+    if world.get::<Downed>(target).is_some() {
+        return Err("目標已倒下".into());
+    }
+    let target_position = world.get::<Pos>(target).unwrap().0;
+    let target_footprint = *world.get::<Footprint>(target).unwrap();
+    if !overlap(
+        target_cell,
+        Footprint {
+            width: 1,
+            height: 1,
+        },
+        target_position,
+        target_footprint,
+    ) {
+        return Err("所選格不屬於目標".into());
+    }
+    let attacker_fighter = world.get::<Fighter>(attacker).unwrap();
+    let target_fighter = world.get::<Fighter>(target).unwrap();
+    if !attacker_fighter.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
+        return Err("此角色不能使用這個技能".into());
+    }
+    if attacker_fighter.team == target_fighter.team {
+        return Err("不能攻擊友軍".into());
+    }
+    let range = skill.range.unwrap_or(if skill.ranged {
+        attacker_fighter.range
+    } else {
+        gameplay_config::DEFAULT_MELEE_RANGE
+    });
+    let attacker_position = world.get::<Pos>(attacker).unwrap().0;
+    let attacker_footprint = *world.get::<Footprint>(attacker).unwrap();
+    if footprint_distance(
+        attacker_position,
+        attacker_footprint,
+        target_cell,
+        Footprint {
+            width: 1,
+            height: 1,
+        },
+    ) > range
+    {
+        return Err("目標超出射程".into());
+    }
+    Ok(())
+}
+
+fn attack_result(
+    natural: i32,
+    modifier: i32,
+    dodge_target: i32,
+    block_target: i32,
+) -> AttackResult {
+    let roll_degree = degree(natural, modifier, dodge_target);
+    if matches!(
+        roll_degree,
+        RollDegree::Failure | RollDegree::CriticalFailure
+    ) {
+        AttackResult::Dodge
+    } else if natural + modifier < block_target {
+        AttackResult::Block
+    } else {
+        AttackResult::Hit
+    }
+}
+
+fn attack_damage(
+    base_damage: i32,
+    result: AttackResult,
+    block_damage_reduction: i32,
+    critical: bool,
+) -> i32 {
+    let result_damage = match result {
+        AttackResult::Dodge => 0,
+        AttackResult::Block => (base_damage - block_damage_reduction).max(0),
+        AttackResult::Hit => base_damage,
+    };
+    result_damage * if critical { 2 } else { 1 }
+}
+
 fn can_use_skill(turn: &Turn) -> bool {
     matches!(turn.phase, Phase::Ready | Phase::Moving) && turn.moves == 0
         || matches!(turn.phase, Phase::AfterMove) && turn.moves == 1

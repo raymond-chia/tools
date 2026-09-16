@@ -9,6 +9,7 @@ const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
 const CRITICAL_STYLE := "[color=#ff7043]暴擊[/color]"
 const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
+const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 
 @onready var root: Control = $Root
 @onready var info_panel: Panel = $Root/InfoPanel
@@ -39,6 +40,20 @@ const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 @onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
 @onready var move_cost_popup: PanelContainer = $Root/MoveCostPopup
 @onready var move_cost_label: Label = $Root/MoveCostPopup/Label
+@onready var attack_preview_panel: PanelContainer = $Root/AttackPreview
+@onready var attack_preview_title: Label = $Root/AttackPreview/Margin/Content/Title
+@onready var attack_preview_resources: Label = $Root/AttackPreview/Margin/Content/Resources
+@onready var attack_preview_result_labels := {
+	"hit": $Root/AttackPreview/Margin/Content/Details/Hit,
+	"block": $Root/AttackPreview/Margin/Content/Details/Block,
+}
+@onready var attack_preview_health_segments := {
+	"hit": $Root/AttackPreview/Margin/Content/HealthImpactBar/HitRemaining,
+	"block": $Root/AttackPreview/Margin/Content/HealthImpactBar/BlockSaved,
+	"damage": $Root/AttackPreview/Margin/Content/HealthImpactBar/Damage,
+	"missing": $Root/AttackPreview/Margin/Content/HealthImpactBar/Missing,
+}
+@onready var attack_preview_critical: Label = $Root/AttackPreview/Margin/Content/Details/Critical
 @onready var hovered_skill_card: PanelContainer = $Root/HoveredSkill
 @onready var hovered_skill_title: Label = $Root/HoveredSkill/Margin/Content/Title
 @onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
@@ -140,14 +155,41 @@ func present_move_cost(total_cost, pointer_position: Vector2) -> void:
 		return
 	move_cost_label.text = "移動消耗 %d" % int(total_cost)
 	move_cost_popup.reset_size()
+	position_pointer_popup(move_cost_popup, pointer_position, MOVE_COST_POPUP_OFFSET)
+
+func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> void:
+	attack_preview_panel.visible = not preview.is_empty()
+	if preview.is_empty():
+		return
+	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % preview.target
+	attack_preview_resources.text = tr("ATTACK_PREVIEW_RESOURCES") % [int(preview.target_hp), int(preview.target_max_hp), int(preview.target_mana), int(preview.hit_damage)]
+	var has_block := int(preview.block_chance) > 0
+	attack_preview_result_labels.hit.text = tr("ATTACK_PREVIEW_HIT") % int(preview.hit_chance)
+	attack_preview_result_labels.block.text = tr("ATTACK_PREVIEW_BLOCK") % int(preview.block_chance)
+	attack_preview_critical.text = tr("ATTACK_PREVIEW_CRITICAL") % int(preview.critical_chance)
+	var damage_start_hp := int(preview.block_remaining_hp) if has_block else int(preview.hit_remaining_hp)
+	var segment_values := {
+		"hit": int(preview.hit_remaining_hp),
+		"block": int(preview.block_remaining_hp) - int(preview.hit_remaining_hp) if has_block else 0,
+		"damage": int(preview.target_hp) - damage_start_hp,
+		"missing": int(preview.target_max_hp) - int(preview.target_hp),
+	}
+	for result in attack_preview_health_segments:
+		var segment: ColorRect = attack_preview_health_segments[result]
+		segment.visible = segment_values[result] > 0
+		segment.size_flags_stretch_ratio = float(segment_values[result])
+	attack_preview_panel.reset_size()
+	position_pointer_popup(attack_preview_panel, pointer_position, ATTACK_PREVIEW_OFFSET)
+
+func position_pointer_popup(popup: Control, pointer_position: Vector2, pointer_offset: Vector2) -> void:
 	var viewport_rect: Rect2 = get_viewport().get_visible_rect()
-	var popup_position: Vector2 = pointer_position + MOVE_COST_POPUP_OFFSET
-	if popup_position.x + move_cost_popup.size.x > viewport_rect.end.x:
-		popup_position.x = pointer_position.x - MOVE_COST_POPUP_OFFSET.x - move_cost_popup.size.x
-	if popup_position.y + move_cost_popup.size.y > viewport_rect.end.y:
-		popup_position.y = pointer_position.y - MOVE_COST_POPUP_OFFSET.y - move_cost_popup.size.y
-	var maximum_position: Vector2 = viewport_rect.end - move_cost_popup.size
-	move_cost_popup.position = popup_position.clamp(viewport_rect.position, maximum_position)
+	var popup_position: Vector2 = pointer_position + pointer_offset
+	if popup_position.x + popup.size.x > viewport_rect.end.x:
+		popup_position.x = pointer_position.x - pointer_offset.x - popup.size.x
+	if popup_position.y + popup.size.y > viewport_rect.end.y:
+		popup_position.y = pointer_position.y - pointer_offset.y - popup.size.y
+	var maximum_position: Vector2 = viewport_rect.end - popup.size
+	popup.position = popup_position.clamp(viewport_rect.position, maximum_position)
 
 func format_log(events: Array) -> String:
 	var entries: Array[String] = []

@@ -3,6 +3,7 @@ extends Node2D
 signal primary_clicked(unit_id: String, cell: Vector2i)
 signal inspection_clicked(unit_id: String, cell: Vector2i)
 signal move_preview_changed(total_cost, pointer_position: Vector2)
+signal attack_preview_changed(preview: Dictionary, pointer_position: Vector2)
 
 const TILE_SIZE := Vector2i(64, 32)
 const UI_FONT := preload("res://assets/fonts/NotoSans.ttf")
@@ -25,6 +26,8 @@ var first_move_path: Array = []
 var second_move_path: Array = []
 var move_preview_interrupted := false
 var move_preview_total_cost = null
+var attack_preview: Dictionary = {}
+var attack_preview_unit: Dictionary = {}
 var core
 var unit_nodes := {}
 
@@ -53,6 +56,7 @@ func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_cor
 	core = game_core
 	sync_unit_sprites()
 	update_move_preview()
+	update_attack_preview()
 	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -65,9 +69,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if hovered != next_hovered:
 			hovered = next_hovered
 			update_move_preview()
+			update_attack_preview()
 			queue_redraw()
 		else:
 			move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
+			attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
 	if not local_event is InputEventMouseButton or not local_event.pressed:
 		return
@@ -100,6 +106,7 @@ func sync_unit_sprites() -> void:
 		if not unit_nodes.has(unit.id):
 			node = Node2D.new()
 			node.name = unit.id
+			var new_attack_preview_ring := Sprite2D.new(); new_attack_preview_ring.name = "AttackPreviewRing"; new_attack_preview_ring.texture = BASE_ART; new_attack_preview_ring.visible = false; node.add_child(new_attack_preview_ring)
 			var selection := Sprite2D.new(); selection.name = "Selection"; selection.texture = BASE_ART; node.add_child(selection)
 			var base := Sprite2D.new(); base.name = "Base"; base.texture = BASE_ART; node.add_child(base)
 			var body := Sprite2D.new(); body.name = "Body"; body.texture = UNIT_ART[unit.id]; node.add_child(body)
@@ -112,6 +119,9 @@ func sync_unit_sprites() -> void:
 		node.z_index = int(center.y)
 		var large: bool = unit.width > 1
 		var base_scale := Vector2(1.7, 1.7) if large else Vector2.ONE
+		var attack_preview_ring: Sprite2D = node.get_node("AttackPreviewRing")
+		attack_preview_ring.scale = base_scale * BattleVisualConfig.ATTACK_PREVIEW_RING_SCALE
+		attack_preview_ring.modulate = Color("ffe17a")
 		var selection: Sprite2D = node.get_node("Selection")
 		selection.scale = base_scale * 1.18
 		selection.modulate = Color("ffe17a")
@@ -181,6 +191,32 @@ func update_move_preview() -> void:
 	move_preview_total_cost = preview.total_cost
 	move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 
+func update_attack_preview() -> void:
+	attack_preview = {}
+	attack_preview_unit = {}
+	sync_attack_preview_ring()
+	if pending_action == "" or pending_action_targets_cell() or core == null or state.is_empty() or state.turn.actor == null:
+		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
+		return
+	var target := unit_at_cell(hovered)
+	if target.is_empty():
+		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
+		return
+	var value = JSON.parse_string(core.preview_attack(state.turn.actor, target.id, hovered.x, hovered.y, pending_action))
+	if value.has("error"):
+		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
+		return
+	attack_preview = value
+	attack_preview_unit = target
+	sync_attack_preview_ring()
+	attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
+
+func sync_attack_preview_ring() -> void:
+	var preview_unit_id: String = "" if attack_preview_unit.is_empty() else attack_preview_unit.id
+	for unit_id in unit_nodes:
+		var attack_preview_ring: Sprite2D = unit_nodes[unit_id].get_node("AttackPreviewRing")
+		attack_preview_ring.visible = unit_id == preview_unit_id
+
 func diamond(center: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([center+Vector2(0,-16),center+Vector2(32,0),center+Vector2(0,16),center+Vector2(-32,0)])
 
@@ -208,6 +244,10 @@ func _draw() -> void:
 		for cell in state.second_reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.04,0.15,0.42,0.38),Color(0.12,0.32,0.72,0.9))
 		for cell in state.reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.12,0.48,0.95,0.3),Color(0.3,0.68,1.0,0.92))
 	for cell in selected_skill_range(): draw_marker(Vector2i(cell.x,cell.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)
+	if not attack_preview_unit.is_empty():
+		for y in range(int(attack_preview_unit.y), int(attack_preview_unit.y + attack_preview_unit.height)):
+			for x in range(int(attack_preview_unit.x), int(attack_preview_unit.x + attack_preview_unit.width)):
+				draw_marker(Vector2i(x, y),Color(1.0,0.72,0.08,0.42),Color("ffe17a"),4.0)
 	var first_path_color := Color("ff5b4d") if move_preview_interrupted else Color("9debff")
 	var second_path_color := Color("ff5b4d") if move_preview_interrupted else Color("78a8ff")
 	draw_move_path(first_move_path,first_path_color); draw_move_path(second_move_path,second_path_color)
