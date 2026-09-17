@@ -133,6 +133,7 @@ struct SkillDef {
     damage_bonus: i32,
     range: Option<i32>,
     duration: Option<u32>,
+    heal_amount: Option<i32>,
     #[serde(default)]
     effect: SkillEffect,
 }
@@ -143,6 +144,7 @@ enum SkillEffect {
     Attack,
     Push,
     Mire,
+    Heal,
 }
 #[derive(Deserialize)]
 struct MapDef {
@@ -270,6 +272,16 @@ pub enum CombatLogEvent {
         skill: String,
         terrain: String,
     },
+    Healing {
+        actor: String,
+        actor_team: Team,
+        skill: String,
+        target: String,
+        target_team: Team,
+        healing: i32,
+        remaining_hp: i32,
+        max_hp: i32,
+    },
     StatusApplied {
         target: String,
         target_team: Team,
@@ -312,6 +324,22 @@ pub struct MovePreview {
     pub second: Vec<GridPos>,
     pub interrupted: bool,
     pub total_cost: u32,
+}
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum SkillPreview {
+    Attack(AttackPreview),
+    Healing(HealingPreview),
+}
+#[derive(Serialize)]
+pub struct HealingPreview {
+    pub target: String,
+    pub target_hp: i32,
+    pub target_max_hp: i32,
+    pub target_mana: i32,
+    pub healing: i32,
+    pub remaining_hp: i32,
+    pub missing_hp: i32,
 }
 #[derive(Serialize)]
 pub struct AttackPreview {
@@ -429,6 +457,11 @@ impl Game {
         w.insert_resource(ResultState(Outcome::Ongoing));
         let mut skills = HashMap::new();
         for skill in d.skills {
+            if skill.effect == SkillEffect::Heal
+                && !matches!(skill.heal_amount, Some(amount) if amount > 0)
+            {
+                return Err(format!("{} 的 heal_amount 必須大於 0", skill.id));
+            }
             if skill.duration == Some(0) {
                 return Err(format!("{} 的 duration 必須大於 0", skill.id));
             }
@@ -565,13 +598,13 @@ impl Game {
             total_cost: spent,
         })
     }
-    pub fn preview_attack(
+    pub fn preview_skill(
         &self,
         actor: &str,
         target: &str,
         target_cell: GridPos,
         skill_id: &str,
-    ) -> Result<AttackPreview, String> {
+    ) -> Result<SkillPreview, String> {
         self.ensure(actor)?;
         if !can_use_skill(self.world.resource::<Turn>()) {
             return Err("目前不能使用 Skill".into());
@@ -584,7 +617,14 @@ impl Game {
             .0
             .get(skill_id)
             .ok_or_else(|| format!("unknown skill: {skill_id}"))?;
-        validate_attack_target(&self.world, attacker, target_entity, target_cell, skill)?;
+        validate_unit_skill_target(&self.world, attacker, target_entity, target_cell, skill)?;
+        if skill.effect == SkillEffect::Heal {
+            return Ok(SkillPreview::Healing(healing_preview(
+                &self.world,
+                target_entity,
+                skill,
+            )));
+        }
 
         let attacker_fighter = self.world.get::<Fighter>(attacker).unwrap();
         let target_fighter = self.world.get::<Fighter>(target_entity).unwrap();
@@ -614,7 +654,7 @@ impl Game {
             gameplay_config::BLOCK_DAMAGE_REDUCTION,
             false,
         );
-        Ok(AttackPreview {
+        Ok(SkillPreview::Attack(AttackPreview {
             target: target_fighter.name.clone(),
             target_hp: target_hp.current,
             target_max_hp: target_hp.maximum,
@@ -641,7 +681,7 @@ impl Game {
                 gameplay_config::BLOCK_DAMAGE_REDUCTION,
                 true,
             ),
-        })
+        }))
     }
     fn start(&mut self) -> Result<(), String> {
         if self.world.resource::<Encounter>().round > 0 {
@@ -892,9 +932,36 @@ impl Game {
         }
         let ae = self.entity(a).ok_or("找不到攻擊者")?;
         let te = self.entity(target).ok_or("找不到目標")?;
-        validate_attack_target(&self.world, ae, te, target_cell, &skill)?;
+        validate_unit_skill_target(&self.world, ae, te, target_cell, &skill)?;
         let af = self.world.get::<Fighter>(ae).unwrap().clone();
         let tf = self.world.get::<Fighter>(te).unwrap().clone();
+        if skill.effect == SkillEffect::Heal {
+            let HealingPreview {
+                target: target_name,
+                target_hp: _,
+                target_max_hp: max_hp,
+                target_mana: _,
+                healing,
+                remaining_hp,
+                missing_hp: _,
+            } = healing_preview(&self.world, te, &skill);
+            self.world.get_mut::<Hp>(te).unwrap().current = remaining_hp;
+            self.world
+                .resource_mut::<Log>()
+                .0
+                .push(CombatLogEvent::Healing {
+                    actor: af.name,
+                    actor_team: af.team,
+                    skill: skill.name,
+                    target: target_name,
+                    target_team: tf.team,
+                    healing,
+                    remaining_hp,
+                    max_hp,
+                });
+            self.finish();
+            return Ok(());
+        }
         let modifier = if skill.ranged { af.ranged } else { af.melee } + skill.attack_bonus;
         let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
@@ -1329,7 +1396,21 @@ impl Game {
         }
     }
 }
-fn validate_attack_target(
+fn healing_preview(world: &World, target: Entity, skill: &SkillDef) -> HealingPreview {
+    let hp = world.get::<Hp>(target).unwrap();
+    let remaining_hp = (hp.current + skill.heal_amount.unwrap()).min(hp.maximum);
+    HealingPreview {
+        target: world.get::<Fighter>(target).unwrap().name.clone(),
+        target_hp: hp.current,
+        target_max_hp: hp.maximum,
+        target_mana: gameplay_config::DEFAULT_MANA,
+        healing: remaining_hp - hp.current,
+        remaining_hp,
+        missing_hp: hp.maximum - remaining_hp,
+    }
+}
+
+fn validate_unit_skill_target(
     world: &World,
     attacker: Entity,
     target: Entity,
@@ -1357,7 +1438,11 @@ fn validate_attack_target(
     if !attacker_fighter.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
         return Err("此角色不能使用這個技能".into());
     }
-    if attacker_fighter.team == target_fighter.team {
+    if skill.effect == SkillEffect::Heal {
+        if attacker_fighter.team != target_fighter.team {
+            return Err("只能治療自己或友軍".into());
+        }
+    } else if attacker_fighter.team == target_fighter.team {
         return Err("不能攻擊友軍".into());
     }
     let range = skill.range.unwrap_or(if skill.ranged {
@@ -1720,7 +1805,8 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
                         },
                     );
                     if cell_distance <= range
-                        && (skill.effect == SkillEffect::Mire || cell_distance > 0)
+                        && (matches!(skill.effect, SkillEffect::Mire | SkillEffect::Heal)
+                            || cell_distance > 0)
                     {
                         cells.push(cell);
                     }
@@ -1742,6 +1828,8 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
 fn skill_details(skill: &SkillDef, range: i32) -> Vec<SkillDetailView> {
     let target_key = if skill.effect == SkillEffect::Mire {
         "SKILL_TARGET_CELL"
+    } else if skill.effect == SkillEffect::Heal {
+        "SKILL_TARGET_ALLY"
     } else {
         "SKILL_TARGET_ENEMY"
     };
@@ -1755,7 +1843,7 @@ fn skill_details(skill: &SkillDef, range: i32) -> Vec<SkillDetailView> {
         skill_detail(type_key, None),
         skill_detail("SKILL_RANGE", Some(range)),
     ];
-    if skill.effect != SkillEffect::Mire {
+    if matches!(skill.effect, SkillEffect::Attack | SkillEffect::Push) {
         details.push(skill_detail("SKILL_ATTACK_BONUS", Some(skill.attack_bonus)));
         details.push(skill_detail("SKILL_DAMAGE_BONUS", Some(skill.damage_bonus)));
     }
@@ -1766,6 +1854,7 @@ fn skill_details(skill: &SkillDef, range: i32) -> Vec<SkillDetailView> {
             "SKILL_EFFECT_MIRE",
             skill.duration.map(|duration| duration as i32),
         )),
+        SkillEffect::Heal => details.push(skill_detail("SKILL_EFFECT_HEAL", skill.heal_amount)),
     }
     details
 }

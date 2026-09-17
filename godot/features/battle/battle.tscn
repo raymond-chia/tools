@@ -170,6 +170,13 @@ size_flags_horizontal = 3
 mouse_filter = 2
 color = Color(0.055, 0.067, 0.086, 1)
 
+[node name="Healing" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+color = Color(0.25, 0.85, 0.85, 1)
+
 [node name="HoveredSkill" type="PanelContainer" parent="UI/Root"]
 visible = false
 layout_mode = 1
@@ -346,6 +353,12 @@ custom_minimum_size = Vector2(170, 62)
 layout_mode = 2
 toggle_mode = true
 text = "腐蝕泥沼"
+
+[node name="Heal" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
+custom_minimum_size = Vector2(170, 62)
+layout_mode = 2
+toggle_mode = true
+text = "治癒術"
 
 [node name="Status" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
 layout_mode = 2

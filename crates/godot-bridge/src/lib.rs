@@ -62,7 +62,7 @@ impl TacticalGame {
         }
     }
     #[func]
-    fn preview_attack(
+    fn preview_skill(
         &self,
         actor: GString,
         target: GString,
@@ -72,7 +72,7 @@ impl TacticalGame {
     ) -> GString {
         let lock = self.game.lock().unwrap();
         match lock.as_ref() {
-            Some(game) => match game.preview_attack(
+            Some(game) => match game.preview_skill(
                 &actor.to_string(),
                 &target.to_string(),
                 GridPos { x, y },

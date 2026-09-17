@@ -202,7 +202,7 @@ func update_attack_preview() -> void:
 	if target.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
-	var value = JSON.parse_string(core.preview_attack(state.turn.actor, target.id, hovered.x, hovered.y, pending_action))
+	var value = JSON.parse_string(core.preview_skill(state.turn.actor, target.id, hovered.x, hovered.y, pending_action))
 	if value.has("error"):
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return

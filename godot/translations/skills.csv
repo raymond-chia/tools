@@ -5,6 +5,11 @@ SKILL_POWER_STRIKE_NAME,強力一擊,Power Strike
 SKILL_AIMED_SHOT_NAME,瞄準射擊,Aimed Shot
 SKILL_SHIELD_BASH_NAME,盾牌推擊,Shield Bash
 SKILL_CORROSIVE_MIRE_NAME,腐蝕泥沼,Corrosive Mire
+SKILL_HEAL_NAME,治癒術,Heal
+SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
+SKILL_EFFECT_HEAL,效果：回復 %d HP,Effect: Restores %d HP
+HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
+HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
 SKILL_TARGET_CELL,目標：地面格,Target: Ground cell
 SKILL_TARGET_ENEMY,目標：敵方單位,Target: Enemy unit
 SKILL_TYPE_MELEE,類型：近戰,Type: Melee

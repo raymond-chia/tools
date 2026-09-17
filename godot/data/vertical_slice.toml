@@ -57,6 +57,15 @@ damage_bonus=0
 range=4
 effect="mire"
 duration=2
+[[skills]]
+id="heal"
+name="治癒術"
+ranged=true
+attack_bonus=0
+damage_bonus=0
+range=4
+effect="heal"
+heal_amount=5
 [[units]]
 id="aria"
 name="亞莉亞・劍士"
@@ -107,7 +116,7 @@ melee=1
 ranged=4
 damage=3
 range=4
-skills=["corrosive_mire"]
+skills=["corrosive_mire","heal"]
 [[units]]
 id="wolf_a"
 name="荒原狼 A"

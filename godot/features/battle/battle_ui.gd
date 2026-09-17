@@ -56,6 +56,7 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 	"missing": $Root/AttackPreview/Margin/Content/HealthImpactBar/Missing,
 }
 @onready var attack_preview_critical: Label = $Root/AttackPreview/Margin/Content/Details/Critical
+@onready var healing_preview_segment: ColorRect = $Root/AttackPreview/Margin/Content/HealthImpactBar/Healing
 @onready var hovered_skill_card: PanelContainer = $Root/HoveredSkill
 @onready var hovered_skill_title: Label = $Root/HoveredSkill/Margin/Content/Title
 @onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
@@ -66,6 +67,7 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 	"aimed_shot": $Root/BottomBar/Margin/Layout/Actions/Buttons/AimedShot,
 	"shield_bash": $Root/BottomBar/Margin/Layout/Actions/Buttons/ShieldBash,
 	"corrosive_mire": $Root/BottomBar/Margin/Layout/Actions/Buttons/CorrosiveMire,
+	"heal": $Root/BottomBar/Margin/Layout/Actions/Buttons/Heal,
 }
 var dragging_info_panel := false
 var drag_offset := Vector2.ZERO
@@ -164,8 +166,20 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 	attack_preview_panel.visible = not preview.is_empty()
 	if preview.is_empty():
 		return
-	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % preview.target
+	var is_healing := preview.has("healing")
+	healing_preview_segment.get_parent().move_child(healing_preview_segment, 1 if is_healing else 4)
+	healing_preview_segment.visible = is_healing and int(preview.healing) > 0
+	attack_preview_critical.get_parent().visible = not is_healing
 	attack_preview_resources.text = tr("ATTACK_PREVIEW_RESOURCES") % [int(preview.target_hp), int(preview.target_max_hp), int(preview.target_mana)]
+	if is_healing:
+		attack_preview_title.text = tr("HEAL_PREVIEW_TITLE") % preview.target
+		attack_preview_damage.text = tr("HEAL_PREVIEW_AMOUNT") % int(preview.healing)
+		attack_preview_markers.get_node("Hit").text = str(int(preview.remaining_hp))
+		present_health_segments({"hit": int(preview.target_hp), "block": 0, "damage": 0, "missing": int(preview.missing_hp)})
+		healing_preview_segment.size_flags_stretch_ratio = float(preview.healing)
+		layout_attack_preview(pointer_position)
+		return
+	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % preview.target
 	attack_preview_damage.text = tr("ATTACK_PREVIEW_DAMAGE") % int(preview.hit_damage)
 	var has_block := int(preview.block_chance) > 0
 	attack_preview_result_labels.hit.text = tr("ATTACK_PREVIEW_HIT") % int(preview.hit_chance)
@@ -180,10 +194,16 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 		"damage": int(preview.target_hp) - damage_start_hp,
 		"missing": int(preview.target_max_hp) - int(preview.target_hp),
 	}
+	present_health_segments(segment_values)
+	layout_attack_preview(pointer_position)
+
+func present_health_segments(segment_values: Dictionary) -> void:
 	for result in attack_preview_health_segments:
 		var segment: ColorRect = attack_preview_health_segments[result]
 		segment.visible = segment_values[result] > 0
 		segment.size_flags_stretch_ratio = float(segment_values[result])
+
+func layout_attack_preview(pointer_position: Vector2) -> void:
 	attack_preview_panel.reset_size()
 	position_pointer_popup(attack_preview_panel, pointer_position, ATTACK_PREVIEW_OFFSET)
 	position_health_markers.call_deferred()
@@ -194,6 +214,11 @@ func position_health_markers() -> void:
 	var hit_segment: ColorRect = attack_preview_health_segments.hit
 	var block_segment: ColorRect = attack_preview_health_segments.block
 	var hit_end := hit_segment.position.x + hit_segment.size.x if hit_segment.visible else 0.0
+	if healing_preview_segment.visible:
+		hit_end = healing_preview_segment.position.x + healing_preview_segment.size.x
+	var hit_color := healing_preview_segment.color if healing_preview_segment.visible else hit_segment.color
+	hit_label.add_theme_color_override("font_color", hit_color)
+	attack_preview_markers.get_node("HitTick").color = hit_color
 	var block_end := block_segment.position.x + block_segment.size.x
 	hit_label.reset_size()
 	block_label.reset_size()
@@ -233,9 +258,12 @@ func format_log(events: Array) -> String:
 				if expanded:
 					for initiative_roll in event.initiative_rolls:
 						entries.append("%s：D20 擲骰 %d + 先攻加值 %d = 先攻總值 %d" % [colored_unit(initiative_roll.unit, initiative_roll.team), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
-			"skill":
+			"skill", "healing":
 				entries.append("[url=log_entry:%d]%s %s 使用「%s」影響 %s[/url]" % [index, marker, colored_unit(event.actor, event.actor_team), event.skill, colored_unit(event.target, event.target_team)])
 				if not expanded:
+					continue
+				if event.type == "healing":
+					entries.append("結果：%s，回復 %d HP，HP %d/%d" % [RESULT_STYLE % "治療", int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 					continue
 				entries.append("D20 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.roll), int(event.attack_modifier), int(event.attack_total)])
 				entries.append("目標防禦：閃避門檻 %d／格擋門檻 %d" % [int(event.dodge_target), int(event.block_target)])
