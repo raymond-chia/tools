@@ -91,9 +91,19 @@ func _ready() -> void:
 	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 
 func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, inspected_skill_id: String, status_text: String) -> void:
-	status.text = status_text
+	present_status(status_text)
 	if snapshot.is_empty():
+		actor_name.text = "—"
+		movement.text = ""
+		info_panel.hide()
+		move_cost_popup.hide()
+		attack_preview_panel.hide()
+		hovered_skill_card.hide()
+		for button in action_buttons.values():
+			button.disabled = true
+		$Root/BottomBar/Margin/Layout/EndTurn.disabled = true
 		return
+	$Root/BottomBar/Margin/Layout/EndTurn.disabled = not snapshot.turn.can_end_turn
 	update_log_entry_states(snapshot.log)
 	presented_log_events = snapshot.log.duplicate(true)
 	var formatted_log := format_log(presented_log_events)
@@ -106,13 +116,13 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	if not hovered_skill_id.is_empty() and skill_with_id(presented_skills, hovered_skill_id).is_empty():
 		hovered_skill_id = ""
 	for action in action_buttons:
-		var available := skill_is_available(snapshot.skill_ranges, action)
-		action_buttons[action].visible = available
 		var skill := skill_with_id(presented_skills, action)
+		action_buttons[action].visible = not skill.is_empty()
+		action_buttons[action].disabled = true
 		if not skill.is_empty():
 			action_buttons[action].text = localized_skill_name(skill)
+			action_buttons[action].disabled = not skill.enabled
 		action_buttons[action].button_pressed = action == pending_action
-		action_buttons[action].disabled = not snapshot.turn.can_skill or not available
 	present_hovered_skill()
 	var inspected_skill := skill_with_id(presented_skills, inspected_skill_id)
 	if not inspected_skill.is_empty():
@@ -125,7 +135,8 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		inspected_skill_name.text = localized_skill_name(inspected_skill)
 		inspected_skill_description.text = localized_skill_details(inspected_skill)
 		return
-	var inspected := is_cell_on_board(snapshot, inspected_cell)
+	var terrain := terrain_at(snapshot.terrain_cells, inspected_cell)
+	var inspected := not terrain.is_empty()
 	info_panel.visible = inspected
 	if not inspected:
 		return
@@ -133,26 +144,25 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	inspected_skill_details.visible = false
 	terrain_title.visible = true
 	terrain_rows.visible = true
-	var unit := unit_at_cell(snapshot.units, inspected_cell)
+	var unit := unit_with_id(snapshot.units, terrain.unit_id)
 	unit_details.visible = not unit.is_empty()
 	if not unit.is_empty():
 		unit_name.text = unit.name
 		detail_values.team.text = "我方" if unit.team == "player" else "敵方"
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
-		detail_values.size.text = "大型" if unit.width > 1 or unit.height > 1 else "一般"
+		detail_values.size.text = "大型" if unit.large else "一般"
 		detail_values.movement.text = "%d" % int(unit.movement)
 		detail_values.initiative.text = "%d" % int(unit.initiative)
 		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
 		detail_values.attack.text = "%d / %d" % [int(unit.melee), int(unit.ranged)]
 		detail_values.power.text = "%d / %d" % [int(unit.damage), int(unit.range)]
-	var terrain := terrain_at(snapshot.terrain_cells, inspected_cell)
 	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面", "spikes": "地刺", "mire": "腐蝕泥沼"}
 	terrain_name.text = terrain_names[terrain.kind]
 	terrain_cost.text = "%d" % int(terrain.cost)
-	if terrain.kind == "mire":
-		terrain_effect.text = "閃避與格擋 −3，移動消耗 +1，剩餘 %d 回合" % int(terrain.remaining_rounds)
-	else:
-		terrain_effect.text = "造成 %d 點傷害" % int(terrain.damage) if terrain.damage > 0 else terrain.effect
+	terrain_effect.text = localized_detail(terrain.effect_description)
+
+func present_status(message: String) -> void:
+	status.text = message
 
 func present_move_cost(total_cost, pointer_position: Vector2) -> void:
 	move_cost_popup.visible = total_cost != null
@@ -175,26 +185,18 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 		attack_preview_title.text = tr("HEAL_PREVIEW_TITLE") % preview.target
 		attack_preview_damage.text = tr("HEAL_PREVIEW_AMOUNT") % int(preview.healing)
 		attack_preview_markers.get_node("Hit").text = str(int(preview.remaining_hp))
-		present_health_segments({"hit": int(preview.target_hp), "block": 0, "damage": 0, "missing": int(preview.missing_hp)})
+		present_health_segments(preview.health_segments)
 		healing_preview_segment.size_flags_stretch_ratio = float(preview.healing)
 		layout_attack_preview(pointer_position)
 		return
 	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % preview.target
 	attack_preview_damage.text = tr("ATTACK_PREVIEW_DAMAGE") % int(preview.hit_damage)
-	var has_block := int(preview.block_chance) > 0
 	attack_preview_result_labels.hit.text = tr("ATTACK_PREVIEW_HIT") % int(preview.hit_chance)
 	attack_preview_result_labels.block.text = tr("ATTACK_PREVIEW_BLOCK") % int(preview.block_chance)
 	attack_preview_critical.text = tr("ATTACK_PREVIEW_CRITICAL") % int(preview.critical_chance)
 	attack_preview_markers.get_node("Hit").text = str(int(preview.hit_remaining_hp))
 	attack_preview_markers.get_node("Block").text = str(int(preview.block_remaining_hp))
-	var damage_start_hp := int(preview.block_remaining_hp) if has_block else int(preview.hit_remaining_hp)
-	var segment_values := {
-		"hit": int(preview.hit_remaining_hp),
-		"block": int(preview.block_remaining_hp) - int(preview.hit_remaining_hp) if has_block else 0,
-		"damage": int(preview.target_hp) - damage_start_hp,
-		"missing": int(preview.target_max_hp) - int(preview.target_hp),
-	}
-	present_health_segments(segment_values)
+	present_health_segments(preview.health_segments)
 	layout_attack_preview(pointer_position)
 
 func present_health_segments(segment_values: Dictionary) -> void:
@@ -257,7 +259,7 @@ func format_log(events: Array) -> String:
 				entries.append("[url=log_entry:%d]%s ── 第 %d 輪 ──[/url]" % [index, marker, int(event.round)])
 				if expanded:
 					for initiative_roll in event.initiative_rolls:
-						entries.append("%s：D20 擲骰 %d + 先攻加值 %d = 先攻總值 %d" % [colored_unit(initiative_roll.unit, initiative_roll.team), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
+						entries.append("%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d" % [colored_unit(initiative_roll.unit, initiative_roll.team), int(initiative_roll.die_sides), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
 			"skill", "healing":
 				entries.append("[url=log_entry:%d]%s %s 使用「%s」影響 %s[/url]" % [index, marker, colored_unit(event.actor, event.actor_team), event.skill, colored_unit(event.target, event.target_team)])
 				if not expanded:
@@ -265,7 +267,7 @@ func format_log(events: Array) -> String:
 				if event.type == "healing":
 					entries.append("結果：%s，回復 %d HP，HP %d/%d" % [RESULT_STYLE % "治療", int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 					continue
-				entries.append("D20 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.roll), int(event.attack_modifier), int(event.attack_total)])
+				entries.append("D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.die_sides), int(event.roll), int(event.attack_modifier), int(event.attack_total)])
 				entries.append("目標防禦：閃避門檻 %d／格擋門檻 %d" % [int(event.dodge_target), int(event.block_target)])
 				var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
 				var result: String = RESULT_STYLE % result_names[event.result]
@@ -276,8 +278,8 @@ func format_log(events: Array) -> String:
 				else:
 					entries.append("結果：%s%s，%d 傷害，HP %d/%d" % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
 				if event.pushed:
-					entries.append("%s 被沿攻擊方向推動 1 格" % colored_unit(event.target, event.target_team))
-				elif int(event.collision_damage) > 0:
+					entries.append("%s 被沿攻擊方向推動 %d 格" % [colored_unit(event.target, event.target_team), int(event.push_distance)])
+				elif event.push_blocked:
 					entries.append("推擊受阻，%s 額外受到 %d 點碰撞傷害" % [colored_unit(event.target, event.target_team), int(event.collision_damage)])
 				if event.downed:
 					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
@@ -333,12 +335,6 @@ func _on_battle_log_gui_input(event: InputEvent) -> void:
 func colored_unit(unit: String, team: String) -> String:
 	return "[color=%s]%s[/color]" % [TEAM_COLORS[team], unit]
 
-func skill_is_available(skill_ranges: Array, skill_id: String) -> bool:
-	for skill_range in skill_ranges:
-		if skill_range.id == skill_id:
-			return true
-	return false
-
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)
 
@@ -369,11 +365,15 @@ func localized_skill_name(skill: Dictionary) -> String:
 func localized_skill_details(skill: Dictionary) -> String:
 	var lines: Array[String] = []
 	for detail in skill.details:
-		var line := tr(detail.text_key)
-		if detail.value != null:
-			line %= int(detail.value)
-		lines.append(line)
+		lines.append(localized_detail(detail))
 	return "\n".join(lines)
+
+func localized_detail(detail: Dictionary) -> String:
+	var text := tr(detail.text_key)
+	var values: Array[int] = []
+	for value in detail.arguments:
+		values.append(int(value))
+	return text if values.is_empty() else text % values
 
 func skill_with_id(skills: Array, skill_id: String) -> Dictionary:
 	for skill in skills:
@@ -398,17 +398,8 @@ func unit_with_id(units: Array, id) -> Dictionary:
 			return unit
 	return {}
 
-func unit_at_cell(units: Array, cell: Vector2i) -> Dictionary:
-	for unit in units:
-		if cell.x >= unit.x and cell.x < unit.x + unit.width and cell.y >= unit.y and cell.y < unit.y + unit.height:
-			return unit
-	return {}
-
 func terrain_at(terrains: Array, cell: Vector2i) -> Dictionary:
 	for terrain in terrains:
 		if terrain.x == cell.x and terrain.y == cell.y:
 			return terrain
 	return {}
-
-func is_cell_on_board(snapshot: Dictionary, cell: Vector2i) -> bool:
-	return cell.x >= 0 and cell.y >= 0 and cell.x < snapshot.width and cell.y < snapshot.height

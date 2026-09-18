@@ -17,8 +17,10 @@ SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
 SKILL_RANGE,射程：%d 格,Range: %d tiles
 SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_DAMAGE_BONUS,傷害加值：%+d,Damage modifier: %+d
-SKILL_EFFECT_PUSH,效果：命中後推動目標 1 格；受阻時造成碰撞傷害,Effect: Pushes the target 1 tile on hit; obstruction deals collision damage
-SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +1，持續 %d 回合,Effect: Creates corrosive mire; movement cost +1 for %d rounds
+SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時造成碰撞傷害,Effect: Pushes the target %d tile on hit; obstruction deals collision damage
+SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
+TERRAIN_EFFECT_MIRE,閃避與格擋 −%d，移動消耗 +%d，剩餘 %d 回合,"Dodge and block −%d, movement cost +%d, %d rounds remaining"
+TERRAIN_EFFECT_DAMAGE,造成 %d 點傷害,Deals %d damage
 ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
 ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d,HP %d / %d | MP %d
 ATTACK_PREVIEW_DAMAGE,傷害 %d,Damage %d

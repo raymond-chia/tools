@@ -29,6 +29,7 @@ var move_preview_total_cost = null
 var attack_preview: Dictionary = {}
 var attack_preview_unit: Dictionary = {}
 var core
+var read_core_response: Callable
 var unit_nodes := {}
 
 func setup_map(snapshot: Dictionary) -> void:
@@ -44,17 +45,17 @@ func setup_map(snapshot: Dictionary) -> void:
 	atlas.create_tile(Vector2i(1, 0))
 	tiles.add_source(atlas, 0)
 	ground.tile_set = tiles
-	for y in state.height:
-		for x in state.width:
-			var atlas_cell := Vector2i(1, 0) if state.costs[y * state.width + x] > 1 else Vector2i.ZERO
-			ground.set_cell(Vector2i(x, y), 0, atlas_cell)
+	for terrain in state.terrain_cells:
+		var atlas_cell := Vector2i(1, 0) if terrain.base_kind == "rough" else Vector2i.ZERO
+		ground.set_cell(Vector2i(terrain.x, terrain.y), 0, atlas_cell)
 
 func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core) -> void:
 	state = snapshot
 	pending_action = action
 	inspected_cell = inspected
 	core = game_core
-	sync_unit_sprites()
+	if not state.is_empty():
+		sync_unit_sprites()
 	update_move_preview()
 	update_attack_preview()
 	queue_redraw()
@@ -117,7 +118,7 @@ func sync_unit_sprites() -> void:
 		var center := footprint_center(unit)
 		node.position = center
 		node.z_index = int(center.y)
-		var large: bool = unit.width > 1
+		var large: bool = unit.large
 		var base_scale := Vector2(1.7, 1.7) if large else Vector2.ONE
 		var attack_preview_ring: Sprite2D = node.get_node("AttackPreviewRing")
 		attack_preview_ring.scale = base_scale * BattleVisualConfig.ATTACK_PREVIEW_RING_SCALE
@@ -139,22 +140,31 @@ func footprint_center(unit: Dictionary) -> Vector2:
 	return (first + last) * 0.5
 
 func unit_at_cell(cell: Vector2i) -> Dictionary:
+	var terrain := terrain_at_cell(cell)
+	if terrain.is_empty() or terrain.unit_id == null:
+		return {}
 	for unit in state.units:
-		if unit_occupies_cell(unit, cell):
+		if unit.id == terrain.unit_id:
 			return unit
 	return {}
 
 func unit_occupies_cell_id(unit_id: String, cell: Vector2i) -> bool:
-	for unit in state.units:
-		if unit.id == unit_id:
-			return unit_occupies_cell(unit, cell)
-	return false
+	var terrain := terrain_at_cell(cell)
+	return not terrain.is_empty() and terrain.unit_id == unit_id
 
 func unit_occupies_cell(unit: Dictionary, cell: Vector2i) -> bool:
-	return cell.x >= unit.x and cell.x < unit.x + unit.width and cell.y >= unit.y and cell.y < unit.y + unit.height
+	return unit_occupies_cell_id(unit.id, cell)
+
+func terrain_at_cell(cell: Vector2i) -> Dictionary:
+	if state.is_empty():
+		return {}
+	for terrain in state.terrain_cells:
+		if terrain.x == cell.x and terrain.y == cell.y:
+			return terrain
+	return {}
 
 func is_cell_on_board(cell: Vector2i) -> bool:
-	return not state.is_empty() and cell.x >= 0 and cell.y >= 0 and cell.x < state.width and cell.y < state.height
+	return not terrain_at_cell(cell).is_empty()
 
 func selected_skill_range() -> Array:
 	if pending_action == "":
@@ -181,8 +191,8 @@ func update_move_preview() -> void:
 	if pending_action != "" or core == null or state.is_empty() or state.turn.actor == null or not is_cell_on_board(hovered):
 		move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 		return
-	var preview = JSON.parse_string(core.preview_move(state.turn.actor, hovered.x, hovered.y))
-	if preview.has("error"):
+	var preview: Dictionary = read_core_response.call(core.preview_move(state.turn.actor, hovered.x, hovered.y), false)
+	if preview.is_empty():
 		move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 		return
 	first_move_path = preview.first
@@ -202,8 +212,8 @@ func update_attack_preview() -> void:
 	if target.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
-	var value = JSON.parse_string(core.preview_skill(state.turn.actor, target.id, hovered.x, hovered.y, pending_action))
-	if value.has("error"):
+	var value: Dictionary = read_core_response.call(core.preview_skill(state.turn.actor, target.id, hovered.x, hovered.y, pending_action), false)
+	if value.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
 	attack_preview = value
@@ -245,9 +255,8 @@ func _draw() -> void:
 		for cell in state.reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.12,0.48,0.95,0.3),Color(0.3,0.68,1.0,0.92))
 	for cell in selected_skill_range(): draw_marker(Vector2i(cell.x,cell.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)
 	if not attack_preview_unit.is_empty():
-		for y in range(int(attack_preview_unit.y), int(attack_preview_unit.y + attack_preview_unit.height)):
-			for x in range(int(attack_preview_unit.x), int(attack_preview_unit.x + attack_preview_unit.width)):
-				draw_marker(Vector2i(x, y),Color(1.0,0.72,0.08,0.42),Color("ffe17a"),4.0)
+		for cell in attack_preview_unit.occupied_cells:
+			draw_marker(Vector2i(cell.x, cell.y),Color(1.0,0.72,0.08,0.42),Color("ffe17a"),4.0)
 	var first_path_color := Color("ff5b4d") if move_preview_interrupted else Color("9debff")
 	var second_path_color := Color("ff5b4d") if move_preview_interrupted else Color("78a8ff")
 	draw_move_path(first_move_path,first_path_color); draw_move_path(second_move_path,second_path_color)
@@ -266,6 +275,6 @@ func _draw() -> void:
 			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,23,Color(0.2,0.55,0.28,0.76)); draw_circle(Vector2(-9,1),5,Color(0.58,0.86,0.38,0.72)); draw_set_transform(Vector2.ZERO)
 	for unit in state.units:
 		var center := footprint_center(unit)
-		var width: float = 96 if unit.width > 1 else 60
+		var width: float = 96 if unit.large else 60
 		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width,7)),Color("281e25"))
-		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width*float(unit.hp)/unit.max_hp,7)),Color("62d27c"))
+		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width*unit.health_ratio,7)),Color("62d27c"))

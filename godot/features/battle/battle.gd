@@ -15,6 +15,7 @@ func _ready() -> void:
 	world.inspection_clicked.connect(_on_inspection_clicked)
 	world.move_preview_changed.connect(ui.present_move_cost)
 	world.attack_preview_changed.connect(ui.present_attack_preview)
+	world.read_core_response = read_core_response
 	ui.action_selected.connect(select_action)
 	ui.end_turn_requested.connect(_on_end_turn_requested)
 	ui.inspection_closed.connect(_close_inspection)
@@ -22,24 +23,38 @@ func _ready() -> void:
 	core = TacticalGame.new()
 	var file := FileAccess.open("res://data/vertical_slice.toml", FileAccess.READ)
 	if file == null:
-		status = "無法讀取 TOML"
+		show_error("無法讀取 TOML：%s" % error_string(FileAccess.get_open_error()))
 		present()
 		return
-	state = JSON.parse_string(core.load_definition(file.get_as_text()))
+	state = read_core_response(core.load_definition(file.get_as_text()))
+	if state.is_empty():
+		present()
+		return
 	core.set_random_seed(randi())
 	world.setup_map(state)
 	send({"type": "start"})
 
 func send(command: Dictionary) -> bool:
-	var value = JSON.parse_string(core.dispatch(JSON.stringify(command)))
-	if value.has("error"):
-		status = value.error
+	var value := read_core_response(core.dispatch(JSON.stringify(command)))
+	if value.is_empty():
 		present()
 		return false
 	state = value
 	status = ""
 	present()
 	return true
+
+func read_core_response(response: String, report_error := true) -> Dictionary:
+	var value: Dictionary = JSON.parse_string(response)
+	if value.has("error"):
+		if report_error:
+			show_error(value.error)
+		return {}
+	return value
+
+func show_error(message: String) -> void:
+	status = message
+	ui.present_status(message)
 
 func present() -> void:
 	world.present(state, pending_action, inspected_cell, core)

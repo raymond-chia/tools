@@ -22,8 +22,11 @@ impl TacticalGame {
     fn load_definition(&self, text: GString) -> GString {
         match Game::from_toml(&text.to_string()) {
             Ok(mut game) => {
-                let out = serde_json::to_string(&game.snapshot()).unwrap();
-                *self.game.lock().unwrap() = Some(game);
+                let out = match serde_json::to_string(&game.snapshot()) {
+                    Ok(out) => out,
+                    Err(e) => return error(e.to_string()),
+                };
+                *self.game.lock().expect("核心鎖不應因先前的 panic 而中毒") = Some(game);
                 GString::from(&out)
             }
             Err(e) => error(e),
@@ -35,10 +38,10 @@ impl TacticalGame {
             Ok(v) => v,
             Err(e) => return error(e.to_string()),
         };
-        let mut lock = self.game.lock().unwrap();
+        let mut lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
         match lock.as_mut() {
             Some(game) => match game.command(command) {
-                Ok(s) => GString::from(&serde_json::to_string(&s).unwrap()),
+                Ok(s) => json_response(serde_json::to_string(&s)),
                 Err(e) => error(e),
             },
             None => error("尚未載入定義".into()),
@@ -46,16 +49,21 @@ impl TacticalGame {
     }
     #[func]
     fn set_random_seed(&self, seed: i64) {
-        if let Some(game) = self.game.lock().unwrap().as_mut() {
+        if let Some(game) = self
+            .game
+            .lock()
+            .expect("核心鎖不應因先前的 panic 而中毒")
+            .as_mut()
+        {
             game.set_random_seed(seed as u64);
         }
     }
     #[func]
     fn preview_move(&self, actor: GString, x: i32, y: i32) -> GString {
-        let lock = self.game.lock().unwrap();
+        let lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
         match lock.as_ref() {
             Some(game) => match game.preview_move(&actor.to_string(), GridPos { x, y }) {
-                Ok(preview) => GString::from(&serde_json::to_string(&preview).unwrap()),
+                Ok(preview) => json_response(serde_json::to_string(&preview)),
                 Err(e) => error(e),
             },
             None => error("尚未載入定義".into()),
@@ -70,7 +78,7 @@ impl TacticalGame {
         y: i32,
         skill: GString,
     ) -> GString {
-        let lock = self.game.lock().unwrap();
+        let lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
         match lock.as_ref() {
             Some(game) => match game.preview_skill(
                 &actor.to_string(),
@@ -78,11 +86,17 @@ impl TacticalGame {
                 GridPos { x, y },
                 &skill.to_string(),
             ) {
-                Ok(preview) => GString::from(&serde_json::to_string(&preview).unwrap()),
+                Ok(preview) => json_response(serde_json::to_string(&preview)),
                 Err(e) => error(e),
             },
             None => error("尚未載入定義".into()),
         }
+    }
+}
+fn json_response(result: Result<String, serde_json::Error>) -> GString {
+    match result {
+        Ok(json) => GString::from(&json),
+        Err(e) => error(e.to_string()),
     }
 }
 fn error(message: String) -> GString {
