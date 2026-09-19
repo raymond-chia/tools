@@ -43,6 +43,12 @@ pub enum AttackResult {
     Block,
     Hit,
 }
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AttackStat {
+    Melee,
+    Ranged,
+}
 #[derive(Component)]
 struct Id(String);
 #[derive(Component, Clone, Copy)]
@@ -252,6 +258,10 @@ pub enum CombatLogEvent {
         target_team: Team,
         roll: i32,
         die_sides: u32,
+        attack_stat: AttackStat,
+        attack_stat_modifier: i32,
+        skill_attack_modifier: i32,
+        flanking_modifier: i32,
         attack_modifier: i32,
         attack_total: i32,
         dodge_target: i32,
@@ -1050,7 +1060,13 @@ impl Game {
             self.finish();
             return Ok(());
         }
-        let modifier = attack_modifier(&self.world, ae, te, &skill);
+        let AttackModifierBreakdown {
+            attack_stat,
+            attack_stat_modifier,
+            skill_attack_modifier,
+            flanking_modifier,
+            total: modifier,
+        } = attack_modifier_breakdown(&self.world, ae, te, &skill);
         let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
         let target_block = effective_block(&self.world, te);
@@ -1157,6 +1173,10 @@ impl Game {
                 target_team: target_unit.team,
                 roll: natural,
                 die_sides: gameplay_config::ATTACK_DIE_SIDES,
+                attack_stat,
+                attack_stat_modifier,
+                skill_attack_modifier,
+                flanking_modifier,
                 attack_modifier: modifier,
                 attack_total: natural + modifier,
                 dodge_target: gameplay_config::BASE_DEFENSE + target_dodge,
@@ -1712,16 +1732,41 @@ enum TargetSide {
     Below,
 }
 
+struct AttackModifierBreakdown {
+    attack_stat: AttackStat,
+    attack_stat_modifier: i32,
+    skill_attack_modifier: i32,
+    flanking_modifier: i32,
+    total: i32,
+}
+
 fn attack_modifier(world: &World, attacker: Entity, target: Entity, skill: &SkillDef) -> i32 {
+    attack_modifier_breakdown(world, attacker, target, skill).total
+}
+
+fn attack_modifier_breakdown(
+    world: &World,
+    attacker: Entity,
+    target: Entity,
+    skill: &SkillDef,
+) -> AttackModifierBreakdown {
     let unit = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit");
-    let base_modifier = if skill.ranged {
-        unit.ranged
+    let (attack_stat, attack_stat_modifier) = if skill.ranged {
+        (AttackStat::Ranged, unit.ranged)
     } else {
-        unit.melee
-    } + skill.attack_bonus;
-    base_modifier + flanking_bonus(world, attacker, target, skill)
+        (AttackStat::Melee, unit.melee)
+    };
+    let skill_attack_modifier = skill.attack_bonus;
+    let flanking_modifier = flanking_bonus(world, attacker, target, skill);
+    AttackModifierBreakdown {
+        attack_stat,
+        attack_stat_modifier,
+        skill_attack_modifier,
+        flanking_modifier,
+        total: attack_stat_modifier + skill_attack_modifier + flanking_modifier,
+    }
 }
 
 fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &SkillDef) -> i32 {

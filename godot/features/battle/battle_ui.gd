@@ -267,6 +267,8 @@ func format_log(events: Array) -> String:
 				if event.type == "healing":
 					entries.append("結果：%s，回復 %d HP，HP %d/%d" % [RESULT_STYLE % "治療", int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 					continue
+				var attack_stat_names := {"melee": "近戰", "ranged": "遠程"}
+				entries.append("攻擊加值：%s %d%s%s = %d" % [attack_stat_names[event.attack_stat], int(event.attack_stat_modifier), format_modifier_term("技能", int(event.skill_attack_modifier)), format_modifier_term("包抄", int(event.flanking_modifier)), int(event.attack_modifier)])
 				entries.append("D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.die_sides), int(event.roll), int(event.attack_modifier), int(event.attack_total)])
 				entries.append("目標防禦：閃避門檻 %d／格擋門檻 %d" % [int(event.dodge_target), int(event.block_target)])
 				var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
@@ -301,6 +303,10 @@ func format_log(events: Array) -> String:
 					if event.downed:
 						entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
 	return "\n".join(entries)
+
+func format_modifier_term(label: String, value: int) -> String:
+	var operator := " + " if value >= 0 else " − "
+	return "%s%s %d" % [operator, label, absi(value)]
 
 func update_log_entry_states(events: Array) -> void:
 	var unchanged_count := 0

@@ -10,7 +10,8 @@ const UI_FONT := preload("res://assets/fonts/NotoSans.ttf")
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
 const UNIT_ART := {
-	"aria": preload("res://assets/units/fighter.svg"), "lyra": preload("res://assets/units/archer.svg"),
+	"aria": preload("res://assets/units/fighter.svg"), "kael": preload("res://assets/units/fighter.svg"),
+	"lyra": preload("res://assets/units/archer.svg"),
 	"mira": preload("res://assets/units/archer.svg"),
 	"wolf_a": preload("res://assets/units/wolf.svg"), "wolf_b": preload("res://assets/units/wolf.svg"),
 	"ogre": preload("res://assets/units/ogre.svg"),
