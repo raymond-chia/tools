@@ -305,6 +305,8 @@ func format_log(events: Array) -> String:
 	return "\n".join(entries)
 
 func format_modifier_term(label: String, value: int) -> String:
+	if value == 0:
+		return ""
 	var operator := " + " if value >= 0 else " − "
 	return "%s%s %d" % [operator, label, absi(value)]
 
