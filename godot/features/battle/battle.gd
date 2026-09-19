@@ -8,6 +8,7 @@ var state: Dictionary = {}
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
 var inspected_skill := ""
+var selecting_delay := false
 var status := "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 
 func _ready() -> void:
@@ -18,6 +19,8 @@ func _ready() -> void:
 	world.read_core_response = read_core_response
 	ui.action_selected.connect(select_action)
 	ui.end_turn_requested.connect(_on_end_turn_requested)
+	ui.delay_selection_requested.connect(_on_delay_selection_requested)
+	ui.delay_target_selected.connect(_on_delay_target_selected)
 	ui.inspection_closed.connect(_close_inspection)
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	core = TacticalGame.new()
@@ -58,14 +61,17 @@ func show_error(message: String) -> void:
 
 func present() -> void:
 	world.present(state, pending_action, inspected_cell, core)
-	ui.present(state, pending_action, inspected_cell, inspected_skill, status)
+	ui.present(state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
 
 func select_action(action: String) -> void:
+	selecting_delay = false
 	pending_action = action
 	status = "請選擇施法格子。" if pending_action_targets_cell() else "請選擇技能目標。"
 	present()
 
 func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
+	if selecting_delay:
+		return
 	if pending_action != "":
 		if pending_action_targets_cell():
 			use_pending_cell_action(cell)
@@ -130,4 +136,20 @@ func _on_end_turn_requested() -> void:
 	if state.is_empty() or state.turn.actor == null:
 		return
 	pending_action = ""
+	selecting_delay = false
 	send({"type": "end_turn", "actor": state.turn.actor})
+
+func _on_delay_selection_requested() -> void:
+	if state.is_empty() or not state.turn.can_delay:
+		return
+	pending_action = ""
+	selecting_delay = not selecting_delay
+	status = ""
+	present()
+
+func _on_delay_target_selected(unit_id: String) -> void:
+	if not selecting_delay or state.is_empty() or state.turn.actor == null:
+		return
+	var actor: String = state.turn.actor
+	selecting_delay = false
+	send({"type": "delay", "actor": actor, "after": unit_id})

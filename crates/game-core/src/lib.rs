@@ -226,6 +226,10 @@ pub enum Command {
     EndTurn {
         actor: String,
     },
+    Delay {
+        actor: String,
+        after: String,
+    },
 }
 #[derive(Serialize)]
 pub struct Snapshot {
@@ -238,6 +242,7 @@ pub struct Snapshot {
     pub reachable: Vec<GridPos>,
     pub second_reachable: Vec<GridPos>,
     pub skill_ranges: Vec<SkillRangeView>,
+    pub turn_order: Vec<String>,
     pub turn: TurnView,
     pub round: u32,
     pub outcome: Outcome,
@@ -438,6 +443,7 @@ pub struct TurnView {
     pub can_move: bool,
     pub can_skill: bool,
     pub can_end_turn: bool,
+    pub can_delay: bool,
 }
 
 pub struct Game {
@@ -586,6 +592,7 @@ impl Game {
                 self.finish();
                 Ok(())
             }
+            Command::Delay { actor, after } => self.delay(&actor, &after),
         }?;
         self.enemy_turns()?;
         self.outcome();
@@ -840,6 +847,29 @@ impl Game {
             e.cursor >= e.order.len()
         };
         if end { self.roll_round() } else { self.begin() }
+    }
+    fn delay(&mut self, actor: &str, after: &str) -> Result<(), String> {
+        self.ensure(actor)?;
+        let turn = self.world.resource::<Turn>();
+        if turn.phase != Phase::Ready || turn.moves != 0 {
+            return Err("開始行動後不能延後".into());
+        }
+        let encounter = self.world.resource::<Encounter>();
+        let target_index = encounter
+            .order
+            .iter()
+            .position(|unit_id| unit_id == after)
+            .ok_or("找不到延後目標")?;
+        if target_index <= encounter.cursor {
+            return Err("只能延後到尚未行動的單位之後".into());
+        }
+        let mut encounter = self.world.resource_mut::<Encounter>();
+        let current_index = encounter.cursor;
+        let delayed_actor = encounter.order.remove(current_index);
+        encounter.order.insert(target_index, delayed_actor);
+        drop(encounter);
+        self.begin();
+        Ok(())
     }
     fn ensure(&self, a: &str) -> Result<(), String> {
         if self.world.resource::<Turn>().actor.as_deref() != Some(a) {
@@ -1504,6 +1534,20 @@ impl Game {
             .map(|entity| skill_ranges(&self.world, entity))
             .unwrap_or_default();
         let can_skill = can_use_skill(&turn);
+        let turn_order: Vec<_> = enc
+            .order
+            .iter()
+            .skip(enc.cursor + 1)
+            .filter(|unit_id| {
+                self.entity(unit_id)
+                    .is_some_and(|entity| self.world.get::<Downed>(entity).is_none())
+            })
+            .cloned()
+            .collect();
+        let can_delay = turn.phase == Phase::Ready
+            && turn.moves == 0
+            && turn.actor.is_some()
+            && !turn_order.is_empty();
         let terrain_cells = (0..b.height)
             .flat_map(|y| {
                 let board = &b;
@@ -1597,6 +1641,7 @@ impl Game {
             reachable,
             second_reachable,
             skill_ranges,
+            turn_order,
             turn: TurnView {
                 can_end_turn: turn.actor.is_some(),
                 actor: turn.actor,
@@ -1605,6 +1650,7 @@ impl Game {
                 can_move: matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
                     && turn.moves < 2,
                 can_skill,
+                can_delay,
             },
             round: enc.round,
             outcome: self.world.resource::<ResultState>().0,

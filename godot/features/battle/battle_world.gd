@@ -9,13 +9,6 @@ const TILE_SIZE := Vector2i(64, 32)
 const UI_FONT := preload("res://assets/fonts/NotoSans.ttf")
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
-const UNIT_ART := {
-	"aria": preload("res://assets/units/fighter.svg"), "kael": preload("res://assets/units/fighter.svg"),
-	"lyra": preload("res://assets/units/archer.svg"),
-	"mira": preload("res://assets/units/archer.svg"),
-	"wolf_a": preload("res://assets/units/wolf.svg"), "wolf_b": preload("res://assets/units/wolf.svg"),
-	"ogre": preload("res://assets/units/ogre.svg"),
-}
 
 @onready var ground: TileMapLayer = $Ground
 @onready var units_layer: Node2D = $Units
@@ -111,7 +104,7 @@ func sync_unit_sprites() -> void:
 			var new_attack_preview_ring := Sprite2D.new(); new_attack_preview_ring.name = "AttackPreviewRing"; new_attack_preview_ring.texture = BASE_ART; new_attack_preview_ring.visible = false; node.add_child(new_attack_preview_ring)
 			var selection := Sprite2D.new(); selection.name = "Selection"; selection.texture = BASE_ART; node.add_child(selection)
 			var base := Sprite2D.new(); base.name = "Base"; base.texture = BASE_ART; node.add_child(base)
-			var body := Sprite2D.new(); body.name = "Body"; body.texture = UNIT_ART[unit.id]; node.add_child(body)
+			var body := Sprite2D.new(); body.name = "Body"; body.texture = BattleVisualConfig.UNIT_ART[unit.id]; node.add_child(body)
 			units_layer.add_child(node)
 			unit_nodes[unit.id] = node
 		else:

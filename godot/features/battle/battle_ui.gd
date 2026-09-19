@@ -2,6 +2,8 @@ extends CanvasLayer
 
 signal action_selected(action: String)
 signal end_turn_requested
+signal delay_selection_requested
+signal delay_target_selected(unit_id: String)
 signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
 
@@ -34,8 +36,11 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var inspected_skill_details: VBoxContainer = $Root/InfoPanel/Margin/Content/SkillDetails
 @onready var inspected_skill_name: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Name
 @onready var inspected_skill_description: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Details
-@onready var actor_name: Label = $Root/BottomBar/Margin/Layout/Actor/Name
-@onready var movement: Label = $Root/BottomBar/Margin/Layout/Actor/Movement
+@onready var actor_name: Label = $Root/BottomBar/Margin/Layout/Actor/NameAndMovement/Name
+@onready var actor_portrait: TextureRect = $Root/BottomBar/Margin/Layout/Actor/Portrait
+@onready var movement: Label = $Root/BottomBar/Margin/Layout/Actor/NameAndMovement/Movement
+@onready var turn_order: VBoxContainer = $Root/TurnOrder/Margin/Units
+@onready var delay_button: Button = $Root/TurnOrder/Delay
 @onready var status: Label = $Root/BottomBar/Margin/Layout/Actions/Status
 @onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
 @onready var move_cost_popup: PanelContainer = $Root/MoveCostPopup
@@ -89,12 +94,15 @@ func _ready() -> void:
 		action_buttons[action].mouse_exited.connect(_on_skill_mouse_exited.bind(action))
 		action_buttons[action].gui_input.connect(_on_skill_gui_input.bind(action))
 	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
+	delay_button.pressed.connect(func(): delay_selection_requested.emit())
 
-func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, inspected_skill_id: String, status_text: String) -> void:
+func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, inspected_skill_id: String, status_text: String, selecting_delay: bool) -> void:
 	present_status(status_text)
 	if snapshot.is_empty():
 		actor_name.text = "—"
+		actor_portrait.texture = null
 		movement.text = ""
+		clear_turn_order()
 		info_panel.hide()
 		move_cost_popup.hide()
 		attack_preview_panel.hide()
@@ -102,6 +110,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		for button in action_buttons.values():
 			button.disabled = true
 		$Root/BottomBar/Margin/Layout/EndTurn.disabled = true
+		delay_button.disabled = true
 		return
 	$Root/BottomBar/Margin/Layout/EndTurn.disabled = not snapshot.turn.can_end_turn
 	update_log_entry_states(snapshot.log)
@@ -111,7 +120,11 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		battle_log.text = formatted_log
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
 	actor_name.text = actor.name if not actor.is_empty() else "—"
+	actor_portrait.texture = BattleVisualConfig.UNIT_ART.get(actor.id) if not actor.is_empty() else null
 	movement.text = "剩餘移動 %d" % int(snapshot.turn.move_remaining)
+	present_turn_order(snapshot, selecting_delay)
+	delay_button.disabled = not snapshot.turn.can_delay
+	delay_button.text = "取消延後" if selecting_delay else "延後"
 	presented_skills = snapshot.skill_ranges
 	if not hovered_skill_id.is_empty() and skill_with_id(presented_skills, hovered_skill_id).is_empty():
 		hovered_skill_id = ""
@@ -160,6 +173,44 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	terrain_name.text = terrain_names[terrain.kind]
 	terrain_cost.text = "%d" % int(terrain.cost)
 	terrain_effect.text = localized_detail(terrain.effect_description)
+
+func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
+	clear_turn_order()
+	for index in range(snapshot.turn_order.size() - 1, -1, -1):
+		var unit := unit_with_id(snapshot.units, snapshot.turn_order[index])
+		if unit.is_empty():
+			continue
+		var slot := VBoxContainer.new()
+		slot.add_theme_constant_override("separation", 2)
+		var marker := ColorRect.new()
+		marker.custom_minimum_size = Vector2(112.0, 6.0)
+		marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		marker.color = BattleVisualConfig.DELAY_SLOT_COLOR
+		slot.add_child(marker)
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(112.0, 72.0)
+		button.icon = BattleVisualConfig.UNIT_ART[unit.id]
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		button.tooltip_text = unit.name
+		button.mouse_filter = Control.MOUSE_FILTER_STOP if selecting_delay else Control.MOUSE_FILTER_IGNORE
+		button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true))
+		button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false))
+		button.pressed.connect(_on_turn_order_pressed.bind(unit.id))
+		slot.add_child(button)
+		turn_order.add_child(slot)
+
+func clear_turn_order() -> void:
+	for child in turn_order.get_children():
+		turn_order.remove_child(child)
+		child.queue_free()
+
+func _on_turn_order_pressed(unit_id: String) -> void:
+	delay_target_selected.emit(unit_id)
+
+func _on_delay_target_hovered(marker: ColorRect, highlighted: bool) -> void:
+	marker.color = BattleVisualConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted else BattleVisualConfig.DELAY_SLOT_COLOR
 
 func present_status(message: String) -> void:
 	status.text = message

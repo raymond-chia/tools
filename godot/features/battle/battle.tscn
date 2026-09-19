@@ -263,6 +263,51 @@ scroll_active = true
 scroll_following = true
 selection_enabled = true
 
+[node name="TurnOrder" type="Control" parent="UI/Root"]
+z_index = 1
+layout_mode = 1
+anchors_preset = 10
+anchor_left = 0.0
+anchor_top = 0.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 38.0
+offset_top = 36.0
+offset_right = 158.0
+offset_bottom = -225.0
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/Root/TurnOrder"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 4.0
+offset_top = 0.0
+offset_right = -4.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Units" type="VBoxContainer" parent="UI/Root/TurnOrder/Margin"]
+layout_mode = 2
+alignment = 2
+theme_override_constants/separation = 8
+
+[node name="Delay" type="Button" parent="UI/Root/TurnOrder"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -48.0
+offset_right = 128.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "延後"
+
 [node name="BottomBar" type="Panel" parent="UI/Root"]
 layout_mode = 1
 anchors_preset = 12
@@ -289,26 +334,39 @@ grow_vertical = 2
 layout_mode = 2
 theme_override_constants/separation = 28
 
-[node name="Actor" type="VBoxContainer" parent="UI/Root/BottomBar/Margin/Layout"]
+[node name="Actor" type="HBoxContainer" parent="UI/Root/BottomBar/Margin/Layout"]
 custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
+theme_override_constants/separation = 14
 
-[node name="Title" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
+[node name="Portrait" type="TextureRect" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
+custom_minimum_size = Vector2(112, 112)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="NameAndMovement" type="VBoxContainer" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="Title" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor/NameAndMovement"]
 layout_mode = 2
 text = "行動角色"
 
-[node name="Name" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
+[node name="Name" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor/NameAndMovement"]
 layout_mode = 2
 theme_type_variation = &"ActorNameLabel"
 text = "—"
 
-[node name="Movement" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
+[node name="Movement" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor/NameAndMovement"]
 layout_mode = 2
 text = "剩餘移動 0"
 
 [node name="Actions" type="VBoxContainer" parent="UI/Root/BottomBar/Margin/Layout"]
 layout_mode = 2
 size_flags_horizontal = 3
+alignment = 2
+theme_override_constants/separation = 4
 
 [node name="Title" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
 layout_mode = 2
@@ -362,7 +420,6 @@ text = "治癒術"
 
 [node name="Status" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
 layout_mode = 2
-size_flags_vertical = 3
 text = "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 vertical_alignment = 1
 
