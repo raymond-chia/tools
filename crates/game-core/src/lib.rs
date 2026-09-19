@@ -957,15 +957,23 @@ impl Game {
             .expect("已建立的戰鬥單位應具有 Footprint 元件");
         let first_budget = if turn.moves == 0 { turn.remaining } else { 0 };
         let second_budget = allowance;
-        let mut path = find_path(
-            &self.world,
-            entity,
-            start,
-            end,
-            footprint,
-            first_budget + second_budget,
-        )
-        .ok_or("目的地不可達")?;
+        let first_path = if first_budget > 0 {
+            find_path(&self.world, entity, start, end, footprint, first_budget)
+        } else {
+            None
+        };
+        let mut path = first_path
+            .or_else(|| {
+                find_path(
+                    &self.world,
+                    entity,
+                    start,
+                    end,
+                    footprint,
+                    first_budget + second_budget,
+                )
+            })
+            .ok_or("目的地不可達")?;
         if let Some(trigger_index) = path.iter().skip(1).position(|position| {
             terrain_at(&self.world, *position).is_some_and(|kind| kind != "mire")
         }) {
@@ -2089,16 +2097,25 @@ fn footprint_distance(a: GridPos, af: Footprint, b: GridPos, bf: Footprint) -> i
         .max(0);
     dx + dy
 }
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+struct PathState {
+    danger: u32,
+    position: GridPos,
+}
+
 #[derive(Eq)]
 struct Node {
-    c: u32,
-    p: GridPos,
+    movement: u32,
+    state: PathState,
 }
 impl Ord for Node {
     fn cmp(&self, o: &Self) -> Ordering {
-        o.c.cmp(&self.c)
-            .then_with(|| self.p.x.cmp(&o.p.x))
-            .then_with(|| self.p.y.cmp(&o.p.y))
+        o.state
+            .danger
+            .cmp(&self.state.danger)
+            .then_with(|| o.movement.cmp(&self.movement))
+            .then_with(|| self.state.position.x.cmp(&o.state.position.x))
+            .then_with(|| self.state.position.y.cmp(&o.state.position.y))
     }
 }
 impl PartialOrd for Node {
@@ -2108,41 +2125,71 @@ impl PartialOrd for Node {
 }
 impl PartialEq for Node {
     fn eq(&self, o: &Self) -> bool {
-        self.c == o.c && self.p == o.p
+        self.movement == o.movement && self.state == o.state
     }
 }
-fn paths(
-    w: &World,
-    e: Entity,
-    start: GridPos,
-    f: Footprint,
-    budget: u32,
-) -> (HashMap<GridPos, u32>, HashMap<GridPos, GridPos>) {
+
+struct Paths {
+    best: HashMap<GridPos, PathState>,
+    previous: HashMap<PathState, PathState>,
+}
+fn paths(w: &World, e: Entity, start: GridPos, f: Footprint, budget: u32) -> Paths {
     let board = w.resource::<Board>();
-    let mut dist = HashMap::from([(start, 0)]);
-    let mut prev = HashMap::new();
-    let mut heap = BinaryHeap::from([Node { c: 0, p: start }]);
-    while let Some(Node { c, p }) = heap.pop() {
-        if c > *dist.get(&p).expect("加入搜尋佇列的格子應已有距離紀錄") {
+    let start_state = PathState {
+        danger: 0,
+        position: start,
+    };
+    let mut dist = HashMap::from([(start_state, 0)]);
+    let mut labels = HashMap::from([(start, vec![(0, 0)])]);
+    let mut best = HashMap::new();
+    let mut previous = HashMap::new();
+    let mut heap = BinaryHeap::from([Node {
+        movement: 0,
+        state: start_state,
+    }]);
+    while let Some(Node { movement, state }) = heap.pop() {
+        if movement
+            > *dist
+                .get(&state)
+                .expect("加入搜尋佇列的狀態應已有移動成本紀錄")
+        {
             continue;
         }
+        best.entry(state.position).or_insert(state);
         for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
             let n = GridPos {
-                x: p.x + dx,
-                y: p.y + dy,
+                x: state.position.x + dx,
+                y: state.position.y + dy,
             };
             if !fits(board, n, f) || occupied(w, e, n, f) {
                 continue;
             }
-            let nc = c + movement_cost(w, n);
-            if nc <= budget && nc < *dist.get(&n).unwrap_or(&u32::MAX) {
-                dist.insert(n, nc);
-                prev.insert(n, p);
-                heap.push(Node { c: nc, p: n })
+            let next_state = PathState {
+                danger: state.danger
+                    + u32::from(terrain_at(w, n).is_some_and(|terrain| terrain != "mire")),
+                position: n,
+            };
+            let next_movement = movement + movement_cost(w, n);
+            let dominated = labels.get(&n).is_some_and(|known| {
+                known.iter().any(|(danger, movement)| {
+                    *danger <= next_state.danger && *movement <= next_movement
+                })
+            });
+            if next_movement <= budget && !dominated {
+                dist.insert(next_state, next_movement);
+                labels
+                    .entry(n)
+                    .or_default()
+                    .push((next_state.danger, next_movement));
+                previous.insert(next_state, state);
+                heap.push(Node {
+                    movement: next_movement,
+                    state: next_state,
+                })
             }
         }
     }
-    (dist, prev)
+    Paths { best, previous }
 }
 fn find_path(
     w: &World,
@@ -2152,16 +2199,14 @@ fn find_path(
     f: Footprint,
     b: u32,
 ) -> Option<Vec<GridPos>> {
-    let (d, p) = paths(w, e, s, f, b);
-    if !d.contains_key(&end) {
-        return None;
-    }
-    let mut out = vec![end];
-    while *out.last().expect("回溯路徑已先放入終點，不應為空") != s {
-        out.push(
-            *p.get(out.last().expect("回溯路徑已先放入終點，不應為空"))
-                .expect("已到達的非起點格子應具有前驅紀錄"),
-        )
+    let Paths { best, previous } = paths(w, e, s, f, b);
+    let mut state = *best.get(&end)?;
+    let mut out = vec![state.position];
+    while state.position != s {
+        state = *previous
+            .get(&state)
+            .expect("非起點的最佳尋路狀態必須有前一個狀態");
+        out.push(state.position)
     }
     out.reverse();
     Some(out)
@@ -2174,8 +2219,8 @@ fn toward(
     f: Footprint,
     b: u32,
 ) -> Option<Vec<GridPos>> {
-    let (d, _) = paths(w, e, s, f, b);
-    let end = *d.keys().min_by_key(|p| distance(**p, target))?;
+    let Paths { best, previous: _ } = paths(w, e, s, f, b);
+    let end = *best.keys().min_by_key(|p| distance(**p, target))?;
     find_path(w, e, s, end, f, b)
 }
 fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
@@ -2183,7 +2228,7 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     let f = *w
         .get::<Footprint>(e)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let mut v: Vec<_> = paths(w, e, p, f, b).0.into_keys().collect();
+    let mut v: Vec<_> = paths(w, e, p, f, b).best.into_keys().collect();
     v.sort_by_key(|p| (p.y, p.x));
     v
 }

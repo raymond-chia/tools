@@ -127,6 +127,108 @@ fn attack_modifier_uses_expected_flanking_bonus() {
     }
 }
 
+struct MovementPreviewCase {
+    name: &'static str,
+    movement: u32,
+    interrupted: bool,
+    path_length: usize,
+    total_cost: u32,
+}
+
+// 驗證第一階段會在預算內優先安全繞路，無法繞路時則選擇同階段的危險路徑。
+#[test]
+fn move_preview_chooses_safest_path_within_first_phase() {
+    let cases = [
+        MovementPreviewCase {
+            name: "第一階段可以安全繞路",
+            movement: 4,
+            interrupted: false,
+            path_length: 5,
+            total_cost: 4,
+        },
+        MovementPreviewCase {
+            name: "第一階段無法安全繞路",
+            movement: 2,
+            interrupted: true,
+            path_length: 2,
+            total_cost: 1,
+        },
+    ];
+
+    for case in cases {
+        let (game, actor_position, spikes, destination) = movement_preview_game(case.movement);
+        let preview = game
+            .preview_move("actor", destination)
+            .expect("目的地應能在第一階段朝目標移動");
+        let expected_last = if case.interrupted {
+            spikes
+        } else {
+            destination
+        };
+
+        assert_eq!(preview.interrupted, case.interrupted, "{}", case.name);
+        assert_eq!(
+            preview.first.first(),
+            Some(&actor_position),
+            "{}",
+            case.name
+        );
+        assert_eq!(preview.first.last(), Some(&expected_last), "{}", case.name);
+        assert_eq!(preview.first.len(), case.path_length, "{}", case.name);
+        assert_eq!(
+            preview.first.contains(&spikes),
+            case.interrupted,
+            "{}",
+            case.name
+        );
+        assert_eq!(preview.total_cost, case.total_cost, "{}", case.name);
+        assert!(preview.second.is_empty(), "{}", case.name);
+    }
+}
+
+fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
+    let actor_position = GridPos { x: 0, y: 1 };
+    let spikes = GridPos { x: 1, y: 1 };
+    let destination = GridPos { x: 2, y: 1 };
+    let mut world = World::new();
+    world.insert_resource(Board {
+        width: 3,
+        height: 3,
+        costs: vec![1; 9],
+        triggers: HashMap::from([(spikes, "spikes".into())]),
+    });
+    world.insert_resource(TemporaryTerrains::default());
+    world.insert_resource(Turn {
+        actor: Some("actor".into()),
+        phase: Phase::Ready,
+        remaining: movement,
+        moves: 0,
+    });
+    world.spawn((
+        Id("actor".into()),
+        Pos(actor_position),
+        Footprint {
+            width: 1,
+            height: 1,
+        },
+        Unit {
+            name: "測試角色".into(),
+            team: Team::Player,
+            group: "測試群組".into(),
+            movement,
+            initiative: 0,
+            dodge: 0,
+            block: 0,
+            melee: 0,
+            ranged: 0,
+            damage: 0,
+            range: 1,
+            skills: Vec::new(),
+        },
+    ));
+    (Game { world }, actor_position, spikes, destination)
+}
+
 fn attack_skill(ranged: bool, range: i32) -> SkillDef {
     SkillDef {
         id: if ranged {
