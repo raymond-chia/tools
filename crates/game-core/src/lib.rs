@@ -58,7 +58,7 @@ struct Hp {
     maximum: i32,
 }
 #[derive(Component, Clone)]
-struct Fighter {
+struct Unit {
     name: String,
     team: Team,
     group: String,
@@ -516,7 +516,7 @@ impl Game {
                     current: u.hp,
                     maximum: u.hp,
                 },
-                Fighter {
+                Unit {
                     name: u.name,
                     team: u.team,
                     group: u.group,
@@ -654,23 +654,19 @@ impl Game {
             )));
         }
 
-        let attacker_fighter = self
+        let attacker_unit = self
             .world
-            .get::<Fighter>(attacker)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件");
-        let target_fighter = self
+            .get::<Unit>(attacker)
+            .expect("已建立的戰鬥單位應具有 Unit 元件");
+        let target_unit = self
             .world
-            .get::<Fighter>(target_entity)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件");
+            .get::<Unit>(target_entity)
+            .expect("已建立的戰鬥單位應具有 Unit 元件");
         let target_hp = self
             .world
             .get::<Hp>(target_entity)
             .expect("已建立的戰鬥單位應具有 Hp 元件");
-        let modifier = if skill.ranged {
-            attacker_fighter.ranged
-        } else {
-            attacker_fighter.melee
-        } + skill.attack_bonus;
+        let modifier = attack_modifier(&self.world, attacker, target_entity, skill);
         let dodge_target =
             gameplay_config::BASE_DEFENSE + effective_dodge(&self.world, target_entity);
         let block_target = dodge_target + effective_block(&self.world, target_entity);
@@ -684,7 +680,7 @@ impl Game {
                 AttackResult::Hit => hit_count += 1,
             }
         }
-        let hit_damage = attacker_fighter.damage + skill.damage_bonus;
+        let hit_damage = attacker_unit.damage + skill.damage_bonus;
         let block_damage = attack_damage(
             hit_damage,
             AttackResult::Block,
@@ -699,7 +695,7 @@ impl Game {
             0
         };
         Ok(SkillPreview::Attack(AttackPreview {
-            target: target_fighter.name.clone(),
+            target: target_unit.name.clone(),
             target_hp: target_hp.current,
             target_max_hp: target_hp.maximum,
             target_mana: gameplay_config::DEFAULT_MANA,
@@ -739,7 +735,7 @@ impl Game {
         }
         let ids: Vec<_> = self
             .world
-            .query::<(&Id, &Fighter)>()
+            .query::<(&Id, &Unit)>()
             .iter(&self.world)
             .filter(|(_, f)| f.team == Team::Player || f.group == "wolves")
             .map(|(i, _)| i.0.clone())
@@ -760,7 +756,7 @@ impl Game {
         let active = self.world.resource::<Encounter>().participants.clone();
         let entries: Vec<_> = self
             .world
-            .query::<(&Id, &Fighter, Has<Downed>)>()
+            .query::<(&Id, &Unit, Has<Downed>)>()
             .iter(&self.world)
             .filter(|(i, _, d)| active.contains(&i.0) && !*d)
             .map(|(i, f, _)| (i.0.clone(), f.name.clone(), f.team, f.initiative))
@@ -814,8 +810,8 @@ impl Game {
             .and_then(|a| self.entity(a))
             .map(|e| {
                 self.world
-                    .get::<Fighter>(e)
-                    .expect("已建立的戰鬥單位應具有 Fighter 元件")
+                    .get::<Unit>(e)
+                    .expect("已建立的戰鬥單位應具有 Unit 元件")
                     .movement
             })
             .unwrap_or(0);
@@ -862,12 +858,12 @@ impl Game {
                 if k == "mire" {
                     continue;
                 }
-                let fighter = self
+                let unit = self
                     .world
-                    .get::<Fighter>(e)
-                    .expect("已建立的戰鬥單位應具有 Fighter 元件");
-                let target = fighter.name.clone();
-                let target_team = fighter.team;
+                    .get::<Unit>(e)
+                    .expect("已建立的戰鬥單位應具有 Unit 元件");
+                let target = unit.name.clone();
+                let target_team = unit.team;
                 let damage = terrain_damage(&k);
                 if damage > 0 {
                     let mut hp = self
@@ -932,8 +928,8 @@ impl Game {
         let entity = self.entity(actor).ok_or("找不到移動單位")?;
         let allowance = self
             .world
-            .get::<Fighter>(entity)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件")
+            .get::<Unit>(entity)
+            .expect("已建立的戰鬥單位應具有 Unit 元件")
             .movement;
         let turn = self.world.resource::<Turn>().clone();
         if !matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove) || turn.moves >= 2
@@ -982,7 +978,7 @@ impl Game {
         let active = self.world.resource::<Encounter>().participants.clone();
         let add: Vec<_> = self
             .world
-            .query::<(&Id, &Pos, &Fighter)>()
+            .query::<(&Id, &Pos, &Unit)>()
             .iter(&self.world)
             .filter(|(i, q, f)| {
                 f.team == Team::Enemy
@@ -1013,15 +1009,15 @@ impl Game {
         let ae = self.entity(a).ok_or("找不到攻擊者")?;
         let te = self.entity(target).ok_or("找不到目標")?;
         validate_unit_skill_target(&self.world, ae, te, target_cell, &skill)?;
-        let af = self
+        let attacker_unit = self
             .world
-            .get::<Fighter>(ae)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件")
+            .get::<Unit>(ae)
+            .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        let tf = self
+        let target_unit = self
             .world
-            .get::<Fighter>(te)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件")
+            .get::<Unit>(te)
+            .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
         if skill.effect == SkillEffect::Heal {
             let HealingPreview {
@@ -1042,11 +1038,11 @@ impl Game {
                 .resource_mut::<Log>()
                 .0
                 .push(CombatLogEvent::Healing {
-                    actor: af.name,
-                    actor_team: af.team,
+                    actor: attacker_unit.name,
+                    actor_team: attacker_unit.team,
                     skill: skill.name,
                     target: target_name,
-                    target_team: tf.team,
+                    target_team: target_unit.team,
                     healing,
                     remaining_hp,
                     max_hp,
@@ -1054,7 +1050,7 @@ impl Game {
             self.finish();
             return Ok(());
         }
-        let modifier = if skill.ranged { af.ranged } else { af.melee } + skill.attack_bonus;
+        let modifier = attack_modifier(&self.world, ae, te, &skill);
         let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
         let target_block = effective_block(&self.world, te);
@@ -1069,7 +1065,7 @@ impl Game {
             gameplay_config::BASE_DEFENSE + target_dodge,
             gameplay_config::BASE_DEFENSE + target_dodge + target_block,
         );
-        let base_damage = af.damage + skill.damage_bonus;
+        let base_damage = attacker_unit.damage + skill.damage_bonus;
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
@@ -1154,11 +1150,11 @@ impl Game {
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::Skill {
-                actor: af.name,
-                actor_team: af.team,
+                actor: attacker_unit.name,
+                actor_team: attacker_unit.team,
                 skill: skill.name,
-                target: tf.name,
-                target_team: tf.team,
+                target: target_unit.name,
+                target_team: target_unit.team,
                 roll: natural,
                 die_sides: gameplay_config::ATTACK_DIE_SIDES,
                 attack_modifier: modifier,
@@ -1203,12 +1199,12 @@ impl Game {
         if damage == 0 {
             return;
         }
-        let fighter = self
+        let unit = self
             .world
-            .get::<Fighter>(entity)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件");
-        let target = fighter.name.clone();
-        let target_team = fighter.team;
+            .get::<Unit>(entity)
+            .expect("已建立的戰鬥單位應具有 Unit 元件");
+        let target = unit.name.clone();
+        let target_team = unit.team;
         let mut hp = self
             .world
             .get_mut::<Hp>(entity)
@@ -1248,12 +1244,12 @@ impl Game {
             return Err("現在不能使用技能".into());
         }
         let entity = self.entity(actor).ok_or("找不到行動角色")?;
-        let fighter = self
+        let unit = self
             .world
-            .get::<Fighter>(entity)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件")
+            .get::<Unit>(entity)
+            .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        if !fighter.skills.contains(&skill.id) || skill.effect != SkillEffect::Mire {
+        if !unit.skills.contains(&skill.id) || skill.effect != SkillEffect::Mire {
             return Err("此角色不能使用這個技能".into());
         }
         let board = self.world.resource::<Board>();
@@ -1290,8 +1286,8 @@ impl Game {
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::TerrainCreated {
-                actor: fighter.name,
-                actor_team: fighter.team,
+                actor: unit.name,
+                actor_team: unit.team,
                 skill: skill.name,
                 terrain: "mire".into(),
             });
@@ -1311,8 +1307,8 @@ impl Game {
             }
             if self
                 .world
-                .get::<Fighter>(e)
-                .expect("已建立的戰鬥單位應具有 Fighter 元件")
+                .get::<Unit>(e)
+                .expect("已建立的戰鬥單位應具有 Unit 元件")
                 .team
                 == Team::Player
             {
@@ -1342,8 +1338,8 @@ impl Game {
                     .expect("已建立的戰鬥單位應具有 Footprint 元件");
                 let b = self
                     .world
-                    .get::<Fighter>(e)
-                    .expect("已建立的戰鬥單位應具有 Fighter 元件")
+                    .get::<Unit>(e)
+                    .expect("已建立的戰鬥單位應具有 Unit 元件")
                     .movement;
                 if let Some(last) = toward(&self.world, e, start, goal, fp, b)
                     .as_ref()
@@ -1391,7 +1387,7 @@ impl Game {
         self.world
             .iter_entities()
             .filter(|q| {
-                q.get::<Fighter>().is_some_and(|f| f.team == Team::Player)
+                q.get::<Unit>().is_some_and(|f| f.team == Team::Player)
                     && q.get::<Downed>().is_none()
             })
             .min_by_key(|q| {
@@ -1406,7 +1402,7 @@ impl Game {
         let mut p = false;
         let mut e = false;
         for q in self.world.iter_entities() {
-            if let Some(f) = q.get::<Fighter>().filter(|_| q.get::<Downed>().is_none()) {
+            if let Some(f) = q.get::<Unit>().filter(|_| q.get::<Downed>().is_none()) {
                 match f.team {
                     Team::Player => p = true,
                     Team::Enemy => e = true,
@@ -1437,7 +1433,7 @@ impl Game {
                     e.get::<Pos>()?,
                     e.get::<Footprint>()?,
                     e.get::<Hp>()?,
-                    e.get::<Fighter>()?,
+                    e.get::<Unit>()?,
                     e.get::<Downed>().is_some(),
                 ))
             })
@@ -1599,8 +1595,8 @@ fn healing_preview(world: &World, target: Entity, skill: &SkillDef) -> HealingPr
     .min(hp.maximum);
     HealingPreview {
         target: world
-            .get::<Fighter>(target)
-            .expect("已建立的戰鬥單位應具有 Fighter 元件")
+            .get::<Unit>(target)
+            .expect("已建立的戰鬥單位應具有 Unit 元件")
             .name
             .clone(),
         target_hp: hp.current,
@@ -1646,24 +1642,24 @@ fn validate_unit_skill_target(
     ) {
         return Err("所選格不屬於目標".into());
     }
-    let attacker_fighter = world
-        .get::<Fighter>(attacker)
-        .expect("已建立的戰鬥單位應具有 Fighter 元件");
-    let target_fighter = world
-        .get::<Fighter>(target)
-        .expect("已建立的戰鬥單位應具有 Fighter 元件");
-    if !attacker_fighter.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
+    let attacker_unit = world
+        .get::<Unit>(attacker)
+        .expect("已建立的戰鬥單位應具有 Unit 元件");
+    let target_unit = world
+        .get::<Unit>(target)
+        .expect("已建立的戰鬥單位應具有 Unit 元件");
+    if !attacker_unit.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
         return Err("此角色不能使用這個技能".into());
     }
     if skill.effect == SkillEffect::Heal {
-        if attacker_fighter.team != target_fighter.team {
+        if attacker_unit.team != target_unit.team {
             return Err("只能治療自己或友軍".into());
         }
-    } else if attacker_fighter.team == target_fighter.team {
+    } else if attacker_unit.team == target_unit.team {
         return Err("不能攻擊友軍".into());
     }
     let range = skill.range.unwrap_or(if skill.ranged {
-        attacker_fighter.range
+        attacker_unit.range
     } else {
         gameplay_config::DEFAULT_MELEE_RANGE
     });
@@ -1706,6 +1702,133 @@ fn attack_result(
     } else {
         AttackResult::Hit
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TargetSide {
+    Left,
+    Right,
+    Above,
+    Below,
+}
+
+fn attack_modifier(world: &World, attacker: Entity, target: Entity, skill: &SkillDef) -> i32 {
+    let unit = world
+        .get::<Unit>(attacker)
+        .expect("可發動攻擊的單位應具有 Unit");
+    let base_modifier = if skill.ranged {
+        unit.ranged
+    } else {
+        unit.melee
+    } + skill.attack_bonus;
+    base_modifier + flanking_bonus(world, attacker, target, skill)
+}
+
+fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &SkillDef) -> i32 {
+    if skill.ranged {
+        return 0;
+    }
+    let attack_range = skill.range.unwrap_or(gameplay_config::DEFAULT_MELEE_RANGE);
+    let attacker_side = match target_side_within_range(world, attacker, target, attack_range) {
+        Some(side) => side,
+        None => return 0,
+    };
+    let attacker_team = world
+        .get::<Unit>(attacker)
+        .expect("可發動攻擊的單位應具有 Unit")
+        .team;
+    let skills = world.resource::<Skills>();
+    let has_supporter = world.iter_entities().any(|entity| {
+        if entity.id() == attacker || entity.id() == target || entity.get::<Downed>().is_some() {
+            return false;
+        }
+        let unit = match entity.get::<Unit>() {
+            Some(unit) => unit,
+            None => return false,
+        };
+        if unit.team != attacker_team {
+            return false;
+        }
+        let support_range = unit
+            .skills
+            .iter()
+            .filter_map(|skill_id| skills.0.get(skill_id))
+            .filter(|support_skill| {
+                !support_skill.ranged
+                    && matches!(
+                        support_skill.effect,
+                        SkillEffect::Attack | SkillEffect::Push
+                    )
+            })
+            .map(|support_skill| {
+                support_skill
+                    .range
+                    .unwrap_or(gameplay_config::DEFAULT_MELEE_RANGE)
+            })
+            .max();
+        support_range.is_some_and(|range| {
+            target_side_within_range(world, entity.id(), target, range)
+                .is_some_and(|side| sides_are_opposite(attacker_side, side))
+        })
+    });
+    if has_supporter {
+        gameplay_config::FLANKING_ATTACK_BONUS
+    } else {
+        0
+    }
+}
+
+fn target_side_within_range(
+    world: &World,
+    unit: Entity,
+    target: Entity,
+    range: i32,
+) -> Option<TargetSide> {
+    let unit_position = world.get::<Pos>(unit).expect("參與包夾的單位應具有 Pos").0;
+    let unit_footprint = *world
+        .get::<Footprint>(unit)
+        .expect("參與包夾的單位應具有 Footprint");
+    let target_position = world.get::<Pos>(target).expect("包夾目標應具有 Pos").0;
+    let target_footprint = *world
+        .get::<Footprint>(target)
+        .expect("包夾目標應具有 Footprint");
+    if footprint_distance(
+        unit_position,
+        unit_footprint,
+        target_position,
+        target_footprint,
+    ) > range
+    {
+        return None;
+    }
+
+    let unit_right = unit_position.x + unit_footprint.width - 1;
+    let unit_bottom = unit_position.y + unit_footprint.height - 1;
+    let target_right = target_position.x + target_footprint.width - 1;
+    let target_bottom = target_position.y + target_footprint.height - 1;
+    let rows_overlap = unit_position.y <= target_bottom && unit_bottom >= target_position.y;
+    let columns_overlap = unit_position.x <= target_right && unit_right >= target_position.x;
+    if rows_overlap && unit_right < target_position.x {
+        Some(TargetSide::Left)
+    } else if rows_overlap && unit_position.x > target_right {
+        Some(TargetSide::Right)
+    } else if columns_overlap && unit_bottom < target_position.y {
+        Some(TargetSide::Above)
+    } else if columns_overlap && unit_position.y > target_bottom {
+        Some(TargetSide::Below)
+    } else {
+        None
+    }
+}
+
+fn sides_are_opposite(first: TargetSide, second: TargetSide) -> bool {
+    matches!(
+        (first, second),
+        (TargetSide::Left, TargetSide::Right)
+            | (TargetSide::Right, TargetSide::Left)
+            | (TargetSide::Above, TargetSide::Below)
+            | (TargetSide::Below, TargetSide::Above)
+    )
 }
 
 fn attack_damage(
@@ -1758,9 +1881,9 @@ fn movement_cost(w: &World, position: GridPos) -> u32 {
 }
 
 fn effective_dodge(w: &World, entity: Entity) -> i32 {
-    let fighter = w
-        .get::<Fighter>(entity)
-        .expect("已建立的戰鬥單位應具有 Fighter 元件");
+    let unit = w
+        .get::<Unit>(entity)
+        .expect("已建立的戰鬥單位應具有 Unit 元件");
     let position = w
         .get::<Pos>(entity)
         .expect("已建立的戰鬥單位應具有 Pos 元件")
@@ -1779,13 +1902,13 @@ fn effective_dodge(w: &World, entity: Entity) -> i32 {
     } else {
         0
     };
-    (fighter.dodge - penalty).max(0)
+    (unit.dodge - penalty).max(0)
 }
 
 fn effective_block(w: &World, entity: Entity) -> i32 {
-    let fighter = w
-        .get::<Fighter>(entity)
-        .expect("已建立的戰鬥單位應具有 Fighter 元件");
+    let unit = w
+        .get::<Unit>(entity)
+        .expect("已建立的戰鬥單位應具有 Unit 元件");
     let position = w
         .get::<Pos>(entity)
         .expect("已建立的戰鬥單位應具有 Pos 元件")
@@ -1804,7 +1927,7 @@ fn effective_block(w: &World, entity: Entity) -> i32 {
     } else {
         0
     };
-    (fighter.block - penalty).max(0)
+    (unit.block - penalty).max(0)
 }
 
 fn footprint_on_terrain(
@@ -2024,8 +2147,8 @@ fn movement_ranges(w: &World, e: Entity, turn: &Turn) -> (Vec<GridPos>, Vec<Grid
         return (Vec::new(), Vec::new());
     }
     let allowance = w
-        .get::<Fighter>(e)
-        .expect("已建立的戰鬥單位應具有 Fighter 元件")
+        .get::<Unit>(e)
+        .expect("已建立的戰鬥單位應具有 Unit 元件")
         .movement;
     let first_budget = if turn.moves == 0 { turn.remaining } else { 0 };
     let reachable = if first_budget > 0 {
@@ -2046,17 +2169,15 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
     let footprint = *w
         .get::<Footprint>(e)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let fighter = w
-        .get::<Fighter>(e)
-        .expect("已建立的戰鬥單位應具有 Fighter 元件");
+    let unit = w.get::<Unit>(e).expect("已建立的戰鬥單位應具有 Unit 元件");
     let mut ranges: Vec<_> = w
         .resource::<Skills>()
         .0
         .values()
-        .filter(|skill| fighter.skills.contains(&skill.id))
+        .filter(|skill| unit.skills.contains(&skill.id))
         .map(|skill| {
             let range = skill.range.unwrap_or(if skill.ranged {
-                fighter.range
+                unit.range
             } else {
                 gameplay_config::DEFAULT_MELEE_RANGE
             });

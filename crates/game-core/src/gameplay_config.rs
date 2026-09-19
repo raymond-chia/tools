@@ -15,4 +15,5 @@ pub const DEFAULT_MIRE_RANGE: i32 = 4;
 pub const DEFAULT_MIRE_DURATION: u32 = 2;
 
 pub const DEFAULT_MELEE_RANGE: i32 = 1;
+pub const FLANKING_ATTACK_BONUS: i32 = 2;
 pub const ENEMY_REVEAL_RANGE: i32 = 4;
