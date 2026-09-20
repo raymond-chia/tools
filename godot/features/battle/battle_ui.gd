@@ -43,7 +43,9 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var turn_order: VBoxContainer = $Root/TurnOrder/Margin/Units
 @onready var delay_button: Button = $Root/TurnOrder/Delay
 @onready var status: Label = $Root/BottomBar/Margin/Layout/Actions/Status
+@onready var log_panel: Panel = $Root/LogPanel
 @onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
+@onready var log_visibility_button: Button = $Root/LogVisibilityButton
 @onready var move_cost_popup: PanelContainer = $Root/MoveCostPopup
 @onready var move_cost_label: Label = $Root/MoveCostPopup/Label
 @onready var attack_preview_panel: PanelContainer = $Root/AttackPreview
@@ -89,6 +91,7 @@ func _ready() -> void:
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
 	battle_log.meta_clicked.connect(_on_battle_log_meta_clicked)
 	battle_log.gui_input.connect(_on_battle_log_gui_input)
+	log_visibility_button.toggled.connect(_on_log_visibility_toggled)
 	for action in action_buttons:
 		action_buttons[action].pressed.connect(_on_action_pressed.bind(action))
 		action_buttons[action].mouse_entered.connect(_on_skill_mouse_entered.bind(action))
@@ -394,6 +397,10 @@ func _on_battle_log_gui_input(event: InputEvent) -> void:
 		var scroll_bar := battle_log.get_v_scroll_bar()
 		scroll_bar.value -= event.relative.y
 		battle_log.accept_event()
+
+func _on_log_visibility_toggled(hidden: bool) -> void:
+	log_panel.visible = not hidden
+	log_visibility_button.text = "顯示紀錄" if hidden else "隱藏紀錄"
 
 func colored_unit(unit: String, team: String) -> String:
 	return "[color=%s]%s[/color]" % [TEAM_COLORS[team], unit]

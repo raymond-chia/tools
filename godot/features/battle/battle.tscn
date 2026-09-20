@@ -276,6 +276,20 @@ scroll_active = true
 scroll_following = true
 selection_enabled = true
 
+[node name="LogVisibilityButton" type="Button" parent="UI/Root"]
+z_index = 2
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -164.0
+offset_top = 44.0
+offset_right = -40.0
+offset_bottom = 88.0
+grow_horizontal = 0
+toggle_mode = true
+text = "隱藏紀錄"
+
 [node name="TurnOrder" type="Control" parent="UI/Root"]
 z_index = 1
 layout_mode = 1
@@ -444,11 +458,15 @@ text = "結束回合"
 
 [node name="InfoPanel" type="Panel" parent="UI/Root"]
 visible = false
-layout_mode = 0
-offset_left = 792.0
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -504.0
 offset_top = 36.0
-offset_right = 1272.0
+offset_right = -24.0
 offset_bottom = 816.0
+grow_horizontal = 0
 clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
