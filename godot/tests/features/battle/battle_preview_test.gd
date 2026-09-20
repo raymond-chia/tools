@@ -9,19 +9,20 @@ var runner: GdUnitSceneRunner
 
 func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
+	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
 # 驗證懸停敵人的真實核心預覽、資源與傷害排版、金色外環，以及無格擋時的分段顯示。
 func test_attack_hit_preview() -> void:
-	prepare_case(battle)
+	await prepare_case(battle)
 	push_control_click(battle.ui.action_buttons.aimed_shot)
 	push_mouse_motion(battle.world, battle.world.cell_center(Vector2i(3, 1)))
 
 	var preview: Dictionary = battle.world.attack_preview
 	var target_node: Node2D = battle.world.unit_nodes[battle.world.attack_preview_unit.id]
-	var attack_preview_ring: Sprite2D = target_node.get_node("AttackPreviewRing")
-	var target_base: Sprite2D = target_node.get_node("Base")
+	var attack_preview_ring: Sprite2D = target_node.get_node("Visual/AttackPreviewRing")
+	var target_base: Sprite2D = target_node.get_node("Visual/Base")
 	assert_bool(preview.is_empty()).override_failure_message("懸停可攻擊敵人時應取得命中預覽").is_false()
 	assert_int(int(preview.dodge_chance)).is_equal(10)
 	assert_int(int(preview.block_chance)).is_equal(20)
@@ -71,7 +72,7 @@ func test_attack_hit_preview() -> void:
 
 # 驗證專用 TOML 經真實核心產生的各種血條分段、殘餘 HP 端點、傷害排版與數字避讓。
 func test_attack_preview_visual_variations() -> void:
-	prepare_case(battle)
+	await prepare_case(battle)
 	# 本案例呈現另一個真實核心的預覽，停用地圖輸入以免滑鼠事件清除預覽。
 	battle.world.set_process_unhandled_input(false)
 	var test_data := [
@@ -179,7 +180,7 @@ func test_skill_range_preview() -> void:
 		{"name": "瞄準射擊", "action": "aimed_shot", "button": battle.ui.action_buttons.aimed_shot, "range": 4},
 	]
 	for test_case in test_data:
-		prepare_case(battle)
+		await prepare_case(battle)
 		var actor_cell := actor_cell(battle)
 		push_mouse_motion(battle.world, battle.world.cell_center(actor_cell + Vector2i(3, 0)))
 		assert_bool(battle.world.first_move_path.is_empty()).override_failure_message("%s：選擇技能前應有移動路徑預覽" % test_case.name).is_false()
@@ -201,7 +202,7 @@ func test_two_stage_movement_range_preview() -> void:
 		{"name": "兩段範圍外", "offset": Vector2i(5, 0), "first": false, "second": false},
 	]
 	for test_case in test_data:
-		prepare_case(battle)
+		await prepare_case(battle)
 		var cell: Vector2i = actor_cell(battle) + Vector2i(test_case.offset)
 		var first_cells := cells_from_values(battle.state.reachable)
 		var second_cells := cells_from_values(battle.state.second_reachable)
@@ -216,7 +217,7 @@ func test_movement_path_preview() -> void:
 		{"name": "不可達路徑", "offset": Vector2i(5, 0), "first": [], "second": []},
 	]
 	for test_case in test_data:
-		prepare_case(battle)
+		await prepare_case(battle)
 		var origin := actor_cell(battle)
 		push_mouse_motion(battle.world, battle.world.cell_center(origin + test_case.offset))
 		assert_array(path_x_offsets(battle.world.first_move_path, origin)).override_failure_message("%s：第一段路徑應正確" % test_case.name).is_equal(test_case.first)
@@ -224,7 +225,7 @@ func test_movement_path_preview() -> void:
 
 # 驗證移動路徑碰到地刺時會在觸發格截斷，並啟用危險路徑警示狀態。
 func test_spikes_interrupt_movement_preview() -> void:
-	prepare_case(battle)
+	await prepare_case(battle)
 	var spikes := Vector2i(1, 2)
 	var destination := Vector2i(1, 1)
 	var preview = JSON.parse_string(battle.core.preview_move(battle.state.turn.actor, destination.x, destination.y))
@@ -244,7 +245,7 @@ func test_hovered_tile_movement_total_cost() -> void:
 		{"name": "第二段高消耗地格", "offset": Vector2i(2, 1), "expected": 4},
 	]
 	for test_case in test_data:
-		prepare_case(battle)
+		await prepare_case(battle)
 		var destination: Vector2i = actor_cell(battle) + test_case.offset
 		var preview = JSON.parse_string(battle.core.preview_move(battle.state.turn.actor, destination.x, destination.y))
 
@@ -257,7 +258,7 @@ func test_hovered_tile_movement_total_cost() -> void:
 			assert_bool(popup.visible).override_failure_message("%s：hover tile 應顯示移動總消耗" % test_case.name).is_true()
 			assert_str(popup.get_node("Label").text).override_failure_message("%s：浮動文字應顯示整條路徑的總消耗" % test_case.name).is_equal("移動消耗 %d" % test_case.expected)
 
-	prepare_case(battle)
+	await prepare_case(battle)
 	var destination := actor_cell(battle) + Vector2i(2, 0)
 	push_mouse_motion(battle.world, battle.world.cell_center(destination))
 	push_control_click(battle.ui.action_buttons.melee_attack)
@@ -268,7 +269,7 @@ func test_hovered_tile_movement_total_cost() -> void:
 
 # 驗證游標靠近邊界時，游標浮動面板會共用象限選擇並保持在 viewport 內。
 func test_pointer_popups_use_available_quadrant() -> void:
-	prepare_case(battle)
+	await prepare_case(battle)
 	push_control_click(battle.ui.action_buttons.aimed_shot)
 	push_mouse_motion(battle.world, battle.world.cell_center(Vector2i(3, 1)))
 	var preview: Dictionary = battle.world.attack_preview
@@ -304,7 +305,7 @@ func test_single_click_movement() -> void:
 		{"name": "抵達第二段", "offset": Vector2i(3, 0), "remaining": 1.0, "phase": "moving"},
 	]
 	for test_case in test_data:
-		prepare_case(battle)
+		await prepare_case(battle)
 		var destination: Vector2i = actor_cell(battle) + Vector2i(test_case.offset)
 
 		push_left_click(battle.world, battle.world.cell_center(destination))
@@ -324,9 +325,10 @@ func test_skill_availability_after_movement() -> void:
 		{"name": "單次走完兩段移動", "destinations": [Vector2i(5, 3)], "can_skill": false},
 	]
 	for test_case in test_data:
-		prepare_case(battle)
+		await prepare_case(battle)
 		for destination in test_case.destinations:
 			assert_bool(battle.send({"type": "move", "actor": "aria", "x": destination.x, "y": destination.y})).override_failure_message("%s：測試移動應成功" % test_case.name).is_true()
+		await wait_for_combat_events(battle)
 
 		assert_bool(battle.state.turn.can_skill).override_failure_message("%s：技能可用狀態應正確" % test_case.name).is_equal(test_case.can_skill)
 		assert_bool(battle.ui.action_buttons.aimed_shot.disabled).override_failure_message("%s：技能按鈕狀態應正確" % test_case.name).is_equal(not test_case.can_skill)
@@ -362,6 +364,7 @@ func query_attack_preview(target_id: String, skill_id: String, preparation_skill
 	return preview
 
 func prepare_case(battle) -> void:
+	await wait_for_combat_events(battle)
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
@@ -376,6 +379,11 @@ func prepare_case(battle) -> void:
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
+	await wait_for_combat_events(battle)
+
+func wait_for_combat_events(target_battle) -> void:
+	while target_battle.world.is_presenting_combat_events():
+		await runner.simulate_frames(1)
 
 func actor_cell(battle) -> Vector2i:
 	for unit in battle.state.units:

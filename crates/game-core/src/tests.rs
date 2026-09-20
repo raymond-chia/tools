@@ -226,7 +226,15 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
             skills: Vec::new(),
         },
     ));
-    (Game { world }, actor_position, spikes, destination)
+    (
+        Game {
+            world,
+            movements: Vec::new(),
+        },
+        actor_position,
+        spikes,
+        destination,
+    )
 }
 
 fn attack_skill(ranged: bool, range: i32) -> SkillDef {

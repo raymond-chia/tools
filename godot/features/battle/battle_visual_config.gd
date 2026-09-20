@@ -4,6 +4,20 @@ extends RefCounted
 const ATTACK_PREVIEW_RING_SCALE := 1.20
 const DELAY_SLOT_COLOR := Color(0.35, 0.45, 0.58, 0.65)
 const DELAY_SLOT_HIGHLIGHT_COLOR := Color(1.0, 0.8, 0.25, 1.0)
+const UNIT_MOVE_STEP_DURATION := 0.10
+const ATTACK_LUNGE_DURATION := 0.09
+const ATTACK_LUNGE_DISTANCE := 14.0
+const HIT_FLASH_DURATION := 0.08
+const HIT_SHAKE_DISTANCE := 6.0
+const DEATH_FADE_DURATION := 0.28
+const COMBAT_RESULT_HOLD := 0.45
+const COMBAT_EVENT_PAUSE := 0.18
+const FLOATING_TEXT_DURATION := 0.8
+const FLOATING_TEXT_RISE := 42.0
+const DAMAGE_TEXT_COLOR := Color(1.0, 0.32, 0.28)
+const BLOCK_TEXT_COLOR := Color(1.0, 0.76, 0.28)
+const DODGE_TEXT_COLOR := Color(0.45, 0.85, 1.0)
+const HEALING_TEXT_COLOR := Color(0.35, 1.0, 0.58)
 const UNIT_ART := {
 	"aria": preload("res://assets/units/fighter.svg"), "kael": preload("res://assets/units/fighter.svg"),
 	"lyra": preload("res://assets/units/archer.svg"),

@@ -8,9 +8,10 @@ var runner: GdUnitSceneRunner
 
 func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
+	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	load_test_definition()
+	await load_test_definition()
 
 # 驗證延後模式以橫棒標示插入位置，並將目前單位排到所選單位之後。
 func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
@@ -21,7 +22,7 @@ func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
 
 	assert_bool(marker.color.is_equal_approx(BattleVisualConfig.DELAY_SLOT_COLOR)).override_failure_message("延後位置平時應顯示低亮度橫棒").is_true()
 	battle.ui.delay_button.pressed.emit()
-	await runner.simulate_frames(1)
+	await wait_for_combat_events()
 	target_slot = battle.ui.turn_order.get_child(battle.ui.turn_order.get_child_count() - 1)
 	marker = target_slot.get_child(0)
 	var target_button: Button = target_slot.get_child(1)
@@ -30,7 +31,7 @@ func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
 	assert_bool(marker.color.is_equal_approx(BattleVisualConfig.DELAY_SLOT_HIGHLIGHT_COLOR)).override_failure_message("游標指向的延後位置應高亮").is_true()
 
 	battle._on_delay_target_selected(target_actor)
-	await runner.simulate_frames(1)
+	await wait_for_combat_events()
 
 	assert_str(battle.status).override_failure_message("延後指令應成功").is_empty()
 	assert_str(battle.state.turn.actor).override_failure_message("所選單位應成為目前行動者；預期 %s，實際 %s" % [target_actor, battle.state.turn.actor]).is_equal(target_actor)
@@ -45,12 +46,13 @@ func test_delay_is_disabled_after_moving() -> void:
 	assert_dict(destination).override_failure_message("測試資料應提供未占用的可達格").is_not_empty()
 	var moved: bool = battle.send({"type": "move", "actor": actor, "x": int(destination.x), "y": int(destination.y)})
 	assert_bool(moved).override_failure_message("測試單位應能移動到可達格：%s" % battle.status).is_true()
-	await runner.simulate_frames(1)
+	await wait_for_combat_events()
 
 	assert_bool(battle.state.turn.can_delay).override_failure_message("移動後核心應禁止延後").is_false()
 	assert_bool(battle.ui.delay_button.disabled).override_failure_message("移動後延後按鈕應停用").is_true()
 
 func load_test_definition() -> void:
+	await wait_for_combat_events()
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
@@ -64,6 +66,11 @@ func load_test_definition() -> void:
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
+	await wait_for_combat_events()
+
+func wait_for_combat_events() -> void:
+	while battle.world.is_presenting_combat_events():
+		await runner.simulate_frames(1)
 
 func empty_reachable_cell() -> Dictionary:
 	for reachable in battle.state.reachable:

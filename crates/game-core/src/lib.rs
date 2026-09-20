@@ -247,6 +247,13 @@ pub struct Snapshot {
     pub round: u32,
     pub outcome: Outcome,
     pub log: Vec<CombatLogEvent>,
+    pub movements: Vec<MovementTransition>,
+}
+#[derive(Clone, Serialize)]
+pub struct MovementTransition {
+    pub unit_id: String,
+    pub path: Vec<GridPos>,
+    pub before_log_index: usize,
 }
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -448,6 +455,7 @@ pub struct TurnView {
 
 pub struct Game {
     world: World,
+    movements: Vec<MovementTransition>,
 }
 struct MovePlan {
     entity: Entity,
@@ -552,9 +560,13 @@ impl Game {
                 },
             ));
         }
-        Ok(Self { world: w })
+        Ok(Self {
+            world: w,
+            movements: Vec::new(),
+        })
     }
     pub fn command(&mut self, c: Command) -> Result<Snapshot, String> {
+        self.movements.clear();
         if self.world.resource::<ResultState>().0 != Outcome::Ongoing {
             return Ok(self.snapshot());
         }
@@ -1399,14 +1411,18 @@ impl Game {
                     .get::<Unit>(e)
                     .expect("已建立的戰鬥單位應具有 Unit 元件")
                     .movement;
-                if let Some(last) = toward(&self.world, e, start, goal, fp, b)
-                    .as_ref()
-                    .and_then(|path| path.last())
-                {
-                    self.world
-                        .get_mut::<Pos>(e)
-                        .expect("已建立的戰鬥單位應具有 Pos 元件")
-                        .0 = *last
+                if let Some(path) = toward(&self.world, e, start, goal, fp, b) {
+                    if let Some(last) = path.last() {
+                        self.movements.push(MovementTransition {
+                            unit_id: a.clone(),
+                            path: path.clone(),
+                            before_log_index: self.world.resource::<Log>().0.len(),
+                        });
+                        self.world
+                            .get_mut::<Pos>(e)
+                            .expect("已建立的戰鬥單位應具有 Pos 元件")
+                            .0 = *last
+                    }
                 }
             }
             if entity_distance(&self.world, e, t) <= gameplay_config::DEFAULT_MELEE_RANGE {
@@ -1655,6 +1671,7 @@ impl Game {
             round: enc.round,
             outcome: self.world.resource::<ResultState>().0,
             log: self.world.resource::<Log>().0.iter().cloned().collect(),
+            movements: self.movements.clone(),
         }
     }
 }

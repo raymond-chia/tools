@@ -5,6 +5,7 @@ extends Node
 
 var core
 var state: Dictionary = {}
+var displayed_state: Dictionary = {}
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
 var inspected_skill := ""
@@ -16,6 +17,7 @@ func _ready() -> void:
 	world.inspection_clicked.connect(_on_inspection_clicked)
 	world.move_preview_changed.connect(ui.present_move_cost)
 	world.attack_preview_changed.connect(ui.present_attack_preview)
+	world.combat_events_finished.connect(_on_combat_events_finished)
 	world.read_core_response = read_core_response
 	ui.action_selected.connect(select_action)
 	ui.end_turn_requested.connect(_on_end_turn_requested)
@@ -61,15 +63,28 @@ func show_error(message: String) -> void:
 
 func present() -> void:
 	world.present(state, pending_action, inspected_cell, core)
-	ui.present(state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
+	if not world.is_presenting_combat_events():
+		displayed_state = state
+	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
+
+func _on_combat_events_finished() -> void:
+	displayed_state = state
+	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
+
+func input_is_locked() -> bool:
+	return world.is_presenting_combat_events()
 
 func select_action(action: String) -> void:
+	if input_is_locked():
+		return
 	selecting_delay = false
 	pending_action = action
 	status = "請選擇施法格子。" if pending_action_targets_cell() else "請選擇技能目標。"
 	present()
 
 func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
+	if input_is_locked():
+		return
 	if selecting_delay:
 		return
 	if pending_action != "":
@@ -84,9 +99,13 @@ func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
 		return
 	if state.is_empty() or state.turn.actor == null or not world.is_cell_on_board(cell):
 		return
-	send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y})
+	world.prepare_move_animation(state.turn.actor, cell)
+	if not send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y}):
+		world.cancel_move_animation()
 
 func _on_inspection_clicked(unit_id: String, cell: Vector2i) -> void:
+	if input_is_locked():
+		return
 	if pending_action != "" and (unit_id == "" or world.unit_occupies_cell_id(unit_id, inspected_cell)):
 		pending_action = ""
 		status = "已取消技能。"
@@ -99,11 +118,15 @@ func _on_inspection_clicked(unit_id: String, cell: Vector2i) -> void:
 	present()
 
 func _close_inspection() -> void:
+	if input_is_locked():
+		return
 	inspected_cell = Vector2i(-1, -1)
 	inspected_skill = ""
 	present()
 
 func _on_skill_inspection_requested(skill_id: String) -> void:
+	if input_is_locked():
+		return
 	inspected_cell = Vector2i(-1, -1)
 	inspected_skill = "" if inspected_skill == skill_id else skill_id
 	present()
@@ -133,6 +156,8 @@ func pending_action_targets_cell() -> bool:
 	return false
 
 func _on_end_turn_requested() -> void:
+	if input_is_locked():
+		return
 	if state.is_empty() or state.turn.actor == null:
 		return
 	pending_action = ""
@@ -140,6 +165,8 @@ func _on_end_turn_requested() -> void:
 	send({"type": "end_turn", "actor": state.turn.actor})
 
 func _on_delay_selection_requested() -> void:
+	if input_is_locked():
+		return
 	if state.is_empty() or not state.turn.can_delay:
 		return
 	pending_action = ""
@@ -148,6 +175,8 @@ func _on_delay_selection_requested() -> void:
 	present()
 
 func _on_delay_target_selected(unit_id: String) -> void:
+	if input_is_locked():
+		return
 	if not selecting_delay or state.is_empty() or state.turn.actor == null:
 		return
 	var actor: String = state.turn.actor

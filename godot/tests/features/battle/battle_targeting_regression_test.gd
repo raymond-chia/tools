@@ -8,12 +8,13 @@ var runner: GdUnitSceneRunner
 
 func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
+	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
 # 驗證點擊大型單位所占的指定格施放泥沼時，只在該格建立一份地形。
 func test_mire_on_large_unit_uses_only_clicked_cell() -> void:
-	load_test_definition()
+	await load_test_definition()
 	var clicked_cell := Vector2i(5, 2)
 	battle.select_action("corrosive_mire")
 
@@ -30,7 +31,7 @@ func test_mire_on_large_unit_uses_only_clicked_cell() -> void:
 
 # 驗證查看大型單位時保留實際點擊格，不改寫為 footprint 的儲存座標。
 func test_inspection_keeps_clicked_large_unit_cell() -> void:
-	load_test_definition()
+	await load_test_definition()
 	var clicked_cell := Vector2i(5, 2)
 
 	push_mouse_button(battle.world.cell_center(clicked_cell), MOUSE_BUTTON_RIGHT)
@@ -39,7 +40,7 @@ func test_inspection_keeps_clicked_large_unit_cell() -> void:
 
 # 驗證單體技能射程以大型單位的實際點擊格計算，而不是任意代表格。
 func test_unit_skill_uses_clicked_large_unit_cell() -> void:
-	load_test_definition()
+	await load_test_definition()
 	battle.select_action("shield_bash")
 	push_mouse_button(battle.world.cell_center(Vector2i(5, 2)), MOUSE_BUTTON_LEFT)
 	assert_str(battle.status).override_failure_message("點擊射程外的占用格應由核心拒絕").is_equal("目標超出射程")
@@ -52,7 +53,7 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 
 # 驗證泥沼增加移動消耗，且只維持技能設定的兩個回合。
 func test_mire_movement_cost_and_duration() -> void:
-	load_test_definition()
+	await load_test_definition()
 	var mire_cell := Vector2i(1, 1)
 	assert_bool(battle.send({"type": "cell_skill", "actor": "aria", "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
 	var terrain := terrain_at(mire_cell)
@@ -63,7 +64,7 @@ func test_mire_movement_cost_and_duration() -> void:
 
 # 驗證推擊命中會沿攻擊者到目標的方向移動一格。
 func test_push_hit_moves_target_one_cell() -> void:
-	load_test_definition()
+	await load_test_definition()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "wolf_a", "x": 2, "y": 1, "skill": "shield_bash"})).override_failure_message("推擊應成功命中測試目標").is_true()
 	var target := unit_with_id("wolf_a")
 	assert_int(int(target.x)).override_failure_message("目標應沿攻擊方向向右移動一格").is_equal(3)
@@ -74,7 +75,7 @@ func test_push_hit_moves_target_one_cell() -> void:
 
 # 驗證大型目標無法被推出地圖時不移動，並受到碰撞傷害。
 func test_blocked_push_deals_collision_damage() -> void:
-	load_test_definition()
+	await load_test_definition()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "ogre", "x": 4, "y": 1, "skill": "shield_bash"})).override_failure_message("對地圖邊界的大型目標推擊應完成結算").is_true()
 	var target := unit_with_id("ogre")
 	assert_int(int(target.x)).override_failure_message("受阻的大型目標不應移動").is_equal(4)
@@ -85,7 +86,7 @@ func test_blocked_push_deals_collision_damage() -> void:
 
 # 驗證倒下單位不再占用格子，玩家可移動到原本的屍體位置。
 func test_downed_unit_does_not_block_cell() -> void:
-	load_test_definition()
+	await load_test_definition()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "wolf_a", "x": 2, "y": 1, "skill": "finishing_strike"})).override_failure_message("終結攻擊應使測試目標倒下").is_true()
 	assert_dict(unit_with_id("wolf_a")).override_failure_message("倒下單位不應出現在 presentation snapshot").is_empty()
 	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 2, "y": 1})).override_failure_message("屍體所在格應可進入").is_true()
@@ -94,6 +95,7 @@ func test_downed_unit_does_not_block_cell() -> void:
 	assert_int(int(actor.y)).is_equal(1)
 
 func load_test_definition() -> void:
+	await wait_for_combat_events()
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
@@ -106,6 +108,11 @@ func load_test_definition() -> void:
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
+	await wait_for_combat_events()
+
+func wait_for_combat_events() -> void:
+	while battle.world.is_presenting_combat_events():
+		await runner.simulate_frames(1)
 
 func push_left_click(local_position: Vector2) -> void:
 	push_mouse_button(local_position, MOUSE_BUTTON_LEFT)

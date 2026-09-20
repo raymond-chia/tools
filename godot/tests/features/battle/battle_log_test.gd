@@ -8,9 +8,10 @@ var runner: GdUnitSceneRunner
 
 func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
+	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	load_test_definition()
+	await load_test_definition()
 
 # 驗證開始戰鬥會記錄新回合，並以整數顯示回合數。
 func test_new_round_log() -> void:
@@ -34,6 +35,7 @@ func test_new_round_log_contains_initiative_rolls() -> void:
 func test_log_entries_use_event_default_expansion() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合與先攻紀錄應預設摺疊").is_false()
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	await wait_for_combat_events()
 	var skill_index := find_last_event_index("skill")
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應預設展開").is_true()
 
@@ -43,6 +45,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合紀錄應可獨立展開").is_true()
 	assert_str(battle.ui.battle_log.text).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	await wait_for_combat_events()
 	var skill_index := find_last_event_index("skill")
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新增紀錄後應保留既有展開狀態").is_true()
 	battle.ui.toggle_log_entry(skill_index)
@@ -53,6 +56,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 # 驗證技能紀錄包含判定雙方數值、結果、暴擊、傷害與剩餘生命，且 UI 以整數顯示其意義。
 func test_skill_resolution_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	await wait_for_combat_events()
 	var event := find_last_event("skill")
 	assert_dict(event).override_failure_message("應產生技能事件").is_not_empty()
 	assert_str(event.actor).is_equal("測試劍士")
@@ -81,6 +85,7 @@ func test_skill_resolution_log() -> void:
 # 驗證技能使生命歸零時會記錄倒下狀態與對應顯示文字。
 func test_downed_unit_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_b", "finishing_strike"))).override_failure_message("終結技能應成功施放").is_true()
+	await wait_for_combat_events()
 	var event := find_last_event("skill")
 	assert_bool(event.downed).override_failure_message("生命歸零的目標應標記為倒下").is_true()
 	assert_int(int(event.remaining_hp)).override_failure_message("倒下目標的剩餘生命應為零").is_zero()
@@ -92,6 +97,7 @@ func test_spikes_damage_log() -> void:
 	assert_str(terrain.kind).override_failure_message("測試地格應標記為地刺").is_equal("spikes")
 	assert_int(int(terrain.damage)).override_failure_message("地刺資訊應由核心提供固定傷害").is_equal(3)
 	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 0, "y": 2})).override_failure_message("移動到地刺地格應成功").is_true()
+	await wait_for_combat_events()
 	var event := find_last_event("terrain_damage")
 	assert_dict(event).override_failure_message("應產生地形傷害事件").is_not_empty()
 	assert_str(event.target).is_equal("測試劍士")
@@ -111,6 +117,7 @@ func test_spikes_damage_log() -> void:
 func test_battle_log_can_be_dragged_to_scroll() -> void:
 	for index in 12:
 		assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("第 %d 次測試攻擊應成功" % index).is_true()
+	await wait_for_combat_events()
 	await runner.simulate_frames(2)
 	var scroll_bar: VScrollBar = battle.ui.battle_log.get_v_scroll_bar()
 	scroll_bar.value = scroll_bar.max_value
@@ -137,6 +144,7 @@ func test_battle_log_content_stays_inside_panel_width() -> void:
 	assert_bool(panel.get_global_rect().encloses(battle.ui.battle_log.get_global_rect())).override_failure_message("戰鬥紀錄控制項應完整位於面板內").is_true()
 
 func load_test_definition() -> void:
+	await wait_for_combat_events()
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
@@ -148,6 +156,11 @@ func load_test_definition() -> void:
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
+	await wait_for_combat_events()
+
+func wait_for_combat_events() -> void:
+	while battle.world.is_presenting_combat_events():
+		await runner.simulate_frames(1)
 
 func skill_command(target: String, skill: String) -> Dictionary:
 	var unit := unit_with_id(target)

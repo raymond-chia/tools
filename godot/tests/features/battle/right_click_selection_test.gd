@@ -8,6 +8,7 @@ var runner: GdUnitSceneRunner
 
 func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
+	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
@@ -21,7 +22,7 @@ func test_inspection_changes_from_right_click() -> void:
 		{"name": "切換查看單位", "initial": "unit:aria", "click": "unit:lyra", "expected": "unit:lyra"},
 	]
 	for test_case in test_data:
-		prepare_case(battle, test_case.initial)
+		await prepare_case(battle, test_case.initial)
 		var state_before_input: Dictionary = battle.state.duplicate(true)
 
 		push_mouse_button(battle.world, target_point(battle, test_case.click), true)
@@ -40,7 +41,7 @@ func test_pending_action_right_click_priority() -> void:
 		{"name": "右鍵空地時取消技能", "initial": "unit:aria", "click": "empty", "result": "cancel"},
 	]
 	for test_case in test_data:
-		prepare_case(battle, test_case.initial)
+		await prepare_case(battle, test_case.initial)
 		battle.select_action("melee")
 		var state_before_input: Dictionary = battle.state.duplicate(true)
 
@@ -61,7 +62,7 @@ func test_ignored_right_click_inputs() -> void:
 		{"name": "右鍵放開", "input": "released"},
 	]
 	for test_case in test_data:
-		prepare_case(battle, "unit:aria")
+		await prepare_case(battle, "unit:aria")
 		var state_before_input: Dictionary = battle.state.duplicate(true)
 
 		if test_case.input == "outside":
@@ -75,7 +76,7 @@ func test_ignored_right_click_inputs() -> void:
 
 # 驗證單位詳情可從標題列以左鍵拖曳，且放開左鍵後即停止移動。
 func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
-	prepare_case(battle, "unit:aria")
+	await prepare_case(battle, "unit:aria")
 	var info_panel: Panel = battle.ui.info_panel
 	var header: Control = info_panel.get_node("Margin/Content/Header")
 	var initial_position := info_panel.position
@@ -91,7 +92,7 @@ func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
 
 # 驗證詳情面板遇到無斷點長文字時，所有可見內容仍留在左右邊界內。
 func test_inspection_content_stays_inside_panel_width() -> void:
-	prepare_case(battle, "unit:aria")
+	await prepare_case(battle, "unit:aria")
 	var info_panel: Panel = battle.ui.info_panel
 	var unit_name: Label = info_panel.get_node("Margin/Content/UnitDetails/UnitName")
 	var terrain_effect: Label = info_panel.get_node("Margin/Content/TerrainRows/EffectValue")
@@ -107,13 +108,14 @@ func test_inspection_content_stays_inside_panel_width() -> void:
 		assert_float(control_rect.end.x).override_failure_message("%s 不應超出詳情面板右側" % control.get_path()).is_less_equal(panel_rect.end.x)
 
 func prepare_case(battle, initial_target: String) -> void:
-	load_test_definition(battle)
+	await load_test_definition(battle)
 	battle.inspected_cell = target_cell(battle, initial_target)
 	battle.pending_action = ""
 	battle.status = ""
 	battle.present()
 
 func load_test_definition(battle) -> void:
+	await wait_for_combat_events(battle)
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
@@ -127,6 +129,11 @@ func load_test_definition(battle) -> void:
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
+	await wait_for_combat_events(battle)
+
+func wait_for_combat_events(target_battle) -> void:
+	while target_battle.world.is_presenting_combat_events():
+		await runner.simulate_frames(1)
 
 func target_point(battle, target: String) -> Vector2:
 	if target == "empty":
@@ -165,7 +172,7 @@ func assert_inspection(battle, expected_target: String, case_name: String) -> vo
 	assert_vector(battle.inspected_cell).override_failure_message("%s：查看格應正確" % case_name).is_equal(target_cell(battle, expected_target))
 	var selected_unit_id := expected_target.get_slice(":", 1) if expected_target.begins_with("unit:") else ""
 	for unit_id in battle.world.unit_nodes:
-		var selection = battle.world.unit_nodes[unit_id].get_node("Selection")
+		var selection = battle.world.unit_nodes[unit_id].get_node("Visual/Selection")
 		assert_bool(selection.visible).override_failure_message("%s：%s 的選取圈可見性應正確" % [case_name, unit_id]).is_equal(unit_id == selected_unit_id)
 
 func push_mouse_button(battle, local_position: Vector2, pressed: bool) -> void:
