@@ -23,6 +23,7 @@ func _ready() -> void:
 	ui.end_turn_requested.connect(_on_end_turn_requested)
 	ui.delay_selection_requested.connect(_on_delay_selection_requested)
 	ui.delay_target_selected.connect(_on_delay_target_selected)
+	ui.turn_order_focus_requested.connect(_on_turn_order_focus_requested)
 	ui.inspection_closed.connect(_close_inspection)
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	core = TacticalGame.new()
@@ -182,3 +183,13 @@ func _on_delay_target_selected(unit_id: String) -> void:
 	var actor: String = state.turn.actor
 	selecting_delay = false
 	send({"type": "delay", "actor": actor, "after": unit_id})
+
+func _on_turn_order_focus_requested(unit_id: String) -> void:
+	if input_is_locked():
+		return
+	world.focus_unit(unit_id)
+	if world.unit_id_at_cell(inspected_cell).is_empty():
+		return
+	inspected_cell = world.unit_cell(unit_id)
+	inspected_skill = ""
+	present()

@@ -13,6 +13,7 @@ const BASE_ART := preload("res://assets/units/faction_base.svg")
 
 @onready var ground: TileMapLayer = $Ground
 @onready var units_layer: Node2D = $Units
+@onready var camera: Camera2D = get_node("../Camera2D")
 var state: Dictionary = {}
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
@@ -36,6 +37,8 @@ var combat_event_queue: Array[Dictionary] = []
 var playing_combat_events := false
 var pending_death_ids := {}
 var pending_movement_ids := {}
+var camera_tween: Tween
+var camera_bounds := Rect2()
 
 func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
@@ -53,6 +56,18 @@ func setup_map(snapshot: Dictionary) -> void:
 	for terrain in state.terrain_cells:
 		var atlas_cell := Vector2i(1, 0) if terrain.base_kind == "rough" else Vector2i.ZERO
 		ground.set_cell(Vector2i(terrain.x, terrain.y), 0, atlas_cell)
+	update_camera_bounds()
+
+func _process(delta: float) -> void:
+	var direction := Vector2(
+		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
+		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
+	)
+	if direction.is_zero_approx():
+		return
+	if camera_tween != null and camera_tween.is_valid():
+		camera_tween.kill()
+	camera.position = clamp_camera_position(camera.position + direction.normalized() * BattleVisualConfig.CAMERA_MOVE_SPEED * delta)
 
 func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core) -> void:
 	var previous_state := state
@@ -103,6 +118,45 @@ func cell_center(cell: Vector2i) -> Vector2:
 
 func point_to_cell(point: Vector2) -> Vector2i:
 	return ground.local_to_map(point - ground.position)
+
+func focus_unit(unit_id: String) -> void:
+	var unit := unit_with_id(state.get("units", []), unit_id)
+	if unit.is_empty():
+		return
+	if camera_tween != null and camera_tween.is_valid():
+		camera_tween.kill()
+	camera_tween = create_tween().bind_node(camera)
+	var destination := clamp_camera_position(to_global(footprint_center(unit)))
+	camera_tween.tween_property(camera, "position", destination, BattleVisualConfig.CAMERA_FOCUS_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func update_camera_bounds() -> void:
+	if state.terrain_cells.is_empty():
+		camera_bounds = Rect2()
+		return
+	var first_terrain: Dictionary = state.terrain_cells[0]
+	var first_center := to_global(cell_center(Vector2i(first_terrain.x, first_terrain.y)))
+	var minimum := first_center
+	var maximum := first_center
+	for terrain in state.terrain_cells.slice(1):
+		var center := to_global(cell_center(Vector2i(terrain.x, terrain.y)))
+		minimum = minimum.min(center)
+		maximum = maximum.max(center)
+	camera_bounds = Rect2(minimum, maximum - minimum).grow(BattleVisualConfig.CAMERA_BOUNDS_MARGIN)
+
+func clamp_camera_position(position: Vector2) -> Vector2:
+	if camera_bounds.has_area():
+		return position.clamp(camera_bounds.position, camera_bounds.end)
+	return position
+
+func unit_id_at_cell(cell: Vector2i) -> String:
+	var unit := unit_at_cell(cell)
+	return unit.id if not unit.is_empty() else ""
+
+func unit_cell(unit_id: String) -> Vector2i:
+	var unit := unit_with_id(state.get("units", []), unit_id)
+	if unit.is_empty():
+		return Vector2i(-1, -1)
+	return Vector2i(unit.x, unit.y)
 
 func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 	var current_unit_ids := {}
@@ -522,7 +576,6 @@ func draw_spikes(cell: Vector2i) -> void:
 func _draw() -> void:
 	if state.is_empty():
 		return
-	draw_string(UI_FONT,Vector2(26,44),"灰燼谷伏擊",HORIZONTAL_ALIGNMENT_LEFT,-1,36,Color("f2d49b"))
 	if pending_action == "" and not is_presenting_combat_events():
 		for cell in state.second_reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.04,0.15,0.42,0.38),Color(0.12,0.32,0.72,0.9))
 		for cell in state.reachable: draw_marker(Vector2i(cell.x,cell.y),Color(0.12,0.48,0.95,0.3),Color(0.3,0.68,1.0,0.92))

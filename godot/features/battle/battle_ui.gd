@@ -4,6 +4,7 @@ signal action_selected(action: String)
 signal end_turn_requested
 signal delay_selection_requested
 signal delay_target_selected(unit_id: String)
+signal turn_order_focus_requested(unit_id: String)
 signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
 
@@ -194,10 +195,10 @@ func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 		button.tooltip_text = unit.name
-		button.mouse_filter = Control.MOUSE_FILTER_STOP if selecting_delay else Control.MOUSE_FILTER_IGNORE
-		button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true))
-		button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false))
-		button.pressed.connect(_on_turn_order_pressed.bind(unit.id))
+		button.mouse_filter = Control.MOUSE_FILTER_STOP
+		button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true, selecting_delay))
+		button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false, selecting_delay))
+		button.pressed.connect(_on_turn_order_pressed.bind(unit.id, selecting_delay))
 		slot.add_child(button)
 		turn_order.add_child(slot)
 
@@ -206,11 +207,14 @@ func clear_turn_order() -> void:
 		turn_order.remove_child(child)
 		child.queue_free()
 
-func _on_turn_order_pressed(unit_id: String) -> void:
-	delay_target_selected.emit(unit_id)
+func _on_turn_order_pressed(unit_id: String, selecting_delay: bool) -> void:
+	if selecting_delay:
+		delay_target_selected.emit(unit_id)
+		return
+	turn_order_focus_requested.emit(unit_id)
 
-func _on_delay_target_hovered(marker: ColorRect, highlighted: bool) -> void:
-	marker.color = BattleVisualConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted else BattleVisualConfig.DELAY_SLOT_COLOR
+func _on_delay_target_hovered(marker: ColorRect, highlighted: bool, selecting_delay: bool) -> void:
+	marker.color = BattleVisualConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted and selecting_delay else BattleVisualConfig.DELAY_SLOT_COLOR
 
 func present_status(message: String) -> void:
 	status.text = message
