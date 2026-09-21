@@ -1,6 +1,10 @@
 class_name BattleVisualConfig
 extends RefCounted
 
+const UI_Z_BASE := 0
+const UI_Z_INSPECTION := 10
+const UI_Z_TOOLTIP := 20
+
 const ATTACK_PREVIEW_RING_SCALE := 1.20
 const DELAY_SLOT_COLOR := Color(0.35, 0.45, 0.58, 0.65)
 const DELAY_SLOT_HIGHLIGHT_COLOR := Color(1.0, 0.8, 0.25, 1.0)

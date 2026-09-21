@@ -37,12 +37,12 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var inspected_skill_details: VBoxContainer = $Root/InfoPanel/Margin/Content/SkillDetails
 @onready var inspected_skill_name: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Name
 @onready var inspected_skill_description: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Details
-@onready var actor_name: Label = $Root/BottomBar/Margin/Layout/Actor/NameAndMovement/Name
-@onready var actor_portrait: TextureRect = $Root/BottomBar/Margin/Layout/Actor/Portrait
-@onready var movement: Label = $Root/BottomBar/Margin/Layout/Actor/NameAndMovement/Movement
-@onready var turn_order: VBoxContainer = $Root/TurnOrder/Margin/Units
-@onready var delay_button: Button = $Root/TurnOrder/Delay
-@onready var status: Label = $Root/BottomBar/Margin/Layout/Actions/Status
+@onready var actor_name: Label = $Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/NameAndMovement/Name
+@onready var actor_portrait: TextureRect = $Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/Portrait
+@onready var movement: Label = $Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/NameAndMovement/Movement
+@onready var turn_order: VBoxContainer = $Root/LeftColumn/TurnOrder/Margin/Units
+@onready var delay_button: Button = $Root/LeftColumn/TurnOrder/Delay
+@onready var status: Label = $Root/Status
 @onready var log_panel: Panel = $Root/LogPanel
 @onready var battle_log: RichTextLabel = $Root/LogPanel/Margin/Content/Entries
 @onready var log_visibility_button: Button = $Root/LogVisibilityButton
@@ -69,13 +69,13 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var hovered_skill_title: Label = $Root/HoveredSkill/Margin/Content/Title
 @onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
 @onready var action_buttons := {
-	"melee_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Melee,
-	"ranged_attack": $Root/BottomBar/Margin/Layout/Actions/Buttons/Ranged,
-	"power_strike": $Root/BottomBar/Margin/Layout/Actions/Buttons/PowerStrike,
-	"aimed_shot": $Root/BottomBar/Margin/Layout/Actions/Buttons/AimedShot,
-	"shield_bash": $Root/BottomBar/Margin/Layout/Actions/Buttons/ShieldBash,
-	"corrosive_mire": $Root/BottomBar/Margin/Layout/Actions/Buttons/CorrosiveMire,
-	"heal": $Root/BottomBar/Margin/Layout/Actions/Buttons/Heal,
+	"melee_attack": $Root/ActionBar/Margin/Layout/Actions/Buttons/Melee,
+	"ranged_attack": $Root/ActionBar/Margin/Layout/Actions/Buttons/Ranged,
+	"power_strike": $Root/ActionBar/Margin/Layout/Actions/Buttons/PowerStrike,
+	"aimed_shot": $Root/ActionBar/Margin/Layout/Actions/Buttons/AimedShot,
+	"shield_bash": $Root/ActionBar/Margin/Layout/Actions/Buttons/ShieldBash,
+	"corrosive_mire": $Root/ActionBar/Margin/Layout/Actions/Buttons/CorrosiveMire,
+	"heal": $Root/ActionBar/Margin/Layout/Actions/Buttons/Heal,
 }
 var dragging_info_panel := false
 var drag_offset := Vector2.ZERO
@@ -86,6 +86,7 @@ var presented_skills: Array = []
 var hovered_skill_id := ""
 
 func _ready() -> void:
+	apply_ui_z_order()
 	$Root/AttackPreview/Margin/Content/HealthImpactBar.resized.connect(func(): position_health_markers.call_deferred())
 	$Root/InfoPanel/Margin/Content/Header.gui_input.connect(_on_header_gui_input)
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
@@ -97,8 +98,19 @@ func _ready() -> void:
 		action_buttons[action].mouse_entered.connect(_on_skill_mouse_entered.bind(action))
 		action_buttons[action].mouse_exited.connect(_on_skill_mouse_exited.bind(action))
 		action_buttons[action].gui_input.connect(_on_skill_gui_input.bind(action))
-	$Root/BottomBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
+	$Root/ActionBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 	delay_button.pressed.connect(func(): delay_selection_requested.emit())
+
+func apply_ui_z_order() -> void:
+	$Root/LogPanel.z_index = BattleVisualConfig.UI_Z_BASE
+	$Root/LogVisibilityButton.z_index = BattleVisualConfig.UI_Z_BASE
+	$Root/LeftColumn.z_index = BattleVisualConfig.UI_Z_BASE
+	$Root/LeftColumn/TurnOrder.z_index = BattleVisualConfig.UI_Z_BASE
+	$Root/ActionBar.z_index = BattleVisualConfig.UI_Z_BASE
+	info_panel.z_index = BattleVisualConfig.UI_Z_INSPECTION
+	move_cost_popup.z_index = BattleVisualConfig.UI_Z_TOOLTIP
+	attack_preview_panel.z_index = BattleVisualConfig.UI_Z_TOOLTIP
+	hovered_skill_card.z_index = BattleVisualConfig.UI_Z_TOOLTIP
 
 func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, inspected_skill_id: String, status_text: String, selecting_delay: bool) -> void:
 	present_status(status_text)
@@ -113,10 +125,10 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		hovered_skill_card.hide()
 		for button in action_buttons.values():
 			button.disabled = true
-		$Root/BottomBar/Margin/Layout/EndTurn.disabled = true
+		$Root/ActionBar/Margin/Layout/EndTurn.disabled = true
 		delay_button.disabled = true
 		return
-	$Root/BottomBar/Margin/Layout/EndTurn.disabled = not snapshot.turn.can_end_turn
+	$Root/ActionBar/Margin/Layout/EndTurn.disabled = not snapshot.turn.can_end_turn
 	update_log_entry_states(snapshot.log)
 	presented_log_events = snapshot.log.duplicate(true)
 	var formatted_log := format_log(presented_log_events)

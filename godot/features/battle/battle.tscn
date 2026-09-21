@@ -1,36 +1,35 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3 uid="uid://du8pevrnneeno"]
 
-[ext_resource path="res://features/battle/battle.gd" type="Script" id="1"]
-[ext_resource path="res://features/battle/battle_world.gd" type="Script" id="2"]
-[ext_resource path="res://features/battle/battle_ui.gd" type="Script" id="3"]
-[ext_resource path="res://features/battle/battle_theme.tres" type="Theme" id="4"]
+[ext_resource type="Script" uid="uid://c1xw524esk6pd" path="res://features/battle/battle.gd" id="1"]
+[ext_resource type="Script" uid="uid://deai6ca2tbw2a" path="res://features/battle/battle_world.gd" id="2"]
+[ext_resource type="Script" uid="uid://d1qgddtm0w0tj" path="res://features/battle/battle_ui.gd" id="3"]
+[ext_resource type="Theme" path="res://features/battle/battle_theme.tres" id="4"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_log"]
 bg_color = Color(0.055, 0.067, 0.086, 1)
 
-[node name="Battle" type="Node"]
+[node name="Battle" type="Node" unique_id=341550505]
 script = ExtResource("1")
 
-[node name="World" type="Node2D" parent="."]
+[node name="World" type="Node2D" parent="." unique_id=1134298430]
 scale = Vector2(1.5, 1.5)
 script = ExtResource("2")
 
-[node name="Ground" type="TileMapLayer" parent="World"]
-position = Vector2(212, 360)
+[node name="Ground" type="TileMapLayer" parent="World" unique_id=1570646684]
 z_index = -10
+position = Vector2(212, 360)
 
-[node name="Units" type="Node2D" parent="World"]
+[node name="Units" type="Node2D" parent="World" unique_id=563973539]
 z_index = 1
 y_sort_enabled = true
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=480117644]
 position = Vector2(960, 540)
 
-[node name="UI" type="CanvasLayer" parent="."]
-layer = 1
+[node name="UI" type="CanvasLayer" parent="." unique_id=380245762]
 script = ExtResource("3")
 
-[node name="Root" type="Control" parent="UI"]
+[node name="Root" type="Control" parent="UI" unique_id=1151572582]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -40,158 +39,158 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("4")
 
-[node name="BattleTitle" type="Label" parent="UI/Root"]
+[node name="BattleTitle" type="Label" parent="UI/Root" unique_id=1712591140]
+layout_mode = 0
 offset_left = 39.0
 offset_top = 12.0
 offset_right = 420.0
 offset_bottom = 78.0
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.94902, 0.831373, 0.607843, 1)
 theme_override_font_sizes/font_size = 54
 text = "灰燼谷伏擊"
 
-[node name="MoveCostPopup" type="PanelContainer" parent="UI/Root"]
+[node name="MoveCostPopup" type="PanelContainer" parent="UI/Root" unique_id=330312368]
 visible = false
 custom_minimum_size = Vector2(160, 48)
 layout_mode = 0
 mouse_filter = 2
 
-[node name="Label" type="Label" parent="UI/Root/MoveCostPopup"]
+[node name="Label" type="Label" parent="UI/Root/MoveCostPopup" unique_id=1971572601]
 layout_mode = 2
 text = "移動消耗 0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="AttackPreview" type="PanelContainer" parent="UI/Root"]
+[node name="AttackPreview" type="PanelContainer" parent="UI/Root" unique_id=963040895]
 visible = false
-z_index = 1
 custom_minimum_size = Vector2(390, 0)
 layout_mode = 0
 mouse_filter = 2
 
-[node name="Margin" type="MarginContainer" parent="UI/Root/AttackPreview"]
+[node name="Margin" type="MarginContainer" parent="UI/Root/AttackPreview" unique_id=1800080030]
 layout_mode = 2
 theme_override_constants/margin_left = 16
 theme_override_constants/margin_top = 12
 theme_override_constants/margin_right = 16
 theme_override_constants/margin_bottom = 12
 
-[node name="Content" type="VBoxContainer" parent="UI/Root/AttackPreview/Margin"]
+[node name="Content" type="VBoxContainer" parent="UI/Root/AttackPreview/Margin" unique_id=399249411]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="Title" type="Label" parent="UI/Root/AttackPreview/Margin/Content"]
+[node name="Title" type="Label" parent="UI/Root/AttackPreview/Margin/Content" unique_id=563644868]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "攻擊預覽"
 
-[node name="ResourceRow" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content"]
+[node name="ResourceRow" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content" unique_id=1382004891]
 layout_mode = 2
 theme_override_constants/separation = 24
 
-[node name="Resources" type="Label" parent="UI/Root/AttackPreview/Margin/Content/ResourceRow"]
+[node name="Resources" type="Label" parent="UI/Root/AttackPreview/Margin/Content/ResourceRow" unique_id=871327024]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "HP 0 / 0｜MP 1"
 
-[node name="Damage" type="Label" parent="UI/Root/AttackPreview/Margin/Content/ResourceRow"]
+[node name="Damage" type="Label" parent="UI/Root/AttackPreview/Margin/Content/ResourceRow" unique_id=688712973]
 layout_mode = 2
 text = "傷害 0"
 horizontal_alignment = 2
 
-[node name="Details" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content"]
+[node name="Details" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content" unique_id=88130857]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Hit" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details"]
+[node name="Hit" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details" unique_id=1094267125]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "命中 0%"
 horizontal_alignment = 1
 
-[node name="Block" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details"]
+[node name="Block" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details" unique_id=1996306920]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "格擋 0%"
 horizontal_alignment = 1
 
-[node name="Critical" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details"]
+[node name="Critical" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details" unique_id=1728429245]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "暴擊率 0%"
 horizontal_alignment = 1
 
-[node name="HealthMarkers" type="Control" parent="UI/Root/AttackPreview/Margin/Content"]
+[node name="HealthMarkers" type="Control" parent="UI/Root/AttackPreview/Margin/Content" unique_id=1426511633]
 custom_minimum_size = Vector2(0, 28)
 layout_mode = 2
 mouse_filter = 2
 
-[node name="Hit" type="Label" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers"]
+[node name="Hit" type="Label" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers" unique_id=67400637]
 layout_mode = 0
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.384, 0.824, 0.486, 1)
 theme_override_font_sizes/font_size = 20
 text = "0"
 
-[node name="Block" type="Label" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers"]
+[node name="Block" type="Label" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers" unique_id=689145376]
 layout_mode = 0
-mouse_filter = 2
 theme_override_colors/font_color = Color(0.94902, 0.721569, 0.294118, 1)
 theme_override_font_sizes/font_size = 20
 text = "0"
 
-[node name="HitTick" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers"]
+[node name="HitTick" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers" unique_id=600722749]
+layout_mode = 0
 offset_top = 38.0
 offset_right = 1.0
 offset_bottom = 50.0
 mouse_filter = 2
 color = Color(0.384, 0.824, 0.486, 1)
 
-[node name="BlockTick" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers"]
+[node name="BlockTick" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthMarkers" unique_id=1970881561]
+layout_mode = 0
 offset_top = 38.0
 offset_right = 1.0
 offset_bottom = 50.0
 mouse_filter = 2
 color = Color(0.94902, 0.721569, 0.294118, 1)
 
-[node name="HealthImpactBar" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content"]
+[node name="HealthImpactBar" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content" unique_id=1603329805]
 custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 theme_override_constants/separation = 0
 
-[node name="HitRemaining" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+[node name="HitRemaining" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar" unique_id=2062249940]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 color = Color(0.384, 0.824, 0.486, 1)
 
-[node name="BlockSaved" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+[node name="BlockSaved" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar" unique_id=1244240205]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 color = Color(0.94902, 0.721569, 0.294118, 1)
 
-[node name="Damage" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+[node name="Damage" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar" unique_id=630212911]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 color = Color(0.937255, 0.32549, 0.313725, 1)
 
-[node name="Missing" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+[node name="Missing" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar" unique_id=1302035649]
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 color = Color(0.055, 0.067, 0.086, 1)
 
-[node name="Healing" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar"]
+[node name="Healing" type="ColorRect" parent="UI/Root/AttackPreview/Margin/Content/HealthImpactBar" unique_id=196174855]
 visible = false
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
 color = Color(0.25, 0.85, 0.85, 1)
 
-[node name="HoveredSkill" type="PanelContainer" parent="UI/Root"]
+[node name="HoveredSkill" type="PanelContainer" parent="UI/Root" unique_id=1591563736]
 visible = false
+custom_minimum_size = Vector2(450, 0)
 layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
@@ -199,39 +198,38 @@ anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
 offset_left = -650.0
-offset_top = -510.0
+offset_top = -113.0
 offset_right = -200.0
-offset_bottom = -245.0
+offset_bottom = -113.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
-custom_minimum_size = Vector2(450, 0)
 
-[node name="Margin" type="MarginContainer" parent="UI/Root/HoveredSkill"]
+[node name="Margin" type="MarginContainer" parent="UI/Root/HoveredSkill" unique_id=1520629492]
 layout_mode = 2
 theme_override_constants/margin_left = 18
 theme_override_constants/margin_top = 14
 theme_override_constants/margin_right = 18
 theme_override_constants/margin_bottom = 14
 
-[node name="Content" type="VBoxContainer" parent="UI/Root/HoveredSkill/Margin"]
+[node name="Content" type="VBoxContainer" parent="UI/Root/HoveredSkill/Margin" unique_id=1115200523]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Title" type="Label" parent="UI/Root/HoveredSkill/Margin/Content"]
+[node name="Title" type="Label" parent="UI/Root/HoveredSkill/Margin/Content" unique_id=1055447773]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "技能"
 
-[node name="Details" type="Label" parent="UI/Root/HoveredSkill/Margin/Content"]
+[node name="Details" type="Label" parent="UI/Root/HoveredSkill/Margin/Content" unique_id=1796803146]
 layout_mode = 2
 text = "技能說明"
 autowrap_mode = 2
 
-[node name="LogPanel" type="Panel" parent="UI/Root"]
-z_index = -1
+[node name="LogPanel" type="Panel" parent="UI/Root" unique_id=1465909814]
+clip_contents = true
 layout_mode = 1
-anchors_preset = 9
+anchors_preset = 11
 anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -241,10 +239,9 @@ offset_right = -24.0
 offset_bottom = -249.0
 grow_horizontal = 0
 grow_vertical = 2
-clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
-[node name="Margin" type="MarginContainer" parent="UI/Root/LogPanel"]
+[node name="Margin" type="MarginContainer" parent="UI/Root/LogPanel" unique_id=1833380066]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -256,28 +253,26 @@ offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Content" type="VBoxContainer" parent="UI/Root/LogPanel/Margin"]
+[node name="Content" type="VBoxContainer" parent="UI/Root/LogPanel/Margin" unique_id=1402811974]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Title" type="Label" parent="UI/Root/LogPanel/Margin/Content"]
+[node name="Title" type="Label" parent="UI/Root/LogPanel/Margin/Content" unique_id=997955482]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "戰鬥紀錄"
 
-[node name="Entries" type="RichTextLabel" parent="UI/Root/LogPanel/Margin/Content"]
+[node name="Entries" type="RichTextLabel" parent="UI/Root/LogPanel/Margin/Content" unique_id=445708774]
 layout_mode = 2
 size_flags_vertical = 3
-autowrap_mode = 1
-bbcode_enabled = true
-fit_content = false
+focus_mode = 2
 mouse_force_pass_scroll_events = false
-scroll_active = true
+bbcode_enabled = true
 scroll_following = true
+autowrap_mode = 1
 selection_enabled = true
 
-[node name="LogVisibilityButton" type="Button" parent="UI/Root"]
-z_index = 2
+[node name="LogVisibilityButton" type="Button" parent="UI/Root" unique_id=582829342]
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -290,174 +285,206 @@ grow_horizontal = 0
 toggle_mode = true
 text = "隱藏紀錄"
 
-[node name="TurnOrder" type="Control" parent="UI/Root"]
-z_index = 1
-layout_mode = 1
-anchors_preset = 10
-anchor_left = 0.0
-anchor_top = 0.0
-anchor_right = 0.0
-anchor_bottom = 1.0
-offset_left = 38.0
-offset_top = 36.0
-offset_right = 158.0
-offset_bottom = -225.0
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="Margin" type="MarginContainer" parent="UI/Root/TurnOrder"]
+[node name="LeftColumn" type="VBoxContainer" parent="UI/Root" unique_id=1188849361]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 4.0
-offset_top = 0.0
-offset_right = -4.0
-offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TurnOrder" type="Control" parent="UI/Root/LeftColumn" unique_id=1066382231]
+custom_minimum_size = Vector2(112, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 3
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/Root/LeftColumn/TurnOrder" unique_id=103978767]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Units" type="VBoxContainer" parent="UI/Root/TurnOrder/Margin"]
+[node name="Units" type="VBoxContainer" parent="UI/Root/LeftColumn/TurnOrder/Margin" unique_id=1551778767]
 layout_mode = 2
-alignment = 2
 theme_override_constants/separation = 8
+alignment = 2
 
-[node name="Delay" type="Button" parent="UI/Root/TurnOrder"]
+[node name="Delay" type="Button" parent="UI/Root/LeftColumn/TurnOrder" unique_id=31759515]
 layout_mode = 1
+anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 8.0
 offset_top = -48.0
-offset_right = 128.0
+offset_right = 120.0
 grow_horizontal = 0
 grow_vertical = 0
 text = "延後"
 
-[node name="BottomBar" type="Panel" parent="UI/Root"]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = -225.0
-grow_horizontal = 2
-grow_vertical = 0
+[node name="CurrentUnitBar" type="Panel" parent="UI/Root/LeftColumn" unique_id=883535864]
+custom_minimum_size = Vector2(426, 176)
+layout_mode = 2
+size_flags_horizontal = 0
 
-[node name="Margin" type="MarginContainer" parent="UI/Root/BottomBar"]
+[node name="Margin" type="MarginContainer" parent="UI/Root/LeftColumn/CurrentUnitBar" unique_id=142628155]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 38.0
 offset_top = 18.0
-offset_right = -38.0
+offset_right = -18.0
 offset_bottom = -18.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Layout" type="HBoxContainer" parent="UI/Root/BottomBar/Margin"]
+[node name="Layout" type="HBoxContainer" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin" unique_id=1306884843]
 layout_mode = 2
-theme_override_constants/separation = 28
 
-[node name="Actor" type="HBoxContainer" parent="UI/Root/BottomBar/Margin/Layout"]
+[node name="Actor" type="HBoxContainer" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout" unique_id=219648164]
 custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="Portrait" type="TextureRect" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
-custom_minimum_size = Vector2(112, 112)
+[node name="Portrait" type="TextureRect" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor" unique_id=906775951]
+custom_minimum_size = Vector2(140, 140)
 layout_mode = 2
 expand_mode = 1
 stretch_mode = 5
 
-[node name="NameAndMovement" type="VBoxContainer" parent="UI/Root/BottomBar/Margin/Layout/Actor"]
+[node name="NameAndMovement" type="VBoxContainer" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor" unique_id=890898144]
 layout_mode = 2
 size_flags_vertical = 4
 
-[node name="Title" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor/NameAndMovement"]
+[node name="Title" type="Label" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/NameAndMovement" unique_id=1541465896]
 layout_mode = 2
 text = "行動角色"
 
-[node name="Name" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor/NameAndMovement"]
+[node name="Name" type="Label" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/NameAndMovement" unique_id=1134736676]
 layout_mode = 2
 theme_type_variation = &"ActorNameLabel"
 text = "—"
 
-[node name="Movement" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actor/NameAndMovement"]
+[node name="Movement" type="Label" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/NameAndMovement" unique_id=1655902080]
 layout_mode = 2
 text = "剩餘移動 0"
 
-[node name="Actions" type="VBoxContainer" parent="UI/Root/BottomBar/Margin/Layout"]
+[node name="ActionBar" type="Panel" parent="UI/Root" unique_id=424199129]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 490.0
+offset_top = -105.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="UI/Root/ActionBar" unique_id=1216324974]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 14.0
+offset_top = 8.0
+offset_right = -38.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Layout" type="HBoxContainer" parent="UI/Root/ActionBar/Margin" unique_id=549326087]
 layout_mode = 2
-size_flags_horizontal = 3
-alignment = 2
+theme_override_constants/separation = 28
+
+[node name="Actions" type="VBoxContainer" parent="UI/Root/ActionBar/Margin/Layout" unique_id=413952608]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
 theme_override_constants/separation = 4
 
-[node name="Title" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
+[node name="Title" type="Label" parent="UI/Root/ActionBar/Margin/Layout/Actions" unique_id=215328332]
 layout_mode = 2
 text = "攻擊與技能"
 
-[node name="Buttons" type="HBoxContainer" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
+[node name="Buttons" type="HBoxContainer" parent="UI/Root/ActionBar/Margin/Layout/Actions" unique_id=1836712815]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="Melee" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="Melee" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1034944613]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "近戰攻擊"
 
-[node name="Ranged" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="Ranged" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1840499510]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "遠程攻擊"
 
-[node name="PowerStrike" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="PowerStrike" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=694630304]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "強力一擊"
 
-[node name="AimedShot" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="AimedShot" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=984378654]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "瞄準射擊"
 
-[node name="ShieldBash" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="ShieldBash" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1214974124]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "推擊"
 
-[node name="CorrosiveMire" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="CorrosiveMire" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=20522162]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "腐蝕泥沼"
 
-[node name="Heal" type="Button" parent="UI/Root/BottomBar/Margin/Layout/Actions/Buttons"]
-custom_minimum_size = Vector2(170, 62)
+[node name="Heal" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1934193712]
+custom_minimum_size = Vector2(100, 48)
 layout_mode = 2
 toggle_mode = true
 text = "治癒術"
 
-[node name="Status" type="Label" parent="UI/Root/BottomBar/Margin/Layout/Actions"]
+[node name="Spacer" type="Control" parent="UI/Root/ActionBar/Margin/Layout" unique_id=221806416]
 layout_mode = 2
-text = "左鍵選擇與移動；右鍵查看單位或地面資訊。"
-vertical_alignment = 1
+size_flags_horizontal = 3
+mouse_filter = 2
 
-[node name="EndTurn" type="Button" parent="UI/Root/BottomBar/Margin/Layout"]
+[node name="EndTurn" type="Button" parent="UI/Root/ActionBar/Margin/Layout" unique_id=372917673]
 custom_minimum_size = Vector2(180, 72)
 layout_mode = 2
+size_flags_vertical = 8
 theme_type_variation = &"PrimaryButton"
 text = "結束回合"
 
-[node name="InfoPanel" type="Panel" parent="UI/Root"]
+[node name="Status" type="Label" parent="UI/Root" unique_id=1756298131]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 490.0
+offset_top = -143.0
+offset_right = 1150.0
+offset_bottom = -111.0
+grow_vertical = 0
+text = "左鍵選擇與移動；右鍵查看單位或地面資訊。"
+vertical_alignment = 1
+
+[node name="InfoPanel" type="Panel" parent="UI/Root" unique_id=1260530961]
 visible = false
+clip_contents = true
 layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
@@ -467,10 +494,9 @@ offset_top = 36.0
 offset_right = -24.0
 offset_bottom = 816.0
 grow_horizontal = 0
-clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
-[node name="Margin" type="MarginContainer" parent="UI/Root/InfoPanel"]
+[node name="Margin" type="MarginContainer" parent="UI/Root/InfoPanel" unique_id=674436552]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -482,166 +508,186 @@ offset_bottom = -24.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Content" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin"]
+[node name="Content" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin" unique_id=1059066980]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="Header" type="HBoxContainer" parent="UI/Root/InfoPanel/Margin/Content"]
+[node name="Header" type="HBoxContainer" parent="UI/Root/InfoPanel/Margin/Content" unique_id=1301182738]
 custom_minimum_size = Vector2(0, 56)
 layout_mode = 2
 mouse_default_cursor_shape = 13
 
-[node name="Title" type="Label" parent="UI/Root/InfoPanel/Margin/Content/Header"]
+[node name="Title" type="Label" parent="UI/Root/InfoPanel/Margin/Content/Header" unique_id=1708576877]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"HeadingLabel"
 text = "詳情"
 vertical_alignment = 1
 
-[node name="Close" type="Button" parent="UI/Root/InfoPanel/Margin/Content/Header"]
+[node name="Close" type="Button" parent="UI/Root/InfoPanel/Margin/Content/Header" unique_id=802454022]
 custom_minimum_size = Vector2(52, 52)
 layout_mode = 2
 text = "×"
 
-[node name="SkillDetails" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content"]
+[node name="SkillDetails" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content" unique_id=1188467631]
 visible = false
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="Name" type="Label" parent="UI/Root/InfoPanel/Margin/Content/SkillDetails"]
+[node name="Name" type="Label" parent="UI/Root/InfoPanel/Margin/Content/SkillDetails" unique_id=1222380467]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "技能"
 autowrap_mode = 2
 
-[node name="Details" type="Label" parent="UI/Root/InfoPanel/Margin/Content/SkillDetails"]
+[node name="Details" type="Label" parent="UI/Root/InfoPanel/Margin/Content/SkillDetails" unique_id=1163905536]
 layout_mode = 2
 text = "技能說明"
 autowrap_mode = 2
 
-[node name="UnitDetails" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content"]
+[node name="UnitDetails" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content" unique_id=1250347530]
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="UnitName" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails"]
+[node name="UnitName" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails" unique_id=936751259]
 custom_maximum_size = Vector2(432, -1)
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "單位"
 autowrap_mode = 2
 
-[node name="Rows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails"]
+[node name="Rows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails" unique_id=42214286]
 layout_mode = 2
-columns = 2
 theme_override_constants/h_separation = 24
 theme_override_constants/v_separation = 10
+columns = 2
 
-[node name="TeamLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+[node name="TeamLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1667310013]
 layout_mode = 2
 text = "陣營"
-[node name="TeamValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="HpLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "生命"
-[node name="HpValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="SizeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "體型"
-[node name="SizeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="MovementLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "移動"
-[node name="MovementValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="InitiativeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "先攻"
-[node name="InitiativeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="DefenseLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "閃避／格擋"
-[node name="DefenseValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="AttackLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "近戰／遠程"
-[node name="AttackValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-[node name="PowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "傷害／射程"
-[node name="PowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+
+[node name="TeamValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1460731533]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
 
-[node name="TerrainTitle" type="Label" parent="UI/Root/InfoPanel/Margin/Content"]
+[node name="HpLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=184161072]
+layout_mode = 2
+text = "生命"
+
+[node name="HpValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1179911450]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="SizeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1663230119]
+layout_mode = 2
+text = "體型"
+
+[node name="SizeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=359824839]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="MovementLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=351357159]
+layout_mode = 2
+text = "移動"
+
+[node name="MovementValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=360268508]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="InitiativeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=2026487544]
+layout_mode = 2
+text = "先攻"
+
+[node name="InitiativeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=131765223]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="DefenseLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1422269306]
+layout_mode = 2
+text = "閃避／格擋"
+
+[node name="DefenseValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1356774818]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="AttackLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=2030797192]
+layout_mode = 2
+text = "近戰／遠程"
+
+[node name="AttackValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1798711331]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="PowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1902669502]
+layout_mode = 2
+text = "傷害／射程"
+
+[node name="PowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=82172087]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="TerrainTitle" type="Label" parent="UI/Root/InfoPanel/Margin/Content" unique_id=641749960]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
 text = "地面"
 
-[node name="TerrainRows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content"]
+[node name="TerrainRows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content" unique_id=1551729434]
 layout_mode = 2
-columns = 2
 theme_override_constants/h_separation = 24
 theme_override_constants/v_separation = 10
+columns = 2
 
-[node name="TerrainLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+[node name="TerrainLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=1760620082]
 layout_mode = 2
 text = "地形"
-[node name="TerrainValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+
+[node name="TerrainValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=856038111]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
-[node name="CostLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+
+[node name="CostLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=187402672]
 layout_mode = 2
 text = "移動消耗"
-[node name="CostValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+
+[node name="CostValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=1573503191]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
-[node name="EffectLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+
+[node name="EffectLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=195611038]
 layout_mode = 2
 text = "地面效果"
-[node name="EffectValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows"]
+
+[node name="EffectValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=998091986]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
