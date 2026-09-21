@@ -21,6 +21,8 @@ SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時造成碰撞�
 SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
 TERRAIN_EFFECT_MIRE,閃避與格擋 −%d，移動消耗 +%d，剩餘 %d 回合,"Dodge and block −%d, movement cost +%d, %d rounds remaining"
 TERRAIN_EFFECT_DAMAGE,造成 %d 點傷害,Deals %d damage
+TERRAIN_EFFECT_CLIFF,無法通行,Impassable
+TERRAIN_EFFECT_CHASM,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
 ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
 ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d,HP %d / %d | MP %d
 ATTACK_PREVIEW_DAMAGE,傷害 %d,Damage %d

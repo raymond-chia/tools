@@ -30,5 +30,7 @@ const UNIT_ART := {
 	"lyra": preload("res://assets/units/archer.svg"),
 	"mira": preload("res://assets/units/archer.svg"),
 	"wolf_a": preload("res://assets/units/wolf.svg"), "wolf_b": preload("res://assets/units/wolf.svg"),
+	"wolf_c": preload("res://assets/units/wolf.svg"), "wolf_d": preload("res://assets/units/wolf.svg"),
+	"wolf_e": preload("res://assets/units/wolf.svg"),
 	"ogre": preload("res://assets/units/ogre.svg"),
 }

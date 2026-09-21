@@ -573,6 +573,18 @@ func draw_spikes(cell: Vector2i) -> void:
 		var base := center + Vector2(offset_x, 5.0)
 		draw_colored_polygon(PackedVector2Array([base + Vector2(-5.0, 0.0), base + Vector2(5.0, 0.0), base + Vector2(0.0, -18.0)]), spike_color)
 
+func draw_cliff(cell: Vector2i) -> void:
+	var center := cell_center(cell)
+	var top := diamond(center)
+	draw_colored_polygon(top, Color("59636c"))
+	draw_polyline(PackedVector2Array([center + Vector2(-32, 0), center + Vector2(0, 16), center + Vector2(32, 0)]), Color("303840"), 5.0)
+	draw_colored_polygon(PackedVector2Array([center + Vector2(-22, -2), center + Vector2(-8, -13), center + Vector2(3, 1)]), Color("818b91"))
+
+func draw_chasm(cell: Vector2i) -> void:
+	var center := cell_center(cell)
+	draw_colored_polygon(diamond(center), Color("11131d"))
+	draw_polyline(PackedVector2Array([center + Vector2(-32, 0), center + Vector2(0, -16), center + Vector2(32, 0)]), Color("b7774b"), 4.0)
+
 func _draw() -> void:
 	if state.is_empty():
 		return
@@ -593,7 +605,11 @@ func _draw() -> void:
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
 	for effect in state.terrain_effects:
-		if effect.effect == "spikes":
+		if effect.effect == "cliff":
+			draw_cliff(Vector2i(effect.x, effect.y))
+		elif effect.effect == "chasm":
+			draw_chasm(Vector2i(effect.x, effect.y))
+		elif effect.effect == "spikes":
 			draw_spikes(Vector2i(effect.x, effect.y))
 		elif effect.effect == "grease":
 			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,20,Color(0.6,0.3,0.85,0.72)); draw_set_transform(Vector2.ZERO)

@@ -201,6 +201,10 @@ fn terrain_damage(kind: &str) -> i32 {
         0
     }
 }
+
+fn is_impassable_terrain(kind: &str) -> bool {
+    matches!(kind, "cliff" | "chasm")
+}
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
@@ -476,6 +480,11 @@ impl Game {
         if d.map.costs.contains(&0) {
             return Err("movement cost 必須大於 0".into());
         }
+        if d.map.triggers.iter().any(|trigger| {
+            trigger.x < 0 || trigger.y < 0 || trigger.x >= d.map.width || trigger.y >= d.map.height
+        }) {
+            return Err("map trigger 超出地圖範圍".into());
+        }
         let mut w = World::new();
         let triggers = d
             .map
@@ -531,6 +540,9 @@ impl Game {
             let p = GridPos { x: u.x, y: u.y };
             if !fits(w.resource::<Board>(), p, f) {
                 return Err(format!("{} 超出地圖", u.id));
+            }
+            if footprint_on_impassable(w.resource::<Board>(), p, f) {
+                return Err(format!("{} 不可放置在峭壁或懸崖", u.id));
             }
             w.spawn((
                 Id(u.id),
@@ -1181,7 +1193,14 @@ impl Game {
                 y: current.y + direction.y * gameplay_config::PUSH_DISTANCE,
             };
             let can_push = fits(self.world.resource::<Board>(), destination, footprint)
-                && !occupied(&self.world, te, destination, footprint);
+                && !occupied(&self.world, te, destination, footprint)
+                && !footprint_on_terrain(
+                    self.world.resource::<Board>(),
+                    self.world.resource::<TemporaryTerrains>(),
+                    destination,
+                    footprint,
+                    "cliff",
+                );
             if can_push {
                 self.world
                     .get_mut::<Pos>(te)
@@ -1265,7 +1284,14 @@ impl Game {
             Some(value) => value,
             None => return,
         };
-        let damage = terrain_damage(&terrain);
+        let damage = if terrain == "chasm" {
+            self.world
+                .get::<Hp>(entity)
+                .expect("被推動的單位應具有 Hp")
+                .current
+        } else {
+            terrain_damage(&terrain)
+        };
         if damage == 0 {
             return;
         }
@@ -1579,7 +1605,10 @@ impl Game {
                         .or_else(|| board.triggers.get(&position).cloned())
                         .unwrap_or_default();
                     let cost = movement_cost(world, position);
-                    let kind = if effect == "grease" || effect == "spikes" || effect == "mire" {
+                    let kind = if matches!(
+                        effect.as_str(),
+                        "grease" | "spikes" | "mire" | "cliff" | "chasm"
+                    ) {
                         effect.as_str()
                     } else if cost > 1 {
                         "rough"
@@ -1598,6 +1627,10 @@ impl Game {
                                 remaining_rounds.unwrap_or(0) as i32,
                             ],
                         )
+                    } else if effect == "cliff" {
+                        detail("TERRAIN_EFFECT_CLIFF", &[])
+                    } else if effect == "chasm" {
+                        detail("TERRAIN_EFFECT_CHASM", &[])
                     } else if damage > 0 {
                         detail("TERRAIN_EFFECT_DAMAGE", &[damage])
                     } else {
@@ -2068,6 +2101,17 @@ fn footprint_on_terrain(
     })
 }
 
+fn footprint_on_impassable(board: &Board, position: GridPos, footprint: Footprint) -> bool {
+    (position.y..position.y + footprint.height).any(|y| {
+        (position.x..position.x + footprint.width).any(|x| {
+            board
+                .triggers
+                .get(&GridPos { x, y })
+                .is_some_and(|kind| is_impassable_terrain(kind))
+        })
+    })
+}
+
 fn push_direction(w: &World, attacker: Entity, target_cell: GridPos) -> GridPos {
     let attacker_position = w
         .get::<Pos>(attacker)
@@ -2224,7 +2268,7 @@ fn paths(w: &World, e: Entity, start: GridPos, f: Footprint, budget: u32) -> Pat
                 x: state.position.x + dx,
                 y: state.position.y + dy,
             };
-            if !fits(board, n, f) || occupied(w, e, n, f) {
+            if !fits(board, n, f) || occupied(w, e, n, f) || footprint_on_impassable(board, n, f) {
                 continue;
             }
             let next_state = PathState {
