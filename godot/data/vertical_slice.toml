@@ -15,12 +15,65 @@ triggers=[
 {x=0,y=1,kind="cliff"},{x=1,y=1,kind="cliff"},{x=2,y=1,kind="cliff"},{x=3,y=1,kind="cliff"},{x=4,y=1,kind="cliff"},{x=5,y=1,kind="cliff"},{x=6,y=1,kind="cliff"},{x=7,y=1,kind="cliff"},{x=8,y=1,kind="cliff"},{x=9,y=1,kind="cliff"},
 {x=0,y=6,kind="chasm"},{x=1,y=6,kind="chasm"},{x=2,y=6,kind="chasm"},{x=3,y=6,kind="chasm"},{x=4,y=6,kind="chasm"},{x=5,y=6,kind="chasm"},{x=6,y=6,kind="chasm"},{x=7,y=6,kind="chasm"},{x=8,y=6,kind="chasm"},{x=9,y=6,kind="chasm"},
 {x=0,y=7,kind="chasm"},{x=1,y=7,kind="chasm"},{x=2,y=7,kind="chasm"},{x=3,y=7,kind="chasm"},{x=4,y=7,kind="chasm"},{x=5,y=7,kind="chasm"},{x=6,y=7,kind="chasm"},{x=7,y=7,kind="chasm"},{x=8,y=7,kind="chasm"},{x=9,y=7,kind="chasm"}]
+
+[terrain_types.plain]
+name_key="TERRAIN_PLAIN"
+visual="plain"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.rough]
+name_key="TERRAIN_ROUGH"
+visual="rough"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.spikes]
+name_key="TERRAIN_SPIKES"
+visual="spikes"
+passable=true
+ends_movement=true
+damage=3
+effect_key="TERRAIN_EFFECT_DAMAGE"
+
+[terrain_types.grease]
+name_key="TERRAIN_GREASE"
+visual="grease"
+passable=true
+ends_movement=true
+effect_key="TERRAIN_EFFECT_GREASE"
+
+[terrain_types.mire]
+name_key="TERRAIN_MIRE"
+visual="mire"
+passable=true
+movement_cost_bonus=1
+dodge_penalty=3
+block_penalty=3
+effect_key="TERRAIN_EFFECT_MIRE"
+
+[terrain_types.cliff]
+name_key="TERRAIN_CLIFF"
+visual="cliff"
+passable=false
+forced_entry="blocked"
+effect_key="TERRAIN_EFFECT_CLIFF"
+
+[terrain_types.chasm]
+name_key="TERRAIN_CHASM"
+visual="chasm"
+passable=false
+forced_entry="defeat"
+effect_key="TERRAIN_EFFECT_CHASM"
+forced_entry_log_key="COMBAT_LOG_FORCED_DEFEAT"
+
 [[skills]]
 id="melee_attack"
 name="近戰攻擊"
 ranged=false
 attack_bonus=0
 damage_bonus=0
+ai_default=true
 [[skills]]
 id="ranged_attack"
 name="遠程攻擊"
@@ -57,6 +110,7 @@ attack_bonus=0
 damage_bonus=0
 range=4
 effect="mire"
+terrain="mire"
 duration=2
 [[skills]]
 id="heal"
@@ -70,6 +124,7 @@ heal_amount=5
 [[units]]
 id="aria"
 name="亞莉亞・劍士"
+visual="res://assets/units/fighter.svg"
 team="player"
 group="heroes"
 x=1
@@ -87,6 +142,7 @@ skills=["melee_attack","power_strike","shield_bash"]
 [[units]]
 id="lyra"
 name="萊拉・遊俠"
+visual="res://assets/units/archer.svg"
 team="player"
 group="heroes"
 x=2
@@ -104,6 +160,7 @@ skills=["ranged_attack","aimed_shot"]
 [[units]]
 id="mira"
 name="米菈・術士"
+visual="res://assets/units/archer.svg"
 team="player"
 group="heroes"
 x=1
@@ -121,6 +178,7 @@ skills=["corrosive_mire","heal"]
 [[units]]
 id="wolf_a"
 name="荒原狼 A"
+visual="res://assets/units/wolf.svg"
 team="enemy"
 group="wolves"
 x=6
@@ -138,6 +196,7 @@ skills=["melee_attack"]
 [[units]]
 id="wolf_b"
 name="荒原狼 B"
+visual="res://assets/units/wolf.svg"
 team="enemy"
 group="wolves"
 x=7
@@ -155,6 +214,7 @@ skills=["melee_attack"]
 [[units]]
 id="wolf_c"
 name="荒原狼 C"
+visual="res://assets/units/wolf.svg"
 team="enemy"
 group="wolves"
 x=8
@@ -172,6 +232,7 @@ skills=["melee_attack"]
 [[units]]
 id="wolf_d"
 name="荒原狼 D"
+visual="res://assets/units/wolf.svg"
 team="enemy"
 group="wolves"
 x=8
@@ -189,6 +250,7 @@ skills=["melee_attack"]
 [[units]]
 id="wolf_e"
 name="荒原狼 E"
+visual="res://assets/units/wolf.svg"
 team="enemy"
 group="wolves"
 x=7

@@ -7,14 +7,37 @@ costs=[
 1,1,1,1,1,1,
 1,1,1,1,1,1]
 
+[terrain_types.plain]
+name_key="TERRAIN_PLAIN"
+visual="plain"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.rough]
+name_key="TERRAIN_ROUGH"
+visual="rough"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.mire]
+name_key="TERRAIN_MIRE"
+visual="mire"
+passable=true
+movement_cost_bonus=1
+dodge_penalty=3
+block_penalty=3
+effect_key="TERRAIN_EFFECT_MIRE"
+
 [[skills]]
 id="corrosive_mire"
+ai_default=true
 name="測試腐蝕泥沼"
 ranged=true
 attack_bonus=0
 damage_bonus=0
 range=10
 effect="mire"
+terrain="mire"
 duration=2
 
 [[skills]]
@@ -36,6 +59,7 @@ range=10
 
 [[units]]
 id="aria"
+visual="res://assets/units/fighter.svg"
 name="測試法師"
 team="player"
 group="heroes"
@@ -54,6 +78,7 @@ skills=["corrosive_mire", "shield_bash", "finishing_strike"]
 
 [[units]]
 id="wolf_a"
+visual="res://assets/units/wolf.svg"
 name="測試木樁"
 team="enemy"
 group="targets"
@@ -72,6 +97,7 @@ skills=[]
 
 [[units]]
 id="ogre"
+visual="res://assets/units/ogre.svg"
 name="測試大型單位"
 team="enemy"
 group="ogres"

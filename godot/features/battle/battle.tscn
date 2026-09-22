@@ -415,48 +415,6 @@ text = "攻擊與技能"
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="Melee" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1034944613]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "近戰攻擊"
-
-[node name="Ranged" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1840499510]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "遠程攻擊"
-
-[node name="PowerStrike" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=694630304]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "強力一擊"
-
-[node name="AimedShot" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=984378654]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "瞄準射擊"
-
-[node name="ShieldBash" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1214974124]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "推擊"
-
-[node name="CorrosiveMire" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=20522162]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "腐蝕泥沼"
-
-[node name="Heal" type="Button" parent="UI/Root/ActionBar/Margin/Layout/Actions/Buttons" unique_id=1934193712]
-custom_minimum_size = Vector2(100, 48)
-layout_mode = 2
-toggle_mode = true
-text = "治癒術"
-
 [node name="Spacer" type="Control" parent="UI/Root/ActionBar/Margin/Layout" unique_id=221806416]
 layout_mode = 2
 size_flags_horizontal = 3

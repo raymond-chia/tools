@@ -179,7 +179,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 			var new_attack_preview_ring := Sprite2D.new(); new_attack_preview_ring.name = "AttackPreviewRing"; new_attack_preview_ring.texture = BASE_ART; new_attack_preview_ring.visible = false; visual.add_child(new_attack_preview_ring)
 			var selection := Sprite2D.new(); selection.name = "Selection"; selection.texture = BASE_ART; visual.add_child(selection)
 			var base := Sprite2D.new(); base.name = "Base"; base.texture = BASE_ART; visual.add_child(base)
-			var body := Sprite2D.new(); body.name = "Body"; body.texture = BattleVisualConfig.UNIT_ART[unit.id]; visual.add_child(body)
+			var body := Sprite2D.new(); body.name = "Body"; body.texture = load(unit.visual); visual.add_child(body)
 			units_layer.add_child(node)
 			unit_nodes[unit.id] = node
 		else:
@@ -605,15 +605,15 @@ func _draw() -> void:
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
 	for effect in state.terrain_effects:
-		if effect.effect == "cliff":
+		if effect.visual == "cliff":
 			draw_cliff(Vector2i(effect.x, effect.y))
-		elif effect.effect == "chasm":
+		elif effect.visual == "chasm":
 			draw_chasm(Vector2i(effect.x, effect.y))
-		elif effect.effect == "spikes":
+		elif effect.visual == "spikes":
 			draw_spikes(Vector2i(effect.x, effect.y))
-		elif effect.effect == "grease":
+		elif effect.visual == "grease":
 			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,20,Color(0.6,0.3,0.85,0.72)); draw_set_transform(Vector2.ZERO)
-		elif effect.effect == "mire":
+		elif effect.visual == "mire":
 			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,23,Color(0.2,0.55,0.28,0.76)); draw_circle(Vector2(-9,1),5,Color(0.58,0.86,0.38,0.72)); draw_set_transform(Vector2.ZERO)
 	for unit in state.units:
 		var center := footprint_center(unit)

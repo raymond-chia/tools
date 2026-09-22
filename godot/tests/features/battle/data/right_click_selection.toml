@@ -1,4 +1,10 @@
-skills=[]
+[[skills]]
+id="test_ai_default"
+name="測試攻擊"
+ranged=false
+attack_bonus=0
+damage_bonus=0
+ai_default=true
 
 [map]
 width=5
@@ -9,8 +15,21 @@ costs=[
 1,1,1,1,1,
 1,1,1,1,1]
 
+[terrain_types.plain]
+name_key="TERRAIN_PLAIN"
+visual="plain"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.rough]
+name_key="TERRAIN_ROUGH"
+visual="rough"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
 [[units]]
 id="aria"
+visual="res://assets/units/fighter.svg"
 name="測試劍士"
 team="player"
 group="heroes"
@@ -28,6 +47,7 @@ range=1
 
 [[units]]
 id="lyra"
+visual="res://assets/units/archer.svg"
 name="測試遊俠"
 team="player"
 group="heroes"
@@ -45,6 +65,7 @@ range=4
 
 [[units]]
 id="ogre"
+visual="res://assets/units/ogre.svg"
 name="測試巨魔"
 team="enemy"
 group="ogres"

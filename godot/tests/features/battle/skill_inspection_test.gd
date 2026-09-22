@@ -29,7 +29,9 @@ func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
+	await wait_for_combat_events()
 	load_test_definition()
+	await wait_for_combat_events()
 
 func after_test() -> void:
 	TranslationServer.set_locale(original_locale)
@@ -95,6 +97,10 @@ func load_test_definition() -> void:
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
+
+func wait_for_combat_events() -> void:
+	while battle.world.is_presenting_combat_events():
+		await runner.simulate_frames(1)
 
 func emit_right_press(control: Control) -> void:
 	var event := InputEventMouseButton.new()

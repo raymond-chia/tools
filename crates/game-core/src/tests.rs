@@ -196,6 +196,22 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
         height: 3,
         costs: vec![1; 9],
         triggers: HashMap::from([(spikes, "spikes".into())]),
+        terrain_types: HashMap::from([(
+            "spikes".into(),
+            TerrainTypeDef {
+                name_key: "TERRAIN_SPIKES".into(),
+                visual: "spikes".into(),
+                passable: true,
+                ends_movement: true,
+                damage: 0,
+                movement_cost_bonus: 0,
+                dodge_penalty: 0,
+                block_penalty: 0,
+                forced_entry: ForcedEntry::None,
+                effect_key: "TERRAIN_EFFECT_DAMAGE".into(),
+                forced_entry_log_key: None,
+            },
+        )]),
     });
     world.insert_resource(TemporaryTerrains::default());
     world.insert_resource(Turn {
@@ -213,6 +229,7 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
         },
         Unit {
             name: "測試角色".into(),
+            visual: "test_actor".into(),
             team: Team::Player,
             group: "測試群組".into(),
             movement,
@@ -251,7 +268,9 @@ fn attack_skill(ranged: bool, range: i32) -> SkillDef {
         range: Some(range),
         duration: None,
         heal_amount: None,
+        terrain: None,
         effect: SkillEffect::Attack,
+        ai_default: true,
     }
 }
 
@@ -268,6 +287,7 @@ fn spawn_unit(
             footprint,
             Unit {
                 name: "測試單位".into(),
+                visual: "test_unit".into(),
                 team,
                 group: "測試群組".into(),
                 movement: 0,
@@ -294,10 +314,10 @@ fn flanking_world(
     let melee_skill = attack_skill(false, melee_range);
     let melee_skill_id = melee_skill.id.clone();
     let mut world = World::new();
-    world.insert_resource(Skills(HashMap::from([(
-        melee_skill_id.clone(),
-        melee_skill,
-    )])));
+    world.insert_resource(Skills {
+        definitions: HashMap::from([(melee_skill_id.clone(), melee_skill)]),
+        ai_default: melee_skill_id.clone(),
+    });
     let attacker = spawn_unit(
         &mut world,
         attacker_position,

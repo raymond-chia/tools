@@ -68,15 +68,8 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var hovered_skill_card: PanelContainer = $Root/HoveredSkill
 @onready var hovered_skill_title: Label = $Root/HoveredSkill/Margin/Content/Title
 @onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
-@onready var action_buttons := {
-	"melee_attack": $Root/ActionBar/Margin/Layout/Actions/Buttons/Melee,
-	"ranged_attack": $Root/ActionBar/Margin/Layout/Actions/Buttons/Ranged,
-	"power_strike": $Root/ActionBar/Margin/Layout/Actions/Buttons/PowerStrike,
-	"aimed_shot": $Root/ActionBar/Margin/Layout/Actions/Buttons/AimedShot,
-	"shield_bash": $Root/ActionBar/Margin/Layout/Actions/Buttons/ShieldBash,
-	"corrosive_mire": $Root/ActionBar/Margin/Layout/Actions/Buttons/CorrosiveMire,
-	"heal": $Root/ActionBar/Margin/Layout/Actions/Buttons/Heal,
-}
+@onready var action_buttons_container: HBoxContainer = $Root/ActionBar/Margin/Layout/Actions/Buttons
+var action_buttons := {}
 var dragging_info_panel := false
 var drag_offset := Vector2.ZERO
 var log_entry_expanded_states: Dictionary = {}
@@ -93,11 +86,6 @@ func _ready() -> void:
 	battle_log.meta_clicked.connect(_on_battle_log_meta_clicked)
 	battle_log.gui_input.connect(_on_battle_log_gui_input)
 	log_visibility_button.toggled.connect(_on_log_visibility_toggled)
-	for action in action_buttons:
-		action_buttons[action].pressed.connect(_on_action_pressed.bind(action))
-		action_buttons[action].mouse_entered.connect(_on_skill_mouse_entered.bind(action))
-		action_buttons[action].mouse_exited.connect(_on_skill_mouse_exited.bind(action))
-		action_buttons[action].gui_input.connect(_on_skill_gui_input.bind(action))
 	$Root/ActionBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 	delay_button.pressed.connect(func(): delay_selection_requested.emit())
 
@@ -136,12 +124,13 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		battle_log.text = formatted_log
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
 	actor_name.text = actor.name if not actor.is_empty() else "—"
-	actor_portrait.texture = BattleVisualConfig.UNIT_ART.get(actor.id) if not actor.is_empty() else null
+	actor_portrait.texture = load(actor.visual) if not actor.is_empty() else null
 	movement.text = "剩餘移動 %d" % int(snapshot.turn.move_remaining)
 	present_turn_order(snapshot, selecting_delay)
 	delay_button.disabled = not snapshot.turn.can_delay
 	delay_button.text = "取消延後" if selecting_delay else "延後"
 	presented_skills = snapshot.skill_ranges
+	sync_action_buttons()
 	if not hovered_skill_id.is_empty() and skill_with_id(presented_skills, hovered_skill_id).is_empty():
 		hovered_skill_id = ""
 	for action in action_buttons:
@@ -185,9 +174,8 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
 		detail_values.attack.text = "%d / %d" % [int(unit.melee), int(unit.ranged)]
 		detail_values.power.text = "%d / %d" % [int(unit.damage), int(unit.range)]
-	var terrain_names := {"plain": "平地", "rough": "崎嶇地面", "grease": "油膩地面", "spikes": "地刺", "mire": "腐蝕泥沼", "cliff": "峭壁", "chasm": "懸崖"}
-	terrain_name.text = terrain_names[terrain.kind]
-	terrain_cost.text = "無法通行" if terrain.kind in ["cliff", "chasm"] else "%d" % int(terrain.cost)
+	terrain_name.text = tr(terrain.name_key)
+	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else "無法通行"
 	terrain_effect.text = localized_detail(terrain.effect_description)
 
 func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
@@ -205,7 +193,7 @@ func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 		slot.add_child(marker)
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(112.0, 72.0)
-		button.icon = BattleVisualConfig.UNIT_ART[unit.id]
+		button.icon = load(unit.visual)
 		button.expand_icon = true
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -337,12 +325,11 @@ func format_log(events: Array) -> String:
 				if event.type == "healing":
 					entries.append("結果：%s，回復 %d HP，HP %d/%d" % [RESULT_STYLE % "治療", int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 					continue
-				var attack_stat_names := {"melee": "近戰", "ranged": "遠程"}
-				entries.append("攻擊加值：%s %d%s%s = %d" % [attack_stat_names[event.attack_stat], int(event.attack_stat_modifier), format_modifier_term("技能", int(event.skill_attack_modifier)), format_modifier_term("包抄", int(event.flanking_modifier)), int(event.attack_modifier)])
+				var attack_stat_name := tr("ATTACK_STAT_%s" % event.attack_stat.to_upper())
+				entries.append("攻擊加值：%s %d%s%s = %d" % [attack_stat_name, int(event.attack_stat_modifier), format_modifier_term("技能", int(event.skill_attack_modifier)), format_modifier_term("包抄", int(event.flanking_modifier)), int(event.attack_modifier)])
 				entries.append("D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d" % [int(event.die_sides), int(event.roll), int(event.attack_modifier), int(event.attack_total)])
 				entries.append("目標防禦：閃避門檻 %d／格擋門檻 %d" % [int(event.dodge_target), int(event.block_target)])
-				var result_names := {"dodge": "閃避", "block": "格擋", "hit": "命中"}
-				var result: String = RESULT_STYLE % result_names[event.result]
+				var result: String = RESULT_STYLE % tr("ATTACK_RESULT_%s" % event.result.to_upper())
 				var critical := "，%s" % CRITICAL_STYLE if event.critical else ""
 				if event.result == "block":
 					entries.append("結果：%s%s" % [result, critical])
@@ -356,27 +343,16 @@ func format_log(events: Array) -> String:
 				if event.downed:
 					entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
 			"terrain_created":
-				var terrain_names := {"mire": "腐蝕泥沼"}
 				entries.append("[url=log_entry:%d]%s %s 使用「%s」[/url]" % [index, marker, colored_unit(event.actor, event.actor_team), event.skill])
 				if expanded:
-					entries.append("產生「%s」" % terrain_names[event.terrain])
+					entries.append("產生「%s」" % tr(event.terrain_name_key))
 			"status_applied":
-				var status_names := {"grease": "油脂"}
 				entries.append("[url=log_entry:%d]%s 狀態變化[/url]" % [index, marker])
 				if expanded:
-					entries.append("%s 受到「%s」狀態影響" % [colored_unit(event.target, event.target_team), status_names[event.status]])
+					entries.append("%s 受到「%s」狀態影響" % [colored_unit(event.target, event.target_team), tr(event.status_name_key)])
 			"terrain_damage":
-				if event.terrain == "chasm":
-					entries.append("[url=log_entry:%d]%s %s 被推下懸崖[/url]" % [index, marker, colored_unit(event.target, event.target_team)])
-					if expanded:
-						entries.append("%s 墜入懸崖並倒下" % colored_unit(event.target, event.target_team))
-				else:
-					var terrain_names := {"spikes": "地刺"}
-					entries.append("[url=log_entry:%d]%s %s 踩到「%s」[/url]" % [index, marker, colored_unit(event.target, event.target_team), terrain_names[event.terrain]])
-					if expanded:
-						entries.append("%s 踩到「%s」，受到 %d 點傷害，HP %d/%d" % [colored_unit(event.target, event.target_team), terrain_names[event.terrain], int(event.damage), int(event.remaining_hp), int(event.max_hp)])
-						if event.downed:
-							entries.append("%s 倒下" % colored_unit(event.target, event.target_team))
+				var log_text := tr(event.log_key) % [colored_unit(event.target, event.target_team), tr(event.terrain_name_key), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, log_text])
 	return "\n".join(entries)
 
 func format_modifier_term(label: String, value: int) -> String:
@@ -424,6 +400,27 @@ func colored_unit(unit: String, team: String) -> String:
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)
+
+func sync_action_buttons() -> void:
+	var current_ids := {}
+	for skill in presented_skills:
+		current_ids[skill.id] = true
+		if action_buttons.has(skill.id):
+			continue
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(100, 48)
+		button.toggle_mode = true
+		button.pressed.connect(_on_action_pressed.bind(skill.id))
+		button.mouse_entered.connect(_on_skill_mouse_entered.bind(skill.id))
+		button.mouse_exited.connect(_on_skill_mouse_exited.bind(skill.id))
+		button.gui_input.connect(_on_skill_gui_input.bind(skill.id))
+		action_buttons_container.add_child(button)
+		action_buttons[skill.id] = button
+	for action in action_buttons.keys():
+		if current_ids.has(action):
+			continue
+		action_buttons[action].queue_free()
+		action_buttons.erase(action)
 
 func _on_skill_mouse_entered(action: String) -> void:
 	hovered_skill_id = action

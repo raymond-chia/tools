@@ -66,6 +66,7 @@ struct Hp {
 #[derive(Component, Clone)]
 struct Unit {
     name: String,
+    visual: String,
     team: Team,
     group: String,
     movement: u32,
@@ -86,6 +87,7 @@ struct Board {
     height: i32,
     costs: Vec<u32>,
     triggers: HashMap<GridPos, String>,
+    terrain_types: HashMap<String, TerrainTypeDef>,
 }
 #[derive(Clone)]
 struct TemporaryTerrain {
@@ -122,11 +124,15 @@ struct Log(Vec<CombatLogEvent>);
 #[derive(Resource)]
 struct ResultState(Outcome);
 #[derive(Resource)]
-struct Skills(HashMap<String, SkillDef>);
+struct Skills {
+    definitions: HashMap<String, SkillDef>,
+    ai_default: String,
+}
 
 #[derive(Deserialize)]
 struct Definition {
     map: MapDef,
+    terrain_types: HashMap<String, TerrainTypeDef>,
     skills: Vec<SkillDef>,
     units: Vec<UnitDef>,
 }
@@ -140,8 +146,11 @@ struct SkillDef {
     range: Option<i32>,
     duration: Option<u32>,
     heal_amount: Option<i32>,
+    terrain: Option<String>,
     #[serde(default)]
     effect: SkillEffect,
+    #[serde(default)]
+    ai_default: bool,
 }
 #[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -166,10 +175,39 @@ struct TriggerDef {
     y: i32,
     kind: String,
 }
+#[derive(Clone, Deserialize)]
+struct TerrainTypeDef {
+    name_key: String,
+    visual: String,
+    passable: bool,
+    #[serde(default)]
+    ends_movement: bool,
+    #[serde(default)]
+    damage: i32,
+    #[serde(default)]
+    movement_cost_bonus: u32,
+    #[serde(default)]
+    dodge_penalty: i32,
+    #[serde(default)]
+    block_penalty: i32,
+    #[serde(default)]
+    forced_entry: ForcedEntry,
+    effect_key: String,
+    forced_entry_log_key: Option<String>,
+}
+#[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum ForcedEntry {
+    #[default]
+    None,
+    Blocked,
+    Defeat,
+}
 #[derive(Deserialize)]
 struct UnitDef {
     id: String,
     name: String,
+    visual: String,
     team: Team,
     group: String,
     x: i32,
@@ -194,16 +232,15 @@ fn one() -> i32 {
     1
 }
 
-fn terrain_damage(kind: &str) -> i32 {
-    if kind == "spikes" {
-        gameplay_config::SPIKES_DAMAGE
-    } else {
-        0
-    }
+fn terrain_type<'a>(board: &'a Board, kind: &str) -> &'a TerrainTypeDef {
+    board
+        .terrain_types
+        .get(kind)
+        .expect("載入時已驗證所有地形種類")
 }
 
-fn is_impassable_terrain(kind: &str) -> bool {
-    matches!(kind, "cliff" | "chasm")
+fn terrain_damage(board: &Board, kind: &str) -> i32 {
+    terrain_type(board, kind).damage
 }
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -300,6 +337,7 @@ pub enum CombatLogEvent {
         actor_team: Team,
         skill: String,
         terrain: String,
+        terrain_name_key: String,
     },
     Healing {
         actor: String,
@@ -315,11 +353,14 @@ pub enum CombatLogEvent {
         target: String,
         target_team: Team,
         status: String,
+        status_name_key: String,
     },
     TerrainDamage {
         target: String,
         target_team: Team,
         terrain: String,
+        terrain_name_key: String,
+        log_key: String,
         damage: i32,
         remaining_hp: i32,
         max_hp: i32,
@@ -404,6 +445,7 @@ pub struct AttackPreview {
 pub struct UnitView {
     pub id: String,
     pub name: String,
+    pub visual: String,
     pub team: Team,
     pub x: i32,
     pub y: i32,
@@ -430,6 +472,7 @@ pub struct TerrainEffectView {
     pub x: i32,
     pub y: i32,
     pub effect: String,
+    pub visual: String,
     pub damage: i32,
     pub remaining_rounds: Option<u32>,
 }
@@ -438,6 +481,9 @@ pub struct TerrainCellView {
     pub x: i32,
     pub y: i32,
     pub kind: String,
+    pub name_key: String,
+    pub visual: String,
+    pub passable: bool,
     pub base_kind: String,
     pub unit_id: Option<String>,
     pub cost: u32,
@@ -485,6 +531,16 @@ impl Game {
         }) {
             return Err("map trigger 超出地圖範圍".into());
         }
+        for required in ["plain", "rough"] {
+            if !d.terrain_types.contains_key(required) {
+                return Err(format!("缺少必要地形種類 {required}"));
+            }
+        }
+        for trigger in &d.map.triggers {
+            if !d.terrain_types.contains_key(&trigger.kind) {
+                return Err(format!("找不到地形種類 {}", trigger.kind));
+            }
+        }
         let mut w = World::new();
         let triggers = d
             .map
@@ -497,6 +553,7 @@ impl Game {
             height: d.map.height,
             costs: d.map.costs,
             triggers,
+            terrain_types: d.terrain_types,
         });
         w.insert_resource(Encounter::default());
         w.insert_resource(TemporaryTerrains::default());
@@ -510,6 +567,7 @@ impl Game {
         w.insert_resource(Log::default());
         w.insert_resource(ResultState(Outcome::Ongoing));
         let mut skills = HashMap::new();
+        let mut ai_default = None;
         for skill in d.skills {
             if skill.effect == SkillEffect::Heal
                 && !matches!(skill.heal_amount, Some(amount) if amount > 0)
@@ -519,12 +577,28 @@ impl Game {
             if skill.duration == Some(0) {
                 return Err(format!("{} 的 duration 必須大於 0", skill.id));
             }
+            if skill.effect == SkillEffect::Mire
+                && !skill.terrain.as_ref().is_some_and(|terrain| {
+                    w.resource::<Board>().terrain_types.contains_key(terrain)
+                })
+            {
+                return Err(format!("{} 必須指定已定義的 terrain", skill.id));
+            }
+            if skill.ai_default {
+                if ai_default.replace(skill.id.clone()).is_some() {
+                    return Err("只能有一個 ai_default 技能".into());
+                }
+            }
             if skills.insert(skill.id.clone(), skill).is_some() {
                 return Err("duplicate skill id".into());
             }
         }
-        w.insert_resource(Skills(skills));
-        let all_skill_ids: Vec<_> = w.resource::<Skills>().0.keys().cloned().collect();
+        let ai_default = ai_default.ok_or("缺少 ai_default 技能")?;
+        w.insert_resource(Skills {
+            definitions: skills,
+            ai_default,
+        });
+        let all_skill_ids: Vec<_> = w.resource::<Skills>().definitions.keys().cloned().collect();
         let mut ids = HashSet::new();
         for u in d.units {
             if !ids.insert(u.id.clone()) {
@@ -554,6 +628,7 @@ impl Game {
                 },
                 Unit {
                     name: u.name,
+                    visual: u.visual,
                     team: u.team,
                     group: u.group,
                     movement: u.movement,
@@ -595,7 +670,7 @@ impl Game {
                 let definition = self
                     .world
                     .resource::<Skills>()
-                    .0
+                    .definitions
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| format!("unknown skill: {skill}"))?;
@@ -605,7 +680,7 @@ impl Game {
                 let definition = self
                     .world
                     .resource::<Skills>()
-                    .0
+                    .definitions
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| format!("unknown skill: {skill}"))?;
@@ -635,8 +710,7 @@ impl Game {
         } = self.move_plan(actor, end)?;
         let interrupted = path
             .last()
-            .and_then(|position| terrain_at(&self.world, *position))
-            .is_some_and(|kind| kind != "mire");
+            .is_some_and(|position| terrain_ends_movement(&self.world, *position));
         let mut first = Vec::new();
         let mut second = Vec::new();
         let mut spent = 0;
@@ -683,7 +757,7 @@ impl Game {
         let skill = self
             .world
             .resource::<Skills>()
-            .0
+            .definitions
             .get(skill_id)
             .ok_or_else(|| format!("unknown skill: {skill_id}"))?;
         validate_unit_skill_target(&self.world, attacker, target_entity, target_cell, skill)?;
@@ -919,7 +993,7 @@ impl Game {
                 .0 = p;
             self.reveal(e);
             if let Some(k) = terrain_at(&self.world, p) {
-                if k == "mire" {
+                if !terrain_ends_movement(&self.world, p) {
                     continue;
                 }
                 let unit = self
@@ -928,7 +1002,13 @@ impl Game {
                     .expect("已建立的戰鬥單位應具有 Unit 元件");
                 let target = unit.name.clone();
                 let target_team = unit.team;
-                let damage = terrain_damage(&k);
+                let terrain_definition = terrain_type(self.world.resource::<Board>(), &k);
+                let terrain_name_key = terrain_definition.name_key.clone();
+                let log_key = terrain_definition
+                    .forced_entry_log_key
+                    .clone()
+                    .unwrap_or_else(|| "COMBAT_LOG_TERRAIN_DAMAGE".into());
+                let damage = terrain_definition.damage;
                 if damage > 0 {
                     let mut hp = self
                         .world
@@ -952,6 +1032,8 @@ impl Game {
                             target,
                             target_team,
                             terrain: k,
+                            terrain_name_key,
+                            log_key,
                             damage,
                             remaining_hp,
                             max_hp,
@@ -965,6 +1047,7 @@ impl Game {
                             target,
                             target_team,
                             status: k,
+                            status_name_key: terrain_name_key,
                         });
                 }
                 break;
@@ -1028,9 +1111,11 @@ impl Game {
                 )
             })
             .ok_or("目的地不可達")?;
-        if let Some(trigger_index) = path.iter().skip(1).position(|position| {
-            terrain_at(&self.world, *position).is_some_and(|kind| kind != "mire")
-        }) {
+        if let Some(trigger_index) = path
+            .iter()
+            .skip(1)
+            .position(|position| terrain_ends_movement(&self.world, *position))
+        {
             path.truncate(trigger_index + 2);
         }
         Ok(MovePlan {
@@ -1194,12 +1279,10 @@ impl Game {
             };
             let can_push = fits(self.world.resource::<Board>(), destination, footprint)
                 && !occupied(&self.world, te, destination, footprint)
-                && !footprint_on_terrain(
+                && !footprint_blocks_forced_entry(
                     self.world.resource::<Board>(),
-                    self.world.resource::<TemporaryTerrains>(),
                     destination,
                     footprint,
-                    "cliff",
                 );
             if can_push {
                 self.world
@@ -1284,13 +1367,19 @@ impl Game {
             Some(value) => value,
             None => return,
         };
-        let damage = if terrain == "chasm" {
+        let terrain_definition = terrain_type(self.world.resource::<Board>(), &terrain);
+        let terrain_name_key = terrain_definition.name_key.clone();
+        let log_key = terrain_definition
+            .forced_entry_log_key
+            .clone()
+            .unwrap_or_else(|| "COMBAT_LOG_TERRAIN_DAMAGE".into());
+        let damage = if terrain_definition.forced_entry == ForcedEntry::Defeat {
             self.world
                 .get::<Hp>(entity)
                 .expect("被推動的單位應具有 Hp")
                 .current
         } else {
-            terrain_damage(&terrain)
+            terrain_definition.damage
         };
         if damage == 0 {
             return;
@@ -1323,6 +1412,8 @@ impl Game {
                 target,
                 target_team,
                 terrain,
+                terrain_name_key,
+                log_key,
                 damage,
                 remaining_hp,
                 max_hp,
@@ -1371,13 +1462,21 @@ impl Game {
         let duration = skill
             .duration
             .unwrap_or(gameplay_config::DEFAULT_MIRE_DURATION);
+        let terrain = skill
+            .terrain
+            .as_ref()
+            .expect("載入時已驗證地形技能具有 terrain")
+            .clone();
         self.world.resource_mut::<TemporaryTerrains>().0.insert(
             position,
             TemporaryTerrain {
-                kind: "mire".into(),
+                kind: terrain.clone(),
                 expires_after_round: current_round + duration - 1,
             },
         );
+        let terrain_name_key = terrain_type(self.world.resource::<Board>(), &terrain)
+            .name_key
+            .clone();
         self.world
             .resource_mut::<Log>()
             .0
@@ -1385,7 +1484,8 @@ impl Game {
                 actor: unit.name,
                 actor_team: unit.team,
                 skill: skill.name,
-                terrain: "mire".into(),
+                terrain,
+                terrain_name_key,
             });
         self.finish();
         Ok(())
@@ -1458,13 +1558,12 @@ impl Game {
                     .expect("已建立的戰鬥單位應具有 Id 元件")
                     .0
                     .clone();
-                let skill = self
-                    .world
-                    .resource::<Skills>()
-                    .0
-                    .get("melee_attack")
+                let skills = self.world.resource::<Skills>();
+                let skill = skills
+                    .definitions
+                    .get(&skills.ai_default)
                     .cloned()
-                    .ok_or("找不到 melee_attack 技能")?;
+                    .expect("載入時已驗證 ai_default 技能");
                 let target_cell = closest_occupied_cell(&self.world, e, t);
                 self.use_skill(&a, &id, target_cell, skill)?
             } else {
@@ -1540,6 +1639,7 @@ impl Game {
             .map(|(entity, i, p, fp, h, f, d)| UnitView {
                 id: i.0.clone(),
                 name: f.name.clone(),
+                visual: f.visual.clone(),
                 team: f.team,
                 x: p.0.x,
                 y: p.0.y,
@@ -1605,41 +1705,40 @@ impl Game {
                         .or_else(|| board.triggers.get(&position).cloned())
                         .unwrap_or_default();
                     let cost = movement_cost(world, position);
-                    let kind = if matches!(
-                        effect.as_str(),
-                        "grease" | "spikes" | "mire" | "cliff" | "chasm"
-                    ) {
+                    let kind = if !effect.is_empty() {
                         effect.as_str()
-                    } else if cost > 1 {
+                    } else if base_cost > 1 {
                         "rough"
                     } else {
                         "plain"
                     };
-                    let damage = terrain_damage(&effect);
+                    let definition = terrain_type(board, kind);
+                    let damage = definition.damage;
                     let remaining_rounds = temporary_terrain
                         .map(|terrain| terrain.expires_after_round.saturating_sub(enc.round) + 1);
-                    let effect_description = if effect == "mire" {
-                        detail(
-                            "TERRAIN_EFFECT_MIRE",
-                            &[
-                                gameplay_config::MIRE_STAT_PENALTY,
-                                gameplay_config::MIRE_MOVEMENT_COST_INCREASE as i32,
-                                remaining_rounds.unwrap_or(0) as i32,
-                            ],
-                        )
-                    } else if effect == "cliff" {
-                        detail("TERRAIN_EFFECT_CLIFF", &[])
-                    } else if effect == "chasm" {
-                        detail("TERRAIN_EFFECT_CHASM", &[])
+                    let effect_arguments = if remaining_rounds.is_some()
+                        && (definition.dodge_penalty > 0
+                            || definition.block_penalty > 0
+                            || definition.movement_cost_bonus > 0)
+                    {
+                        vec![
+                            definition.dodge_penalty.max(definition.block_penalty),
+                            definition.movement_cost_bonus as i32,
+                            remaining_rounds.unwrap_or(0) as i32,
+                        ]
                     } else if damage > 0 {
-                        detail("TERRAIN_EFFECT_DAMAGE", &[damage])
+                        vec![damage]
                     } else {
-                        detail(&effect, &[])
+                        Vec::new()
                     };
+                    let effect_description = detail(&definition.effect_key, &effect_arguments);
                     TerrainCellView {
                         x,
                         y,
                         kind: kind.to_string(),
+                        name_key: definition.name_key.clone(),
+                        visual: definition.visual.clone(),
+                        passable: definition.passable,
                         base_kind: if base_cost > 1 { "rough" } else { "plain" }.to_string(),
                         unit_id: units
                             .iter()
@@ -1657,16 +1756,18 @@ impl Game {
         Snapshot {
             width: b.width,
             height: b.height,
-            costs: b.costs,
+            costs: b.costs.clone(),
             terrain_effects: {
                 let mut effects: Vec<_> = b
                     .triggers
+                    .clone()
                     .into_iter()
                     .filter(|(position, _)| !temporary_terrains.0.contains_key(position))
                     .map(|(position, effect)| TerrainEffectView {
                         x: position.x,
                         y: position.y,
-                        damage: terrain_damage(&effect),
+                        damage: terrain_damage(&b, &effect),
+                        visual: terrain_type(&b, &effect).visual.clone(),
                         effect,
                         remaining_rounds: None,
                     })
@@ -1675,7 +1776,8 @@ impl Game {
                     TerrainEffectView {
                         x: position.x,
                         y: position.y,
-                        damage: terrain_damage(&terrain.kind),
+                        damage: terrain_damage(&b, &terrain.kind),
+                        visual: terrain_type(&b, &terrain.kind).visual.clone(),
                         effect: terrain.kind,
                         remaining_rounds: Some(
                             terrain.expires_after_round.saturating_sub(enc.round) + 1,
@@ -1901,7 +2003,7 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
         let support_range = unit
             .skills
             .iter()
-            .filter_map(|skill_id| skills.0.get(skill_id))
+            .filter_map(|skill_id| skills.definitions.get(skill_id))
             .filter(|support_skill| {
                 !support_skill.ranged
                     && matches!(
@@ -2025,8 +2127,14 @@ fn terrain_at(w: &World, position: GridPos) -> Option<String> {
 fn movement_cost(w: &World, position: GridPos) -> u32 {
     let board = w.resource::<Board>();
     let base = board.costs[(position.y * board.width + position.x) as usize];
-    base + gameplay_config::MIRE_MOVEMENT_COST_INCREASE
-        * u32::from(terrain_at(w, position).is_some_and(|kind| kind == "mire"))
+    base + terrain_at(w, position)
+        .map(|kind| terrain_type(board, &kind).movement_cost_bonus)
+        .unwrap_or(0)
+}
+
+fn terrain_ends_movement(w: &World, position: GridPos) -> bool {
+    terrain_at(w, position)
+        .is_some_and(|kind| terrain_type(w.resource::<Board>(), &kind).ends_movement)
 }
 
 fn effective_dodge(w: &World, entity: Entity) -> i32 {
@@ -2040,17 +2148,13 @@ fn effective_dodge(w: &World, entity: Entity) -> i32 {
     let footprint = *w
         .get::<Footprint>(entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let penalty = if footprint_on_terrain(
+    let penalty = footprint_terrain_penalty(
         w.resource::<Board>(),
         w.resource::<TemporaryTerrains>(),
         position,
         footprint,
-        "mire",
-    ) {
-        gameplay_config::MIRE_STAT_PENALTY
-    } else {
-        0
-    };
+        |terrain| terrain.dodge_penalty,
+    );
     (unit.dodge - penalty).max(0)
 }
 
@@ -2065,40 +2169,35 @@ fn effective_block(w: &World, entity: Entity) -> i32 {
     let footprint = *w
         .get::<Footprint>(entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let penalty = if footprint_on_terrain(
+    let penalty = footprint_terrain_penalty(
         w.resource::<Board>(),
         w.resource::<TemporaryTerrains>(),
         position,
         footprint,
-        "mire",
-    ) {
-        gameplay_config::MIRE_STAT_PENALTY
-    } else {
-        0
-    };
+        |terrain| terrain.block_penalty,
+    );
     (unit.block - penalty).max(0)
 }
 
-fn footprint_on_terrain(
+fn footprint_terrain_penalty(
     board: &Board,
     temporary: &TemporaryTerrains,
     position: GridPos,
     footprint: Footprint,
-    kind: &str,
-) -> bool {
-    (position.y..position.y + footprint.height).any(|y| {
-        (position.x..position.x + footprint.width).any(|x| {
-            let cell = GridPos { x, y };
+    penalty: impl Fn(&TerrainTypeDef) -> i32,
+) -> i32 {
+    (position.y..position.y + footprint.height)
+        .flat_map(|y| (position.x..position.x + footprint.width).map(move |x| GridPos { x, y }))
+        .filter_map(|cell| {
             temporary
                 .0
                 .get(&cell)
-                .is_some_and(|terrain| terrain.kind == kind)
-                || board
-                    .triggers
-                    .get(&cell)
-                    .is_some_and(|terrain| terrain == kind)
+                .map(|terrain| terrain.kind.as_str())
+                .or_else(|| board.triggers.get(&cell).map(String::as_str))
         })
-    })
+        .map(|kind| penalty(terrain_type(board, kind)))
+        .max()
+        .unwrap_or(0)
 }
 
 fn footprint_on_impassable(board: &Board, position: GridPos, footprint: Footprint) -> bool {
@@ -2107,7 +2206,18 @@ fn footprint_on_impassable(board: &Board, position: GridPos, footprint: Footprin
             board
                 .triggers
                 .get(&GridPos { x, y })
-                .is_some_and(|kind| is_impassable_terrain(kind))
+                .is_some_and(|kind| !terrain_type(board, kind).passable)
+        })
+    })
+}
+
+fn footprint_blocks_forced_entry(board: &Board, position: GridPos, footprint: Footprint) -> bool {
+    (position.y..position.y + footprint.height).any(|y| {
+        (position.x..position.x + footprint.width).any(|x| {
+            board
+                .triggers
+                .get(&GridPos { x, y })
+                .is_some_and(|kind| terrain_type(board, kind).forced_entry == ForcedEntry::Blocked)
         })
     })
 }
@@ -2272,8 +2382,7 @@ fn paths(w: &World, e: Entity, start: GridPos, f: Footprint, budget: u32) -> Pat
                 continue;
             }
             let next_state = PathState {
-                danger: state.danger
-                    + u32::from(terrain_at(w, n).is_some_and(|terrain| terrain != "mire")),
+                danger: state.danger + u32::from(terrain_ends_movement(w, n)),
                 position: n,
             };
             let next_movement = movement + movement_cost(w, n);
@@ -2367,11 +2476,11 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         .get::<Footprint>(e)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
     let unit = w.get::<Unit>(e).expect("已建立的戰鬥單位應具有 Unit 元件");
-    let mut ranges: Vec<_> = w
-        .resource::<Skills>()
-        .0
-        .values()
-        .filter(|skill| unit.skills.contains(&skill.id))
+    let skills = w.resource::<Skills>();
+    let ranges: Vec<_> = unit
+        .skills
+        .iter()
+        .filter_map(|skill_id| skills.definitions.get(skill_id))
         .map(|skill| {
             let range = skill.range.unwrap_or(if skill.ranged {
                 unit.range
@@ -2402,18 +2511,17 @@ fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
             SkillRangeView {
                 id: skill.id.clone(),
                 name_key: format!("SKILL_{}_NAME", skill.id.to_ascii_uppercase()),
-                details: skill_details(skill, range),
+                details: skill_details(skill, range, board),
                 cell_targeted: skill.effect == SkillEffect::Mire,
                 enabled: can_use_skill(w.resource::<Turn>()),
                 cells,
             }
         })
         .collect();
-    ranges.sort_by(|a, b| a.id.cmp(&b.id));
     ranges
 }
 
-fn skill_details(skill: &SkillDef, range: i32) -> Vec<DetailView> {
+fn skill_details(skill: &SkillDef, range: i32, board: &Board) -> Vec<DetailView> {
     let target_key = if skill.effect == SkillEffect::Mire {
         "SKILL_TARGET_CELL"
     } else if skill.effect == SkillEffect::Heal {
@@ -2441,15 +2549,22 @@ fn skill_details(skill: &SkillDef, range: i32) -> Vec<DetailView> {
             "SKILL_EFFECT_PUSH",
             &[gameplay_config::PUSH_DISTANCE],
         )),
-        SkillEffect::Mire => details.push(detail(
-            "SKILL_EFFECT_MIRE",
-            &[
-                gameplay_config::MIRE_MOVEMENT_COST_INCREASE as i32,
-                skill
-                    .duration
-                    .unwrap_or(gameplay_config::DEFAULT_MIRE_DURATION) as i32,
-            ],
-        )),
+        SkillEffect::Mire => {
+            let terrain = skill
+                .terrain
+                .as_ref()
+                .expect("載入時已驗證地形技能具有 terrain");
+            details.push(detail(
+                "SKILL_EFFECT_MIRE",
+                &[
+                    terrain_type(board, terrain).movement_cost_bonus as i32,
+                    skill
+                        .duration
+                        .unwrap_or(gameplay_config::DEFAULT_MIRE_DURATION)
+                        as i32,
+                ],
+            ))
+        }
         SkillEffect::Heal => details.push(detail(
             "SKILL_EFFECT_HEAL",
             &[skill

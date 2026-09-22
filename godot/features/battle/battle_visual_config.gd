@@ -25,12 +25,3 @@ const DAMAGE_TEXT_COLOR := Color(1.0, 0.32, 0.28)
 const BLOCK_TEXT_COLOR := Color(1.0, 0.76, 0.28)
 const DODGE_TEXT_COLOR := Color(0.45, 0.85, 1.0)
 const HEALING_TEXT_COLOR := Color(0.35, 1.0, 0.58)
-const UNIT_ART := {
-	"aria": preload("res://assets/units/fighter.svg"), "kael": preload("res://assets/units/fighter.svg"),
-	"lyra": preload("res://assets/units/archer.svg"),
-	"mira": preload("res://assets/units/archer.svg"),
-	"wolf_a": preload("res://assets/units/wolf.svg"), "wolf_b": preload("res://assets/units/wolf.svg"),
-	"wolf_c": preload("res://assets/units/wolf.svg"), "wolf_d": preload("res://assets/units/wolf.svg"),
-	"wolf_e": preload("res://assets/units/wolf.svg"),
-	"ogre": preload("res://assets/units/ogre.svg"),
-}

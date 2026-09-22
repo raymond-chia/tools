@@ -12,8 +12,29 @@ costs=[
 triggers=[
 {x=1,y=2,kind="spikes"}]
 
+[terrain_types.plain]
+name_key="TERRAIN_PLAIN"
+visual="plain"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.rough]
+name_key="TERRAIN_ROUGH"
+visual="rough"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.spikes]
+name_key="TERRAIN_SPIKES"
+visual="spikes"
+passable=true
+ends_movement=true
+damage=3
+effect_key="TERRAIN_EFFECT_DAMAGE"
+
 [[skills]]
 id="melee_attack"
+ai_default=true
 name="近戰攻擊"
 ranged=false
 attack_bonus=0
@@ -44,6 +65,7 @@ range=4
 
 [[units]]
 id="aria"
+visual="res://assets/units/fighter.svg"
 name="預覽測試角色"
 team="player"
 group="heroes"
@@ -51,7 +73,7 @@ x=1
 y=3
 hp=10
 movement=2
-initiative=10
+initiative=100
 dodge=2
 block=3
 melee=4
@@ -61,6 +83,7 @@ range=3
 
 [[units]]
 id="ogre"
+visual="res://assets/units/ogre.svg"
 name="預覽測試敵人"
 team="enemy"
 group="ogres"
@@ -68,7 +91,7 @@ x=3
 y=1
 hp=20
 movement=2
-initiative=0
+initiative=-100
 dodge=1
 block=4
 melee=5

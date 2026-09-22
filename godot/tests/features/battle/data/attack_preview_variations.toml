@@ -11,8 +11,21 @@ costs=[
 1,1,1,1,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1]
 
+[terrain_types.plain]
+name_key="TERRAIN_PLAIN"
+visual="plain"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.rough]
+name_key="TERRAIN_ROUGH"
+visual="rough"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
 [[skills]]
 id="preview_5"
+ai_default=true
 name="測試一般傷害"
 ranged=true
 attack_bonus=3
@@ -69,6 +82,7 @@ range=10
 
 [[units]]
 id="aria"
+visual="res://assets/units/fighter.svg"
 name="預覽測試攻擊者"
 team="player"
 group="heroes"
@@ -86,6 +100,7 @@ range=10
 
 [[units]]
 id="ogre"
+visual="res://assets/units/ogre.svg"
 name="高血量測試木樁"
 team="enemy"
 group="targets"
@@ -103,6 +118,7 @@ range=1
 
 [[units]]
 id="wolf_a"
+visual="res://assets/units/wolf.svg"
 name="一般測試木樁"
 team="enemy"
 group="targets"
@@ -120,6 +136,7 @@ range=1
 
 [[units]]
 id="wolf_b"
+visual="res://assets/units/wolf.svg"
 name="無格擋測試木樁"
 team="enemy"
 group="targets"
@@ -137,6 +154,7 @@ range=1
 
 [[units]]
 id="lyra"
+visual="res://assets/units/archer.svg"
 name="高格擋測試木樁"
 team="enemy"
 group="targets"

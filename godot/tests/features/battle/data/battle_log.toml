@@ -8,8 +8,29 @@ costs=[
 triggers=[
 {x=0,y=2,kind="spikes"}]
 
+[terrain_types.plain]
+name_key="TERRAIN_PLAIN"
+visual="plain"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.rough]
+name_key="TERRAIN_ROUGH"
+visual="rough"
+passable=true
+effect_key="TERRAIN_EFFECT_NONE"
+
+[terrain_types.spikes]
+name_key="TERRAIN_SPIKES"
+visual="spikes"
+passable=true
+ends_movement=true
+damage=3
+effect_key="TERRAIN_EFFECT_DAMAGE"
+
 [[skills]]
 id="precise_strike"
+ai_default=true
 name="精準斬擊"
 ranged=false
 attack_bonus=100
@@ -26,6 +47,7 @@ range=3
 
 [[units]]
 id="aria"
+visual="res://assets/units/fighter.svg"
 name="測試劍士"
 team="player"
 group="heroes"
@@ -43,6 +65,7 @@ range=1
 
 [[units]]
 id="wolf_a"
+visual="res://assets/units/wolf.svg"
 name="測試木樁"
 team="enemy"
 group="targets"
@@ -60,6 +83,7 @@ range=1
 
 [[units]]
 id="wolf_b"
+visual="res://assets/units/wolf.svg"
 name="脆弱木樁"
 team="enemy"
 group="targets"

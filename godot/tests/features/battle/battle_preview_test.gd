@@ -174,10 +174,10 @@ func assert_attack_preview_bar(case_name: String, expected_segments: Array, max_
 # 驗證四種技能的施放範圍邊界正確，且選擇技能會隱藏移動範圍並清除路徑預覽。
 func test_skill_range_preview() -> void:
 	var test_data := [
-		{"name": "近戰攻擊", "action": "melee_attack", "button": battle.ui.action_buttons.melee_attack, "range": 1},
-		{"name": "遠程攻擊", "action": "ranged_attack", "button": battle.ui.action_buttons.ranged_attack, "range": 3},
-		{"name": "強力一擊", "action": "power_strike", "button": battle.ui.action_buttons.power_strike, "range": 1},
-		{"name": "瞄準射擊", "action": "aimed_shot", "button": battle.ui.action_buttons.aimed_shot, "range": 4},
+		{"name": "近戰攻擊", "action": "melee_attack", "range": 1},
+		{"name": "遠程攻擊", "action": "ranged_attack", "range": 3},
+		{"name": "強力一擊", "action": "power_strike", "range": 1},
+		{"name": "瞄準射擊", "action": "aimed_shot", "range": 4},
 	]
 	for test_case in test_data:
 		await prepare_case(battle)
@@ -185,7 +185,7 @@ func test_skill_range_preview() -> void:
 		push_mouse_motion(battle.world, battle.world.cell_center(actor_cell + Vector2i(3, 0)))
 		assert_bool(battle.world.first_move_path.is_empty()).override_failure_message("%s：選擇技能前應有移動路徑預覽" % test_case.name).is_false()
 
-		push_control_click(test_case.button)
+		push_control_click(battle.ui.action_buttons[test_case.action])
 
 		var preview_cells := cells_from_values(battle.world.selected_skill_range())
 		assert_bool(preview_cells.has(actor_cell + Vector2i(test_case.range, 0))).override_failure_message("%s：射程邊界格應包含在預覽" % test_case.name).is_true()
