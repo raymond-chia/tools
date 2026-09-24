@@ -359,6 +359,12 @@ func query_attack_preview(target_id: String, skill_id: String, preparation_skill
 		assert_bool(damaged.has("error")).override_failure_message("建立缺血情境的真實攻擊應成功").is_false()
 		if damaged.has("error"):
 			return {}
+		# 準備攻擊會結束玩家回合，推進自動回合後才能再次查詢技能預覽。
+		while damaged.turn.auto_step:
+			damaged = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "auto_step"})))
+			assert_bool(damaged.has("error")).override_failure_message("準備攻擊後的自動回合應成功推進").is_false()
+			if damaged.has("error"):
+				return {}
 	var preview: Dictionary = JSON.parse_string(preview_core.preview_skill("aria", target_id, int(target.x), int(target.y), skill_id))
 	assert_bool(preview.has("error")).override_failure_message("核心應成功產生 %s 的 %s 預覽" % [target_id, skill_id]).is_false()
 	return preview

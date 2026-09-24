@@ -37,7 +37,7 @@ struct FlankingCase {
     expected_modifier: i32,
 }
 
-// 驗證武器類型、射程、相對站位與大型目標占用格會正確決定包夾加成。
+// 驗證近戰／遠程技能、射程、相對站位與大型目標占用格會正確決定包夾加成。
 #[test]
 fn attack_modifier_uses_expected_flanking_bonus() {
     let cases = [
