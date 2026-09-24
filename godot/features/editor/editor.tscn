@@ -1,0 +1,153 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://features/editor/editor.gd" id="1"]
+[ext_resource type="Theme" path="res://features/battle/battle_theme.tres" id="2"]
+
+[node name="Editor" type="Control"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2")
+script = ExtResource("1")
+
+[node name="Layout" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = -12.0
+
+[node name="Toolbar" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+
+[node name="New" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "New"
+
+[node name="Maps" type="OptionButton" parent="Layout/Toolbar"]
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+
+[node name="Open" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "Open"
+
+[node name="Save" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "Save"
+
+[node name="Duplicate" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "Duplicate"
+
+[node name="Undo" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "Undo"
+
+[node name="Redo" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "Redo"
+
+[node name="Play" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "Test / Play"
+
+[node name="Body" type="HSplitContainer" parent="Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+split_offset = 850
+
+[node name="MapPanel" type="VBoxContainer" parent="Layout/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="MapFields" type="HBoxContainer" parent="Layout/Body/MapPanel"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/Body/MapPanel/MapFields"]
+layout_mode = 2
+text = "地圖"
+
+[node name="MapName" type="LineEdit" parent="Layout/Body/MapPanel/MapFields"]
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+
+[node name="Width" type="SpinBox" parent="Layout/Body/MapPanel/MapFields"]
+custom_minimum_size = Vector2(95, 0)
+layout_mode = 2
+min_value = 2.0
+max_value = 40.0
+value = 10.0
+prefix = "寬 "
+
+[node name="Height" type="SpinBox" parent="Layout/Body/MapPanel/MapFields"]
+custom_minimum_size = Vector2(95, 0)
+layout_mode = 2
+min_value = 2.0
+max_value = 40.0
+value = 8.0
+prefix = "高 "
+
+[node name="Tools" type="HBoxContainer" parent="Layout/Body/MapPanel"]
+layout_mode = 2
+
+[node name="Mode" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+
+[node name="Terrain" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+custom_minimum_size = Vector2(125, 0)
+layout_mode = 2
+
+[node name="Unit" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+custom_minimum_size = Vector2(145, 0)
+layout_mode = 2
+
+[node name="Team" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+layout_mode = 2
+
+[node name="GridScroll" type="ScrollContainer" parent="Layout/Body/MapPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Grid" type="GridContainer" parent="Layout/Body/MapPanel/GridScroll"]
+layout_mode = 2
+
+[node name="SidePanel" type="VBoxContainer" parent="Layout/Body"]
+custom_minimum_size = Vector2(330, 0)
+layout_mode = 2
+
+[node name="Category" type="OptionButton" parent="Layout/Body/SidePanel"]
+layout_mode = 2
+
+[node name="Definition" type="OptionButton" parent="Layout/Body/SidePanel"]
+layout_mode = 2
+
+[node name="DefinitionActions" type="HBoxContainer" parent="Layout/Body/SidePanel"]
+layout_mode = 2
+
+[node name="AddDefinition" type="Button" parent="Layout/Body/SidePanel/DefinitionActions"]
+layout_mode = 2
+text = "新增定義"
+
+[node name="RemoveDefinition" type="Button" parent="Layout/Body/SidePanel/DefinitionActions"]
+layout_mode = 2
+text = "刪除定義"
+
+[node name="InspectorScroll" type="ScrollContainer" parent="Layout/Body/SidePanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Fields" type="GridContainer" parent="Layout/Body/SidePanel/InspectorScroll"]
+layout_mode = 2
+columns = 2
+
+[node name="Status" type="Label" parent="Layout"]
+layout_mode = 2
+text = ""
+autowrap_mode = 2

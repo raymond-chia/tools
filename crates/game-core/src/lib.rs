@@ -2,6 +2,7 @@
 use bevy_ecs::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub mod authoring;
 mod gameplay_config;
 #[cfg(test)]
 mod tests;
@@ -136,8 +137,8 @@ struct Definition {
     skills: Vec<SkillDef>,
     units: Vec<UnitDef>,
 }
-#[derive(Clone, Deserialize)]
-struct SkillDef {
+#[derive(Clone, Deserialize, Serialize)]
+pub struct SkillDef {
     id: String,
     name: String,
     ranged: bool,
@@ -152,9 +153,9 @@ struct SkillDef {
     #[serde(default)]
     ai_default: bool,
 }
-#[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-enum SkillEffect {
+pub enum SkillEffect {
     #[default]
     Attack,
     Push,
@@ -169,14 +170,14 @@ struct MapDef {
     #[serde(default)]
     triggers: Vec<TriggerDef>,
 }
-#[derive(Deserialize)]
-struct TriggerDef {
+#[derive(Clone, Deserialize, Serialize)]
+pub struct TriggerDef {
     x: i32,
     y: i32,
     kind: String,
 }
-#[derive(Clone, Deserialize)]
-struct TerrainTypeDef {
+#[derive(Clone, Deserialize, Serialize)]
+pub struct TerrainTypeDef {
     name_key: String,
     visual: String,
     passable: bool,
@@ -195,9 +196,9 @@ struct TerrainTypeDef {
     effect_key: String,
     forced_entry_log_key: Option<String>,
 }
-#[derive(Clone, Copy, Default, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-enum ForcedEntry {
+pub enum ForcedEntry {
     #[default]
     None,
     Blocked,
@@ -447,6 +448,7 @@ pub struct UnitView {
     pub name: String,
     pub visual: String,
     pub team: Team,
+    pub group: String,
     pub x: i32,
     pub y: i32,
     pub width: i32,
@@ -517,9 +519,27 @@ struct MovePlan {
 impl Game {
     pub fn from_toml(s: &str) -> Result<Self, String> {
         let d: Definition = toml::from_str(s).map_err(|e| e.to_string())?;
+        Self::from_definition(d)
+    }
+    pub fn from_documents(definitions: &str, map: &str) -> Result<Self, String> {
+        let definitions: authoring::Definitions =
+            toml::from_str(definitions).map_err(|e| e.to_string())?;
+        let map: authoring::Map = toml::from_str(map).map_err(|e| e.to_string())?;
+        Self::from_authoring(definitions, map)
+    }
+    pub fn from_authoring(
+        definitions: authoring::Definitions,
+        map: authoring::Map,
+    ) -> Result<Self, String> {
+        Self::from_definition(authoring::into_definition(definitions, map)?)
+    }
+    fn from_definition(d: Definition) -> Result<Self, String> {
         if d.map.width <= 0
             || d.map.height <= 0
-            || d.map.costs.len() != (d.map.width * d.map.height) as usize
+            || d.map
+                .width
+                .checked_mul(d.map.height)
+                .is_none_or(|cells| d.map.costs.len() != cells as usize)
         {
             return Err("map.costs 數量與尺寸不符".into());
         }
@@ -539,6 +559,12 @@ impl Game {
         for trigger in &d.map.triggers {
             if !d.terrain_types.contains_key(&trigger.kind) {
                 return Err(format!("找不到地形種類 {}", trigger.kind));
+            }
+        }
+        let mut terrain_positions = HashSet::new();
+        for trigger in &d.map.triggers {
+            if !terrain_positions.insert((trigger.x, trigger.y)) {
+                return Err(format!("地形格子重複 ({}, {})", trigger.x, trigger.y));
             }
         }
         let mut w = World::new();
@@ -600,6 +626,7 @@ impl Game {
         });
         let all_skill_ids: Vec<_> = w.resource::<Skills>().definitions.keys().cloned().collect();
         let mut ids = HashSet::new();
+        let mut occupied = HashSet::new();
         for u in d.units {
             if !ids.insert(u.id.clone()) {
                 return Err(format!("重複 id {}", u.id));
@@ -617,6 +644,19 @@ impl Game {
             }
             if footprint_on_impassable(w.resource::<Board>(), p, f) {
                 return Err(format!("{} 不可放置在峭壁或懸崖", u.id));
+            }
+            if footprint_cells(p, f)
+                .iter()
+                .any(|cell| !occupied.insert(*cell))
+            {
+                return Err(format!("{} 與其他單位重疊", u.id));
+            }
+            if let Some(unknown) = u
+                .skills
+                .iter()
+                .find(|skill| !w.resource::<Skills>().definitions.contains_key(*skill))
+            {
+                return Err(format!("{} 使用未知技能 {}", u.id, unknown));
             }
             w.spawn((
                 Id(u.id),
@@ -850,10 +890,9 @@ impl Game {
         }
         let ids: Vec<_> = self
             .world
-            .query::<(&Id, &Unit)>()
+            .query::<&Id>()
             .iter(&self.world)
-            .filter(|(_, f)| f.team == Team::Player || f.group == "wolves")
-            .map(|(i, _)| i.0.clone())
+            .map(|i| i.0.clone())
             .collect();
         self.world
             .resource_mut::<Encounter>()
@@ -1538,7 +1577,7 @@ impl Game {
                     .expect("已建立的戰鬥單位應具有 Unit 元件")
                     .movement;
                 if let Some(path) = toward(&self.world, e, start, goal, fp, b) {
-                    if let Some(last) = path.last() {
+                    if let [_, .., last] = path.as_slice() {
                         self.movements.push(MovementTransition {
                             unit_id: a.clone(),
                             path: path.clone(),
@@ -1641,6 +1680,7 @@ impl Game {
                 name: f.name.clone(),
                 visual: f.visual.clone(),
                 team: f.team,
+                group: f.group.clone(),
                 x: p.0.x,
                 y: p.0.y,
                 width: fp.width,
@@ -2435,9 +2475,40 @@ fn toward(
     f: Footprint,
     b: u32,
 ) -> Option<Vec<GridPos>> {
-    let Paths { best, previous: _ } = paths(w, e, s, f, b);
-    let end = *best.keys().min_by_key(|p| distance(**p, target))?;
-    find_path(w, e, s, end, f, b)
+    let board = w.resource::<Board>();
+    let search_budget = (0..board.height)
+        .flat_map(|y| (0..board.width).map(move |x| GridPos { x, y }))
+        .fold(0_u32, |total, cell| {
+            total.saturating_add(movement_cost(w, cell))
+        });
+    let Paths { best, previous } = paths(w, e, s, f, search_budget);
+    let end = *best
+        .keys()
+        .min_by_key(|p| (distance(**p, target), p.y, p.x))?;
+    let mut state = *best.get(&end).expect("選出的終點應有尋路狀態");
+    let mut route = vec![state.position];
+    while state.position != s {
+        state = *previous
+            .get(&state)
+            .expect("非起點的最佳尋路狀態必須有前一個狀態");
+        route.push(state.position);
+    }
+    route.reverse();
+    let mut spent = 0;
+    let mut steps = 1;
+    for cell in route.iter().skip(1) {
+        let cost = movement_cost(w, *cell);
+        if cost > b.saturating_sub(spent) {
+            break;
+        }
+        spent += cost;
+        steps += 1;
+        if terrain_ends_movement(w, *cell) {
+            break;
+        }
+    }
+    route.truncate(steps);
+    Some(route)
 }
 fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     let p = w.get::<Pos>(e).expect("已建立的戰鬥單位應具有 Pos 元件").0;

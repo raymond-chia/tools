@@ -1,10 +1,25 @@
 [gd_resource type="Theme" format=3]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.055, 0.067, 0.086, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_popup"]
+content_margin_left = 8.0
+content_margin_top = 8.0
+content_margin_right = 8.0
+content_margin_bottom = 8.0
+bg_color = Color(0.055, 0.067, 0.086, 0.9)
+
 [resource]
 default_font_size = 26
 Button/font_sizes/font_size = 28
 Label/font_sizes/font_size = 26
 RichTextLabel/font_sizes/normal_font_size = 26
+Panel/styles/panel = SubResource("StyleBoxFlat_panel")
+PanelContainer/styles/panel = SubResource("StyleBoxFlat_popup")
+PopupMenu/styles/panel = SubResource("StyleBoxFlat_popup")
+FloatingPanel/base_type = &"Panel"
+FloatingPanel/styles/panel = SubResource("StyleBoxFlat_popup")
 HeadingLabel/base_type = &"Label"
 HeadingLabel/font_sizes/font_size = 30
 ActorNameLabel/base_type = &"Label"

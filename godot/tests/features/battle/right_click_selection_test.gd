@@ -139,6 +139,8 @@ func target_point(battle, target: String) -> Vector2:
 	if target == "empty":
 		return battle.world.cell_center(find_empty_cell(battle.state))
 	var unit := find_unit(battle.state.units, target.get_slice(":", 1))
+	if unit.width > 1 or unit.height > 1:
+		return battle.world.cell_center(Vector2i(unit.x + unit.width - 1, unit.y))
 	return battle.world.footprint_center(unit)
 
 func target_cell(battle, target: String) -> Vector2i:
@@ -146,8 +148,7 @@ func target_cell(battle, target: String) -> Vector2i:
 		return Vector2i(-1, -1)
 	if target == "empty":
 		return find_empty_cell(battle.state)
-	var unit := find_unit(battle.state.units, target.get_slice(":", 1))
-	return Vector2i(unit.x, unit.y)
+	return battle.world.point_to_cell(target_point(battle, target))
 
 func find_empty_cell(state: Dictionary) -> Vector2i:
 	for y in state.height:

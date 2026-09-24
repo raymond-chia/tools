@@ -15,28 +15,34 @@ func before_test() -> void:
 
 # 驗證開始戰鬥會記錄新回合，並以整數顯示回合數。
 func test_new_round_log() -> void:
-	var event := find_last_event("new_round")
+	var event: Dictionary = battle.state.log[0]
+	assert_str(event.type).is_equal("new_round")
 	assert_dict(event).override_failure_message("應產生新回合事件").is_not_empty()
 	assert_int(int(event.round)).override_failure_message("新回合事件應記錄目前輪數").is_equal(1)
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示整數回合數").contains("── 第 1 輪 ──")
 
 # 驗證新回合事件提供已排序的先攻擲骰明細，且總值等於擲骰與加值之和。
 func test_new_round_log_contains_initiative_rolls() -> void:
-	var event := find_last_event("new_round")
+	var event: Dictionary = battle.state.log[0]
+	assert_str(event.type).is_equal("new_round")
 	assert_array(event.initiative_rolls).override_failure_message("新回合事件應提供先攻擲骰明細").is_not_empty()
-	assert_int(event.initiative_rolls.size()).is_equal(1)
+	assert_int(event.initiative_rolls.size()).is_equal(3)
 	var initiative_roll: Dictionary = event.initiative_rolls[0]
 	assert_str(initiative_roll.unit).is_equal("測試劍士")
 	assert_str(initiative_roll.team).is_equal("player")
 	assert_int(int(initiative_roll.modifier)).is_equal(100)
-	assert_int(int(initiative_roll.total)).is_equal(int(initiative_roll.roll) + 100)
+	var previous_total := 1000
+	for roll in event.initiative_rolls:
+		assert_int(int(roll.total)).is_equal(int(roll.roll) + int(roll.modifier))
+		assert_int(int(roll.total)).is_less_equal(previous_total)
+		previous_total = int(roll.total)
 
 # 驗證每筆紀錄依事件類型決定預設展開狀態。
 func test_log_entries_use_event_default_expansion() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合與先攻紀錄應預設摺疊").is_false()
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var skill_index := find_last_event_index("skill")
+	var skill_index := find_last_event_index("skill", "測試劍士")
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應預設展開").is_true()
 
 # 驗證切換一筆紀錄只改變該筆狀態，且新增紀錄後保留既有狀態。
@@ -46,7 +52,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	assert_str(battle.ui.battle_log.text).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var skill_index := find_last_event_index("skill")
+	var skill_index := find_last_event_index("skill", "測試劍士")
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新增紀錄後應保留既有展開狀態").is_true()
 	battle.ui.toggle_log_entry(skill_index)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("切換技能紀錄不應影響新回合紀錄").is_true()
@@ -57,7 +63,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 func test_skill_resolution_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var event := find_last_event("skill")
+	var event := find_last_event("skill", "測試劍士")
 	assert_dict(event).override_failure_message("應產生技能事件").is_not_empty()
 	assert_str(event.actor).is_equal("測試劍士")
 	assert_str(event.actor_team).is_equal("player")
@@ -86,7 +92,7 @@ func test_skill_resolution_log() -> void:
 func test_downed_unit_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_b", "finishing_strike"))).override_failure_message("終結技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var event := find_last_event("skill")
+	var event := find_last_event("skill", "測試劍士")
 	assert_bool(event.downed).override_failure_message("生命歸零的目標應標記為倒下").is_true()
 	assert_int(int(event.remaining_hp)).override_failure_message("倒下目標的剩餘生命應為零").is_zero()
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]脆弱木樁[/color] 倒下")
@@ -166,16 +172,17 @@ func skill_command(target: String, skill: String) -> Dictionary:
 	var unit := unit_with_id(target)
 	return {"type": "skill", "actor": "aria", "target": target, "x": int(unit.x), "y": int(unit.y), "skill": skill}
 
-func find_last_event(type: String) -> Dictionary:
+func find_last_event(type: String, actor := "") -> Dictionary:
 	for index in range(battle.state.log.size() - 1, -1, -1):
 		var event: Dictionary = battle.state.log[index]
-		if event.type == type:
+		if event.type == type and (actor == "" or event.get("actor") == actor):
 			return event
 	return {}
 
-func find_last_event_index(type: String) -> int:
+func find_last_event_index(type: String, actor := "") -> int:
 	for index in range(battle.state.log.size() - 1, -1, -1):
-		if battle.state.log[index].type == type:
+		var event: Dictionary = battle.state.log[index]
+		if event.type == type and (actor == "" or event.get("actor") == actor):
 			return index
 	return -1
 

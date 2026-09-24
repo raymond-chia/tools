@@ -1,0 +1,134 @@
+keys,zh_TW,en
+SKILL_MELEE_ATTACK_NAME,近戰攻擊,Melee Attack
+SKILL_RANGED_ATTACK_NAME,遠程攻擊,Ranged Attack
+SKILL_POWER_STRIKE_NAME,強力一擊,Power Strike
+SKILL_AIMED_SHOT_NAME,瞄準射擊,Aimed Shot
+SKILL_SHIELD_BASH_NAME,盾牌推擊,Shield Bash
+SKILL_CORROSIVE_MIRE_NAME,腐蝕泥沼,Corrosive Mire
+SKILL_HEAL_NAME,治癒術,Heal
+SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
+SKILL_EFFECT_HEAL,效果：回復 %d HP,Effect: Restores %d HP
+HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
+HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
+SKILL_TARGET_CELL,目標：地面格,Target: Ground cell
+SKILL_TARGET_ENEMY,目標：敵方單位,Target: Enemy unit
+SKILL_TYPE_MELEE,類型：近戰,Type: Melee
+SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
+SKILL_RANGE,射程：%d 格,Range: %d tiles
+SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
+SKILL_DAMAGE_BONUS,傷害加值：%+d,Damage modifier: %+d
+SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時造成碰撞傷害,Effect: Pushes the target %d tile on hit; obstruction deals collision damage
+SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
+TERRAIN_EFFECT_MIRE,閃避與格擋 −%d，移動消耗 +%d，剩餘 %d 回合,"Dodge and block −%d, movement cost +%d, %d rounds remaining"
+TERRAIN_EFFECT_DAMAGE,造成 %d 點傷害,Deals %d damage
+TERRAIN_EFFECT_CLIFF,無法通行,Impassable
+TERRAIN_EFFECT_CHASM,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
+TERRAIN_EFFECT_NONE,無特殊效果,No special effect
+TERRAIN_EFFECT_GREASE,進入後會中止移動,Entering ends movement
+TERRAIN_PLAIN,平地,Plain
+TERRAIN_ROUGH,崎嶇地面,Rough ground
+TERRAIN_SPIKES,地刺,Spikes
+TERRAIN_GREASE,油膩地面,Grease
+TERRAIN_MIRE,腐蝕泥沼,Corrosive mire
+TERRAIN_CLIFF,峭壁,Cliff wall
+TERRAIN_CHASM,懸崖,Chasm
+COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
+COMBAT_LOG_FORCED_DEFEAT,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
+ATTACK_STAT_MELEE,近戰,Melee
+ATTACK_STAT_RANGED,遠程,Ranged
+ATTACK_RESULT_DODGE,閃避,Dodge
+ATTACK_RESULT_BLOCK,格擋,Block
+ATTACK_RESULT_HIT,命中,Hit
+ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
+ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d,HP %d / %d | MP %d
+ATTACK_PREVIEW_DAMAGE,傷害 %d,Damage %d
+ATTACK_PREVIEW_HIT,命中 %d%%,Hit %d%%
+ATTACK_PREVIEW_BLOCK,格擋 %d%%,Block %d%%
+ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
+選單,選單,Menu
+灰燼谷伏擊,灰燼谷伏擊,Ash Valley Ambush
+測試：,測試：,"Test: "
+返回編輯器,返回編輯器,Back to Editor
+亞莉亞・劍士,亞莉亞・劍士,Aria · Fighter
+萊拉・遊俠,萊拉・遊俠,Lyra · Ranger
+米菈・術士,米菈・術士,Mira · Mage
+荒原狼 A,荒原狼 A,Wasteland Wolf A
+荒原狼 B,荒原狼 B,Wasteland Wolf B
+荒原狼 C,荒原狼 C,Wasteland Wolf C
+荒原狼 D,荒原狼 D,Wasteland Wolf D
+荒原狼 E,荒原狼 E,Wasteland Wolf E
+近戰攻擊,近戰攻擊,Melee Attack
+遠程攻擊,遠程攻擊,Ranged Attack
+強力一擊,強力一擊,Power Strike
+瞄準射擊,瞄準射擊,Aimed Shot
+盾牌推擊,盾牌推擊,Shield Bash
+腐蝕泥沼,腐蝕泥沼,Corrosive Mire
+治癒術,治癒術,Heal
+移動消耗 0,移動消耗 0,Move cost 0
+傷害 0,傷害 0,Damage 0
+命中 0%,命中 0%,Hit 0%
+格擋 0%,格擋 0%,Block 0%
+暴擊率 0%,暴擊率 0%,Critical chance 0%
+技能,技能,Skill
+技能說明,技能說明,Skill details
+戰鬥紀錄,戰鬥紀錄,Combat Log
+延後,延後,Delay
+取消延後,取消延後,Cancel delay
+行動角色,行動角色,Active unit
+剩餘移動 0,剩餘移動 0,Movement left 0
+剩餘移動 %d,剩餘移動 %d,Movement left %d
+攻擊與技能,攻擊與技能,Attacks and Skills
+攻擊預覽,攻擊預覽,Attack Preview
+結束回合,結束回合,End Turn
+詳情,詳情,Details
+單位,單位,Unit
+地面,地面,Ground
+地形,地形,Terrain
+地面效果,地面效果,Ground effect
+陣營,陣營,Team
+生命,生命,Health
+體型,體型,Size
+移動,移動,Movement
+先攻,先攻,Initiative
+閃避／格擋,閃避／格擋,Dodge / Block
+近戰／遠程,近戰／遠程,Melee / Ranged
+傷害／射程,傷害／射程,Damage / Range
+移動消耗,移動消耗,Move cost
+隱藏紀錄,隱藏紀錄,Hide Log
+顯示紀錄,顯示紀錄,Show Log
+我方,我方,Ally
+敵方,敵方,Enemy
+大型,大型,Large
+一般,一般,Normal
+無法通行,無法通行,Impassable
+移動消耗 %d,移動消耗 %d,Move cost %d
+左鍵選擇與移動；右鍵查看單位或地面資訊。,左鍵選擇與移動；右鍵查看單位或地面資訊。,Left-click to select and move; right-click to inspect a unit or ground.
+請選擇施法格子。,請選擇施法格子。,Select a ground cell for the skill.
+請選擇技能目標。,請選擇技能目標。,Select a target for the skill.
+請選擇一個單位作為目標。,請選擇一個單位作為目標。,Select a unit as the target.
+已取消技能。,已取消技能。,Skill cancelled.
+請選擇地圖上的格子。,請選擇地圖上的格子。,Select a cell on the map.
+閃避,閃避,Dodge
+格擋,格擋,Block
+格擋 -%d,格擋 -%d,Block -%d
+── 第 %d 輪 ──,── 第 %d 輪 ──,── Round %d ──
+%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s: D%d roll %d + initiative %d = %d
+%s 使用「%s」影響 %s,%s 使用「%s」影響 %s,%s uses %s on %s
+治療,治療,Healing
+結果：%s，回復 %d HP，HP %d/%d,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
+攻擊加值：%s %d%s%s = %d,攻擊加值：%s %d%s%s = %d,Attack modifier: %s %d%s%s = %d
+D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d roll %d + attack modifier %d = attack total %d
+目標防禦：閃避門檻 %d／格擋門檻 %d,目標防禦：閃避門檻 %d／格擋門檻 %d,Target defense: dodge %d / block %d
+暴擊,暴擊,Critical
+，%s,，%s,", %s"
+結果：%s%s,結果：%s%s,Result: %s%s
+傷害：原始 %d − 格擋 %d = %d，HP %d/%d,傷害：原始 %d − 格擋 %d = %d，HP %d/%d,Damage: raw %d − block %d = %d; HP %d/%d
+結果：%s%s，%d 傷害，HP %d/%d,結果：%s%s，%d 傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
+%s 被沿攻擊方向推動 %d 格,%s 被沿攻擊方向推動 %d 格,%s is pushed %d tiles in the attack direction
+推擊受阻，%s 額外受到 %d 點碰撞傷害,推擊受阻，%s 額外受到 %d 點碰撞傷害,Push blocked: %s takes %d collision damage
+%s 倒下,%s 倒下,%s is defeated
+%s 使用「%s」,%s 使用「%s」,%s uses %s
+產生「%s」,產生「%s」,Creates %s
+狀態變化,狀態變化,Status change
+%s 受到「%s」狀態影響,%s 受到「%s」狀態影響,%s is affected by %s
+包抄,包抄,Flanking

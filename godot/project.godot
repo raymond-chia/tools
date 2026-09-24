@@ -28,7 +28,7 @@ enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg")
 
 [internationalization]
 
-locale/translations=PackedStringArray("res://translations/skills.zh_TW.translation", "res://translations/skills.en.translation")
+locale/translations=PackedStringArray("res://translations/battle.zh_TW.translation", "res://translations/battle.en.translation")
 locale/fallback="zh_TW"
 
 [rendering]

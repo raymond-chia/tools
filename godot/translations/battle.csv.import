@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://mhbor5eiksyh"
+
+[deps]
+
+files=["res://translations/battle.zh_TW.translation", "res://translations/battle.en.translation"]
+
+source_file="res://translations/battle.csv"
+dest_files=["res://translations/battle.zh_TW.translation", "res://translations/battle.en.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

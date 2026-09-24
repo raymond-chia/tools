@@ -1,4 +1,4 @@
-use game_core::{Command, Game, GridPos};
+use game_core::{Command, Game, GridPos, authoring};
 use godot::prelude::*;
 use std::sync::Mutex;
 #[derive(GodotClass)]
@@ -18,6 +18,40 @@ impl IRefCounted for TacticalGame {
 }
 #[godot_api]
 impl TacticalGame {
+    #[func]
+    fn load_documents(&self, definitions: GString, map: GString) -> GString {
+        match Game::from_documents(&definitions.to_string(), &map.to_string()) {
+            Ok(mut game) => {
+                let out = json_response(serde_json::to_string(&game.snapshot()));
+                *self.game.lock().expect("核心鎖不應中毒") = Some(game);
+                out
+            }
+            Err(e) => error(e),
+        }
+    }
+    #[func]
+    fn definitions_to_json(&self, text: GString) -> GString {
+        match authoring::definitions_to_json(&text.to_string()) {
+            Ok(json) => GString::from(&json),
+            Err(e) => error(e),
+        }
+    }
+    #[func]
+    fn map_to_json(&self, text: GString) -> GString {
+        match authoring::map_to_json(&text.to_string()) {
+            Ok(json) => GString::from(&json),
+            Err(e) => error(e),
+        }
+    }
+    #[func]
+    fn documents_from_json(&self, definitions: GString, map: GString) -> GString {
+        match authoring::documents_from_json(&definitions.to_string(), &map.to_string()) {
+            Ok((definitions, map)) => {
+                GString::from(&serde_json::json!({"definitions":definitions,"map":map}).to_string())
+            }
+            Err(e) => error(e),
+        }
+    }
     #[func]
     fn load_definition(&self, text: GString) -> GString {
         match Game::from_toml(&text.to_string()) {

@@ -5,9 +5,6 @@
 [ext_resource type="Script" uid="uid://d1qgddtm0w0tj" path="res://features/battle/battle_ui.gd" id="3"]
 [ext_resource type="Theme" path="res://features/battle/battle_theme.tres" id="4"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_log"]
-bg_color = Color(0.055, 0.067, 0.086, 1)
-
 [node name="Battle" type="Node" unique_id=341550505]
 script = ExtResource("1")
 
@@ -41,9 +38,9 @@ theme = ExtResource("4")
 
 [node name="BattleTitle" type="Label" parent="UI/Root" unique_id=1712591140]
 layout_mode = 0
-offset_left = 39.0
+offset_left = 180.0
 offset_top = 12.0
-offset_right = 420.0
+offset_right = 620.0
 offset_bottom = 78.0
 theme_override_colors/font_color = Color(0.94902, 0.831373, 0.607843, 1)
 theme_override_font_sizes/font_size = 54
@@ -229,6 +226,7 @@ autowrap_mode = 2
 [node name="LogPanel" type="Panel" parent="UI/Root" unique_id=1465909814]
 clip_contents = true
 layout_mode = 1
+theme_type_variation = &"FloatingPanel"
 anchors_preset = 11
 anchor_left = 1.0
 anchor_right = 1.0
@@ -239,7 +237,6 @@ offset_right = -24.0
 offset_bottom = -249.0
 grow_horizontal = 0
 grow_vertical = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
 [node name="Margin" type="MarginContainer" parent="UI/Root/LogPanel" unique_id=1833380066]
 layout_mode = 1
@@ -444,6 +441,7 @@ vertical_alignment = 1
 visible = false
 clip_contents = true
 layout_mode = 1
+theme_type_variation = &"FloatingPanel"
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
@@ -452,7 +450,6 @@ offset_top = 36.0
 offset_right = -24.0
 offset_bottom = 816.0
 grow_horizontal = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_log")
 
 [node name="Margin" type="MarginContainer" parent="UI/Root/InfoPanel" unique_id=674436552]
 layout_mode = 1
@@ -651,3 +648,12 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
+
+[node name="Menu" type="MenuButton" parent="UI/Root"]
+layout_mode = 0
+offset_left = 39.0
+offset_top = 20.0
+offset_right = 155.0
+offset_bottom = 68.0
+flat = false
+text = "選單"

@@ -310,9 +310,9 @@ func present_skill_result(event: Dictionary) -> void:
 	var hit_tween: Tween
 	match event.result:
 		"dodge":
-			present_unit_text(event.target, "閃避", BattleVisualConfig.DODGE_TEXT_COLOR)
+			present_unit_text(event.target, tr("閃避"), BattleVisualConfig.DODGE_TEXT_COLOR)
 		"block":
-			var block_text := "格擋" if int(event.damage) == 0 else "格擋 -%d" % int(event.damage)
+			var block_text := tr("格擋") if int(event.damage) == 0 else tr("格擋 -%d") % int(event.damage)
 			present_unit_text(event.target, block_text, BattleVisualConfig.BLOCK_TEXT_COLOR)
 			hit_tween = animate_unit_hit(event.target)
 		"hit":
