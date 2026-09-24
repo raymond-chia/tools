@@ -347,3 +347,122 @@ fn flanking_world(
     );
     (world, attacker, target)
 }
+
+// 驗證推擊撞上另一單位時停止移動，並讓被推單位與被撞單位都受到碰撞傷害。
+#[test]
+fn push_collision_damages_both_units() {
+    let mut game = push_collision_game();
+    game.start().expect("測試戰鬥應可開始");
+    let skill = game
+        .world
+        .resource::<Skills>()
+        .definitions
+        .get("push")
+        .expect("測試推擊技能應存在")
+        .clone();
+    game.use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill)
+        .expect("推擊應成功結算");
+
+    let target = game.entity("target").expect("測試目標應存在");
+    let blocker = game.entity("blocker").expect("測試碰撞單位應存在");
+    let log = game.world.resource::<Log>();
+    let (damage, collision_damage, collision_units) = match log.0.last() {
+        Some(CombatLogEvent::Skill {
+            damage,
+            collision_damage,
+            collision_units,
+            push_blocked: true,
+            pushed: false,
+            ..
+        }) => (*damage, *collision_damage, collision_units),
+        _ => panic!("推擊應記錄單位碰撞且不移動"),
+    };
+
+    assert_eq!(collision_damage, gameplay_config::COLLISION_DAMAGE);
+    assert_eq!(game.world.get::<Pos>(target).expect("目標應有位置").0.x, 2);
+    assert_eq!(
+        game.world.get::<Hp>(target).expect("目標應有 HP").current,
+        100 - damage - collision_damage
+    );
+    assert_eq!(
+        game.world
+            .get::<Hp>(blocker)
+            .expect("碰撞單位應有 HP")
+            .current,
+        100 - collision_damage
+    );
+    assert_eq!(collision_units.len(), 1);
+    assert_eq!(collision_units[0].unit, "碰撞單位");
+    assert_eq!(collision_units[0].remaining_hp, 100 - collision_damage);
+}
+
+fn push_collision_game() -> Game {
+    let terrain = TerrainTypeDef {
+        name_key: "TERRAIN_PLAIN".into(),
+        visual: "plain".into(),
+        passable: true,
+        ends_movement: false,
+        damage: 0,
+        movement_cost_bonus: 0,
+        dodge_penalty: 0,
+        block_penalty: 0,
+        forced_entry: ForcedEntry::None,
+        effect_key: "TERRAIN_EFFECT_NONE".into(),
+        forced_entry_log_key: None,
+    };
+    let definition = Definition {
+        map: MapDef {
+            width: 5,
+            height: 2,
+            costs: vec![1; 10],
+            triggers: Vec::new(),
+        },
+        terrain_types: HashMap::from([
+            ("plain".into(), terrain.clone()),
+            ("rough".into(), terrain),
+        ]),
+        skills: vec![SkillDef {
+            id: "push".into(),
+            name: "測試推擊".into(),
+            ranged: false,
+            attack_bonus: 100,
+            damage_bonus: 0,
+            range: Some(1),
+            duration: None,
+            heal_amount: None,
+            terrain: None,
+            effect: SkillEffect::Push,
+            ai_default: true,
+        }],
+        units: vec![
+            push_collision_unit("actor", "攻擊者", Team::Player, 1),
+            push_collision_unit("target", "被推單位", Team::Enemy, 2),
+            push_collision_unit("blocker", "碰撞單位", Team::Enemy, 3),
+        ],
+    };
+    Game::from_definition(definition).expect("測試戰鬥定義應有效")
+}
+
+fn push_collision_unit(id: &str, name: &str, team: Team, x: i32) -> UnitDef {
+    UnitDef {
+        id: id.into(),
+        name: name.into(),
+        visual: "test_unit".into(),
+        team,
+        group: "測試群組".into(),
+        x,
+        y: 1,
+        width: 1,
+        height: 1,
+        hp: 100,
+        movement: 0,
+        initiative: if team == Team::Player { 100 } else { 0 },
+        dodge: 0,
+        block: 0,
+        melee: 0,
+        ranged: 0,
+        damage: 1,
+        range: 1,
+        skills: vec!["push".into()],
+    }
+}

@@ -258,6 +258,12 @@ func queue_new_combat_events(previous_state: Dictionary) -> void:
 				var unit_id := unit_id_with_name(event.target)
 				if not unit_id.is_empty():
 					pending_death_ids[unit_id] = true
+			if event.type == "skill":
+				for collision_unit in event.collision_units:
+					if collision_unit.downed:
+						var unit_id := unit_id_with_name(collision_unit.unit)
+						if not unit_id.is_empty():
+							pending_death_ids[unit_id] = true
 	if previous_log_size < state.log.size() or movements_changed:
 		queue_movements_before_log(state.log.size())
 
@@ -320,6 +326,9 @@ func present_skill_result(event: Dictionary) -> void:
 			hit_tween = animate_unit_hit(event.target)
 	if int(event.collision_damage) > 0:
 		present_unit_text(event.target, "-%d" % int(event.collision_damage), BattleVisualConfig.DAMAGE_TEXT_COLOR, 18.0)
+		for collision_unit in event.collision_units:
+			present_unit_text(collision_unit.unit, "-%d" % int(event.collision_damage), BattleVisualConfig.DAMAGE_TEXT_COLOR)
+			animate_unit_hit(collision_unit.unit)
 	if hit_tween != null:
 		await hit_tween.finished
 	else:
@@ -327,6 +336,9 @@ func present_skill_result(event: Dictionary) -> void:
 	await get_tree().create_timer(BattleVisualConfig.COMBAT_RESULT_HOLD).timeout
 	if event.downed:
 		await animate_unit_death(event.target)
+	for collision_unit in event.collision_units:
+		if collision_unit.downed:
+			await animate_unit_death(collision_unit.unit)
 
 func present_unit_text(unit_name: String, text: String, color: Color, horizontal_offset := 0.0) -> void:
 	var unit_id := unit_id_with_name(unit_name)

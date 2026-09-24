@@ -17,7 +17,7 @@ SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
 SKILL_RANGE,射程：%d 格,Range: %d tiles
 SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_DAMAGE_BONUS,傷害加值：%+d,Damage modifier: %+d
-SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時造成碰撞傷害,Effect: Pushes the target %d tile on hit; obstruction deals collision damage
+SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too
 SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
 TERRAIN_EFFECT_MIRE,閃避與格擋 −%d，移動消耗 +%d，剩餘 %d 回合,"Dodge and block −%d, movement cost +%d, %d rounds remaining"
 TERRAIN_EFFECT_DAMAGE,造成 %d 點傷害,Deals %d damage
@@ -126,6 +126,7 @@ D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %
 結果：%s%s，%d 傷害，HP %d/%d,結果：%s%s，%d 傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
 %s 被沿攻擊方向推動 %d 格,%s 被沿攻擊方向推動 %d 格,%s is pushed %d tiles in the attack direction
 推擊受阻，%s 額外受到 %d 點碰撞傷害,推擊受阻，%s 額外受到 %d 點碰撞傷害,Push blocked: %s takes %d collision damage
+"%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s is struck and takes %d collision damage; HP %d/%d"
 %s 倒下,%s 倒下,%s is defeated
 %s 使用「%s」,%s 使用「%s」,%s uses %s
 產生「%s」,產生「%s」,Creates %s

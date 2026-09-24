@@ -332,6 +332,7 @@ pub enum CombatLogEvent {
         push_blocked: bool,
         push_distance: i32,
         collision_damage: i32,
+        collision_units: Vec<CollisionUnitLog>,
     },
     TerrainCreated {
         actor: String,
@@ -367,6 +368,14 @@ pub enum CombatLogEvent {
         max_hp: i32,
         downed: bool,
     },
+}
+#[derive(Clone, Serialize)]
+pub struct CollisionUnitLog {
+    unit: String,
+    team: Team,
+    remaining_hp: i32,
+    max_hp: i32,
+    downed: bool,
 }
 #[derive(Clone, Serialize)]
 pub struct InitiativeRollLog {
@@ -1301,6 +1310,7 @@ impl Game {
         let mut pushed = false;
         let mut push_blocked = false;
         let mut collision_damage = 0;
+        let mut collision_units = Vec::new();
         if skill.effect == SkillEffect::Push && result == AttackResult::Hit && !downed {
             let direction = push_direction(&self.world, ae, target_cell);
             let current = self
@@ -1316,13 +1326,31 @@ impl Game {
                 x: current.x + direction.x * gameplay_config::PUSH_DISTANCE,
                 y: current.y + direction.y * gameplay_config::PUSH_DISTANCE,
             };
-            let can_push = fits(self.world.resource::<Board>(), destination, footprint)
-                && !occupied(&self.world, te, destination, footprint)
+            let terrain_allows_push = fits(self.world.resource::<Board>(), destination, footprint)
                 && !footprint_blocks_forced_entry(
                     self.world.resource::<Board>(),
                     destination,
                     footprint,
                 );
+            let blocking_units: Vec<Entity> = if terrain_allows_push {
+                self.world
+                    .iter_entities()
+                    .filter(|entity| {
+                        entity.id() != te
+                            && entity.get::<Downed>().is_none()
+                            && entity
+                                .get::<Pos>()
+                                .zip(entity.get::<Footprint>())
+                                .is_some_and(|(position, other_footprint)| {
+                                    overlap(destination, footprint, position.0, *other_footprint)
+                                })
+                    })
+                    .map(|entity| entity.id())
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let can_push = terrain_allows_push && blocking_units.is_empty();
             if can_push {
                 self.world
                     .get_mut::<Pos>(te)
@@ -1344,6 +1372,41 @@ impl Game {
                         .resource_mut::<Encounter>()
                         .participants
                         .remove(target);
+                }
+                for blocking_entity in blocking_units {
+                    let unit = self
+                        .world
+                        .get::<Unit>(blocking_entity)
+                        .expect("佔用格子的戰鬥單位應具有 Unit 元件")
+                        .clone();
+                    let id = self
+                        .world
+                        .get::<Id>(blocking_entity)
+                        .expect("佔用格子的戰鬥單位應具有 Id 元件")
+                        .0
+                        .clone();
+                    let mut hp = self
+                        .world
+                        .get_mut::<Hp>(blocking_entity)
+                        .expect("佔用格子的戰鬥單位應具有 Hp 元件");
+                    hp.current = (hp.current - collision_damage).max(0);
+                    let remaining_hp = hp.current;
+                    let max_hp = hp.maximum;
+                    let blocker_downed = remaining_hp == 0;
+                    if blocker_downed {
+                        self.world.entity_mut(blocking_entity).insert(Downed);
+                        self.world
+                            .resource_mut::<Encounter>()
+                            .participants
+                            .remove(&id);
+                    }
+                    collision_units.push(CollisionUnitLog {
+                        unit: unit.name,
+                        team: unit.team,
+                        remaining_hp,
+                        max_hp,
+                        downed: blocker_downed,
+                    });
                 }
             }
         }
@@ -1388,6 +1451,7 @@ impl Game {
                     0
                 },
                 collision_damage,
+                collision_units,
             });
         if pushed {
             self.apply_pushed_terrain(te, target);

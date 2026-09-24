@@ -368,8 +368,13 @@ func format_log(events: Array) -> String:
 					entries.append(tr("%s 被沿攻擊方向推動 %d 格") % [colored_unit(event.target, event.target_team), int(event.push_distance)])
 				elif event.push_blocked:
 					entries.append(tr("推擊受阻，%s 額外受到 %d 點碰撞傷害") % [colored_unit(event.target, event.target_team), int(event.collision_damage)])
+					for collision_unit in event.collision_units:
+						entries.append(tr("%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d") % [colored_unit(collision_unit.unit, collision_unit.team), int(event.collision_damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
 				if event.downed:
 					entries.append(tr("%s 倒下") % colored_unit(event.target, event.target_team))
+				for collision_unit in event.collision_units:
+					if collision_unit.downed:
+						entries.append(tr("%s 倒下") % colored_unit(collision_unit.unit, collision_unit.team))
 			"terrain_created":
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor, event.actor_team), tr(event.skill)]])
 				if expanded:
