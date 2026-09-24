@@ -85,7 +85,17 @@ func send(command: Dictionary) -> bool:
 	state = value
 	status = ""
 	present()
+	advance_automatic_turn()
 	return true
+
+func advance_automatic_turn() -> void:
+	if state.is_empty() or not state.turn.auto_step:
+		return
+	if world.is_presenting_combat_events():
+		await world.combat_events_finished
+	await get_tree().create_timer(BattleVisualConfig.COMBAT_EVENT_PAUSE).timeout
+	if is_inside_tree():
+		send({"type": "auto_step"})
 
 func read_core_response(response: String, report_error := true) -> Dictionary:
 	var value: Dictionary = JSON.parse_string(response)
@@ -110,7 +120,7 @@ func _on_combat_events_finished() -> void:
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
 
 func input_is_locked() -> bool:
-	return world.is_presenting_combat_events()
+	return (not state.is_empty() and state.turn.auto_step) or world.is_presenting_combat_events()
 
 func select_action(action: String) -> void:
 	if input_is_locked():

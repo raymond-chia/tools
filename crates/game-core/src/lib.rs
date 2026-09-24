@@ -247,6 +247,7 @@ fn terrain_damage(board: &Board, kind: &str) -> i32 {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
     Start,
+    AutoStep,
     Move {
         actor: String,
         x: i32,
@@ -507,6 +508,7 @@ pub struct TerrainCellView {
 pub struct TurnView {
     pub actor: Option<String>,
     pub phase: String,
+    pub auto_step: bool,
     pub move_remaining: u32,
     pub can_move: bool,
     pub can_skill: bool,
@@ -701,13 +703,19 @@ impl Game {
             movements: Vec::new(),
         })
     }
+    // 每次只執行一個命令或一段自動回合，讓畫面先完成呈現再推進。
     pub fn command(&mut self, c: Command) -> Result<Snapshot, String> {
+        self.apply_command(c)?;
+        Ok(self.snapshot())
+    }
+    fn apply_command(&mut self, c: Command) -> Result<(), String> {
         self.movements.clear();
         if self.world.resource::<ResultState>().0 != Outcome::Ongoing {
-            return Ok(self.snapshot());
+            return Ok(());
         }
         match c {
             Command::Start => self.start(),
+            Command::AutoStep => self.auto_step(),
             Command::Move { actor, x, y } => self.move_to(&actor, GridPos { x, y }),
             Command::Skill {
                 actor,
@@ -742,9 +750,8 @@ impl Game {
             }
             Command::Delay { actor, after } => self.delay(&actor, &after),
         }?;
-        self.enemy_turns()?;
         self.outcome();
-        Ok(self.snapshot())
+        Ok(())
     }
     pub fn set_random_seed(&mut self, seed: u64) {
         self.world.resource_mut::<Random>().0 = seed;
@@ -987,12 +994,47 @@ impl Game {
     }
     fn finish(&mut self) {
         self.world.resource_mut::<Turn>().phase = Phase::Ended;
+    }
+    fn advance_turn(&mut self) {
         let end = {
             let mut e = self.world.resource_mut::<Encounter>();
             e.cursor += 1;
             e.cursor >= e.order.len()
         };
         if end { self.roll_round() } else { self.begin() }
+    }
+    fn auto_step_available(&self) -> bool {
+        if self.world.resource::<ResultState>().0 != Outcome::Ongoing
+            || self.world.resource::<Encounter>().round == 0
+        {
+            return false;
+        }
+        let turn = self.world.resource::<Turn>();
+        if turn.phase == Phase::Ended {
+            return true;
+        }
+        turn.actor
+            .as_ref()
+            .and_then(|actor| self.entity(actor))
+            .is_some_and(|entity| {
+                self.world.get::<Downed>(entity).is_some()
+                    || self
+                        .world
+                        .get::<Unit>(entity)
+                        .expect("已建立的戰鬥單位應具有 Unit 元件")
+                        .team
+                        == Team::Enemy
+            })
+    }
+    fn auto_step(&mut self) -> Result<(), String> {
+        if !self.auto_step_available() {
+            return Err("目前沒有可推進的自動回合".into());
+        }
+        if self.world.resource::<Turn>().phase == Phase::Ended {
+            self.advance_turn();
+            return Ok(());
+        }
+        self.enemy_turn_once()
     }
     fn delay(&mut self, actor: &str, after: &str) -> Result<(), String> {
         self.ensure(actor)?;
@@ -1593,90 +1635,78 @@ impl Game {
         self.finish();
         Ok(())
     }
-    fn enemy_turns(&mut self) -> Result<(), String> {
-        loop {
-            let a = match self.world.resource::<Turn>().actor.clone() {
-                Some(v) => v,
-                None => return Ok(()),
-            };
-            let e = self.entity(&a).ok_or("先攻單位不存在")?;
-            if self.world.get::<Downed>(e).is_some() {
+    fn enemy_turn_once(&mut self) -> Result<(), String> {
+        let a = self
+            .world
+            .resource::<Turn>()
+            .actor
+            .clone()
+            .ok_or("先攻單位不存在")?;
+        let e = self.entity(&a).ok_or("先攻單位不存在")?;
+        if self.world.get::<Downed>(e).is_some() {
+            self.finish();
+            return Ok(());
+        }
+        let t = match self.closest(e) {
+            Some(v) => v,
+            None => {
                 self.finish();
-                continue;
+                return Ok(());
             }
-            if self
+        };
+        if entity_distance(&self.world, e, t) > gameplay_config::DEFAULT_MELEE_RANGE {
+            let goal = self
+                .world
+                .get::<Pos>(t)
+                .expect("已建立的戰鬥單位應具有 Pos 元件")
+                .0;
+            let start = self
+                .world
+                .get::<Pos>(e)
+                .expect("已建立的戰鬥單位應具有 Pos 元件")
+                .0;
+            let fp = *self
+                .world
+                .get::<Footprint>(e)
+                .expect("已建立的戰鬥單位應具有 Footprint 元件");
+            let b = self
                 .world
                 .get::<Unit>(e)
                 .expect("已建立的戰鬥單位應具有 Unit 元件")
-                .team
-                == Team::Player
-            {
-                return Ok(());
-            }
-            let t = match self.closest(e) {
-                Some(v) => v,
-                None => {
-                    self.finish();
-                    continue;
+                .movement;
+            if let Some(path) = toward(&self.world, e, start, goal, fp, b) {
+                if let [_, .., last] = path.as_slice() {
+                    self.movements.push(MovementTransition {
+                        unit_id: a.clone(),
+                        path: path.clone(),
+                        before_log_index: self.world.resource::<Log>().0.len(),
+                    });
+                    self.world
+                        .get_mut::<Pos>(e)
+                        .expect("已建立的戰鬥單位應具有 Pos 元件")
+                        .0 = *last
                 }
-            };
-            if entity_distance(&self.world, e, t) > gameplay_config::DEFAULT_MELEE_RANGE {
-                let goal = self
-                    .world
-                    .get::<Pos>(t)
-                    .expect("已建立的戰鬥單位應具有 Pos 元件")
-                    .0;
-                let start = self
-                    .world
-                    .get::<Pos>(e)
-                    .expect("已建立的戰鬥單位應具有 Pos 元件")
-                    .0;
-                let fp = *self
-                    .world
-                    .get::<Footprint>(e)
-                    .expect("已建立的戰鬥單位應具有 Footprint 元件");
-                let b = self
-                    .world
-                    .get::<Unit>(e)
-                    .expect("已建立的戰鬥單位應具有 Unit 元件")
-                    .movement;
-                if let Some(path) = toward(&self.world, e, start, goal, fp, b) {
-                    if let [_, .., last] = path.as_slice() {
-                        self.movements.push(MovementTransition {
-                            unit_id: a.clone(),
-                            path: path.clone(),
-                            before_log_index: self.world.resource::<Log>().0.len(),
-                        });
-                        self.world
-                            .get_mut::<Pos>(e)
-                            .expect("已建立的戰鬥單位應具有 Pos 元件")
-                            .0 = *last
-                    }
-                }
-            }
-            if entity_distance(&self.world, e, t) <= gameplay_config::DEFAULT_MELEE_RANGE {
-                let id = self
-                    .world
-                    .get::<Id>(t)
-                    .expect("已建立的戰鬥單位應具有 Id 元件")
-                    .0
-                    .clone();
-                let skills = self.world.resource::<Skills>();
-                let skill = skills
-                    .definitions
-                    .get(&skills.ai_default)
-                    .cloned()
-                    .expect("載入時已驗證 ai_default 技能");
-                let target_cell = closest_occupied_cell(&self.world, e, t);
-                self.use_skill(&a, &id, target_cell, skill)?
-            } else {
-                self.finish()
-            }
-            self.outcome();
-            if self.world.resource::<ResultState>().0 != Outcome::Ongoing {
-                return Ok(());
             }
         }
+        if entity_distance(&self.world, e, t) <= gameplay_config::DEFAULT_MELEE_RANGE {
+            let id = self
+                .world
+                .get::<Id>(t)
+                .expect("已建立的戰鬥單位應具有 Id 元件")
+                .0
+                .clone();
+            let skills = self.world.resource::<Skills>();
+            let skill = skills
+                .definitions
+                .get(&skills.ai_default)
+                .cloned()
+                .expect("載入時已驗證 ai_default 技能");
+            let target_cell = closest_occupied_cell(&self.world, e, t);
+            self.use_skill(&a, &id, target_cell, skill)?
+        } else {
+            self.finish()
+        }
+        Ok(())
     }
     fn entity(&self, id: &str) -> Option<Entity> {
         self.world
@@ -1767,19 +1797,39 @@ impl Game {
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
-        let movement_ranges = turn
-            .actor
-            .as_ref()
-            .and_then(|a| self.entity(a))
-            .map(|entity| movement_ranges(&self.world, entity, &turn));
-        let (reachable, second_reachable) = movement_ranges.unwrap_or_default();
-        let skill_ranges = turn
+        let player_turn = turn
             .actor
             .as_ref()
             .and_then(|actor| self.entity(actor))
-            .map(|entity| skill_ranges(&self.world, entity))
-            .unwrap_or_default();
-        let can_skill = can_use_skill(&turn);
+            .is_some_and(|entity| {
+                self.world
+                    .get::<Unit>(entity)
+                    .expect("已建立的戰鬥單位應具有 Unit 元件")
+                    .team
+                    == Team::Player
+            });
+        let can_move = player_turn
+            && matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
+            && turn.moves < 2;
+        let movement_ranges = if can_move {
+            turn.actor
+                .as_ref()
+                .and_then(|actor| self.entity(actor))
+                .map(|entity| movement_ranges(&self.world, entity, &turn))
+        } else {
+            None
+        };
+        let (reachable, second_reachable) = movement_ranges.unwrap_or_default();
+        let skill_ranges = if player_turn && turn.phase != Phase::Ended {
+            turn.actor
+                .as_ref()
+                .and_then(|actor| self.entity(actor))
+                .map(|entity| skill_ranges(&self.world, entity))
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let can_skill = player_turn && can_use_skill(&turn);
         let turn_order: Vec<_> = enc
             .order
             .iter()
@@ -1790,7 +1840,8 @@ impl Game {
             })
             .cloned()
             .collect();
-        let can_delay = turn.phase == Phase::Ready
+        let can_delay = player_turn
+            && turn.phase == Phase::Ready
             && turn.moves == 0
             && turn.actor.is_some()
             && !turn_order.is_empty();
@@ -1898,12 +1949,12 @@ impl Game {
             skill_ranges,
             turn_order,
             turn: TurnView {
-                can_end_turn: turn.actor.is_some(),
+                can_end_turn: player_turn && turn.phase != Phase::Ended,
                 actor: turn.actor,
                 phase: format!("{:?}", turn.phase).to_lowercase(),
+                auto_step: self.auto_step_available(),
                 move_remaining: turn.remaining,
-                can_move: matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
-                    && turn.moves < 2,
+                can_move,
                 can_skill,
                 can_delay,
             },

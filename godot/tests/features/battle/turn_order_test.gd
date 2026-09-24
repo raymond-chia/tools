@@ -69,7 +69,7 @@ func load_test_definition() -> void:
 	await wait_for_combat_events()
 
 func wait_for_combat_events() -> void:
-	while battle.world.is_presenting_combat_events():
+	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func empty_reachable_cell() -> Dictionary:

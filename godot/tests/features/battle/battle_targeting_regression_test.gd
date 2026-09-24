@@ -51,15 +51,17 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 	assert_str(battle.status).override_failure_message("點擊射程內的占用格應成功結算").is_empty()
 	assert_int(int(unit_with_id("ogre").hp)).override_failure_message("同一大型單位的近側占用格應可被命中").is_equal(93)
 
-# 驗證泥沼增加移動消耗，且只維持技能設定的兩個回合。
+# 驗證等待自動回合完成後，泥沼增加移動消耗且只維持兩個回合。
 func test_mire_movement_cost_and_duration() -> void:
 	await load_test_definition()
 	var mire_cell := Vector2i(1, 1)
 	assert_bool(battle.send({"type": "cell_skill", "actor": "aria", "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
+	await wait_for_combat_events()
 	var terrain := terrain_at(mire_cell)
 	assert_int(int(terrain.cost)).override_failure_message("泥沼地格應增加一點移動消耗").is_equal(2)
 	assert_int(int(terrain.remaining_rounds)).override_failure_message("進入下一輪後泥沼應剩餘一輪").is_equal(1)
 	assert_bool(battle.send({"type": "end_turn", "actor": "aria"})).override_failure_message("應能結束下一輪以推進泥沼期限").is_true()
+	await wait_for_combat_events()
 	assert_str(terrain_at(mire_cell).kind).override_failure_message("兩輪結束後泥沼應恢復為原地形").is_equal("plain")
 
 # 驗證推擊命中會沿攻擊者到目標的方向移動一格。
@@ -84,10 +86,11 @@ func test_blocked_push_deals_collision_damage() -> void:
 	assert_bool(event.pushed).is_false()
 	assert_int(int(event.collision_damage)).override_failure_message("技能事件應記錄碰撞傷害").is_equal(2)
 
-# 驗證倒下單位不再占用格子，玩家可移動到原本的屍體位置。
+# 驗證攻擊動畫與自動回合完成後，倒下單位的格子可再次進入。
 func test_downed_unit_does_not_block_cell() -> void:
 	await load_test_definition()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "wolf_a", "x": 2, "y": 1, "skill": "finishing_strike"})).override_failure_message("終結攻擊應使測試目標倒下").is_true()
+	await wait_for_combat_events()
 	assert_dict(unit_with_id("wolf_a")).override_failure_message("倒下單位不應出現在 presentation snapshot").is_empty()
 	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 2, "y": 1})).override_failure_message("屍體所在格應可進入").is_true()
 	var actor := unit_with_id("aria")
@@ -111,7 +114,7 @@ func load_test_definition() -> void:
 	await wait_for_combat_events()
 
 func wait_for_combat_events() -> void:
-	while battle.world.is_presenting_combat_events():
+	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func push_left_click(local_position: Vector2) -> void:

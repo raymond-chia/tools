@@ -191,8 +191,9 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 			node.position = center
 		elif pending_movement_ids.has(unit.id):
 			pass
-		elif not moved and not has_active_tween(movement_tweens, unit.id):
-			node.position = center
+		elif not moved:
+			if not has_active_tween(movement_tweens, unit.id):
+				node.position = center
 		elif moved and unit_has_movement_transition(unit.id):
 			pending_movement_ids[unit.id] = true
 		else:

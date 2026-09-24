@@ -99,7 +99,7 @@ func load_test_definition() -> void:
 	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
 
 func wait_for_combat_events() -> void:
-	while battle.world.is_presenting_combat_events():
+	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func emit_right_press(control: Control) -> void:

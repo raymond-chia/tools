@@ -132,7 +132,7 @@ func load_test_definition(battle) -> void:
 	await wait_for_combat_events(battle)
 
 func wait_for_combat_events(target_battle) -> void:
-	while target_battle.world.is_presenting_combat_events():
+	while target_battle.state.turn.auto_step or target_battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func target_point(battle, target: String) -> Vector2:

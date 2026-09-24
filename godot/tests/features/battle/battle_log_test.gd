@@ -119,11 +119,11 @@ func test_spikes_damage_log() -> void:
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]測試劍士[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50")
 
-# 驗證戰鬥紀錄可從文字區任意位置以左鍵拖曳垂直捲動。
+# 驗證每次攻擊動畫與自動回合完成後，長戰鬥紀錄仍可拖曳捲動。
 func test_battle_log_can_be_dragged_to_scroll() -> void:
 	for index in 12:
 		assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("第 %d 次測試攻擊應成功" % index).is_true()
-	await wait_for_combat_events()
+		await wait_for_combat_events()
 	await runner.simulate_frames(2)
 	var scroll_bar: VScrollBar = battle.ui.battle_log.get_v_scroll_bar()
 	scroll_bar.value = scroll_bar.max_value
@@ -165,7 +165,7 @@ func load_test_definition() -> void:
 	await wait_for_combat_events()
 
 func wait_for_combat_events() -> void:
-	while battle.world.is_presenting_combat_events():
+	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func skill_command(target: String, skill: String) -> Dictionary:
