@@ -97,7 +97,7 @@ impl Game {
                     .get::<Unit>(e)
                     .expect("已建立的戰鬥單位應具有 Unit 元件");
                 let target = unit.name.clone();
-                let target_team = unit.team;
+                let target_team = unit.team.clone();
                 let terrain_definition = terrain_type(self.world.resource::<Board>(), &k);
                 let terrain_name_key = terrain_definition.name_key.clone();
                 let log_key = terrain_definition
@@ -234,7 +234,7 @@ impl Game {
             .query::<(&Id, &Pos, &Unit)>()
             .iter(&self.world)
             .filter(|(i, q, f)| {
-                f.team == Team::Enemy
+                f.team != Team::Player
                     && !active.contains(&i.0)
                     && distance(p, q.0) <= gameplay_config::ENEMY_REVEAL_RANGE
             })

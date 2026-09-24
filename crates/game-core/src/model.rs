@@ -8,11 +8,11 @@ pub struct GridPos {
     pub x: i32,
     pub y: i32,
 }
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Team {
     Player,
-    Enemy,
+    Enemy(String),
 }
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -36,12 +36,6 @@ pub enum AttackResult {
     Block,
     Hit,
 }
-#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum AttackStat {
-    Melee,
-    Ranged,
-}
 #[derive(Component)]
 pub(crate) struct Id(pub(crate) String);
 #[derive(Component, Clone, Copy)]
@@ -61,15 +55,12 @@ pub(crate) struct Unit {
     pub(crate) name: String,
     pub(crate) visual: String,
     pub(crate) team: Team,
-    pub(crate) group: String,
     pub(crate) movement: u32,
     pub(crate) initiative: i32,
     pub(crate) dodge: i32,
     pub(crate) block: i32,
-    pub(crate) melee: i32,
-    pub(crate) ranged: i32,
+    pub(crate) attack: i32,
     pub(crate) damage: i32,
-    pub(crate) range: i32,
     pub(crate) skills: Vec<String>,
 }
 #[derive(Component)]
@@ -136,7 +127,8 @@ pub struct SkillDef {
     pub(crate) ranged: bool,
     pub(crate) attack_bonus: i32,
     pub(crate) damage_bonus: i32,
-    pub(crate) range: Option<i32>,
+    pub(crate) min_range: i32,
+    pub(crate) max_range: i32,
     pub(crate) duration: Option<u32>,
     pub(crate) heal_amount: Option<i32>,
     pub(crate) terrain: Option<String>,
@@ -202,7 +194,6 @@ pub(crate) struct UnitDef {
     pub(crate) name: String,
     pub(crate) visual: String,
     pub(crate) team: Team,
-    pub(crate) group: String,
     pub(crate) x: i32,
     pub(crate) y: i32,
     #[serde(default = "one")]
@@ -214,10 +205,8 @@ pub(crate) struct UnitDef {
     pub(crate) initiative: i32,
     pub(crate) dodge: i32,
     pub(crate) block: i32,
-    pub(crate) melee: i32,
-    pub(crate) ranged: i32,
+    pub(crate) attack: i32,
     pub(crate) damage: i32,
-    pub(crate) range: i32,
     #[serde(default)]
     pub(crate) skills: Vec<String>,
 }
@@ -295,7 +284,6 @@ pub enum CombatLogEvent {
         target_team: Team,
         roll: i32,
         die_sides: u32,
-        attack_stat: AttackStat,
         attack_stat_modifier: i32,
         skill_attack_modifier: i32,
         flanking_modifier: i32,
@@ -440,7 +428,6 @@ pub struct UnitView {
     pub name: String,
     pub visual: String,
     pub team: Team,
-    pub group: String,
     pub x: i32,
     pub y: i32,
     pub width: i32,
@@ -454,10 +441,8 @@ pub struct UnitView {
     pub initiative: i32,
     pub dodge: i32,
     pub block: i32,
-    pub melee: i32,
-    pub ranged: i32,
+    pub attack: i32,
     pub damage: i32,
-    pub range: i32,
     pub downed: bool,
     pub active: bool,
 }

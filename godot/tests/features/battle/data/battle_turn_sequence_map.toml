@@ -1,0 +1,19 @@
+name="battle_turn_sequence"
+
+width=3
+height=2
+costs=[1,1,1,1,1,1]
+
+[[units]]
+id="aria"
+unit_type="aria"
+team="player"
+x=0
+y=0
+
+[[units]]
+id="wolf"
+unit_type="wolf"
+team={ enemy="wolves" }
+x=2
+y=0

@@ -2,14 +2,14 @@
 use crate::game::{Game, die};
 use crate::gameplay_config;
 use crate::model::{
-    AttackPreview, AttackResult, AttackStat, Board, CollisionUnitLog, CombatLogEvent, DetailView,
-    Downed, Encounter, Footprint, ForcedEntry, GridPos, HealingPreview, HealthSegmentsView, Hp, Id,
-    Log, Phase, Pos, RollDegree, SkillDef, SkillEffect, SkillPreview, SkillRangeView, Skills,
+    AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, DetailView, Downed,
+    Encounter, Footprint, ForcedEntry, GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log,
+    Phase, Pos, RollDegree, SkillDef, SkillEffect, SkillPreview, SkillRangeView, Skills,
     TemporaryTerrain, TemporaryTerrains, TerrainTypeDef, Turn, Unit,
 };
 use crate::movement::{
-    distance, fits, footprint_blocks_forced_entry, footprint_cells, footprint_distance, overlap,
-    terrain_at, terrain_type,
+    fits, footprint_blocks_forced_entry, footprint_cells, footprint_distance, overlap, terrain_at,
+    terrain_type,
 };
 use bevy_ecs::prelude::{Entity, World};
 
@@ -162,10 +162,10 @@ impl Game {
                 .0
                 .push(CombatLogEvent::Healing {
                     actor: attacker_unit.name,
-                    actor_team: attacker_unit.team,
+                    actor_team: attacker_unit.team.clone(),
                     skill: skill.name,
                     target: target_name,
-                    target_team: target_unit.team,
+                    target_team: target_unit.team.clone(),
                     healing,
                     remaining_hp,
                     max_hp,
@@ -174,7 +174,6 @@ impl Game {
             return Ok(());
         }
         let AttackModifierBreakdown {
-            attack_stat,
             attack_stat_modifier,
             skill_attack_modifier,
             flanking_modifier,
@@ -320,7 +319,7 @@ impl Game {
                     }
                     collision_units.push(CollisionUnitLog {
                         unit: unit.name,
-                        team: unit.team,
+                        team: unit.team.clone(),
                         remaining_hp,
                         max_hp,
                         downed: blocker_downed,
@@ -339,13 +338,12 @@ impl Game {
             .0
             .push(CombatLogEvent::Skill {
                 actor: attacker_unit.name,
-                actor_team: attacker_unit.team,
+                actor_team: attacker_unit.team.clone(),
                 skill: skill.name,
                 target: target_unit.name,
-                target_team: target_unit.team,
+                target_team: target_unit.team.clone(),
                 roll: natural,
                 die_sides: gameplay_config::ATTACK_DIE_SIDES,
-                attack_stat,
                 attack_stat_modifier,
                 skill_attack_modifier,
                 flanking_modifier,
@@ -410,7 +408,7 @@ impl Game {
             .get::<Unit>(entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件");
         let target = unit.name.clone();
-        let target_team = unit.team;
+        let target_team = unit.team.clone();
         let mut hp = self
             .world
             .get_mut::<Hp>(entity)
@@ -476,7 +474,23 @@ impl Game {
             .get::<Pos>(entity)
             .expect("已建立的戰鬥單位應具有 Pos 元件")
             .0;
-        if distance(origin, position) > skill.range.unwrap_or(gameplay_config::DEFAULT_MIRE_RANGE) {
+        let footprint = *self
+            .world
+            .get::<Footprint>(entity)
+            .expect("已建立的戰鬥單位應具有 Footprint 元件");
+        let target_distance = footprint_distance(
+            origin,
+            footprint,
+            position,
+            Footprint {
+                width: 1,
+                height: 1,
+            },
+        );
+        if target_distance < skill.min_range {
+            return Err("目標距離太近".into());
+        }
+        if target_distance > skill.max_range {
             return Err("目標超出技能範圍".into());
         }
         let current_round = self.world.resource::<Encounter>().round;
@@ -503,7 +517,7 @@ impl Game {
             .0
             .push(CombatLogEvent::TerrainCreated {
                 actor: unit.name,
-                actor_team: unit.team,
+                actor_team: unit.team.clone(),
                 skill: skill.name,
                 terrain,
                 terrain_name_key,
@@ -587,11 +601,6 @@ fn validate_unit_skill_target(
     } else if attacker_unit.team == target_unit.team {
         return Err("不能攻擊友軍".into());
     }
-    let range = skill.range.unwrap_or(if skill.ranged {
-        attacker_unit.range
-    } else {
-        gameplay_config::DEFAULT_MELEE_RANGE
-    });
     let attacker_position = world
         .get::<Pos>(attacker)
         .expect("已建立的戰鬥單位應具有 Pos 元件")
@@ -599,7 +608,7 @@ fn validate_unit_skill_target(
     let attacker_footprint = *world
         .get::<Footprint>(attacker)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    if footprint_distance(
+    let target_distance = footprint_distance(
         attacker_position,
         attacker_footprint,
         target_cell,
@@ -607,8 +616,11 @@ fn validate_unit_skill_target(
             width: 1,
             height: 1,
         },
-    ) > range
-    {
+    );
+    if target_distance < skill.min_range {
+        return Err("目標距離太近".into());
+    }
+    if target_distance > skill.max_range {
         return Err("目標超出射程".into());
     }
     Ok(())
@@ -642,7 +654,6 @@ enum TargetSide {
 }
 
 struct AttackModifierBreakdown {
-    attack_stat: AttackStat,
     attack_stat_modifier: i32,
     skill_attack_modifier: i32,
     flanking_modifier: i32,
@@ -667,15 +678,10 @@ fn attack_modifier_breakdown(
     let unit = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit");
-    let (attack_stat, attack_stat_modifier) = if skill.ranged {
-        (AttackStat::Ranged, unit.ranged)
-    } else {
-        (AttackStat::Melee, unit.melee)
-    };
+    let attack_stat_modifier = unit.attack;
     let skill_attack_modifier = skill.attack_bonus;
     let flanking_modifier = flanking_bonus(world, attacker, target, skill);
     AttackModifierBreakdown {
-        attack_stat,
         attack_stat_modifier,
         skill_attack_modifier,
         flanking_modifier,
@@ -687,15 +693,16 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
     if skill.ranged {
         return 0;
     }
-    let attack_range = skill.range.unwrap_or(gameplay_config::DEFAULT_MELEE_RANGE);
-    let attacker_side = match target_side_within_range(world, attacker, target, attack_range) {
-        Some(side) => side,
-        None => return 0,
-    };
+    let attacker_side =
+        match target_side_within_range(world, attacker, target, skill.min_range, skill.max_range) {
+            Some(side) => side,
+            None => return 0,
+        };
     let attacker_team = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit")
-        .team;
+        .team
+        .clone();
     let skills = world.resource::<Skills>();
     let has_supporter = world.iter_entities().any(|entity| {
         if entity.id() == attacker || entity.id() == target || entity.get::<Downed>().is_some() {
@@ -708,8 +715,7 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
         if unit.team != attacker_team {
             return false;
         }
-        let support_range = unit
-            .skills
+        unit.skills
             .iter()
             .filter_map(|skill_id| skills.definitions.get(skill_id))
             .filter(|support_skill| {
@@ -719,16 +725,16 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
                         SkillEffect::Attack | SkillEffect::Push
                     )
             })
-            .map(|support_skill| {
-                support_skill
-                    .range
-                    .unwrap_or(gameplay_config::DEFAULT_MELEE_RANGE)
-            })
-            .max();
-        support_range.is_some_and(|range| {
-            target_side_within_range(world, entity.id(), target, range)
+            .any(|support_skill| {
+                target_side_within_range(
+                    world,
+                    entity.id(),
+                    target,
+                    support_skill.min_range,
+                    support_skill.max_range,
+                )
                 .is_some_and(|side| sides_are_opposite(attacker_side, side))
-        })
+            })
     });
     if has_supporter {
         gameplay_config::FLANKING_ATTACK_BONUS
@@ -741,7 +747,8 @@ fn target_side_within_range(
     world: &World,
     unit: Entity,
     target: Entity,
-    range: i32,
+    min_range: i32,
+    max_range: i32,
 ) -> Option<TargetSide> {
     let unit_position = world.get::<Pos>(unit).expect("參與包夾的單位應具有 Pos").0;
     let unit_footprint = *world
@@ -751,13 +758,13 @@ fn target_side_within_range(
     let target_footprint = *world
         .get::<Footprint>(target)
         .expect("包夾目標應具有 Footprint");
-    if footprint_distance(
+    let target_distance = footprint_distance(
         unit_position,
         unit_footprint,
         target_position,
         target_footprint,
-    ) > range
-    {
+    );
+    if target_distance < min_range || target_distance > max_range {
         return None;
     }
 
@@ -946,11 +953,6 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         .iter()
         .filter_map(|skill_id| skills.definitions.get(skill_id))
         .map(|skill| {
-            let range = skill.range.unwrap_or(if skill.ranged {
-                unit.range
-            } else {
-                gameplay_config::DEFAULT_MELEE_RANGE
-            });
             let mut cells = Vec::new();
             for y in 0..board.height {
                 for x in 0..board.width {
@@ -964,7 +966,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
                             height: 1,
                         },
                     );
-                    if cell_distance <= range
+                    if (skill.min_range..=skill.max_range).contains(&cell_distance)
                         && (matches!(skill.effect, SkillEffect::Mire | SkillEffect::Heal)
                             || cell_distance > 0)
                     {
@@ -975,7 +977,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
             SkillRangeView {
                 id: skill.id.clone(),
                 name_key: format!("SKILL_{}_NAME", skill.id.to_ascii_uppercase()),
-                details: skill_details(skill, range, board),
+                details: skill_details(skill, board),
                 cell_targeted: skill.effect == SkillEffect::Mire,
                 enabled: can_use_skill(w.resource::<Turn>()),
                 cells,
@@ -985,7 +987,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
     ranges
 }
 
-fn skill_details(skill: &SkillDef, range: i32, board: &Board) -> Vec<DetailView> {
+fn skill_details(skill: &SkillDef, board: &Board) -> Vec<DetailView> {
     let target_key = if skill.effect == SkillEffect::Mire {
         "SKILL_TARGET_CELL"
     } else if skill.effect == SkillEffect::Heal {
@@ -1001,7 +1003,11 @@ fn skill_details(skill: &SkillDef, range: i32, board: &Board) -> Vec<DetailView>
     let mut details = vec![
         detail(target_key, &[]),
         detail(type_key, &[]),
-        detail("SKILL_RANGE", &[range]),
+        if skill.min_range == skill.max_range {
+            detail("SKILL_RANGE", &[skill.max_range])
+        } else {
+            detail("SKILL_RANGE_INTERVAL", &[skill.min_range, skill.max_range])
+        },
     ];
     if matches!(skill.effect, SkillEffect::Attack | SkillEffect::Push) {
         details.push(detail("SKILL_ATTACK_BONUS", &[skill.attack_bonus]));

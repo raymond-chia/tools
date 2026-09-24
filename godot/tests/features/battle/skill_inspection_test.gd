@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/battle_preview.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_preview_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/battle_preview_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -30,7 +31,7 @@ func before_test() -> void:
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 	await wait_for_combat_events()
-	load_test_definition()
+	load_test_documents()
 	await wait_for_combat_events()
 
 func after_test() -> void:
@@ -85,12 +86,13 @@ func add_test_translation(locale: String, messages: Dictionary) -> void:
 	TranslationServer.add_translation(translation)
 	test_translations.append(translation)
 
-func load_test_definition() -> void:
+func load_test_documents() -> void:
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return

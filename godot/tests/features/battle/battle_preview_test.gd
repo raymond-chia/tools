@@ -1,8 +1,10 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/battle_preview.toml"
-const ATTACK_VARIATIONS_DEFINITION := "res://tests/features/battle/data/attack_preview_variations.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_preview_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/battle_preview_map.toml"
+const ATTACK_VARIATIONS_DEFINITIONS := "res://tests/features/battle/data/attack_preview_variations_definitions.toml"
+const ATTACK_VARIATIONS_MAP := "res://tests/features/battle/data/attack_preview_variations_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -337,8 +339,9 @@ func test_skill_availability_after_movement() -> void:
 # 載入專用 TOML，必要時以真實攻擊建立缺血情境，再取得核心的完整預覽。
 func query_attack_preview(target_id: String, skill_id: String, preparation_skill := "") -> Dictionary:
 	var preview_core := TacticalGame.new()
-	var definition := FileAccess.get_file_as_string(ATTACK_VARIATIONS_DEFINITION)
-	var loaded: Dictionary = JSON.parse_string(preview_core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(ATTACK_VARIATIONS_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(ATTACK_VARIATIONS_MAP)
+	var loaded: Dictionary = JSON.parse_string(preview_core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("預覽變化專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return {}
@@ -378,8 +381,9 @@ func prepare_case(battle) -> void:
 	battle.world.hovered = Vector2i(-1, -1)
 	battle.world.clear_move_preview()
 
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"): return
 	battle.state = loaded

@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/battle_turn_sequence.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_turn_sequence_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/battle_turn_sequence_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -16,8 +17,9 @@ func before_test() -> void:
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded: Dictionary = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded: Dictionary = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return

@@ -53,20 +53,6 @@ impl TacticalGame {
         }
     }
     #[func]
-    fn load_definition(&self, text: GString) -> GString {
-        match Game::from_toml(&text.to_string()) {
-            Ok(mut game) => {
-                let out = match serde_json::to_string(&game.snapshot()) {
-                    Ok(out) => out,
-                    Err(e) => return error(e.to_string()),
-                };
-                *self.game.lock().expect("核心鎖不應因先前的 panic 而中毒") = Some(game);
-                GString::from(&out)
-            }
-            Err(e) => error(e),
-        }
-    }
-    #[func]
     fn dispatch(&self, json: GString) -> GString {
         let command: Command = match serde_json::from_str(&json.to_string()) {
             Ok(v) => v,

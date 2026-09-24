@@ -111,6 +111,12 @@ layout_mode = 2
 [node name="Team" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
 layout_mode = 2
 
+[node name="Faction" type="LineEdit" parent="Layout/Body/MapPanel/Tools"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+text = "enemies"
+placeholder_text = "敵方派系"
+
 [node name="GridScroll" type="ScrollContainer" parent="Layout/Body/MapPanel"]
 layout_mode = 2
 size_flags_vertical = 3

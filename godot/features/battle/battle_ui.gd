@@ -29,7 +29,7 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 	"initiative": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/InitiativeValue,
 	"defense": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/DefenseValue,
 	"attack": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/AttackValue,
-	"power": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/PowerValue,
+	"damage": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/DamageValue,
 }
 @onready var terrain_name: Label = $Root/InfoPanel/Margin/Content/TerrainRows/TerrainValue
 @onready var terrain_cost: Label = $Root/InfoPanel/Margin/Content/TerrainRows/CostValue
@@ -194,14 +194,14 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	unit_details.visible = not unit.is_empty()
 	if not unit.is_empty():
 		unit_name.text = tr(unit.name)
-		detail_values.team.text = tr("我方") if unit.team == "player" else tr("敵方")
+		detail_values.team.text = tr("我方") if unit.team is String else tr("敵方") + "（%s）" % unit.team.enemy
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
 		detail_values.size.text = tr("大型") if unit.large else tr("一般")
 		detail_values.movement.text = "%d" % int(unit.movement)
 		detail_values.initiative.text = "%d" % int(unit.initiative)
 		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
-		detail_values.attack.text = "%d / %d" % [int(unit.melee), int(unit.ranged)]
-		detail_values.power.text = "%d / %d" % [int(unit.damage), int(unit.range)]
+		detail_values.attack.text = "%d" % int(unit.attack)
+		detail_values.damage.text = "%d" % int(unit.damage)
 	terrain_name.text = tr(terrain.name_key)
 	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("無法通行")
 	terrain_effect.text = localized_detail(terrain.effect_description)
@@ -353,8 +353,7 @@ func format_log(events: Array) -> String:
 				if event.type == "healing":
 					entries.append(tr("結果：%s，回復 %d HP，HP %d/%d") % [RESULT_STYLE % tr("治療"), int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 					continue
-				var attack_stat_name := tr("ATTACK_STAT_%s" % event.attack_stat.to_upper())
-				entries.append(tr("攻擊加值：%s %d%s%s = %d") % [attack_stat_name, int(event.attack_stat_modifier), format_modifier_term("技能", int(event.skill_attack_modifier)), format_modifier_term("包抄", int(event.flanking_modifier)), int(event.attack_modifier)])
+				entries.append(tr("攻擊加值：%d%s%s = %d") % [int(event.attack_stat_modifier), format_modifier_term("技能", int(event.skill_attack_modifier)), format_modifier_term("包抄", int(event.flanking_modifier)), int(event.attack_modifier)])
 				entries.append(tr("D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d") % [int(event.die_sides), int(event.roll), int(event.attack_modifier), int(event.attack_total)])
 				entries.append(tr("目標防禦：閃避門檻 %d／格擋門檻 %d") % [int(event.dodge_target), int(event.block_target)])
 				var result: String = RESULT_STYLE % tr("ATTACK_RESULT_%s" % event.result.to_upper())
@@ -428,8 +427,8 @@ func _on_log_visibility_toggled(hidden: bool) -> void:
 	log_panel.visible = not hidden
 	log_visibility_button.text = tr("顯示紀錄") if hidden else tr("隱藏紀錄")
 
-func colored_unit(unit: String, team: String) -> String:
-	return "[color=%s]%s[/color]" % [TEAM_COLORS[team], tr(unit)]
+func colored_unit(unit: String, team: Variant) -> String:
+	return "[color=%s]%s[/color]" % [TEAM_COLORS["player" if team is String else "enemy"], tr(unit)]
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)

@@ -15,6 +15,7 @@ SKILL_TARGET_ENEMY,目標：敵方單位,Target: Enemy unit
 SKILL_TYPE_MELEE,類型：近戰,Type: Melee
 SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
 SKILL_RANGE,射程：%d 格,Range: %d tiles
+SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
 SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_DAMAGE_BONUS,傷害加值：%+d,Damage modifier: %+d
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too
@@ -34,8 +35,6 @@ TERRAIN_CLIFF,峭壁,Cliff wall
 TERRAIN_CHASM,懸崖,Chasm
 COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
 COMBAT_LOG_FORCED_DEFEAT,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
-ATTACK_STAT_MELEE,近戰,Melee
-ATTACK_STAT_RANGED,遠程,Ranged
 ATTACK_RESULT_DODGE,閃避,Dodge
 ATTACK_RESULT_BLOCK,格擋,Block
 ATTACK_RESULT_HIT,命中,Hit
@@ -91,8 +90,8 @@ ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
 移動,移動,Movement
 先攻,先攻,Initiative
 閃避／格擋,閃避／格擋,Dodge / Block
-近戰／遠程,近戰／遠程,Melee / Ranged
-傷害／射程,傷害／射程,Damage / Range
+攻擊,攻擊,Attack
+傷害,傷害,Damage
 移動消耗,移動消耗,Move cost
 隱藏紀錄,隱藏紀錄,Hide Log
 顯示紀錄,顯示紀錄,Show Log
@@ -116,7 +115,7 @@ ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
 %s 使用「%s」影響 %s,%s 使用「%s」影響 %s,%s uses %s on %s
 治療,治療,Healing
 結果：%s，回復 %d HP，HP %d/%d,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
-攻擊加值：%s %d%s%s = %d,攻擊加值：%s %d%s%s = %d,Attack modifier: %s %d%s%s = %d
+攻擊加值：%d%s%s = %d,攻擊加值：%d%s%s = %d,Attack modifier: %d%s%s = %d
 D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d roll %d + attack modifier %d = attack total %d
 目標防禦：閃避門檻 %d／格擋門檻 %d,目標防禦：閃避門檻 %d／格擋門檻 %d,Target defense: dodge %d / block %d
 暴擊,暴擊,Critical

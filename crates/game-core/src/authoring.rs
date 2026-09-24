@@ -24,10 +24,8 @@ pub struct UnitType {
     pub initiative: i32,
     pub dodge: i32,
     pub block: i32,
-    pub melee: i32,
-    pub ranged: i32,
+    pub attack: i32,
     pub damage: i32,
-    pub range: i32,
     #[serde(default)]
     pub skills: Vec<String>,
 }
@@ -49,7 +47,6 @@ pub struct UnitPlacement {
     pub id: String,
     pub unit_type: String,
     pub team: Team,
-    pub group: String,
     pub x: i32,
     pub y: i32,
 }
@@ -61,6 +58,13 @@ fn one() -> i32 {
 pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Definition, String> {
     if map.name.trim().is_empty() {
         return Err("地圖名稱不可為空".into());
+    }
+    if map
+        .units
+        .iter()
+        .any(|unit| matches!(&unit.team, Team::Enemy(name) if name.trim().is_empty()))
+    {
+        return Err("敵方派系名稱不可為空".into());
     }
     let skill_ids: HashSet<_> = definitions
         .skills
@@ -100,7 +104,6 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
             name: kind.name.clone(),
             visual: kind.visual.clone(),
             team: placement.team,
-            group: placement.group,
             x: placement.x,
             y: placement.y,
             width: kind.width,
@@ -110,10 +113,8 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
             initiative: kind.initiative,
             dodge: kind.dodge,
             block: kind.block,
-            melee: kind.melee,
-            ranged: kind.ranged,
+            attack: kind.attack,
             damage: kind.damage,
-            range: kind.range,
             skills: kind.skills.clone(),
         });
     }
@@ -140,6 +141,8 @@ pub fn map_to_json(text: &str) -> Result<String, String> {
     serde_json::to_string(&value).map_err(|e| e.to_string())
 }
 
+/// 將 Godot 編輯器傳來的 JSON 定義與地圖資料驗證後，轉成儲存或試玩用的 TOML 文件。
+/// JSON 僅用於編輯器與 Rust 之間傳遞資料；實際保存的檔案仍是 TOML。
 pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, String), String> {
     let definitions: Definitions = serde_json::from_str(definitions).map_err(|e| e.to_string())?;
     let map: Map = serde_json::from_str(map).map_err(|e| e.to_string())?;

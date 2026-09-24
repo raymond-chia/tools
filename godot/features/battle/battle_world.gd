@@ -209,7 +209,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 		selection.modulate = Color("ffe17a")
 		selection.visible = unit_occupies_cell(unit, inspected_cell)
 		node.get_node("Visual/Base").scale = base_scale
-		node.get_node("Visual/Base").modulate = Color("63a9ff") if unit.team == "player" else Color("ff6868")
+		node.get_node("Visual/Base").modulate = Color("63a9ff") if unit.team is String else Color("ff6868")
 		var body: Sprite2D = node.get_node("Visual/Body")
 		body.position.y = -55 if large else -43
 		body.scale = Vector2(0.88, 0.88) if large else Vector2(0.72, 0.72)

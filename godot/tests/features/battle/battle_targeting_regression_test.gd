@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/battle_targeting_regression.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_targeting_regression_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/battle_targeting_regression_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -14,7 +15,7 @@ func before_test() -> void:
 
 # 驗證點擊大型單位所占的指定格施放泥沼時，只在該格建立一份地形。
 func test_mire_on_large_unit_uses_only_clicked_cell() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	var clicked_cell := Vector2i(5, 2)
 	battle.select_action("corrosive_mire")
 
@@ -31,7 +32,7 @@ func test_mire_on_large_unit_uses_only_clicked_cell() -> void:
 
 # 驗證查看大型單位時保留實際點擊格，不改寫為 footprint 的儲存座標。
 func test_inspection_keeps_clicked_large_unit_cell() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	var clicked_cell := Vector2i(5, 2)
 
 	push_mouse_button(battle.world.cell_center(clicked_cell), MOUSE_BUTTON_RIGHT)
@@ -40,7 +41,7 @@ func test_inspection_keeps_clicked_large_unit_cell() -> void:
 
 # 驗證單體技能射程以大型單位的實際點擊格計算，而不是任意代表格。
 func test_unit_skill_uses_clicked_large_unit_cell() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	battle.select_action("shield_bash")
 	push_mouse_button(battle.world.cell_center(Vector2i(5, 2)), MOUSE_BUTTON_LEFT)
 	assert_str(battle.status).override_failure_message("點擊射程外的占用格應由核心拒絕").is_equal("目標超出射程")
@@ -53,7 +54,7 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 
 # 驗證等待自動回合完成後，泥沼增加移動消耗且只維持兩個回合。
 func test_mire_movement_cost_and_duration() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	var mire_cell := Vector2i(1, 1)
 	assert_bool(battle.send({"type": "cell_skill", "actor": "aria", "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
 	await wait_for_combat_events()
@@ -66,7 +67,7 @@ func test_mire_movement_cost_and_duration() -> void:
 
 # 驗證推擊命中會沿攻擊者到目標的方向移動一格。
 func test_push_hit_moves_target_one_cell() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "wolf_a", "x": 2, "y": 1, "skill": "shield_bash"})).override_failure_message("推擊應成功命中測試目標").is_true()
 	var target := unit_with_id("wolf_a")
 	assert_int(int(target.x)).override_failure_message("目標應沿攻擊方向向右移動一格").is_equal(3)
@@ -77,7 +78,7 @@ func test_push_hit_moves_target_one_cell() -> void:
 
 # 驗證大型目標無法被推出地圖時不移動，並受到碰撞傷害。
 func test_blocked_push_deals_collision_damage() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "ogre", "x": 4, "y": 1, "skill": "shield_bash"})).override_failure_message("對地圖邊界的大型目標推擊應完成結算").is_true()
 	var target := unit_with_id("ogre")
 	assert_int(int(target.x)).override_failure_message("受阻的大型目標不應移動").is_equal(4)
@@ -88,7 +89,7 @@ func test_blocked_push_deals_collision_damage() -> void:
 
 # 驗證攻擊動畫與自動回合完成後，倒下單位的格子可再次進入。
 func test_downed_unit_does_not_block_cell() -> void:
-	await load_test_definition()
+	await load_test_documents()
 	assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "wolf_a", "x": 2, "y": 1, "skill": "finishing_strike"})).override_failure_message("終結攻擊應使測試目標倒下").is_true()
 	await wait_for_combat_events()
 	assert_dict(unit_with_id("wolf_a")).override_failure_message("倒下單位不應出現在 presentation snapshot").is_empty()
@@ -97,14 +98,15 @@ func test_downed_unit_does_not_block_cell() -> void:
 	assert_int(int(actor.x)).is_equal(2)
 	assert_int(int(actor.y)).is_equal(1)
 
-func load_test_definition() -> void:
+func load_test_documents() -> void:
 	await wait_for_combat_events()
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
 	battle.pending_action = ""
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return

@@ -1,5 +1,27 @@
 use super::*;
 
+// 驗證不同敵方派系可互相攻擊，同一派系的單位不能互相攻擊。
+#[test]
+fn enemy_factions_determine_attack_targets() {
+    for (target_faction, allowed) in [("bandits", true), ("wildlife", false)] {
+        let mut game = push_collision_game();
+        let actor = game.entity("actor").expect("測試攻擊者應存在");
+        let target = game.entity("target").expect("測試目標應存在");
+        game.world
+            .get_mut::<Unit>(actor)
+            .expect("攻擊者應有資料")
+            .team = Team::Enemy("wildlife".into());
+        game.world
+            .get_mut::<Unit>(target)
+            .expect("目標應有資料")
+            .team = Team::Enemy(target_faction.into());
+        game.start().expect("測試戰鬥應能開始");
+        let skill = game.world.resource::<Skills>().definitions["push"].clone();
+        let result = game.use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill);
+        assert_eq!(result.is_ok(), allowed, "目標派系 {target_faction}");
+    }
+}
+
 // 驗證命中結果、不同固定格擋減傷與暴擊順序均符合傷害公式。
 #[test]
 fn attack_damage_uses_expected_formula() {
@@ -37,7 +59,7 @@ struct FlankingCase {
     expected_modifier: i32,
 }
 
-// 驗證近戰／遠程技能、射程、相對站位與大型目標占用格會正確決定包夾加成。
+// 驗證共用攻擊值下，技能類型、最小與最大射程、相對站位及大型目標占用格會正確決定包夾加成。
 #[test]
 fn attack_modifier_uses_expected_flanking_bonus() {
     let cases = [
@@ -231,15 +253,12 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
             name: "測試角色".into(),
             visual: "test_actor".into(),
             team: Team::Player,
-            group: "測試群組".into(),
             movement,
             initiative: 0,
             dodge: 0,
             block: 0,
-            melee: 0,
-            ranged: 0,
+            attack: 0,
             damage: 0,
-            range: 1,
             skills: Vec::new(),
         },
     ));
@@ -265,7 +284,8 @@ fn attack_skill(ranged: bool, range: i32) -> SkillDef {
         ranged,
         attack_bonus: 0,
         damage_bonus: 0,
-        range: Some(range),
+        min_range: 1,
+        max_range: range,
         duration: None,
         heal_amount: None,
         terrain: None,
@@ -289,15 +309,12 @@ fn spawn_unit(
                 name: "測試單位".into(),
                 visual: "test_unit".into(),
                 team,
-                group: "測試群組".into(),
                 movement: 0,
                 initiative: 0,
                 dodge: 0,
                 block: 0,
-                melee: 5,
-                ranged: 5,
+                attack: 5,
                 damage: 1,
-                range: 1,
                 skills,
             },
         ))
@@ -342,7 +359,7 @@ fn flanking_world(
         &mut world,
         target_position,
         target_footprint,
-        Team::Enemy,
+        Team::Enemy("test_enemy".into()),
         Vec::new(),
     );
     (world, attacker, target)
@@ -396,7 +413,42 @@ fn push_collision_damages_both_units() {
     assert_eq!(collision_units[0].remaining_hp, 100 - collision_damage);
 }
 
+// 驗證最小射程會排除過近格子，施放時也會拒絕過近的目標。
+#[test]
+fn skill_min_range_limits_preview_and_action() {
+    let mut game = game_with_skill_range_and_effect(2, 2, SkillEffect::Push);
+    let actor = game.entity("actor").expect("測試攻擊者應存在");
+    let range = super::skill::skill_ranges(&game.world, actor);
+    assert!(!range[0].cells.contains(&GridPos { x: 2, y: 1 }));
+    assert!(range[0].cells.contains(&GridPos { x: 3, y: 1 }));
+
+    game.start().expect("測試戰鬥應可開始");
+    let skill = game.world.resource::<Skills>().definitions["push"].clone();
+    assert_eq!(
+        game.use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill),
+        Err("目標距離太近".into())
+    );
+}
+
+// 驗證最小與最大射程都為零時，自身格會出現在預覽且可施放治療。
+#[test]
+fn zero_range_heal_targets_self() {
+    let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal);
+    let actor = game.entity("actor").expect("測試攻擊者應存在");
+    let range = super::skill::skill_ranges(&game.world, actor);
+    assert_eq!(range[0].cells, vec![GridPos { x: 1, y: 1 }]);
+
+    game.start().expect("測試戰鬥應可開始");
+    let skill = game.world.resource::<Skills>().definitions["push"].clone();
+    game.use_skill("actor", "actor", GridPos { x: 1, y: 1 }, skill)
+        .expect("零距離治療應可對自己施放");
+}
+
 fn push_collision_game() -> Game {
+    game_with_skill_range_and_effect(1, 1, SkillEffect::Push)
+}
+
+fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: SkillEffect) -> Game {
     let terrain = TerrainTypeDef {
         name_key: "TERRAIN_PLAIN".into(),
         visual: "plain".into(),
@@ -427,42 +479,45 @@ fn push_collision_game() -> Game {
             ranged: false,
             attack_bonus: 100,
             damage_bonus: 0,
-            range: Some(1),
+            min_range,
+            max_range,
             duration: None,
-            heal_amount: None,
+            heal_amount: if effect == SkillEffect::Heal {
+                Some(5)
+            } else {
+                None
+            },
             terrain: None,
-            effect: SkillEffect::Push,
+            effect,
             ai_default: true,
         }],
         units: vec![
             push_collision_unit("actor", "攻擊者", Team::Player, 1),
-            push_collision_unit("target", "被推單位", Team::Enemy, 2),
-            push_collision_unit("blocker", "碰撞單位", Team::Enemy, 3),
+            push_collision_unit("target", "被推單位", Team::Enemy("test_enemy".into()), 2),
+            push_collision_unit("blocker", "碰撞單位", Team::Enemy("test_enemy".into()), 3),
         ],
     };
     Game::from_definition(definition).expect("測試戰鬥定義應有效")
 }
 
 fn push_collision_unit(id: &str, name: &str, team: Team, x: i32) -> UnitDef {
+    let initiative = if team == Team::Player { 100 } else { 0 };
     UnitDef {
         id: id.into(),
         name: name.into(),
         visual: "test_unit".into(),
         team,
-        group: "測試群組".into(),
         x,
         y: 1,
         width: 1,
         height: 1,
         hp: 100,
         movement: 0,
-        initiative: if team == Team::Player { 100 } else { 0 },
+        initiative,
         dodge: 0,
         block: 0,
-        melee: 0,
-        ranged: 0,
+        attack: 0,
         damage: 1,
-        range: 1,
         skills: vec!["push".into()],
     }
 }

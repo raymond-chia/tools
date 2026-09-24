@@ -1,0 +1,30 @@
+name="battle_targeting_regression"
+
+width=6
+height=4
+costs=[
+1,1,1,1,1,1,
+1,1,1,1,1,1,
+1,1,1,1,1,1,
+1,1,1,1,1,1]
+
+[[units]]
+id="aria"
+unit_type="aria"
+team="player"
+x=0
+y=1
+
+[[units]]
+id="wolf_a"
+unit_type="wolf_a"
+team={ enemy="targets" }
+x=2
+y=1
+
+[[units]]
+id="ogre"
+unit_type="ogre"
+team={ enemy="ogres" }
+x=4
+y=1

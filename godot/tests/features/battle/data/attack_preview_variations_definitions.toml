@@ -1,16 +1,3 @@
-# 以真實核心產生血條分段與機率；木樁不移動，並與攻擊者保持非近戰距離。
-[map]
-width=9
-height=7
-costs=[
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1]
-
 [terrain_types.plain]
 name_key="TERRAIN_PLAIN"
 visual="plain"
@@ -30,7 +17,8 @@ name="測試一般傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=0
-range=10
+min_range=1
+max_range=10
 
 [[skills]]
 id="preview_2"
@@ -38,7 +26,8 @@ name="測試完全格擋"
 ranged=true
 attack_bonus=3
 damage_bonus=-3
-range=10
+min_range=1
+max_range=10
 
 [[skills]]
 id="preview_7"
@@ -46,7 +35,8 @@ name="測試無格擋傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=2
-range=10
+min_range=1
+max_range=10
 
 [[skills]]
 id="preview_16"
@@ -54,7 +44,8 @@ name="測試致死傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=11
-range=10
+min_range=1
+max_range=10
 
 [[skills]]
 id="preview_0"
@@ -62,7 +53,8 @@ name="測試零傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=-5
-range=10
+min_range=1
+max_range=10
 
 [[skills]]
 id="setup_damage_20"
@@ -70,7 +62,8 @@ name="建立二十點缺血"
 ranged=true
 attack_bonus=100
 damage_bonus=15
-range=10
+min_range=1
+max_range=10
 
 [[skills]]
 id="setup_damage_4"
@@ -78,94 +71,65 @@ name="建立四點缺血"
 ranged=true
 attack_bonus=100
 damage_bonus=-1
-range=10
+min_range=1
+max_range=10
 
-[[units]]
+[[unit_types]]
 id="aria"
 visual="res://assets/units/fighter.svg"
 name="預覽測試攻擊者"
-team="player"
-group="heroes"
-x=1
-y=3
 hp=100
 movement=0
 initiative=100
 dodge=2
 block=3
-melee=4
-ranged=5
+attack=5
 damage=5
-range=10
 
-[[units]]
+[[unit_types]]
 id="ogre"
 visual="res://assets/units/ogre.svg"
 name="高血量測試木樁"
-team="enemy"
-group="targets"
-x=3
-y=1
 hp=100
 movement=0
 initiative=-100
 dodge=1
 block=4
-melee=0
-ranged=0
+attack=0
 damage=0
-range=1
 
-[[units]]
+[[unit_types]]
 id="wolf_a"
 visual="res://assets/units/wolf.svg"
 name="一般測試木樁"
-team="enemy"
-group="targets"
-x=3
-y=3
 hp=20
 movement=0
 initiative=-100
 dodge=1
 block=4
-melee=0
-ranged=0
+attack=0
 damage=0
-range=1
 
-[[units]]
+[[unit_types]]
 id="wolf_b"
 visual="res://assets/units/wolf.svg"
 name="無格擋測試木樁"
-team="enemy"
-group="targets"
-x=4
-y=3
 hp=20
 movement=0
 initiative=-100
 dodge=7
 block=0
-melee=0
-ranged=0
+attack=0
 damage=0
-range=1
 
-[[units]]
+[[unit_types]]
 id="lyra"
 visual="res://assets/units/archer.svg"
 name="高格擋測試木樁"
-team="enemy"
-group="targets"
-x=3
-y=4
 hp=20
 movement=0
 initiative=-100
 dodge=2
 block=10
-melee=0
-ranged=0
+attack=0
 damage=0
-range=1

@@ -1,0 +1,49 @@
+# 以真實核心產生血條分段與機率；木樁不移動，並與攻擊者保持非近戰距離。
+
+name="attack_preview_variations"
+
+width=9
+height=7
+costs=[
+1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1]
+
+[[units]]
+id="aria"
+unit_type="aria"
+team="player"
+x=1
+y=3
+
+[[units]]
+id="ogre"
+unit_type="ogre"
+team={ enemy="targets" }
+x=3
+y=1
+
+[[units]]
+id="wolf_a"
+unit_type="wolf_a"
+team={ enemy="targets" }
+x=3
+y=3
+
+[[units]]
+id="wolf_b"
+unit_type="wolf_b"
+team={ enemy="targets" }
+x=4
+y=3
+
+[[units]]
+id="lyra"
+unit_type="lyra"
+team={ enemy="targets" }
+x=3
+y=4

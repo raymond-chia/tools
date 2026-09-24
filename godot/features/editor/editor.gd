@@ -14,6 +14,7 @@ const CATEGORIES := ["unit_types", "skills", "terrain_types"]
 @onready var terrain_list: OptionButton = $Layout/Body/MapPanel/Tools/Terrain
 @onready var unit_list: OptionButton = $Layout/Body/MapPanel/Tools/Unit
 @onready var team_list: OptionButton = $Layout/Body/MapPanel/Tools/Team
+@onready var faction_field: LineEdit = $Layout/Body/MapPanel/Tools/Faction
 @onready var grid: GridContainer = $Layout/Body/MapPanel/GridScroll/Grid
 @onready var category_list: OptionButton = $Layout/Body/SidePanel/Category
 @onready var definition_list: OptionButton = $Layout/Body/SidePanel/Definition
@@ -54,6 +55,8 @@ func _ready() -> void:
 	definition_list.item_selected.connect(func(_index: int): refresh_fields())
 	map_name.text_submitted.connect(func(_value: String): commit_map_name())
 	map_name.focus_exited.connect(commit_map_name)
+	team_list.item_selected.connect(func(index: int): faction_field.visible = index != 0)
+	faction_field.visible = false
 	width_box.value_changed.connect(func(_value: float): resize_map())
 	height_box.value_changed.connect(func(_value: float): resize_map())
 	var source := read_file(DEFINITIONS_PATH)
@@ -179,7 +182,7 @@ func play_map() -> void:
 	var players := 0
 	var enemies := 0
 	for unit in map_data.units:
-		if unit.team == "player": players += 1
+		if unit.team is String: players += 1
 		else: enemies += 1
 	if players == 0 or enemies == 0:
 		show_error("試玩需要至少一名玩家與一名敵方單位。")
@@ -292,7 +295,7 @@ func refresh_grid() -> void:
 			button.tooltip_text = "移動消耗 %d；%s" % [map_data.costs[y * map_data.width + x], kind]
 			button.modulate = Color("c8b9a4") if kind == "rough" else Color.WHITE
 			if kind not in ["plain", "rough"]: button.modulate = Color("e98c82")
-			if not unit.is_empty(): button.modulate = Color("79b9f3") if unit.team == "player" else Color("ee9b94")
+			if not unit.is_empty(): button.modulate = Color("79b9f3") if unit.team is String else Color("ee9b94")
 			button.pressed.connect(func(): edit_cell(cell))
 			button.mouse_entered.connect(func():
 				if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and mode_list.selected == 0: edit_cell(cell))
@@ -333,7 +336,8 @@ func edit_cell(cell: Vector2i) -> void:
 		while map_data.units.any(func(u: Dictionary): return u.id == id):
 			number += 1
 			id = kind + "_%d" % number
-		map_data.units.append({"id":id,"unit_type":kind,"team":team_list.get_item_text(team_list.selected),"group":"heroes" if team_list.selected == 0 else "enemies","x":cell.x,"y":cell.y})
+		var team: Variant = "player" if team_list.selected == 0 else {"enemy": faction_field.text.strip_edges()}
+		map_data.units.append({"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y})
 	elif mode == 2:
 		if selected_unit.is_empty():
 			if current.is_empty(): return
@@ -386,8 +390,8 @@ func refresh_fields() -> void:
 	if entry.is_empty(): return
 	var display := entry.duplicate()
 	if category_key() == "skills":
-		for optional in {"range": 1, "duration": 2, "heal_amount": 5, "terrain": "mire"}:
-			if not display.has(optional): display[optional] = {"range": 1, "duration": 2, "heal_amount": 5, "terrain": "mire"}[optional]
+		for optional in {"duration": 2, "heal_amount": 5, "terrain": "mire"}:
+			if not display.has(optional): display[optional] = {"duration": 2, "heal_amount": 5, "terrain": "mire"}[optional]
 	for key in display.keys():
 		var label := Label.new()
 		label.text = key
@@ -437,9 +441,9 @@ func add_definition() -> void:
 		id = base_id + "_%d" % count
 	checkpoint()
 	if category == "unit_types":
-		definitions.unit_types.append({"id":id,"name":id,"visual":"res://assets/units/fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"melee":3,"ranged":0,"damage":3,"range":1,"skills":["melee_attack"]})
+		definitions.unit_types.append({"id":id,"name":id,"visual":"res://assets/units/fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"attack":3,"damage":3,"skills":["melee_attack"]})
 	elif category == "skills":
-		definitions.skills.append({"id":id,"name":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"effect":"attack","ai_default":false})
+		definitions.skills.append({"id":id,"name":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"min_range":1,"max_range":1,"effect":"attack","ai_default":false})
 	else:
 		definitions.terrain_types[id] = {"name_key":"TERRAIN_PLAIN","visual":"plain","passable":true,"ends_movement":false,"damage":0,"movement_cost_bonus":0,"dodge_penalty":0,"block_penalty":0,"forced_entry":"none","effect_key":"TERRAIN_EFFECT_NONE"}
 	refresh_tools()

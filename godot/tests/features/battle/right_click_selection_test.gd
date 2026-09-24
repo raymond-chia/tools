@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/right_click_selection.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/right_click_selection_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/right_click_selection_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -108,20 +109,21 @@ func test_inspection_content_stays_inside_panel_width() -> void:
 		assert_float(control_rect.end.x).override_failure_message("%s 不應超出詳情面板右側" % control.get_path()).is_less_equal(panel_rect.end.x)
 
 func prepare_case(battle, initial_target: String) -> void:
-	await load_test_definition(battle)
+	await load_test_documents(battle)
 	battle.inspected_cell = target_cell(battle, initial_target)
 	battle.pending_action = ""
 	battle.status = ""
 	battle.present()
 
-func load_test_definition(battle) -> void:
+func load_test_documents(battle) -> void:
 	await wait_for_combat_events(battle)
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
 
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return

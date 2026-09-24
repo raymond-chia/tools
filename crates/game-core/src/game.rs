@@ -22,10 +22,6 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn from_toml(s: &str) -> Result<Self, String> {
-        let d: Definition = toml::from_str(s).map_err(|e| e.to_string())?;
-        Self::from_definition(d)
-    }
     pub fn from_documents(definitions: &str, map: &str) -> Result<Self, String> {
         let definitions: authoring::Definitions =
             toml::from_str(definitions).map_err(|e| e.to_string())?;
@@ -100,6 +96,12 @@ impl Game {
         let mut skills = HashMap::new();
         let mut ai_default = None;
         for skill in d.skills {
+            if skill.min_range < 0 || skill.max_range < skill.min_range {
+                return Err(format!(
+                    "{} 的距離必須符合 0 ≤ min_range ≤ max_range",
+                    skill.id
+                ));
+            }
             if skill.effect == SkillEffect::Heal
                 && !matches!(skill.heal_amount, Some(amount) if amount > 0)
             {
@@ -175,15 +177,12 @@ impl Game {
                     name: u.name,
                     visual: u.visual,
                     team: u.team,
-                    group: u.group,
                     movement: u.movement,
                     initiative: u.initiative,
                     dodge: u.dodge,
                     block: u.block,
-                    melee: u.melee,
-                    ranged: u.ranged,
+                    attack: u.attack,
                     damage: u.damage,
-                    range: u.range,
                     skills: if u.skills.is_empty() {
                         all_skill_ids.clone()
                     } else {
@@ -279,7 +278,7 @@ impl Game {
             .query::<(&Id, &Unit, Has<Downed>)>()
             .iter(&self.world)
             .filter(|(i, _, d)| active.contains(&i.0) && !*d)
-            .map(|(i, f, _)| (i.0.clone(), f.name.clone(), f.team, f.initiative))
+            .map(|(i, f, _)| (i.0.clone(), f.name.clone(), f.team.clone(), f.initiative))
             .collect();
         let mut rolled: Vec<_> = entries
             .into_iter()
@@ -294,7 +293,7 @@ impl Game {
             .map(
                 |(total, _id, unit, team, roll, modifier)| InitiativeRollLog {
                     unit: unit.clone(),
-                    team: *team,
+                    team: team.clone(),
                     roll: *roll,
                     die_sides: gameplay_config::INITIATIVE_DIE_SIDES,
                     modifier: *modifier,
@@ -373,7 +372,7 @@ impl Game {
                         .get::<Unit>(entity)
                         .expect("已建立的戰鬥單位應具有 Unit 元件")
                         .team
-                        == Team::Enemy
+                        != Team::Player
             })
     }
     fn auto_step(&mut self) -> Result<(), String> {
@@ -435,7 +434,7 @@ impl Game {
                 return Ok(());
             }
         };
-        if entity_distance(&self.world, e, t) > gameplay_config::DEFAULT_MELEE_RANGE {
+        if entity_distance(&self.world, e, t) > gameplay_config::AI_ENGAGEMENT_RANGE {
             let goal = self
                 .world
                 .get::<Pos>(t)
@@ -469,7 +468,7 @@ impl Game {
                 }
             }
         }
-        if entity_distance(&self.world, e, t) <= gameplay_config::DEFAULT_MELEE_RANGE {
+        if entity_distance(&self.world, e, t) <= gameplay_config::AI_ENGAGEMENT_RANGE {
             let id = self
                 .world
                 .get::<Id>(t)
@@ -497,11 +496,11 @@ impl Game {
     }
     fn closest(&self, e: Entity) -> Option<Entity> {
         let p = self.world.get::<Pos>(e)?.0;
+        let attacker = &self.world.get::<Unit>(e)?.team;
         self.world
             .iter_entities()
             .filter(|q| {
-                q.get::<Unit>().is_some_and(|f| f.team == Team::Player)
-                    && q.get::<Downed>().is_none()
+                q.get::<Unit>().is_some_and(|f| &f.team != attacker) && q.get::<Downed>().is_none()
             })
             .min_by_key(|q| {
                 distance(
@@ -516,9 +515,9 @@ impl Game {
         let mut e = false;
         for q in self.world.iter_entities() {
             if let Some(f) = q.get::<Unit>().filter(|_| q.get::<Downed>().is_none()) {
-                match f.team {
+                match &f.team {
                     Team::Player => p = true,
-                    Team::Enemy => e = true,
+                    Team::Enemy(_) => e = true,
                 }
             }
         }
@@ -554,8 +553,7 @@ impl Game {
                 id: i.0.clone(),
                 name: f.name.clone(),
                 visual: f.visual.clone(),
-                team: f.team,
-                group: f.group.clone(),
+                team: f.team.clone(),
                 x: p.0.x,
                 y: p.0.y,
                 width: fp.width,
@@ -569,10 +567,8 @@ impl Game {
                 initiative: f.initiative,
                 dodge: effective_dodge(&self.world, entity),
                 block: effective_block(&self.world, entity),
-                melee: f.melee,
-                ranged: f.ranged,
+                attack: f.attack,
                 damage: f.damage,
-                range: f.range,
                 downed: d,
                 active: enc.participants.contains(&i.0),
             })

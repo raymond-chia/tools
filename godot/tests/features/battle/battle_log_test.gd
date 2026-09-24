@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/battle_log.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_log_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/battle_log_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -11,7 +12,7 @@ func before_test() -> void:
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await load_test_definition()
+	await load_test_documents()
 
 # 驗證開始戰鬥會記錄新回合，並以整數顯示回合數。
 func test_new_round_log() -> void:
@@ -59,7 +60,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應可獨立摺疊").is_false()
 	assert_str(battle.ui.battle_log.text).override_failure_message("摺疊技能紀錄應隱藏攻擊判定明細").not_contains("攻擊加值 104")
 
-# 驗證技能紀錄包含判定雙方數值、結果、暴擊、傷害與剩餘生命，且 UI 以整數顯示其意義。
+# 驗證技能紀錄包含雙方派系、判定數值、結果、暴擊、傷害與剩餘生命，且 UI 以整數顯示其意義。
 func test_skill_resolution_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
@@ -69,7 +70,7 @@ func test_skill_resolution_log() -> void:
 	assert_str(event.actor_team).is_equal("player")
 	assert_str(event.skill).is_equal("精準斬擊")
 	assert_str(event.target).is_equal("測試木樁")
-	assert_str(event.target_team).is_equal("enemy")
+	assert_dict(event.target_team).contains_key_value("enemy", "targets")
 	assert_int(int(event.attack_modifier)).is_equal(104)
 	assert_int(int(event.attack_total)).is_equal(int(event.roll) + 104)
 	assert_int(int(event.dodge_target)).is_equal(12)
@@ -154,13 +155,14 @@ func test_battle_log_content_stays_inside_panel_width() -> void:
 	assert_int(battle.ui.battle_log.get_content_width()).override_failure_message("戰鬥紀錄內容寬度不應超出控制項").is_less_equal(int(battle.ui.battle_log.size.x))
 	assert_bool(panel.get_global_rect().encloses(battle.ui.battle_log.get_global_rect())).override_failure_message("戰鬥紀錄控制項應完整位於面板內").is_true()
 
-func load_test_definition() -> void:
+func load_test_documents() -> void:
 	await wait_for_combat_events()
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return

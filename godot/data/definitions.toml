@@ -55,6 +55,8 @@ name="近戰攻擊"
 ranged=false
 attack_bonus=0
 damage_bonus=0
+min_range=1
+max_range=1
 ai_default=true
 
 [[skills]]
@@ -63,6 +65,8 @@ name="遠程攻擊"
 ranged=true
 attack_bonus=0
 damage_bonus=0
+min_range=1
+max_range=5
 
 [[skills]]
 id="power_strike"
@@ -70,7 +74,8 @@ name="強力一擊"
 ranged=false
 attack_bonus=2
 damage_bonus=2
-range=1
+min_range=1
+max_range=1
 
 [[skills]]
 id="shield_bash"
@@ -78,7 +83,8 @@ name="盾牌推擊"
 ranged=false
 attack_bonus=1
 damage_bonus=-3
-range=1
+min_range=1
+max_range=1
 effect="push"
 
 [[skills]]
@@ -87,7 +93,8 @@ name="瞄準射擊"
 ranged=true
 attack_bonus=3
 damage_bonus=0
-range=6
+min_range=1
+max_range=6
 
 [[skills]]
 id="corrosive_mire"
@@ -95,7 +102,8 @@ name="腐蝕泥沼"
 ranged=true
 attack_bonus=0
 damage_bonus=0
-range=4
+min_range=0
+max_range=4
 effect="mire"
 terrain="mire"
 duration=2
@@ -106,7 +114,8 @@ name="治癒術"
 ranged=true
 attack_bonus=0
 damage_bonus=0
-range=4
+min_range=0
+max_range=4
 effect="heal"
 heal_amount=5
 
@@ -119,10 +128,8 @@ movement=5
 initiative=3
 dodge=3
 block=4
-melee=5
-ranged=0
+attack=5
 damage=5
-range=1
 skills=["melee_attack","power_strike","shield_bash"]
 
 [[unit_types]]
@@ -134,10 +141,8 @@ movement=6
 initiative=5
 dodge=5
 block=1
-melee=2
-ranged=6
+attack=6
 damage=4
-range=5
 skills=["ranged_attack","aimed_shot"]
 
 [[unit_types]]
@@ -149,10 +154,8 @@ movement=5
 initiative=2
 dodge=3
 block=2
-melee=1
-ranged=4
+attack=4
 damage=3
-range=4
 skills=["corrosive_mire","heal"]
 
 [[unit_types]]
@@ -164,10 +167,8 @@ movement=5
 initiative=4
 dodge=3
 block=0
-melee=4
-ranged=0
+attack=4
 damage=3
-range=1
 skills=["melee_attack"]
 
 [[unit_types]]
@@ -179,10 +180,8 @@ movement=5
 initiative=2
 dodge=3
 block=0
-melee=4
-ranged=0
+attack=4
 damage=3
-range=1
 skills=["melee_attack"]
 
 [[unit_types]]
@@ -194,10 +193,8 @@ movement=5
 initiative=3
 dodge=3
 block=0
-melee=4
-ranged=0
+attack=4
 damage=3
-range=1
 skills=["melee_attack"]
 
 [[unit_types]]
@@ -209,10 +206,8 @@ movement=5
 initiative=1
 dodge=3
 block=0
-melee=4
-ranged=0
+attack=4
 damage=3
-range=1
 skills=["melee_attack"]
 
 [[unit_types]]
@@ -224,9 +219,6 @@ movement=5
 initiative=2
 dodge=3
 block=0
-melee=4
-ranged=0
+attack=4
 damage=3
-range=1
 skills=["melee_attack"]
-

@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
 
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const TEST_DEFINITION := "res://tests/features/battle/data/turn_order.toml"
+const TEST_DEFINITIONS := "res://tests/features/battle/data/turn_order_definitions.toml"
+const TEST_MAP := "res://tests/features/battle/data/turn_order_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
@@ -11,7 +12,7 @@ func before_test() -> void:
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await load_test_definition()
+	await load_test_documents()
 
 # 驗證延後模式以橫棒標示插入位置，並將目前單位排到所選單位之後。
 func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
@@ -51,15 +52,16 @@ func test_delay_is_disabled_after_moving() -> void:
 	assert_bool(battle.state.turn.can_delay).override_failure_message("移動後核心應禁止延後").is_false()
 	assert_bool(battle.ui.delay_button.disabled).override_failure_message("移動後延後按鈕應停用").is_true()
 
-func load_test_definition() -> void:
+func load_test_documents() -> void:
 	await wait_for_combat_events()
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
 	battle.pending_action = ""
 	battle.selecting_delay = false
-	var definition := FileAccess.get_file_as_string(TEST_DEFINITION)
-	var loaded = JSON.parse_string(battle.core.load_definition(definition))
+	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
+	var map := FileAccess.get_file_as_string(TEST_MAP)
+	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
 	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return
