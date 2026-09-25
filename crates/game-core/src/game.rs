@@ -82,8 +82,8 @@ impl Game {
         w.insert_resource(Turn {
             actor: None,
             phase: Phase::Ended,
-            remaining: 0,
-            moves: 0,
+            movement_remaining: 0,
+            movement_segments_used: 0,
         });
         w.insert_resource(Random(0xc0ffee));
         w.insert_resource(Log::default());
@@ -341,8 +341,8 @@ impl Game {
         *self.world.resource_mut::<Turn>() = Turn {
             actor,
             phase: Phase::Ready,
-            remaining,
-            moves: 0,
+            movement_remaining: remaining,
+            movement_segments_used: 0,
         }
     }
     pub(crate) fn finish(&mut self) {
@@ -410,7 +410,7 @@ impl Game {
     fn delay(&mut self, actor: &str, after: &str) -> Result<(), GameError> {
         self.ensure(actor)?;
         let turn = self.world.resource::<Turn>();
-        if turn.phase != Phase::Ready || turn.moves != 0 {
+        if turn.phase != Phase::Ready || turn.movement_segments_used != 0 {
             return Err(error::delay_after_action());
         }
         let encounter = self.world.resource::<Encounter>();
@@ -603,7 +603,7 @@ impl Game {
             });
         let can_move = player_turn
             && matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
-            && turn.moves < 2;
+            && turn.movement_segments_used < 2;
         let movement_ranges = if can_move {
             turn.actor
                 .as_ref()
@@ -631,7 +631,7 @@ impl Game {
             .collect();
         let can_delay = player_turn
             && turn.phase == Phase::Ready
-            && turn.moves == 0
+            && turn.movement_segments_used == 0
             && turn.actor.is_some()
             && !turn_order.is_empty();
         let terrain_cells = (0..b.height)
@@ -751,7 +751,7 @@ impl Game {
                 actor: turn.actor,
                 phase: format!("{:?}", turn.phase).to_lowercase(),
                 auto_step: self.auto_step_available(),
-                move_remaining: turn.remaining,
+                move_remaining: turn.movement_remaining,
                 can_move,
                 can_skill,
                 can_delay,

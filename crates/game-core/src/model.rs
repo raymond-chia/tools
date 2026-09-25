@@ -43,6 +43,7 @@ pub(crate) struct Id(pub(crate) String);
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Pos(pub(crate) GridPos);
 
+/// 單位在棋盤上佔據的格子範圍，以寬度與高度表示。
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Footprint {
     pub(crate) width: i32,
@@ -66,6 +67,7 @@ pub(crate) struct Unit {
     pub(crate) block: i32,
     pub(crate) attack: i32,
     pub(crate) damage: i32,
+    /// 單位可使用的技能 ID。
     pub(crate) skills: Vec<String>,
 }
 
@@ -73,7 +75,9 @@ pub(crate) struct Unit {
 pub(crate) struct Board {
     pub(crate) width: i32,
     pub(crate) height: i32,
+    /// value 是該格的固定地形種類 ID。
     pub(crate) terrains: HashMap<GridPos, Vec<String>>,
+    /// key 是地形種類 ID。
     pub(crate) terrain_types: HashMap<String, TerrainTypeDef>,
 }
 
@@ -81,15 +85,21 @@ pub(crate) struct Board {
 pub(crate) struct TemporaryTerrain {
     pub(crate) expires_after_round: u32,
 }
+
 #[derive(Resource, Default, Clone)]
+/// 內層 key 是該格的暫時地形種類 ID。
 pub(crate) struct TemporaryTerrains(pub(crate) HashMap<GridPos, HashMap<String, TemporaryTerrain>>);
+
 #[derive(Resource, Default, Clone)]
 pub(crate) struct Encounter {
+    /// 比 order 多了剛加入的單位
     pub(crate) participants: HashSet<String>,
+    /// 本回合依行動順序排列的單位 ID。
     pub(crate) order: Vec<String>,
     pub(crate) cursor: usize,
     pub(crate) round: u32,
 }
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Phase {
     Ready,
@@ -97,13 +107,16 @@ pub(crate) enum Phase {
     AfterMove,
     Ended,
 }
+
 #[derive(Resource, Clone)]
 pub(crate) struct Turn {
+    // option 用於當前行動單位死亡
     pub(crate) actor: Option<String>,
     pub(crate) phase: Phase,
-    pub(crate) remaining: u32,
-    pub(crate) moves: u8,
+    pub(crate) movement_remaining: u32,
+    pub(crate) movement_segments_used: u8,
 }
+
 #[derive(Resource)]
 pub(crate) struct Random(pub(crate) u64);
 #[derive(Resource, Default)]
@@ -114,6 +127,7 @@ pub(crate) struct DeliveredLogCount(pub(crate) usize);
 pub(crate) struct ResultState(pub(crate) Outcome);
 #[derive(Resource)]
 pub(crate) struct Skills {
+    /// Key 是技能 ID。
     pub(crate) definitions: HashMap<String, SkillDef>,
     pub(crate) ai_default: String,
 }
@@ -121,6 +135,7 @@ pub(crate) struct Skills {
 #[derive(Deserialize)]
 pub(crate) struct Definition {
     pub(crate) map: MapDef,
+    /// Key 是地形種類 ID。
     pub(crate) terrain_types: HashMap<String, TerrainTypeDef>,
     pub(crate) skills: Vec<SkillDef>,
     pub(crate) units: Vec<UnitDef>,
@@ -210,6 +225,7 @@ pub(crate) struct UnitDef {
     pub(crate) attack: i32,
     pub(crate) damage: i32,
     #[serde(default)]
+    /// 此單位類型可使用的技能 ID。
     pub(crate) skills: Vec<String>,
 }
 pub(crate) fn one() -> i32 {
@@ -257,6 +273,7 @@ pub struct Snapshot {
     pub reachable: Vec<GridPos>,
     pub second_reachable: Vec<GridPos>,
     pub skill_ranges: Vec<SkillRangeView>,
+    /// 本回合尚未行動、依行動順序排列的單位 ID。
     pub turn_order: Vec<String>,
     pub turn: TurnView,
     pub round: u32,
@@ -462,6 +479,7 @@ pub struct TerrainCellView {
     pub y: i32,
     pub passable: bool,
     pub base_kind: String,
+    /// 此格的地形種類 ID，包含固定與暫時地形。
     pub terrains: Vec<String>,
     pub unit_id: Option<String>,
     pub cost: u32,

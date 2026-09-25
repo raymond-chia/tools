@@ -145,16 +145,16 @@ impl Game {
             return Ok(());
         }
         let mut t = self.world.resource_mut::<Turn>();
-        if turn.moves == 0 && spent <= first_budget {
-            t.remaining = first_budget - spent;
-        } else if turn.moves == 0 {
-            t.moves = 1;
-            t.remaining = second_budget - (spent - first_budget);
+        if turn.movement_segments_used == 0 && spent <= first_budget {
+            t.movement_remaining = first_budget - spent;
+        } else if turn.movement_segments_used == 0 {
+            t.movement_segments_used = 1;
+            t.movement_remaining = second_budget - (spent - first_budget);
         } else {
-            t.remaining = second_budget - spent;
+            t.movement_remaining = second_budget - spent;
         }
-        if t.remaining == 0 {
-            t.moves += 1;
+        if t.movement_remaining == 0 {
+            t.movement_segments_used += 1;
             t.phase = Phase::AfterMove;
         } else {
             t.phase = Phase::Moving;
@@ -170,7 +170,8 @@ impl Game {
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .movement;
         let turn = self.world.resource::<Turn>().clone();
-        if !matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove) || turn.moves >= 2
+        if !matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
+            || turn.movement_segments_used >= 2
         {
             return Err(error::cannot_move());
         }
@@ -183,7 +184,11 @@ impl Game {
             .world
             .get::<Footprint>(entity)
             .expect("已建立的戰鬥單位應具有 Footprint 元件");
-        let first_budget = if turn.moves == 0 { turn.remaining } else { 0 };
+        let first_budget = if turn.movement_segments_used == 0 {
+            turn.movement_remaining
+        } else {
+            0
+        };
         let second_budget = allowance;
         let first_path = if first_budget > 0 {
             find_path(&self.world, entity, start, end, footprint, first_budget)
@@ -515,14 +520,18 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     v
 }
 pub(crate) fn movement_ranges(w: &World, e: Entity, turn: &Turn) -> (Vec<GridPos>, Vec<GridPos>) {
-    if turn.moves >= 2 {
+    if turn.movement_segments_used >= 2 {
         return (Vec::new(), Vec::new());
     }
     let allowance = w
         .get::<Unit>(e)
         .expect("已建立的戰鬥單位應具有 Unit 元件")
         .movement;
-    let first_budget = if turn.moves == 0 { turn.remaining } else { 0 };
+    let first_budget = if turn.movement_segments_used == 0 {
+        turn.movement_remaining
+    } else {
+        0
+    };
     let reachable = if first_budget > 0 {
         reach(w, e, first_budget)
     } else {

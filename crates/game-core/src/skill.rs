@@ -805,8 +805,8 @@ pub(crate) fn attack_damage(
 }
 
 pub(crate) fn can_use_skill(turn: &Turn) -> bool {
-    matches!(turn.phase, Phase::Ready | Phase::Moving) && turn.moves == 0
-        || matches!(turn.phase, Phase::AfterMove) && turn.moves == 1
+    matches!(turn.phase, Phase::Ready | Phase::Moving) && turn.movement_segments_used == 0
+        || matches!(turn.phase, Phase::AfterMove) && turn.movement_segments_used == 1
 }
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
     if n == 1 {

@@ -237,8 +237,8 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
     world.insert_resource(Turn {
         actor: Some("actor".into()),
         phase: Phase::Ready,
-        remaining: movement,
-        moves: 0,
+        movement_remaining: movement,
+        movement_segments_used: 0,
     });
     world.spawn((
         Id("actor".into()),
