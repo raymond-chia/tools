@@ -359,7 +359,7 @@ func format_log(events: Array, start_index := 0) -> String:
 					for initiative_roll in event.initiative_rolls:
 						entries.append(tr("%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d") % [colored_unit(initiative_roll.unit_type, initiative_roll.team), int(initiative_roll.die_sides), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
 			"skill", "healing":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」影響 %s") % [colored_unit(event.actor_type, event.actor_team), tr(event.skill), colored_unit(event.target_type, event.target_team)]])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」影響 %s") % [colored_unit(event.actor_type, event.actor_team), tr(BattleConfig.skill_name_key(event.skill)), colored_unit(event.target_type, event.target_team)]])
 				if not expanded:
 					continue
 				if event.type == "healing":
@@ -387,7 +387,7 @@ func format_log(events: Array, start_index := 0) -> String:
 					if collision_unit.downed:
 						entries.append(tr("%s 倒下") % colored_unit(collision_unit.unit_type, collision_unit.team))
 			"terrain_created":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor_type, event.actor_team), tr(event.skill)]])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor_type, event.actor_team), tr(BattleConfig.skill_name_key(event.skill))]])
 				if expanded:
 					entries.append(tr("產生「%s」") % tr(BattleConfig.terrain_name_key(event.terrain)))
 			"terrain_damage":

@@ -1,11 +1,9 @@
 [terrain_types.rough]
-name_key="TERRAIN_ROUGH"
 visual="rough"
 passable=true
 effect_key="TERRAIN_EFFECT_NONE"
 movement_cost_bonus=1
 [terrain_types.mire]
-name_key="TERRAIN_MIRE"
 visual="mire"
 passable=true
 movement_cost_bonus=1
@@ -16,7 +14,6 @@ effect_key="TERRAIN_EFFECT_MIRE"
 [[skills]]
 id="corrosive_mire"
 ai_default=true
-name="測試腐蝕泥沼"
 ranged=true
 attack_bonus=0
 damage_bonus=0
@@ -28,7 +25,6 @@ duration=2
 
 [[skills]]
 id="shield_bash"
-name="測試推擊"
 ranged=false
 attack_bonus=100
 damage_bonus=0
@@ -38,7 +34,6 @@ effect="push"
 
 [[skills]]
 id="finishing_strike"
-name="測試終結斬擊"
 ranged=false
 attack_bonus=100
 damage_bonus=100

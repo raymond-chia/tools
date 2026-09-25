@@ -62,7 +62,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應可獨立摺疊").is_false()
 	assert_str(formatted_log()).override_failure_message("摺疊技能紀錄應隱藏攻擊判定明細").not_contains("攻擊加值 104")
 
-# 驗證技能紀錄包含實例 ID、雙方派系與判定結果，且 UI 依類型翻譯名稱並顯示數值。
+# 驗證技能紀錄，且 UI 依技能 ID 翻譯名稱並顯示數值。
 func test_skill_resolution_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
@@ -70,7 +70,7 @@ func test_skill_resolution_log() -> void:
 	assert_dict(event).override_failure_message("應產生技能事件").is_not_empty()
 	assert_str(event.actor).is_equal("aria")
 	assert_str(event.actor_team).is_equal("player")
-	assert_str(event.skill).is_equal("精準斬擊")
+	assert_str(event.skill).is_equal("precise_strike")
 	assert_str(event.target).is_equal("wolf_a")
 	assert_dict(event.target_team).contains_key_value("enemy", "targets")
 	assert_int(int(event.attack_modifier)).is_equal(104)
@@ -86,7 +86,7 @@ func test_skill_resolution_log() -> void:
 	var result_names := {"dodge": "[color=#f0c96a]閃避[/color]", "block": "[color=#f0c96a]格擋[/color]", "hit": "[color=#f0c96a]命中[/color]"}
 	var critical_text := "，暴擊" if event.critical else ""
 	var log_text: String = formatted_log()
-	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「精準斬擊」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_ARIA"), tr("UNIT_NAME_WOLF_A")])
+	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「%s」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_ARIA"), tr(BattleConfig.skill_name_key("precise_strike")), tr("UNIT_NAME_WOLF_A")])
 	assert_str(log_text).contains("D20 擲骰 %d + 攻擊加值 104 = 攻擊總值 %d" % [int(event.roll), int(event.attack_total)])
 	assert_str(log_text).contains("目標防禦：閃避門檻 12／格擋門檻 15")
 	assert_str(log_text).contains("結果：%s%s，%d 傷害，HP %d/10000" % [result_names[event.result], critical_text, expected_damage, 10000 - expected_damage])

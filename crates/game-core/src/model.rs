@@ -119,12 +119,16 @@ pub(crate) struct Turn {
 
 #[derive(Resource)]
 pub(crate) struct Random(pub(crate) u64);
+
 #[derive(Resource, Default)]
 pub(crate) struct Log(pub(crate) Vec<CombatLogEvent>);
+
 #[derive(Resource, Default)]
 pub(crate) struct DeliveredLogCount(pub(crate) usize);
+
 #[derive(Resource)]
 pub(crate) struct ResultState(pub(crate) Outcome);
+
 #[derive(Resource)]
 pub(crate) struct Skills {
     /// Key 是技能 ID。
@@ -140,10 +144,10 @@ pub(crate) struct Definition {
     pub(crate) skills: Vec<SkillDef>,
     pub(crate) units: Vec<UnitDef>,
 }
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct SkillDef {
     pub(crate) id: String,
-    pub(crate) name: String,
     pub(crate) ranged: bool,
     pub(crate) attack_bonus: i32,
     pub(crate) damage_bonus: i32,
@@ -181,7 +185,6 @@ pub struct TerrainPlacement {
 }
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainTypeDef {
-    pub(crate) name_key: String,
     pub(crate) visual: String,
     pub(crate) passable: bool,
     #[serde(default)]

@@ -168,7 +168,7 @@ impl Game {
                     actor: a.to_owned(),
                     actor_type: attacker_unit.unit_type,
                     actor_team: attacker_unit.team.clone(),
-                    skill: skill.name,
+                    skill: skill.id,
                     target: target_id,
                     target_type,
                     target_team: target_unit.team.clone(),
@@ -332,7 +332,7 @@ impl Game {
                 actor: a.to_owned(),
                 actor_type: attacker_unit.unit_type,
                 actor_team: attacker_unit.team.clone(),
-                skill: skill.name,
+                skill: skill.id,
                 target: target.to_owned(),
                 target_type: target_unit.unit_type,
                 target_team: target_unit.team.clone(),
@@ -510,7 +510,7 @@ impl Game {
                 actor: actor.to_owned(),
                 actor_type: unit.unit_type,
                 actor_team: unit.team.clone(),
-                skill: skill.name,
+                skill: skill.id,
                 terrain,
             });
         self.finish();

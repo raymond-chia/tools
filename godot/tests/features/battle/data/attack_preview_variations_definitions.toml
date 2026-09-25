@@ -1,5 +1,4 @@
 [terrain_types.rough]
-name_key="TERRAIN_ROUGH"
 visual="rough"
 passable=true
 effect_key="TERRAIN_EFFECT_NONE"
@@ -7,7 +6,6 @@ movement_cost_bonus=1
 [[skills]]
 id="preview_5"
 ai_default=true
-name="測試一般傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=0
@@ -16,7 +14,6 @@ max_range=10
 
 [[skills]]
 id="preview_2"
-name="測試完全格擋"
 ranged=true
 attack_bonus=3
 damage_bonus=-3
@@ -25,7 +22,6 @@ max_range=10
 
 [[skills]]
 id="preview_7"
-name="測試無格擋傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=2
@@ -34,7 +30,6 @@ max_range=10
 
 [[skills]]
 id="preview_16"
-name="測試致死傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=11
@@ -43,7 +38,6 @@ max_range=10
 
 [[skills]]
 id="preview_0"
-name="測試零傷害"
 ranged=true
 attack_bonus=3
 damage_bonus=-5
@@ -52,7 +46,6 @@ max_range=10
 
 [[skills]]
 id="setup_damage_20"
-name="建立二十點缺血"
 ranged=true
 attack_bonus=100
 damage_bonus=15
@@ -61,7 +54,6 @@ max_range=10
 
 [[skills]]
 id="setup_damage_4"
-name="建立四點缺血"
 ranged=true
 attack_bonus=100
 damage_bonus=-1

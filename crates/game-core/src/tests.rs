@@ -220,7 +220,6 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
         terrain_types: HashMap::from([(
             "spikes".into(),
             TerrainTypeDef {
-                name_key: "TERRAIN_SPIKES".into(),
                 visual: "spikes".into(),
                 passable: true,
                 damage: 3,
@@ -278,7 +277,6 @@ fn attack_skill(ranged: bool, range: i32) -> SkillDef {
         } else {
             "melee_attack".into()
         },
-        name: "測試攻擊".into(),
         ranged,
         attack_bonus: 0,
         damage_bonus: 0,
@@ -450,7 +448,6 @@ fn push_collision_game() -> Game {
 
 fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: SkillEffect) -> Game {
     let terrain = TerrainTypeDef {
-        name_key: "TERRAIN_PLAIN".into(),
         visual: "plain".into(),
         passable: true,
         damage: 0,
@@ -473,7 +470,6 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
         ]),
         skills: vec![SkillDef {
             id: "push".into(),
-            name: "測試推擊".into(),
             ranged: false,
             attack_bonus: 100,
             damage_bonus: 0,

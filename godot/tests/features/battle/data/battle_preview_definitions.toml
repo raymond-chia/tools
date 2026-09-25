@@ -1,11 +1,9 @@
 [terrain_types.rough]
-name_key="TERRAIN_ROUGH"
 visual="rough"
 passable=true
 effect_key="TERRAIN_EFFECT_NONE"
 movement_cost_bonus=1
 [terrain_types.spikes]
-name_key="TERRAIN_SPIKES"
 visual="spikes"
 passable=true
 damage=3
@@ -14,7 +12,6 @@ effect_key="TERRAIN_EFFECT_DAMAGE"
 [[skills]]
 id="melee_attack"
 ai_default=true
-name="近戰攻擊"
 ranged=false
 attack_bonus=0
 damage_bonus=0
@@ -23,7 +20,6 @@ max_range=1
 
 [[skills]]
 id="ranged_attack"
-name="遠程攻擊"
 ranged=true
 attack_bonus=0
 damage_bonus=0
@@ -32,7 +28,6 @@ max_range=3
 
 [[skills]]
 id="power_strike"
-name="強力一擊"
 ranged=false
 attack_bonus=2
 damage_bonus=2
@@ -41,7 +36,6 @@ max_range=1
 
 [[skills]]
 id="aimed_shot"
-name="瞄準射擊"
 ranged=true
 attack_bonus=3
 damage_bonus=0

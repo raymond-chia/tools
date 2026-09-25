@@ -1,6 +1,5 @@
 [[skills]]
 id="test_ai_default"
-name="測試攻擊"
 ranged=false
 attack_bonus=0
 damage_bonus=0
@@ -9,7 +8,6 @@ max_range=1
 ai_default=true
 
 [terrain_types.rough]
-name_key="TERRAIN_ROUGH"
 visual="rough"
 passable=true
 effect_key="TERRAIN_EFFECT_NONE"
