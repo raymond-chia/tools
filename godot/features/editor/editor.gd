@@ -62,9 +62,8 @@ func _ready() -> void:
 	var source := read_file(DEFINITIONS_PATH)
 	if source.is_empty():
 		return
-	var parsed: Dictionary = JSON.parse_string(core.definitions_to_json(source))
-	if parsed.has("error"):
-		show_error(parsed.error)
+	var parsed := CoreResponse.read(core.definitions_to_json(source), show_error)
+	if parsed.is_empty():
 		return
 	definitions = parsed
 	refresh_map_list()
@@ -112,9 +111,8 @@ func open_selected_map() -> void:
 	var source := read_file(path)
 	if source.is_empty():
 		return
-	var parsed: Dictionary = JSON.parse_string(core.map_to_json(source))
-	if parsed.has("error"):
-		show_error(parsed.error)
+	var parsed := CoreResponse.read(core.map_to_json(source), show_error)
+	if parsed.is_empty():
 		return
 	map_data = parsed
 	map_file = path
@@ -193,11 +191,7 @@ func play_map() -> void:
 	get_tree().change_scene_to_file(BATTLE_SCENE)
 
 func serialize_documents() -> Dictionary:
-	var parsed: Dictionary = JSON.parse_string(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)))
-	if parsed.has("error"):
-		show_error(parsed.error)
-		return {}
-	return parsed
+	return CoreResponse.read(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
 
 func validate_current() -> void:
 	if serialize_documents().is_empty():
@@ -205,7 +199,7 @@ func validate_current() -> void:
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
 func show_error(message: String) -> void:
-	status_label.text = "錯誤：" + message
+	status_label.text = tr("ERROR_PREFIX") + tr(message)
 
 func checkpoint() -> void:
 	history.append({"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file})

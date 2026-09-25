@@ -132,3 +132,61 @@ D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %
 狀態變化,狀態變化,Status change
 %s 受到「%s」狀態影響,%s 受到「%s」狀態影響,%s is affected by %s
 包抄,包抄,Flanking
+ERROR_PREFIX,錯誤：,"Error: "
+ERROR_CANNOT_ATTACK_ALLY,不能攻擊友軍,Cannot attack an ally
+ERROR_CANNOT_MOVE,目前不能移動,Cannot move now
+ERROR_CANNOT_USE_SKILL,目前不能使用技能,Cannot use a skill now
+ERROR_CELL_NOT_ON_TARGET,所選格不屬於目標,Selected cell is not on the target
+ERROR_COMMAND_JSON_PARSE,指令格式錯誤,Command format is invalid
+ERROR_CORE_RESPONSE_JSON_PARSE,核心回應解析失敗,Failed to parse core response
+ERROR_DEFINITIONS_JSON_PARSE,定義資料格式錯誤,Definitions data format is invalid
+ERROR_DEFINITIONS_TOML_PARSE,定義檔格式錯誤,Definitions file format is invalid
+ERROR_DELAY_AFTER_ACTION,開始行動後不能延後,Cannot delay after acting
+ERROR_DUPLICATE_AI_DEFAULT,只能有一個 AI 預設技能,Only one AI default skill is allowed
+ERROR_DUPLICATE_SKILL_ID,技能 ID 重複,Duplicate skill ID
+ERROR_DUPLICATE_TERRAIN_CELL,地形格子重複,Duplicate terrain cell
+ERROR_DUPLICATE_UNIT_ID,單位 ID 重複,Duplicate unit ID
+ERROR_DUPLICATE_UNIT_PLACEMENT_ID,單位配置 ID 重複,Duplicate unit placement ID
+ERROR_DUPLICATE_UNIT_TYPE_ID,單位定義 ID 重複,Duplicate unit type ID
+ERROR_EMPTY_ENEMY_FACTION,敵方派系名稱不可為空,Enemy faction name cannot be empty
+ERROR_EMPTY_MAP_NAME,地圖名稱不可為空,Map name cannot be empty
+ERROR_EMPTY_UNIT_PLACEMENT_ID,單位配置 ID 不可為空,Unit placement ID cannot be empty
+ERROR_GAME_NOT_LOADED,尚未載入戰鬥資料,Battle data is not loaded
+ERROR_HEAL_ALLIES_ONLY,只能治療自己或友軍,Can only heal yourself or allies
+ERROR_INVALID_DELAY_TARGET,只能延後到尚未行動的單位之後,Can only delay after a unit that has not acted
+ERROR_INVALID_DURATION,技能持續時間必須大於 0,Skill duration must be greater than zero
+ERROR_INVALID_HEAL_AMOUNT,技能治療量必須大於 0,Skill healing amount must be greater than zero
+ERROR_INVALID_MAP_COSTS,地圖移動成本數量與尺寸不符,Map movement costs do not match its size
+ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
+ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
+ERROR_INVALID_UNIT_SIZE_OR_HP,單位佔用尺寸與 HP 必須大於 0,Unit size and HP must be greater than zero
+ERROR_INVALID_UNIT_TYPE,單位定義的 ID、HP 或佔用尺寸無效,"Unit type ID, HP, or size is invalid"
+ERROR_JSON_SERIALIZE,無法轉換資料,Could not convert data
+ERROR_MAP_JSON_PARSE,地圖資料格式錯誤,Map data format is invalid
+ERROR_MAP_TOML_PARSE,地圖檔格式錯誤,Map file format is invalid
+ERROR_MISSING_ACTOR,找不到行動角色,Acting unit not found
+ERROR_MISSING_AI_DEFAULT,缺少 AI 預設技能,AI default skill is missing
+ERROR_MISSING_ATTACKER,找不到攻擊者,Attacker not found
+ERROR_MISSING_DELAY_TARGET,找不到延後目標,Delay target not found
+ERROR_MISSING_INITIATIVE_UNIT,找不到先攻單位,Initiative unit not found
+ERROR_MISSING_MOVE_UNIT,找不到移動單位,Moving unit not found
+ERROR_MISSING_TARGET,找不到目標,Target not found
+ERROR_MISSING_TERRAIN_TYPE,缺少必要的地形種類,A required terrain type is missing
+ERROR_NO_AUTO_STEP,目前沒有可推進的自動回合,No automatic turn can be advanced
+ERROR_OVERLAPPING_UNIT,單位與其他單位重疊,Unit overlaps another unit
+ERROR_TARGET_CELL_OUT_OF_BOUNDS,目標格超出地圖,Target cell is out of bounds
+ERROR_TARGET_DOWNED,目標已倒下,Target is down
+ERROR_TARGET_TOO_CLOSE,目標距離太近,Target is too close
+ERROR_TARGET_TOO_FAR,目標距離太遠,Target is too far
+ERROR_TOML_SERIALIZE,無法儲存資料格式,Could not serialize data
+ERROR_TRIGGER_OUT_OF_BOUNDS,地圖觸發格超出範圍,Map trigger is out of bounds
+ERROR_UNIT_CANNOT_USE_SKILL,此角色不能使用這個技能,This unit cannot use the skill
+ERROR_UNIT_ON_IMPASSABLE,單位不能放在峭壁或懸崖,Unit cannot be placed on a cliff or chasm
+ERROR_UNIT_OUT_OF_BOUNDS,單位超出地圖範圍,Unit is out of bounds
+ERROR_UNKNOWN_SKILL,找不到技能,Skill not found
+ERROR_UNKNOWN_TERRAIN_TYPE,找不到地形種類,Terrain type not found
+ERROR_UNKNOWN_UNIT_SKILL,單位使用了未知技能,A unit uses an unknown skill
+ERROR_UNKNOWN_UNIT_TYPE,找不到單位定義,Unit type not found
+ERROR_UNREACHABLE_DESTINATION,目的地不可達,Destination is unreachable
+ERROR_WRONG_TURN,現在不是該單位的回合,It is not this unit's turn
+ERROR_ZERO_MOVEMENT_COST,移動成本必須大於 0,Movement cost must be greater than zero

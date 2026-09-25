@@ -413,7 +413,7 @@ fn push_collision_damages_both_units() {
     assert_eq!(collision_units[0].remaining_hp, 100 - collision_damage);
 }
 
-// 驗證最小射程會排除過近格子，施放時也會拒絕過近的目標。
+// 驗證最小射程排除過近格子，施放失敗時會回傳固定 ID 與詳細訊息。
 #[test]
 fn skill_min_range_limits_preview_and_action() {
     let mut game = game_with_skill_range_and_effect(2, 2, SkillEffect::Push);
@@ -424,10 +424,11 @@ fn skill_min_range_limits_preview_and_action() {
 
     game.start().expect("測試戰鬥應可開始");
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
-    assert_eq!(
-        game.use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill),
-        Err("目標距離太近".into())
-    );
+    let error = game
+        .use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill)
+        .expect_err("過近的目標應被拒絕");
+    assert_eq!(error.id(), "target_too_close");
+    assert_eq!(error.message(), "目標距離太近");
 }
 
 // 驗證最小與最大射程都為零時，自身格會出現在預覽且可施放治療。

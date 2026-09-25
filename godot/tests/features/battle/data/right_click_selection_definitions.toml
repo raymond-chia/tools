@@ -8,6 +8,15 @@ min_range=1
 max_range=1
 ai_default=true
 
+[[skills]]
+id="melee"
+name="測試近戰技能"
+ranged=false
+attack_bonus=0
+damage_bonus=0
+min_range=1
+max_range=1
+
 [terrain_types.plain]
 name_key="TERRAIN_PLAIN"
 visual="plain"

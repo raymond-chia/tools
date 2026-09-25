@@ -1,5 +1,7 @@
 extends GdUnitTestSuite
 
+const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/turn_order_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/turn_order_map.toml"
@@ -21,7 +23,7 @@ func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
 	var target_slot: VBoxContainer = battle.ui.turn_order.get_child(battle.ui.turn_order.get_child_count() - 1)
 	var marker: ColorRect = target_slot.get_child(0)
 
-	assert_bool(marker.color.is_equal_approx(BattleVisualConfig.DELAY_SLOT_COLOR)).override_failure_message("延後位置平時應顯示低亮度橫棒").is_true()
+	assert_bool(marker.color.is_equal_approx(BattleConfig.DELAY_SLOT_COLOR)).override_failure_message("延後位置平時應顯示低亮度橫棒").is_true()
 	battle.ui.delay_button.pressed.emit()
 	await wait_for_combat_events()
 	target_slot = battle.ui.turn_order.get_child(battle.ui.turn_order.get_child_count() - 1)
@@ -29,7 +31,7 @@ func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
 	var target_button: Button = target_slot.get_child(1)
 	target_button.mouse_entered.emit()
 	assert_bool(battle.selecting_delay).override_failure_message("按下延後後應進入位置選擇模式").is_true()
-	assert_bool(marker.color.is_equal_approx(BattleVisualConfig.DELAY_SLOT_HIGHLIGHT_COLOR)).override_failure_message("游標指向的延後位置應高亮").is_true()
+	assert_bool(marker.color.is_equal_approx(BattleConfig.DELAY_SLOT_HIGHLIGHT_COLOR)).override_failure_message("游標指向的延後位置應高亮").is_true()
 
 	battle._on_delay_target_selected(target_actor)
 	await wait_for_combat_events()
@@ -53,22 +55,10 @@ func test_delay_is_disabled_after_moving() -> void:
 	assert_bool(battle.ui.delay_button.disabled).override_failure_message("移動後延後按鈕應停用").is_true()
 
 func load_test_documents() -> void:
-	await wait_for_combat_events()
-	for child in battle.world.units_layer.get_children():
-		child.free()
-	battle.world.unit_nodes.clear()
 	battle.pending_action = ""
 	battle.selecting_delay = false
-	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
-	var map := FileAccess.get_file_as_string(TEST_MAP)
-	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
-	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
-	if loaded.has("error"):
-		return
-	battle.state = loaded
-	battle.world.setup_map(loaded)
-	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
-	await wait_for_combat_events()
+	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
+	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
 	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():

@@ -56,7 +56,10 @@ func _ready() -> void:
 	if state.is_empty():
 		present()
 		return
-	var map_info: Dictionary = JSON.parse_string(core.map_to_json(map_text))
+	var map_info := read_core_response(core.map_to_json(map_text))
+	if map_info.is_empty():
+		present()
+		return
 	battle_name = map_info.name
 	update_battle_title()
 	core.set_random_seed(randi())
@@ -93,17 +96,13 @@ func advance_automatic_turn() -> void:
 		return
 	if world.is_presenting_combat_events():
 		await world.combat_events_finished
-	await get_tree().create_timer(BattleVisualConfig.COMBAT_EVENT_PAUSE).timeout
+	await get_tree().create_timer(BattleConfig.COMBAT_EVENT_PAUSE).timeout
 	if is_inside_tree():
 		send({"type": "auto_step"})
 
 func read_core_response(response: String, report_error := true) -> Dictionary:
-	var value: Dictionary = JSON.parse_string(response)
-	if value.has("error"):
-		if report_error:
-			show_error(value.error)
-		return {}
-	return value
+	var ignored_error_ids: Array = [] if report_error else BattleConfig.PREVIEW_IGNORED_ERROR_IDS
+	return CoreResponse.read(response, show_error, ignored_error_ids)
 
 func show_error(message: String) -> void:
 	status = message

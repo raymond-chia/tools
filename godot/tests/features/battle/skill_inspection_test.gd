@@ -1,5 +1,7 @@
 extends GdUnitTestSuite
 
+const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_preview_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_preview_map.toml"
@@ -30,9 +32,8 @@ func before_test() -> void:
 	runner = scene_runner(BATTLE_SCENE)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await wait_for_combat_events()
-	load_test_documents()
-	await wait_for_combat_events()
+	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
+	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func after_test() -> void:
 	TranslationServer.set_locale(original_locale)
@@ -85,20 +86,6 @@ func add_test_translation(locale: String, messages: Dictionary) -> void:
 		translation.add_message(message, messages[message])
 	TranslationServer.add_translation(translation)
 	test_translations.append(translation)
-
-func load_test_documents() -> void:
-	for child in battle.world.units_layer.get_children():
-		child.free()
-	battle.world.unit_nodes.clear()
-	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
-	var map := FileAccess.get_file_as_string(TEST_MAP)
-	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
-	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
-	if loaded.has("error"):
-		return
-	battle.state = loaded
-	battle.world.setup_map(loaded)
-	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
 
 func wait_for_combat_events() -> void:
 	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():

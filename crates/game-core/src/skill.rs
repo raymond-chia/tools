@@ -1,4 +1,5 @@
 //! 技能驗證、預覽、效果與戰鬥計算。
+use crate::error::{self, GameError};
 use crate::game::{Game, die};
 use crate::gameplay_config;
 use crate::model::{
@@ -20,19 +21,19 @@ impl Game {
         target: &str,
         target_cell: GridPos,
         skill_id: &str,
-    ) -> Result<SkillPreview, String> {
+    ) -> Result<SkillPreview, GameError> {
         self.ensure(actor)?;
         if !can_use_skill(self.world.resource::<Turn>()) {
-            return Err("目前不能使用 Skill".into());
+            return Err(error::cannot_use_skill());
         }
-        let attacker = self.entity(actor).ok_or("找不到攻擊者")?;
-        let target_entity = self.entity(target).ok_or("找不到目標")?;
+        let attacker = self.entity(actor).ok_or(error::missing_attacker())?;
+        let target_entity = self.entity(target).ok_or(error::missing_target())?;
         let skill = self
             .world
             .resource::<Skills>()
             .definitions
             .get(skill_id)
-            .ok_or_else(|| format!("unknown skill: {skill_id}"))?;
+            .ok_or_else(|| error::unknown_skill(skill_id))?;
         validate_unit_skill_target(&self.world, attacker, target_entity, target_cell, skill)?;
         if skill.effect == SkillEffect::Heal {
             return Ok(SkillPreview::Healing(healing_preview(
@@ -123,14 +124,14 @@ impl Game {
         target: &str,
         target_cell: GridPos,
         skill: SkillDef,
-    ) -> Result<(), String> {
+    ) -> Result<(), GameError> {
         self.ensure(a)?;
         let turn = self.world.resource::<Turn>();
         if !can_use_skill(turn) {
-            return Err("目前不能使用 Skill".into());
+            return Err(error::cannot_use_skill());
         }
-        let ae = self.entity(a).ok_or("找不到攻擊者")?;
-        let te = self.entity(target).ok_or("找不到目標")?;
+        let ae = self.entity(a).ok_or(error::missing_attacker())?;
+        let te = self.entity(target).ok_or(error::missing_target())?;
         validate_unit_skill_target(&self.world, ae, te, target_cell, &skill)?;
         let attacker_unit = self
             .world
@@ -444,19 +445,19 @@ impl Game {
         actor: &str,
         position: GridPos,
         skill: SkillDef,
-    ) -> Result<(), String> {
+    ) -> Result<(), GameError> {
         self.ensure(actor)?;
         if !can_use_skill(self.world.resource::<Turn>()) {
-            return Err("現在不能使用技能".into());
+            return Err(error::cannot_use_skill());
         }
-        let entity = self.entity(actor).ok_or("找不到行動角色")?;
+        let entity = self.entity(actor).ok_or(error::missing_actor())?;
         let unit = self
             .world
             .get::<Unit>(entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
         if !unit.skills.contains(&skill.id) || skill.effect != SkillEffect::Mire {
-            return Err("此角色不能使用這個技能".into());
+            return Err(error::unit_cannot_use_skill());
         }
         let board = self.world.resource::<Board>();
         if !fits(
@@ -467,7 +468,7 @@ impl Game {
                 height: 1,
             },
         ) {
-            return Err("目標格超出地圖".into());
+            return Err(error::target_cell_out_of_bounds());
         }
         let origin = self
             .world
@@ -488,10 +489,10 @@ impl Game {
             },
         );
         if target_distance < skill.min_range {
-            return Err("目標距離太近".into());
+            return Err(error::target_too_close());
         }
         if target_distance > skill.max_range {
-            return Err("目標超出技能範圍".into());
+            return Err(error::target_too_far());
         }
         let current_round = self.world.resource::<Encounter>().round;
         let duration = skill
@@ -563,9 +564,9 @@ fn validate_unit_skill_target(
     target: Entity,
     target_cell: GridPos,
     skill: &SkillDef,
-) -> Result<(), String> {
+) -> Result<(), GameError> {
     if world.get::<Downed>(target).is_some() {
-        return Err("目標已倒下".into());
+        return Err(error::target_downed());
     }
     let target_position = world
         .get::<Pos>(target)
@@ -583,7 +584,7 @@ fn validate_unit_skill_target(
         target_position,
         target_footprint,
     ) {
-        return Err("所選格不屬於目標".into());
+        return Err(error::cell_not_on_target());
     }
     let attacker_unit = world
         .get::<Unit>(attacker)
@@ -592,14 +593,14 @@ fn validate_unit_skill_target(
         .get::<Unit>(target)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
     if !attacker_unit.skills.contains(&skill.id) || skill.effect == SkillEffect::Mire {
-        return Err("此角色不能使用這個技能".into());
+        return Err(error::unit_cannot_use_skill());
     }
     if skill.effect == SkillEffect::Heal {
         if attacker_unit.team != target_unit.team {
-            return Err("只能治療自己或友軍".into());
+            return Err(error::heal_allies_only());
         }
     } else if attacker_unit.team == target_unit.team {
-        return Err("不能攻擊友軍".into());
+        return Err(error::cannot_attack_ally());
     }
     let attacker_position = world
         .get::<Pos>(attacker)
@@ -618,10 +619,10 @@ fn validate_unit_skill_target(
         },
     );
     if target_distance < skill.min_range {
-        return Err("目標距離太近".into());
+        return Err(error::target_too_close());
     }
     if target_distance > skill.max_range {
-        return Err("目標超出射程".into());
+        return Err(error::target_too_far());
     }
     Ok(())
 }

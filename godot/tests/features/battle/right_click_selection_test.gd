@@ -1,5 +1,7 @@
 extends GdUnitTestSuite
 
+const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/right_click_selection_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/right_click_selection_map.toml"
@@ -116,22 +118,8 @@ func prepare_case(battle, initial_target: String) -> void:
 	battle.present()
 
 func load_test_documents(battle) -> void:
-	await wait_for_combat_events(battle)
-	for child in battle.world.units_layer.get_children():
-		child.free()
-	battle.world.unit_nodes.clear()
-
-	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
-	var map := FileAccess.get_file_as_string(TEST_MAP)
-	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
-	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
-	if loaded.has("error"):
-		return
-
-	battle.state = loaded
-	battle.world.setup_map(loaded)
-	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
-	await wait_for_combat_events(battle)
+	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
+	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events(target_battle) -> void:
 	while target_battle.state.turn.auto_step or target_battle.world.is_presenting_combat_events():

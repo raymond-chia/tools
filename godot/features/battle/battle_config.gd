@@ -1,5 +1,16 @@
-class_name BattleVisualConfig
+class_name BattleConfig
 extends RefCounted
+
+const PREVIEW_IGNORED_ERROR_IDS := [
+	"cannot_move",
+	"cannot_use_skill",
+	"unreachable_destination",
+	"target_downed",
+	"target_too_close",
+	"target_too_far",
+	"heal_allies_only",
+	"cannot_attack_ally",
+]
 
 const UI_Z_BASE := 0
 const UI_Z_INSPECTION := 10

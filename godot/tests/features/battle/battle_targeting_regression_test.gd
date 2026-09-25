@@ -1,5 +1,7 @@
 extends GdUnitTestSuite
 
+const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_targeting_regression_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_targeting_regression_map.toml"
@@ -39,12 +41,12 @@ func test_inspection_keeps_clicked_large_unit_cell() -> void:
 
 	assert_vector(battle.inspected_cell).override_failure_message("查看大型單位應以玩家實際點擊格為準").is_equal(clicked_cell)
 
-# 驗證單體技能射程以大型單位的實際點擊格計算，而不是任意代表格。
+# 驗證單體技能射程以大型單位的實際點擊格計算，距離太遠時回報對應錯誤識別碼。
 func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 	await load_test_documents()
 	battle.select_action("shield_bash")
 	push_mouse_button(battle.world.cell_center(Vector2i(5, 2)), MOUSE_BUTTON_LEFT)
-	assert_str(battle.status).override_failure_message("點擊射程外的占用格應由核心拒絕").is_equal("目標超出射程")
+	assert_str(battle.status).override_failure_message("點擊射程外的占用格應由核心拒絕").is_equal("ERROR_TARGET_TOO_FAR")
 	assert_int(int(unit_with_id("ogre").hp)).is_equal(100)
 
 	battle.select_action("shield_bash")
@@ -99,21 +101,9 @@ func test_downed_unit_does_not_block_cell() -> void:
 	assert_int(int(actor.y)).is_equal(1)
 
 func load_test_documents() -> void:
-	await wait_for_combat_events()
-	for child in battle.world.units_layer.get_children():
-		child.free()
-	battle.world.unit_nodes.clear()
 	battle.pending_action = ""
-	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
-	var map := FileAccess.get_file_as_string(TEST_MAP)
-	var loaded = JSON.parse_string(battle.core.load_documents(definitions, map))
-	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
-	if loaded.has("error"):
-		return
-	battle.state = loaded
-	battle.world.setup_map(loaded)
-	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
-	await wait_for_combat_events()
+	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
+	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
 	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():

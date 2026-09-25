@@ -1,6 +1,11 @@
-use game_core::{Command, Game, GridPos, authoring};
+use game_core::{Command, Game, GameError, GridPos, authoring};
 use godot::prelude::*;
 use std::sync::Mutex;
+
+const COMMAND_JSON_PARSE: &str = "command_json_parse";
+const GAME_NOT_LOADED: &str = "game_not_loaded";
+const JSON_SERIALIZE: &str = "json_serialize";
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 struct TacticalGame {
@@ -56,7 +61,7 @@ impl TacticalGame {
     fn dispatch(&self, json: GString) -> GString {
         let command: Command = match serde_json::from_str(&json.to_string()) {
             Ok(v) => v,
-            Err(e) => return error(e.to_string()),
+            Err(e) => return bridge_error(COMMAND_JSON_PARSE, e.to_string()),
         };
         let mut lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
         match lock.as_mut() {
@@ -64,7 +69,7 @@ impl TacticalGame {
                 Ok(s) => json_response(serde_json::to_string(&s)),
                 Err(e) => error(e),
             },
-            None => error("尚未載入定義".into()),
+            None => bridge_error(GAME_NOT_LOADED, "尚未載入定義".into()),
         }
     }
     #[func]
@@ -86,7 +91,7 @@ impl TacticalGame {
                 Ok(preview) => json_response(serde_json::to_string(&preview)),
                 Err(e) => error(e),
             },
-            None => error("尚未載入定義".into()),
+            None => bridge_error(GAME_NOT_LOADED, "尚未載入定義".into()),
         }
     }
     #[func]
@@ -109,18 +114,21 @@ impl TacticalGame {
                 Ok(preview) => json_response(serde_json::to_string(&preview)),
                 Err(e) => error(e),
             },
-            None => error("尚未載入定義".into()),
+            None => bridge_error(GAME_NOT_LOADED, "尚未載入定義".into()),
         }
     }
 }
 fn json_response(result: Result<String, serde_json::Error>) -> GString {
     match result {
         Ok(json) => GString::from(&json),
-        Err(e) => error(e.to_string()),
+        Err(e) => bridge_error(JSON_SERIALIZE, e.to_string()),
     }
 }
-fn error(message: String) -> GString {
-    GString::from(&serde_json::json!({"error":message}).to_string())
+fn error(error: GameError) -> GString {
+    bridge_error(error.id(), error.message().to_owned())
+}
+fn bridge_error(id: &str, message: String) -> GString {
+    GString::from(&serde_json::json!({"error_id":id,"error":message}).to_string())
 }
 struct Extension;
 #[gdextension]

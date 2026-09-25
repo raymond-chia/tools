@@ -1,7 +1,8 @@
 //! Godot 無關的權威戰棋核心。
-//! 資料型別見 model；載入、回合與快照見 game；移動與空間規則見 movement；技能與戰鬥規則見 skill。
+//! 資料型別見 model；錯誤 ID 與描述見 error；載入、回合與快照見 game；移動與空間規則見 movement；技能與戰鬥規則見 skill。
 
 pub mod authoring;
+mod error;
 mod game;
 mod gameplay_config;
 mod model;
@@ -12,6 +13,7 @@ mod tests;
 
 #[cfg(test)]
 use bevy_ecs::prelude::{Entity, World};
+pub use error::GameError;
 pub use game::Game;
 pub use model::{
     AttackPreview, AttackResult, CollisionUnitLog, CombatLogEvent, Command, DetailView,

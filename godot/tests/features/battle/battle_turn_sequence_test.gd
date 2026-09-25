@@ -1,5 +1,7 @@
 extends GdUnitTestSuite
 
+const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_turn_sequence_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_turn_sequence_map.toml"
@@ -12,21 +14,8 @@ func before_test() -> void:
 	runner.set_time_factor(1.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
-		await runner.simulate_frames(1)
-	for child in battle.world.units_layer.get_children():
-		child.free()
-	battle.world.unit_nodes.clear()
-	var definitions := FileAccess.get_file_as_string(TEST_DEFINITIONS)
-	var map := FileAccess.get_file_as_string(TEST_MAP)
-	var loaded: Dictionary = JSON.parse_string(battle.core.load_documents(definitions, map))
-	assert_bool(loaded.has("error")).override_failure_message("專用 TOML 應成功載入").is_false()
-	if loaded.has("error"):
-		return
-	battle.state = loaded
-	battle.world.setup_map(loaded)
-	assert_bool(battle.send({"type": "start"})).override_failure_message("專用測試戰鬥應成功開始").is_true()
-	await wait_for_battle_idle()
+	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
+	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 # 驗證跨輪後先更新先攻順序，並在敵人攻擊動畫結束後才交給下一位。
 func test_new_round_order_precedes_enemy_action() -> void:

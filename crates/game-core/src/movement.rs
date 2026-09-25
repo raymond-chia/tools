@@ -1,4 +1,5 @@
 //! 空間、地形通行、路徑搜尋與移動。
+use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::gameplay_config;
 use crate::model::{
@@ -31,7 +32,7 @@ struct MovePlan {
 }
 
 impl Game {
-    pub fn preview_move(&self, actor: &str, end: GridPos) -> Result<MovePreview, String> {
+    pub fn preview_move(&self, actor: &str, end: GridPos) -> Result<MovePreview, GameError> {
         let MovePlan {
             entity: _,
             turn: _,
@@ -72,7 +73,7 @@ impl Game {
             total_cost: spent,
         })
     }
-    pub(crate) fn move_to(&mut self, a: &str, end: GridPos) -> Result<(), String> {
+    pub(crate) fn move_to(&mut self, a: &str, end: GridPos) -> Result<(), GameError> {
         let MovePlan {
             entity: e,
             turn,
@@ -166,9 +167,9 @@ impl Game {
         }
         Ok(())
     }
-    fn move_plan(&self, actor: &str, end: GridPos) -> Result<MovePlan, String> {
+    fn move_plan(&self, actor: &str, end: GridPos) -> Result<MovePlan, GameError> {
         self.ensure(actor)?;
-        let entity = self.entity(actor).ok_or("找不到移動單位")?;
+        let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
         let allowance = self
             .world
             .get::<Unit>(entity)
@@ -177,7 +178,7 @@ impl Game {
         let turn = self.world.resource::<Turn>().clone();
         if !matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove) || turn.moves >= 2
         {
-            return Err("目前不能移動".into());
+            return Err(error::cannot_move());
         }
         let start = self
             .world
@@ -206,7 +207,7 @@ impl Game {
                     first_budget + second_budget,
                 )
             })
-            .ok_or("目的地不可達")?;
+            .ok_or(error::unreachable_destination())?;
         if let Some(trigger_index) = path
             .iter()
             .skip(1)

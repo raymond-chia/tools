@@ -117,16 +117,16 @@ func update_language_menu() -> void:
 	popup.set_item_checked(1, TranslationServer.get_locale().begins_with("en"))
 
 func apply_ui_z_order() -> void:
-	menu_button.z_index = BattleVisualConfig.MENU_Z_INDEX
-	$Root/LogPanel.z_index = BattleVisualConfig.UI_Z_BASE
-	$Root/LogVisibilityButton.z_index = BattleVisualConfig.UI_Z_BASE
-	$Root/LeftColumn.z_index = BattleVisualConfig.UI_Z_BASE
-	$Root/LeftColumn/TurnOrder.z_index = BattleVisualConfig.UI_Z_BASE
-	$Root/ActionBar.z_index = BattleVisualConfig.UI_Z_BASE
-	info_panel.z_index = BattleVisualConfig.UI_Z_INSPECTION
-	move_cost_popup.z_index = BattleVisualConfig.UI_Z_TOOLTIP
-	attack_preview_panel.z_index = BattleVisualConfig.UI_Z_TOOLTIP
-	hovered_skill_card.z_index = BattleVisualConfig.UI_Z_TOOLTIP
+	menu_button.z_index = BattleConfig.MENU_Z_INDEX
+	$Root/LogPanel.z_index = BattleConfig.UI_Z_BASE
+	$Root/LogVisibilityButton.z_index = BattleConfig.UI_Z_BASE
+	$Root/LeftColumn.z_index = BattleConfig.UI_Z_BASE
+	$Root/LeftColumn/TurnOrder.z_index = BattleConfig.UI_Z_BASE
+	$Root/ActionBar.z_index = BattleConfig.UI_Z_BASE
+	info_panel.z_index = BattleConfig.UI_Z_INSPECTION
+	move_cost_popup.z_index = BattleConfig.UI_Z_TOOLTIP
+	attack_preview_panel.z_index = BattleConfig.UI_Z_TOOLTIP
+	hovered_skill_card.z_index = BattleConfig.UI_Z_TOOLTIP
 
 func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vector2i, inspected_skill_id: String, status_text: String, selecting_delay: bool) -> void:
 	present_status(status_text)
@@ -217,7 +217,7 @@ func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 		var marker := ColorRect.new()
 		marker.custom_minimum_size = Vector2(112.0, 6.0)
 		marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		marker.color = BattleVisualConfig.DELAY_SLOT_COLOR
+		marker.color = BattleConfig.DELAY_SLOT_COLOR
 		slot.add_child(marker)
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(112.0, 72.0)
@@ -245,7 +245,7 @@ func _on_turn_order_pressed(unit_id: String, selecting_delay: bool) -> void:
 	turn_order_focus_requested.emit(unit_id)
 
 func _on_delay_target_hovered(marker: ColorRect, highlighted: bool, selecting_delay: bool) -> void:
-	marker.color = BattleVisualConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted and selecting_delay else BattleVisualConfig.DELAY_SLOT_COLOR
+	marker.color = BattleConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted and selecting_delay else BattleConfig.DELAY_SLOT_COLOR
 
 func present_status(message: String) -> void:
 	status.text = tr(message)

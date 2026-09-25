@@ -1,4 +1,5 @@
 //! 載入、命令分派、回合流程與快照。
+use crate::error::GameError;
 use crate::model::{
     Board, CombatLogEvent, Command, Definition, Downed, Encounter, Footprint, GridPos, Hp, Id,
     InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
@@ -12,7 +13,7 @@ use crate::movement::{
 use crate::skill::{
     can_use_skill, closest_occupied_cell, detail, effective_block, effective_dodge, skill_ranges,
 };
-use crate::{authoring, gameplay_config};
+use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, Has, World};
 use std::collections::{HashMap, HashSet};
 
@@ -22,19 +23,20 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn from_documents(definitions: &str, map: &str) -> Result<Self, String> {
-        let definitions: authoring::Definitions =
-            toml::from_str(definitions).map_err(|e| e.to_string())?;
-        let map: authoring::Map = toml::from_str(map).map_err(|e| e.to_string())?;
+    pub fn from_documents(definitions: &str, map: &str) -> Result<Self, GameError> {
+        let definitions: authoring::Definitions = toml::from_str(definitions)
+            .map_err(|e| error::definitions_toml_parse(e.to_string()))?;
+        let map: authoring::Map =
+            toml::from_str(map).map_err(|e| error::map_toml_parse(e.to_string()))?;
         Self::from_authoring(definitions, map)
     }
     pub fn from_authoring(
         definitions: authoring::Definitions,
         map: authoring::Map,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, GameError> {
         Self::from_definition(authoring::into_definition(definitions, map)?)
     }
-    pub(crate) fn from_definition(d: Definition) -> Result<Self, String> {
+    pub(crate) fn from_definition(d: Definition) -> Result<Self, GameError> {
         if d.map.width <= 0
             || d.map.height <= 0
             || d.map
@@ -42,30 +44,30 @@ impl Game {
                 .checked_mul(d.map.height)
                 .is_none_or(|cells| d.map.costs.len() != cells as usize)
         {
-            return Err("map.costs 數量與尺寸不符".into());
+            return Err(error::invalid_map_costs());
         }
         if d.map.costs.contains(&0) {
-            return Err("movement cost 必須大於 0".into());
+            return Err(error::zero_movement_cost());
         }
         if d.map.triggers.iter().any(|trigger| {
             trigger.x < 0 || trigger.y < 0 || trigger.x >= d.map.width || trigger.y >= d.map.height
         }) {
-            return Err("map trigger 超出地圖範圍".into());
+            return Err(error::trigger_out_of_bounds());
         }
         for required in ["plain", "rough"] {
             if !d.terrain_types.contains_key(required) {
-                return Err(format!("缺少必要地形種類 {required}"));
+                return Err(error::missing_terrain_type(required));
             }
         }
         for trigger in &d.map.triggers {
             if !d.terrain_types.contains_key(&trigger.kind) {
-                return Err(format!("找不到地形種類 {}", trigger.kind));
+                return Err(error::unknown_terrain_type(&trigger.kind));
             }
         }
         let mut terrain_positions = HashSet::new();
         for trigger in &d.map.triggers {
             if !terrain_positions.insert((trigger.x, trigger.y)) {
-                return Err(format!("地形格子重複 ({}, {})", trigger.x, trigger.y));
+                return Err(error::duplicate_terrain_cell(trigger.x, trigger.y));
             }
         }
         let mut w = World::new();
@@ -97,36 +99,33 @@ impl Game {
         let mut ai_default = None;
         for skill in d.skills {
             if skill.min_range < 0 || skill.max_range < skill.min_range {
-                return Err(format!(
-                    "{} 的距離必須符合 0 ≤ min_range ≤ max_range",
-                    skill.id
-                ));
+                return Err(error::invalid_skill_range(&skill.id));
             }
             if skill.effect == SkillEffect::Heal
                 && !matches!(skill.heal_amount, Some(amount) if amount > 0)
             {
-                return Err(format!("{} 的 heal_amount 必須大於 0", skill.id));
+                return Err(error::invalid_heal_amount(&skill.id));
             }
             if skill.duration == Some(0) {
-                return Err(format!("{} 的 duration 必須大於 0", skill.id));
+                return Err(error::invalid_duration(&skill.id));
             }
             if skill.effect == SkillEffect::Mire
                 && !skill.terrain.as_ref().is_some_and(|terrain| {
                     w.resource::<Board>().terrain_types.contains_key(terrain)
                 })
             {
-                return Err(format!("{} 必須指定已定義的 terrain", skill.id));
+                return Err(error::invalid_skill_terrain(&skill.id));
             }
             if skill.ai_default {
                 if ai_default.replace(skill.id.clone()).is_some() {
-                    return Err("只能有一個 ai_default 技能".into());
+                    return Err(error::duplicate_ai_default());
                 }
             }
             if skills.insert(skill.id.clone(), skill).is_some() {
-                return Err("duplicate skill id".into());
+                return Err(error::duplicate_skill_id());
             }
         }
-        let ai_default = ai_default.ok_or("缺少 ai_default 技能")?;
+        let ai_default = ai_default.ok_or(error::missing_ai_default())?;
         w.insert_resource(Skills {
             definitions: skills,
             ai_default,
@@ -136,34 +135,34 @@ impl Game {
         let mut occupied = HashSet::new();
         for u in d.units {
             if !ids.insert(u.id.clone()) {
-                return Err(format!("重複 id {}", u.id));
+                return Err(error::duplicate_unit_id(&u.id));
             }
             let f = Footprint {
                 width: u.width,
                 height: u.height,
             };
             if f.width <= 0 || f.height <= 0 || u.hp <= 0 {
-                return Err(format!("{} 的佔用尺寸與 HP 必須大於 0", u.id));
+                return Err(error::invalid_unit_size_or_hp(&u.id));
             }
             let p = GridPos { x: u.x, y: u.y };
             if !fits(w.resource::<Board>(), p, f) {
-                return Err(format!("{} 超出地圖", u.id));
+                return Err(error::unit_out_of_bounds(&u.id));
             }
             if footprint_on_impassable(w.resource::<Board>(), p, f) {
-                return Err(format!("{} 不可放置在峭壁或懸崖", u.id));
+                return Err(error::unit_on_impassable(&u.id));
             }
             if footprint_cells(p, f)
                 .iter()
                 .any(|cell| !occupied.insert(*cell))
             {
-                return Err(format!("{} 與其他單位重疊", u.id));
+                return Err(error::overlapping_unit(&u.id));
             }
             if let Some(unknown) = u
                 .skills
                 .iter()
                 .find(|skill| !w.resource::<Skills>().definitions.contains_key(*skill))
             {
-                return Err(format!("{} 使用未知技能 {}", u.id, unknown));
+                return Err(error::unknown_unit_skill(&u.id, unknown));
             }
             w.spawn((
                 Id(u.id),
@@ -197,11 +196,11 @@ impl Game {
         })
     }
     // 每次只執行一個命令或一段自動回合，讓畫面先完成呈現再推進。
-    pub fn command(&mut self, c: Command) -> Result<Snapshot, String> {
+    pub fn command(&mut self, c: Command) -> Result<Snapshot, GameError> {
         self.apply_command(c)?;
         Ok(self.snapshot())
     }
-    fn apply_command(&mut self, c: Command) -> Result<(), String> {
+    fn apply_command(&mut self, c: Command) -> Result<(), GameError> {
         self.movements.clear();
         if self.world.resource::<ResultState>().0 != Outcome::Ongoing {
             return Ok(());
@@ -223,7 +222,7 @@ impl Game {
                     .definitions
                     .get(&skill)
                     .cloned()
-                    .ok_or_else(|| format!("unknown skill: {skill}"))?;
+                    .ok_or_else(|| error::unknown_skill(&skill))?;
                 self.use_skill(&actor, &target, GridPos { x, y }, definition)
             }
             Command::CellSkill { actor, x, y, skill } => {
@@ -233,7 +232,7 @@ impl Game {
                     .definitions
                     .get(&skill)
                     .cloned()
-                    .ok_or_else(|| format!("unknown skill: {skill}"))?;
+                    .ok_or_else(|| error::unknown_skill(&skill))?;
                 self.use_cell_skill(&actor, GridPos { x, y }, definition)
             }
             Command::EndTurn { actor } => {
@@ -249,7 +248,7 @@ impl Game {
     pub fn set_random_seed(&mut self, seed: u64) {
         self.world.resource_mut::<Random>().0 = seed;
     }
-    pub(crate) fn start(&mut self) -> Result<(), String> {
+    pub(crate) fn start(&mut self) -> Result<(), GameError> {
         if self.world.resource::<Encounter>().round > 0 {
             return Ok(());
         }
@@ -375,9 +374,9 @@ impl Game {
                         != Team::Player
             })
     }
-    fn auto_step(&mut self) -> Result<(), String> {
+    fn auto_step(&mut self) -> Result<(), GameError> {
         if !self.auto_step_available() {
-            return Err("目前沒有可推進的自動回合".into());
+            return Err(error::no_auto_step());
         }
         if self.world.resource::<Turn>().phase == Phase::Ended {
             self.advance_turn();
@@ -385,20 +384,20 @@ impl Game {
         }
         self.enemy_turn_once()
     }
-    fn delay(&mut self, actor: &str, after: &str) -> Result<(), String> {
+    fn delay(&mut self, actor: &str, after: &str) -> Result<(), GameError> {
         self.ensure(actor)?;
         let turn = self.world.resource::<Turn>();
         if turn.phase != Phase::Ready || turn.moves != 0 {
-            return Err("開始行動後不能延後".into());
+            return Err(error::delay_after_action());
         }
         let encounter = self.world.resource::<Encounter>();
         let target_index = encounter
             .order
             .iter()
             .position(|unit_id| unit_id == after)
-            .ok_or("找不到延後目標")?;
+            .ok_or(error::missing_delay_target())?;
         if target_index <= encounter.cursor {
-            return Err("只能延後到尚未行動的單位之後".into());
+            return Err(error::invalid_delay_target());
         }
         let mut encounter = self.world.resource_mut::<Encounter>();
         let current_index = encounter.cursor;
@@ -408,21 +407,21 @@ impl Game {
         self.begin();
         Ok(())
     }
-    pub(crate) fn ensure(&self, a: &str) -> Result<(), String> {
+    pub(crate) fn ensure(&self, a: &str) -> Result<(), GameError> {
         if self.world.resource::<Turn>().actor.as_deref() != Some(a) {
-            Err("不是該單位的回合".into())
+            Err(error::wrong_turn())
         } else {
             Ok(())
         }
     }
-    fn enemy_turn_once(&mut self) -> Result<(), String> {
+    fn enemy_turn_once(&mut self) -> Result<(), GameError> {
         let a = self
             .world
             .resource::<Turn>()
             .actor
             .clone()
-            .ok_or("先攻單位不存在")?;
-        let e = self.entity(&a).ok_or("先攻單位不存在")?;
+            .ok_or(error::missing_initiative_unit())?;
+        let e = self.entity(&a).ok_or(error::missing_initiative_unit())?;
         if self.world.get::<Downed>(e).is_some() {
             self.finish();
             return Ok(());
