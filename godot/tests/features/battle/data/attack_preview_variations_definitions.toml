@@ -5,7 +5,6 @@ effect_key="TERRAIN_EFFECT_NONE"
 movement_cost_bonus=1
 [[skills]]
 id="preview_5"
-ai_default=true
 ranged=true
 attack_bonus=3
 damage_bonus=0
@@ -70,7 +69,7 @@ dodge=2
 block=3
 attack=5
 damage=5
-
+skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
 id="ogre"
 visual="ogre.svg"
@@ -81,7 +80,7 @@ dodge=1
 block=4
 attack=0
 damage=0
-
+skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
 id="wolf_a"
 visual="wolf.svg"
@@ -92,7 +91,7 @@ dodge=1
 block=4
 attack=0
 damage=0
-
+skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
 id="wolf_b"
 visual="wolf.svg"
@@ -103,7 +102,7 @@ dodge=7
 block=0
 attack=0
 damage=0
-
+skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
 id="lyra"
 visual="archer.svg"
@@ -114,3 +113,4 @@ dodge=2
 block=10
 attack=0
 damage=0
+skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]

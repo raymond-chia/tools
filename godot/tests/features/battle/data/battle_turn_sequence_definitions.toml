@@ -10,7 +10,6 @@ attack_bonus=0
 damage_bonus=0
 min_range=1
 max_range=1
-ai_default=true
 
 [[unit_types]]
 id="aria"
@@ -22,7 +21,7 @@ dodge=2
 block=3
 attack=2
 damage=0
-
+skills=["melee_attack"]
 [[unit_types]]
 id="wolf"
 visual="wolf.svg"
@@ -33,3 +32,4 @@ dodge=2
 block=0
 attack=2
 damage=0
+skills=["melee_attack"]

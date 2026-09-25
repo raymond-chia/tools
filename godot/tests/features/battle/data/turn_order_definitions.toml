@@ -5,7 +5,6 @@ attack_bonus=0
 damage_bonus=0
 min_range=1
 max_range=1
-ai_default=true
 
 [terrain_types.rough]
 visual="rough"
@@ -22,7 +21,7 @@ dodge=2
 block=3
 attack=4
 damage=5
-
+skills=["test_ai_default"]
 [[unit_types]]
 id="lyra"
 visual="archer.svg"
@@ -33,7 +32,7 @@ dodge=4
 block=1
 attack=5
 damage=3
-
+skills=["test_ai_default"]
 [[unit_types]]
 id="mira"
 visual="archer.svg"
@@ -44,7 +43,7 @@ dodge=3
 block=2
 attack=4
 damage=3
-
+skills=["test_ai_default"]
 [[unit_types]]
 id="wolf_a"
 visual="wolf.svg"
@@ -55,3 +54,4 @@ dodge=2
 block=0
 attack=2
 damage=1
+skills=["test_ai_default"]

@@ -467,13 +467,16 @@ pub(crate) fn find_path(
     out.reverse();
     Some(out)
 }
-pub(crate) fn toward(
+pub(crate) fn toward_skill_range(
     w: &World,
     e: Entity,
     s: GridPos,
     target: GridPos,
+    target_footprint: Footprint,
     f: Footprint,
     b: u32,
+    min_range: i32,
+    max_range: i32,
 ) -> Option<Vec<GridPos>> {
     let board = w.resource::<Board>();
     let search_budget = (0..board.height)
@@ -482,9 +485,11 @@ pub(crate) fn toward(
             total.saturating_add(movement_cost(w, cell))
         });
     let Paths { best, previous } = paths(w, e, s, f, search_budget);
-    let end = *best
-        .keys()
-        .min_by_key(|p| (distance(**p, target), p.y, p.x))?;
+    let end = *best.keys().min_by_key(|p| {
+        let range = footprint_distance(**p, f, target, target_footprint);
+        let gap = (min_range - range).max(range - max_range).max(0);
+        (gap, distance(**p, s), p.y, p.x)
+    })?;
     let mut state = *best.get(&end).expect("選出的終點應有尋路狀態");
     let mut route = vec![state.position];
     while state.position != s {

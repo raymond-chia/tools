@@ -133,7 +133,6 @@ pub(crate) struct ResultState(pub(crate) Outcome);
 pub(crate) struct Skills {
     /// Key 是技能 ID。
     pub(crate) definitions: HashMap<String, SkillDef>,
-    pub(crate) ai_default: String,
 }
 
 #[derive(Deserialize)]
@@ -158,8 +157,6 @@ pub struct SkillDef {
     pub(crate) terrain: Option<String>,
     #[serde(default)]
     pub(crate) effect: SkillEffect,
-    #[serde(default)]
-    pub(crate) ai_default: bool,
 }
 #[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

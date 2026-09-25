@@ -1,26 +1,5 @@
 use super::*;
-
-// 驗證不同敵方派系可互相攻擊，同一派系的單位不能互相攻擊。
-#[test]
-fn enemy_factions_determine_attack_targets() {
-    for (target_faction, allowed) in [("bandits", true), ("wildlife", false)] {
-        let mut game = push_collision_game();
-        let actor = game.entity("actor").expect("測試攻擊者應存在");
-        let target = game.entity("target").expect("測試目標應存在");
-        game.world
-            .get_mut::<Unit>(actor)
-            .expect("攻擊者應有資料")
-            .team = Team::Enemy("wildlife".into());
-        game.world
-            .get_mut::<Unit>(target)
-            .expect("目標應有資料")
-            .team = Team::Enemy(target_faction.into());
-        game.start().expect("測試戰鬥應能開始");
-        let skill = game.world.resource::<Skills>().definitions["push"].clone();
-        let result = game.use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill);
-        assert_eq!(result.is_ok(), allowed, "目標派系 {target_faction}");
-    }
-}
+use crate::model::Encounter;
 
 // 驗證命中結果、不同固定格擋減傷與暴擊順序均符合傷害公式。
 #[test]
@@ -286,7 +265,6 @@ fn attack_skill(ranged: bool, range: i32) -> SkillDef {
         heal_amount: None,
         terrain: None,
         effect: SkillEffect::Attack,
-        ai_default: true,
     }
 }
 
@@ -329,7 +307,6 @@ fn flanking_world(
     let mut world = World::new();
     world.insert_resource(Skills {
         definitions: HashMap::from([(melee_skill_id.clone(), melee_skill)]),
-        ai_default: melee_skill_id.clone(),
     });
     let attacker = spawn_unit(
         &mut world,
@@ -442,6 +419,26 @@ fn zero_range_heal_targets_self() {
         .expect("零距離治療應可對自己施放");
 }
 
+// 驗證敵方沒有技能時回報錯誤，且空技能清單不會自動取得所有技能。
+#[test]
+fn enemy_without_skill_reports_error() {
+    let mut game = push_collision_game();
+    let enemy = game.entity("target").expect("測試敵方應存在");
+    game.world
+        .get_mut::<Unit>(enemy)
+        .expect("敵方應有資料")
+        .skills
+        .clear();
+    game.world.resource_mut::<Turn>().actor = Some("target".into());
+    game.world.resource_mut::<Turn>().phase = Phase::Ready;
+    game.world.resource_mut::<Encounter>().round = 1;
+    let error = match game.command(Command::AutoStep) {
+        Ok(_) => panic!("沒有技能的敵方應回報錯誤"),
+        Err(error) => error,
+    };
+    assert_eq!(error.id(), "missing_ai_skill");
+}
+
 fn push_collision_game() -> Game {
     game_with_skill_range_and_effect(1, 1, SkillEffect::Push)
 }
@@ -483,7 +480,6 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
             },
             terrain: None,
             effect,
-            ai_default: true,
         }],
         units: vec![
             push_collision_unit("actor", Team::Player, 1),

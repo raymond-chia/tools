@@ -5,7 +5,6 @@ attack_bonus=0
 damage_bonus=0
 min_range=1
 max_range=1
-ai_default=true
 
 [[skills]]
 id="melee"
@@ -30,7 +29,7 @@ dodge=2
 block=3
 attack=4
 damage=5
-
+skills=["test_ai_default","melee"]
 [[unit_types]]
 id="lyra"
 visual="archer.svg"
@@ -41,7 +40,7 @@ dodge=4
 block=1
 attack=5
 damage=3
-
+skills=["test_ai_default","melee"]
 [[unit_types]]
 id="ogre"
 visual="ogre.svg"
@@ -54,3 +53,4 @@ dodge=1
 block=4
 attack=5
 damage=6
+skills=["test_ai_default","melee"]

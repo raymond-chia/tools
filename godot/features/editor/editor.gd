@@ -430,7 +430,7 @@ func add_definition() -> void:
 	if category == "unit_types":
 		definitions.unit_types.append({"id":id,"visual":"fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"attack":3,"damage":3,"skills":["melee_attack"]})
 	elif category == "skills":
-		definitions.skills.append({"id":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"min_range":1,"max_range":1,"effect":"attack","ai_default":false})
+		definitions.skills.append({"id":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"min_range":1,"max_range":1,"effect":"attack"})
 	else:
 		definitions.terrain_types[id] = {"visual":"plain","passable":true,"damage":0,"movement_cost_bonus":0,"dodge_penalty":0,"block_penalty":0,"forced_entry":"none","effect_key":"TERRAIN_EFFECT_NONE"}
 	refresh_tools()

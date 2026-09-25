@@ -45,19 +45,12 @@ pub(crate) fn terrain_out_of_bounds() -> GameError {
     GameError::new("terrain_out_of_bounds", "terrain 超出地圖範圍".to_owned())
 }
 
-pub(crate) fn duplicate_ai_default() -> GameError {
-    GameError::new(
-        "duplicate_ai_default",
-        "只能有一個 ai_default 技能".to_owned(),
-    )
-}
-
 pub(crate) fn duplicate_skill_id() -> GameError {
     GameError::new("duplicate_skill_id", "duplicate skill id".to_owned())
 }
 
-pub(crate) fn missing_ai_default() -> GameError {
-    GameError::new("missing_ai_default", "缺少 ai_default 技能".to_owned())
+pub(crate) fn missing_ai_skill(id: &str) -> GameError {
+    GameError::new("missing_ai_skill", format!("敵方單位 {id} 沒有技能"))
 }
 
 pub(crate) fn no_auto_step() -> GameError {

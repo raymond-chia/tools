@@ -13,7 +13,6 @@ effect_key="TERRAIN_EFFECT_MIRE"
 
 [[skills]]
 id="corrosive_mire"
-ai_default=true
 ranged=true
 attack_bonus=0
 damage_bonus=0
@@ -62,7 +61,7 @@ dodge=0
 block=0
 attack=0
 damage=0
-skills=[]
+skills=["corrosive_mire"]
 
 [[unit_types]]
 id="ogre"
@@ -76,4 +75,4 @@ dodge=5
 block=6
 attack=0
 damage=0
-skills=[]
+skills=["corrosive_mire"]

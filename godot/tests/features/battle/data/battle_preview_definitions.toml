@@ -11,7 +11,6 @@ effect_key="TERRAIN_EFFECT_DAMAGE"
 
 [[skills]]
 id="melee_attack"
-ai_default=true
 ranged=false
 attack_bonus=0
 damage_bonus=0
@@ -52,7 +51,7 @@ dodge=2
 block=3
 attack=5
 damage=5
-
+skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]
 [[unit_types]]
 id="ogre"
 visual="ogre.svg"
@@ -63,3 +62,4 @@ dodge=1
 block=4
 attack=5
 damage=6
+skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]
