@@ -9,6 +9,9 @@ static func unit_art_path(visual: String) -> String:
 static func unit_name_key(unit_type: String) -> String:
 	return "UNIT_NAME_%s" % unit_type.to_upper()
 
+static func team_name_key(team_name: String) -> String:
+	return "TEAM_NAME_%s" % team_name.to_upper()
+
 static func skill_name_key(skill_id: String) -> String:
 	return "SKILL_NAME_%s" % skill_id.to_upper()
 

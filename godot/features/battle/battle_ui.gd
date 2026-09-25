@@ -199,7 +199,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	unit_details.visible = not unit.is_empty()
 	if not unit.is_empty():
 		unit_name.text = localized_unit_name(unit.unit_type)
-		detail_values.team.text = tr("我方") if unit.team is String else tr("敵方") + "（%s）" % unit.team.enemy
+		detail_values.team.text = tr("我方") if unit.team is String else tr("敵方") + "（%s）" % tr(BattleConfig.team_name_key(unit.team.enemy))
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
 		detail_values.size.text = tr("大型") if unit.large else tr("一般")
 		detail_values.movement.text = "%d" % int(unit.movement)

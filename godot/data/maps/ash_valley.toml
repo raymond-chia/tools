@@ -186,34 +186,34 @@ y=5
 [[units]]
 id="wolf_a"
 unit_type="wolf"
-team={ enemy="wolves" }
+team={ enemy="wild_animals" }
 x=6
 y=3
 
 [[units]]
 id="wolf_b"
 unit_type="wolf"
-team={ enemy="wolves" }
+team={ enemy="wild_animals" }
 x=7
 y=4
 
 [[units]]
 id="wolf_c"
 unit_type="wolf"
-team={ enemy="wolves" }
+team={ enemy="wild_animals" }
 x=8
 y=2
 
 [[units]]
 id="wolf_d"
 unit_type="wolf"
-team={ enemy="wolves" }
+team={ enemy="wild_animals" }
 x=8
 y=4
 
 [[units]]
 id="wolf_e"
 unit_type="wolf"
-team={ enemy="wolves" }
+team={ enemy="wild_animals" }
 x=7
 y=5
