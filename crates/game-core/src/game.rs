@@ -3,15 +3,16 @@ use crate::error::GameError;
 use crate::model::{
     Board, CombatLogEvent, Command, Definition, DeliveredLogCount, Encounter, Footprint, GridPos,
     Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
-    SkillEffect, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView, TerrainEffectView,
-    Turn, TurnView, Unit, UnitView,
+    SkillEffect, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
+    TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, Turn, TurnView, Unit,
+    UnitView,
 };
 use crate::movement::{
     distance, entity_distance, fits, footprint_cells, footprint_distance, footprint_on_impassable,
     movement_cost, movement_ranges, terrain_damage, terrain_type, toward_skill_range,
 };
 use crate::skill::{
-    can_use_skill, closest_occupied_cell, detail, effective_block, effective_dodge, skill_ranges,
+    can_use_skill, closest_occupied_cell, effective_block, effective_dodge, skill_ranges,
 };
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, World};
@@ -694,9 +695,7 @@ impl Game {
                         .sum();
                     let effect_descriptions = terrains
                         .iter()
-                        .filter(|kind| {
-                            terrain_type(board, kind).effect_key != "TERRAIN_EFFECT_NONE"
-                        })
+                        .filter(|kind| kind.as_str() != "rough")
                         .map(|kind| {
                             let definition = terrain_type(board, kind);
                             let remaining = temporary
@@ -706,26 +705,29 @@ impl Game {
                                 .map(|terrain| {
                                     terrain.expires_after_round.saturating_sub(enc.round) + 1
                                 });
-                            let args = if let Some(rounds) = remaining {
-                                vec![
-                                    definition.dodge_penalty.max(definition.block_penalty),
-                                    definition.movement_cost_bonus as i32,
-                                    rounds as i32,
-                                ]
-                            } else if definition.damage > 0 {
-                                vec![definition.damage]
-                            } else {
-                                Vec::new()
+                            let values = TerrainDescriptionValues {
+                                defense_penalty: remaining.map(|_| {
+                                    definition.dodge_penalty.max(definition.block_penalty)
+                                }),
+                                extra_movement_cost: remaining
+                                    .map(|_| definition.extra_movement_cost as i32),
+                                remaining_rounds: remaining.map(|rounds| rounds as i32),
+                                damage: (remaining.is_none() && definition.damage > 0)
+                                    .then_some(definition.damage),
                             };
-                            detail(&definition.effect_key, &args)
+                            TerrainDescriptionView {
+                                terrain: kind.clone(),
+                                values,
+                            }
                         })
                         .collect();
                     TerrainCellView {
                         x,
                         y,
-                        passable: terrains
-                            .iter()
-                            .all(|kind| terrain_type(board, kind).passable),
+                        passable: terrains.iter().all(|kind| {
+                            terrain_type(board, kind).entry_rule
+                                == crate::model::TerrainEntryRule::Walkable
+                        }),
                         base_kind: if terrains.iter().any(|kind| kind == "rough") {
                             "rough"
                         } else {

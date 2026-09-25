@@ -3,14 +3,15 @@ use crate::error::{self, GameError};
 use crate::game::{Game, die};
 use crate::gameplay_config;
 use crate::model::{
-    AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, DetailView, Encounter,
-    Footprint, ForcedEntry, GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, Phase, Pos,
-    RollDegree, SkillDef, SkillEffect, SkillPreview, SkillRangeView, Skills, TemporaryTerrain,
-    TemporaryTerrains, TerrainTypeDef, Turn, Unit,
+    AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
+    GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, Phase, Pos, RollDegree, SkillDef,
+    SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView,
+    SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, TerrainEntryRule, TerrainTypeDef,
+    Turn, Unit,
 };
 use crate::movement::{
-    fits, footprint_blocks_forced_entry, footprint_cells, footprint_distance, overlap,
-    terrain_type, terrains_at,
+    fits, footprint_blocks_push, footprint_cells, footprint_distance, overlap, terrain_type,
+    terrains_at,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::HashSet;
@@ -249,11 +250,7 @@ impl Game {
                 y: current.y + direction.y * gameplay_config::PUSH_DISTANCE,
             };
             let terrain_allows_push = fits(self.world.resource::<Board>(), destination, footprint)
-                && !footprint_blocks_forced_entry(
-                    self.world.resource::<Board>(),
-                    destination,
-                    footprint,
-                );
+                && !footprint_blocks_push(self.world.resource::<Board>(), destination, footprint);
             let blocking_units: Vec<Entity> = if terrain_allows_push {
                 self.world
                     .iter_entities()
@@ -384,11 +381,9 @@ impl Game {
             .0;
         for terrain in terrains_at(&self.world, position) {
             let terrain_definition = terrain_type(self.world.resource::<Board>(), &terrain);
-            let log_key = terrain_definition
-                .forced_entry_log_key
-                .clone()
-                .unwrap_or_else(|| "COMBAT_LOG_TERRAIN_DAMAGE".into());
-            let damage = if terrain_definition.forced_entry == ForcedEntry::Defeat {
+            let instant_down =
+                terrain_definition.entry_rule == TerrainEntryRule::InstantDownWhenPushed;
+            let damage = if instant_down {
                 self.world
                     .get::<Hp>(entity)
                     .expect("被推動的單位應具有 Hp")
@@ -421,7 +416,7 @@ impl Game {
                     target_type,
                     target_team,
                     terrain,
-                    log_key,
+                    instant_down,
                     damage,
                     remaining_hp,
                     max_hp,
@@ -994,59 +989,53 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
     ranges
 }
 
-fn skill_details(skill: &SkillDef, board: &Board) -> Vec<DetailView> {
-    let target_key = if matches!(skill.effect, SkillEffect::Mire { .. }) {
-        "SKILL_TARGET_CELL"
+fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
+    let target = if matches!(skill.effect, SkillEffect::Mire { .. }) {
+        SkillTargetKind::Cell
     } else if matches!(skill.effect, SkillEffect::Heal { .. }) {
-        "SKILL_TARGET_ALLY"
+        SkillTargetKind::Ally
     } else {
-        "SKILL_TARGET_ENEMY"
+        SkillTargetKind::Enemy
     };
-    let type_key = if skill.ranged {
-        "SKILL_TYPE_RANGED"
-    } else {
-        "SKILL_TYPE_MELEE"
-    };
-    let mut details = vec![
-        detail(target_key, &[]),
-        detail(type_key, &[]),
-        if skill.min_range == skill.max_range {
-            detail("SKILL_RANGE", &[skill.max_range])
-        } else {
-            detail("SKILL_RANGE_INTERVAL", &[skill.min_range, skill.max_range])
-        },
-    ];
-    match &skill.effect {
+    let (attack_bonus, power_bonus, effect) = match &skill.effect {
         SkillEffect::Attack {
             attack_bonus,
             power_bonus,
-        }
-        | SkillEffect::Push {
+        } => (
+            Some(*attack_bonus),
+            Some(*power_bonus),
+            SkillDetailEffect::Attack,
+        ),
+        SkillEffect::Push {
             attack_bonus,
             power_bonus,
-        } => {
-            details.push(detail("SKILL_ATTACK_BONUS", &[*attack_bonus]));
-            details.push(detail("SKILL_POWER_BONUS", &[*power_bonus]));
-            if matches!(skill.effect, SkillEffect::Push { .. }) {
-                details.push(detail(
-                    "SKILL_EFFECT_PUSH",
-                    &[gameplay_config::PUSH_DISTANCE],
-                ));
-            }
-        }
-        SkillEffect::Mire { terrain, duration } => details.push(detail(
-            "SKILL_EFFECT_MIRE",
-            &[
-                terrain_type(board, terrain).movement_cost_bonus as i32,
-                *duration as i32,
-            ],
-        )),
-        SkillEffect::Heal { power_bonus } => {
-            details.push(detail("SKILL_POWER_BONUS", &[*power_bonus]));
-            details.push(detail("SKILL_EFFECT_HEAL", &[]));
-        }
+        } => (
+            Some(*attack_bonus),
+            Some(*power_bonus),
+            SkillDetailEffect::Push {
+                distance: gameplay_config::PUSH_DISTANCE,
+            },
+        ),
+        SkillEffect::Mire { terrain, duration } => (
+            None,
+            None,
+            SkillDetailEffect::Mire {
+                extra_movement_cost: terrain_type(board, terrain).extra_movement_cost as i32,
+                duration: *duration,
+            },
+        ),
+        SkillEffect::Heal { power_bonus } => (None, Some(*power_bonus), SkillDetailEffect::Heal),
+    };
+    SkillDetailsView {
+        target,
+        ranged: skill.ranged,
+        min_range: skill.min_range,
+        max_range: skill.max_range,
+        range_is_interval: skill.min_range != skill.max_range,
+        attack_bonus,
+        power_bonus,
+        effect,
     }
-    details
 }
 
 fn skill_power_bonus(effect: &SkillEffect) -> i32 {
@@ -1064,12 +1053,5 @@ fn skill_attack_bonus(effect: &SkillEffect) -> i32 {
             *attack_bonus
         }
         _ => unreachable!("只有攻擊技能使用攻擊加值"),
-    }
-}
-
-pub(crate) fn detail(text_key: &str, values: &[i32]) -> DetailView {
-    DetailView {
-        text_key: text_key.into(),
-        arguments: values.to_vec(),
     }
 }

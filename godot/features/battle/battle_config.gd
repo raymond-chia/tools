@@ -18,6 +18,9 @@ static func skill_name_key(skill_id: String) -> String:
 static func terrain_name_key(terrain_id: String) -> String:
 	return "TERRAIN_NAME_%s" % terrain_id.to_upper()
 
+static func terrain_description_key(terrain_id: String) -> String:
+	return "TERRAIN_DESCRIPTION_%s" % terrain_id.to_upper()
+
 const PREVIEW_IGNORED_ERROR_IDS := [
 	"cannot_move",
 	"cannot_use_skill",

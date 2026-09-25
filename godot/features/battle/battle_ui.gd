@@ -214,8 +214,8 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("無法通行")
 	var terrain_descriptions: Array[String] = []
 	for description in terrain.effect_descriptions:
-		terrain_descriptions.append(localized_detail(description))
-	terrain_effect.text = "；".join(terrain_descriptions) if not terrain_descriptions.is_empty() else tr("TERRAIN_EFFECT_NONE")
+		terrain_descriptions.append(localized_terrain_description(description))
+	terrain_effect.text = "；".join(terrain_descriptions) if not terrain_descriptions.is_empty() else tr("TERRAIN_DESCRIPTION_NONE")
 
 func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 	clear_turn_order()
@@ -391,7 +391,8 @@ func format_log(events: Array, start_index := 0) -> String:
 				if expanded:
 					entries.append(tr("產生「%s」") % tr(BattleConfig.terrain_name_key(event.terrain)))
 			"terrain_damage":
-				var log_text := tr(event.log_key) % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.terrain)), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
+				var log_key := "COMBAT_LOG_TERRAIN_INSTANT_DOWN" if event.instant_down else "COMBAT_LOG_TERRAIN_DAMAGE"
+				var log_text := tr(log_key) % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.terrain)), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, log_text])
 	return "\n".join(entries)
 
@@ -482,17 +483,30 @@ func localized_skill_name(skill: Dictionary) -> String:
 	return tr(BattleConfig.skill_name_key(skill.id))
 
 func localized_skill_details(skill: Dictionary) -> String:
+	var details: Dictionary = skill.details
 	var lines: Array[String] = []
-	for detail in skill.details:
-		lines.append(localized_detail(detail))
+	lines.append(tr("SKILL_TARGET_%s" % details.target.to_upper()))
+	lines.append(tr("SKILL_TYPE_RANGED") if details.ranged else tr("SKILL_TYPE_MELEE"))
+	if details.range_is_interval:
+		lines.append(tr("SKILL_RANGE_INTERVAL") % [int(details.min_range), int(details.max_range)])
+	else:
+		lines.append(tr("SKILL_RANGE") % int(details.max_range))
+	if details.attack_bonus != null:
+		lines.append(tr("SKILL_ATTACK_BONUS") % int(details.attack_bonus))
+	if details.power_bonus != null:
+		lines.append(tr("SKILL_POWER_BONUS") % int(details.power_bonus))
+	var effect: Dictionary = details.effect
+	if effect.kind == "push":
+		lines.append(tr("SKILL_EFFECT_PUSH") % int(effect.distance))
+	elif effect.kind == "mire":
+		lines.append(tr("SKILL_EFFECT_MIRE") % [int(effect.extra_movement_cost), int(effect.duration)])
+	elif effect.kind == "heal":
+		lines.append(tr("SKILL_EFFECT_HEAL"))
 	return "\n".join(lines)
 
-func localized_detail(detail: Dictionary) -> String:
-	var text := tr(detail.text_key)
-	var values: Array[int] = []
-	for value in detail.arguments:
-		values.append(int(value))
-	return text if values.is_empty() else text % values
+func localized_terrain_description(description: Dictionary) -> String:
+	var text := tr(BattleConfig.terrain_description_key(description.terrain))
+	return text.format(description.values)
 
 func skill_with_id(skills: Array, skill_id: String) -> Dictionary:
 	for skill in skills:

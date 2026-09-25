@@ -9,9 +9,8 @@ effect="attack"
 
 [terrain_types.rough]
 visual="rough"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 [[unit_types]]
 id="aria"
 visual="fighter.svg"

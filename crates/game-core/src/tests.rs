@@ -200,14 +200,11 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
             "spikes".into(),
             TerrainTypeDef {
                 visual: "spikes".into(),
-                passable: true,
+                entry_rule: TerrainEntryRule::Walkable,
                 damage: 3,
-                movement_cost_bonus: 0,
+                extra_movement_cost: 0,
                 dodge_penalty: 0,
                 block_penalty: 0,
-                forced_entry: ForcedEntry::None,
-                effect_key: "TERRAIN_EFFECT_DAMAGE".into(),
-                forced_entry_log_key: None,
             },
         )]),
     });
@@ -476,14 +473,11 @@ fn push_collision_game() -> Game {
 fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: SkillEffect) -> Game {
     let terrain = TerrainTypeDef {
         visual: "plain".into(),
-        passable: true,
+        entry_rule: TerrainEntryRule::Walkable,
         damage: 0,
-        movement_cost_bonus: 0,
+        extra_movement_cost: 0,
         dodge_penalty: 0,
         block_penalty: 0,
-        forced_entry: ForcedEntry::None,
-        effect_key: "TERRAIN_EFFECT_NONE".into(),
-        forced_entry_log_key: None,
     };
     let definition = Definition {
         map: MapDef {

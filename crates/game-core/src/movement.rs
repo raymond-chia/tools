@@ -3,8 +3,8 @@ use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::gameplay_config;
 use crate::model::{
-    Board, CombatLogEvent, Encounter, Footprint, ForcedEntry, GridPos, Hp, Id, Log, MovePreview,
-    Phase, Pos, Team, TemporaryTerrains, TerrainTypeDef, Turn, Unit,
+    Board, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Id, Log, MovePreview, Phase, Pos,
+    Team, TemporaryTerrains, TerrainEntryRule, TerrainTypeDef, Turn, Unit,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::{
@@ -101,10 +101,6 @@ impl Game {
                 if terrain_definition.damage <= 0 {
                     continue;
                 }
-                let log_key = terrain_definition
-                    .forced_entry_log_key
-                    .clone()
-                    .unwrap_or_else(|| "COMBAT_LOG_TERRAIN_DAMAGE".into());
                 let damage = terrain_definition.damage;
                 if damage > 0 {
                     let mut hp = self
@@ -126,7 +122,7 @@ impl Game {
                             target_type,
                             target_team,
                             terrain: k,
-                            log_key,
+                            instant_down: false,
                             damage,
                             remaining_hp,
                             max_hp,
@@ -271,7 +267,7 @@ pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {
     let board = w.resource::<Board>();
     1 + terrains_at(w, position)
         .iter()
-        .map(|kind| terrain_type(board, kind).movement_cost_bonus)
+        .map(|kind| terrain_type(board, kind).extra_movement_cost)
         .sum::<u32>()
 }
 
@@ -288,15 +284,16 @@ pub(crate) fn footprint_on_impassable(
 ) -> bool {
     (position.y..position.y + footprint.height).any(|y| {
         (position.x..position.x + footprint.width).any(|x| {
-            board
-                .terrains
-                .get(&GridPos { x, y })
-                .is_some_and(|kinds| kinds.iter().any(|kind| !terrain_type(board, kind).passable))
+            board.terrains.get(&GridPos { x, y }).is_some_and(|kinds| {
+                kinds
+                    .iter()
+                    .any(|kind| terrain_type(board, kind).entry_rule != TerrainEntryRule::Walkable)
+            })
         })
     })
 }
 
-pub(crate) fn footprint_blocks_forced_entry(
+pub(crate) fn footprint_blocks_push(
     board: &Board,
     position: GridPos,
     footprint: Footprint,
@@ -306,7 +303,7 @@ pub(crate) fn footprint_blocks_forced_entry(
             board.terrains.get(&GridPos { x, y }).is_some_and(|kinds| {
                 kinds
                     .iter()
-                    .any(|kind| terrain_type(board, kind).forced_entry == ForcedEntry::Blocked)
+                    .any(|kind| terrain_type(board, kind).entry_rule == TerrainEntryRule::Blocked)
             })
         })
     })

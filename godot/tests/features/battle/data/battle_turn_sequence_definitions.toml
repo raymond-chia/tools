@@ -1,8 +1,7 @@
 [terrain_types.rough]
 visual="rough"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 [[skills]]
 id="melee_attack"
 ranged=false

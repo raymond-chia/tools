@@ -1,15 +1,13 @@
 [terrain_types.rough]
 visual="rough"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 [terrain_types.mire]
 visual="mire"
-passable=true
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 dodge_penalty=3
 block_penalty=3
-effect_key="TERRAIN_EFFECT_MIRE"
 
 [[skills]]
 id="corrosive_mire"

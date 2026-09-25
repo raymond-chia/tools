@@ -170,36 +170,34 @@ pub(crate) struct MapDef {
     #[serde(default)]
     pub(crate) terrains: Vec<TerrainPlacement>,
 }
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainPlacement {
     pub(crate) x: i32,
     pub(crate) y: i32,
     pub(crate) kind: String,
 }
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainTypeDef {
     pub(crate) visual: String,
-    pub(crate) passable: bool,
+    pub(crate) entry_rule: TerrainEntryRule,
     #[serde(default)]
     pub(crate) damage: i32,
     #[serde(default)]
-    pub(crate) movement_cost_bonus: u32,
+    pub(crate) extra_movement_cost: u32,
     #[serde(default)]
     pub(crate) dodge_penalty: i32,
     #[serde(default)]
     pub(crate) block_penalty: i32,
-    #[serde(default)]
-    pub(crate) forced_entry: ForcedEntry,
-    pub(crate) effect_key: String,
-    pub(crate) forced_entry_log_key: Option<String>,
 }
-#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+
+#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum ForcedEntry {
-    #[default]
-    None,
+pub enum TerrainEntryRule {
+    Walkable,
     Blocked,
-    Defeat,
+    InstantDownWhenPushed,
 }
 #[derive(Deserialize)]
 pub(crate) struct UnitDef {
@@ -345,7 +343,7 @@ pub enum CombatLogEvent {
         target_type: String,
         target_team: Team,
         terrain: String,
-        log_key: String,
+        instant_down: bool,
         damage: i32,
         remaining_hp: i32,
         max_hp: i32,
@@ -374,15 +372,57 @@ pub struct InitiativeRollLog {
 #[derive(Serialize)]
 pub struct SkillRangeView {
     pub id: String,
-    pub details: Vec<DetailView>,
+    pub details: SkillDetailsView,
     pub cell_targeted: bool,
     pub enabled: bool,
     pub cells: Vec<GridPos>,
 }
 #[derive(Serialize)]
-pub struct DetailView {
-    pub text_key: String,
-    pub arguments: Vec<i32>,
+pub struct SkillDetailsView {
+    pub target: SkillTargetKind,
+    pub ranged: bool,
+    pub min_range: i32,
+    pub max_range: i32,
+    pub range_is_interval: bool,
+    pub attack_bonus: Option<i32>,
+    pub power_bonus: Option<i32>,
+    pub effect: SkillDetailEffect,
+}
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillTargetKind {
+    Cell,
+    Ally,
+    Enemy,
+}
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SkillDetailEffect {
+    Attack,
+    Push {
+        distance: i32,
+    },
+    Mire {
+        extra_movement_cost: i32,
+        duration: u32,
+    },
+    Heal,
+}
+#[derive(Serialize)]
+pub struct TerrainDescriptionView {
+    pub terrain: String,
+    pub values: TerrainDescriptionValues,
+}
+#[derive(Serialize)]
+pub struct TerrainDescriptionValues {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub defense_penalty: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extra_movement_cost: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_rounds: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub damage: Option<i32>,
 }
 #[derive(Serialize)]
 pub struct MovePreview {
@@ -480,7 +520,7 @@ pub struct TerrainCellView {
     pub unit_id: Option<String>,
     pub cost: u32,
     pub damage: i32,
-    pub effect_descriptions: Vec<DetailView>,
+    pub effect_descriptions: Vec<TerrainDescriptionView>,
 }
 #[derive(Serialize)]
 pub struct TurnView {

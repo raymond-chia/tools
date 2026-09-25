@@ -1,4 +1,5 @@
-//! Editor 與戰鬥共用的作者資料格式。
+//! 原始資料格式，供編輯器與正式遊戲載入文件時使用。
+//! 載入後會轉成 model.rs 的核心資料；本檔宣告的格式不作為戰鬥運行時資料。
 use super::{Definition, MapDef, SkillDef, Team, TerrainPlacement, TerrainTypeDef, UnitDef};
 use crate::error::{self, GameError};
 use serde::{Deserialize, Serialize};

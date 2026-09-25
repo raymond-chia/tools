@@ -1,40 +1,31 @@
 [terrain_types.rough]
 visual="rough"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 
 [terrain_types.spikes]
 visual="spikes"
-passable=true
+entry_rule="walkable"
 damage=3
-effect_key="TERRAIN_EFFECT_DAMAGE"
 
 [terrain_types.grease]
 visual="grease"
-passable=true
-effect_key="TERRAIN_EFFECT_GREASE"
+entry_rule="walkable"
 
 [terrain_types.mire]
 visual="mire"
-passable=true
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 dodge_penalty=3
 block_penalty=3
-effect_key="TERRAIN_EFFECT_MIRE"
 
 [terrain_types.cliff]
 visual="cliff"
-passable=false
-forced_entry="blocked"
-effect_key="TERRAIN_EFFECT_CLIFF"
+entry_rule="blocked"
 
 [terrain_types.chasm]
 visual="chasm"
-passable=false
-forced_entry="defeat"
-effect_key="TERRAIN_EFFECT_CHASM"
-forced_entry_log_key="COMBAT_LOG_FORCED_DEFEAT"
+entry_rule="instant_down_when_pushed"
 
 [[skills]]
 id="melee_attack"

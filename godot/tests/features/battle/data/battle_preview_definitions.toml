@@ -1,13 +1,11 @@
 [terrain_types.rough]
 visual="rough"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-movement_cost_bonus=1
+entry_rule="walkable"
+extra_movement_cost=1
 [terrain_types.spikes]
 visual="spikes"
-passable=true
+entry_rule="walkable"
 damage=3
-effect_key="TERRAIN_EFFECT_DAMAGE"
 
 [[skills]]
 id="melee_attack"

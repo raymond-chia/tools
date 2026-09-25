@@ -20,12 +20,12 @@ SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too
 SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
-TERRAIN_EFFECT_MIRE,閃避與格擋 −%d，移動消耗 +%d，剩餘 %d 回合,"Dodge and block −%d, movement cost +%d, %d rounds remaining"
-TERRAIN_EFFECT_DAMAGE,造成 %d 點傷害,Deals %d damage
-TERRAIN_EFFECT_CLIFF,無法通行,Impassable
-TERRAIN_EFFECT_CHASM,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
-TERRAIN_EFFECT_NONE,無特殊效果,No special effect
-TERRAIN_EFFECT_GREASE,進入後會中止移動,Entering ends movement
+TERRAIN_DESCRIPTION_MIRE,閃避與格擋 −{defense_penalty}，移動消耗 +{extra_movement_cost}，剩餘 {remaining_rounds} 回合,"Dodge and block −{defense_penalty}, movement cost +{extra_movement_cost}, {remaining_rounds} rounds remaining"
+TERRAIN_DESCRIPTION_SPIKES,造成 {damage} 點傷害,Deals {damage} damage
+TERRAIN_DESCRIPTION_CLIFF,無法通行,Impassable
+TERRAIN_DESCRIPTION_CHASM,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
+TERRAIN_DESCRIPTION_NONE,無特殊效果,No special effect
+TERRAIN_DESCRIPTION_GREASE,進入後會中止移動,Entering ends movement
 TERRAIN_NAME_PLAIN,平地,Plain
 TERRAIN_NAME_ROUGH,崎嶇地面,Rough ground
 TERRAIN_NAME_SPIKES,地刺,Spikes
@@ -34,7 +34,7 @@ TERRAIN_NAME_MIRE,腐蝕泥沼,Corrosive mire
 TERRAIN_NAME_CLIFF,峭壁,Cliff wall
 TERRAIN_NAME_CHASM,懸崖,Chasm
 COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
-COMBAT_LOG_FORCED_DEFEAT,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
+COMBAT_LOG_TERRAIN_INSTANT_DOWN,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
 ATTACK_RESULT_DODGE,閃避,Dodge
 ATTACK_RESULT_BLOCK,格擋,Block
 ATTACK_RESULT_HIT,命中,Hit

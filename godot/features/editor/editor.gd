@@ -451,7 +451,7 @@ func add_definition() -> void:
 	elif category == "skills":
 		definitions.skills.append({"id":id,"ranged":false,"attack_bonus":0,"power_bonus":0,"min_range":1,"max_range":1,"effect":"attack"})
 	else:
-		definitions.terrain_types[id] = {"visual":"plain","passable":true,"damage":0,"movement_cost_bonus":0,"dodge_penalty":0,"block_penalty":0,"forced_entry":"none","effect_key":"TERRAIN_EFFECT_NONE"}
+		definitions.terrain_types[id] = {"visual":"plain","entry_rule":"walkable","damage":0,"extra_movement_cost":0,"dodge_penalty":0,"block_penalty":0}
 	refresh_tools()
 	refresh_definitions()
 	definition_list.select(definition_list.item_count - 1)

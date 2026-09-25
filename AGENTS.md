@@ -70,6 +70,10 @@
 - `crates/godot-bridge`：薄 GDExtension，將 JSON command 交給核心，並回傳 presentation snapshot。
 - Godot 的 `features/battle`：僅負責輸入、繪圖和 UI。
 
+### 翻譯邊界
+
+- Rust 只回傳語意 ID、結果分類與顯示所需數值；不得產生、選擇或傳遞翻譯 key。翻譯 key 與文字由 Godot 顯示層處理。
+
 ### Godot 禁止承載遊戲規則
 
 - 凡是根據遊戲資料進行計算、比較、合法性判斷或結果分類，一律由 `game-core` 負責；不因用途是執行、預覽或顯示而例外。
