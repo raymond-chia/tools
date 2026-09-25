@@ -1,11 +1,11 @@
 keys,zh_TW,en
-SKILL_MELEE_ATTACK_NAME,近戰攻擊,Melee Attack
-SKILL_RANGED_ATTACK_NAME,遠程攻擊,Ranged Attack
-SKILL_POWER_STRIKE_NAME,強力一擊,Power Strike
-SKILL_AIMED_SHOT_NAME,瞄準射擊,Aimed Shot
-SKILL_SHIELD_BASH_NAME,盾牌推擊,Shield Bash
-SKILL_CORROSIVE_MIRE_NAME,腐蝕泥沼,Corrosive Mire
-SKILL_HEAL_NAME,治癒術,Heal
+SKILL_NAME_MELEE_ATTACK,近戰攻擊,Melee Attack
+SKILL_NAME_RANGED_ATTACK,遠程攻擊,Ranged Attack
+SKILL_NAME_POWER_STRIKE,強力一擊,Power Strike
+SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
+SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
+SKILL_NAME_CORROSIVE_MIRE,腐蝕泥沼,Corrosive Mire
+SKILL_NAME_HEAL,治癒術,Heal
 SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
 SKILL_EFFECT_HEAL,效果：回復 %d HP,Effect: Restores %d HP
 HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
@@ -26,13 +26,13 @@ TERRAIN_EFFECT_CLIFF,無法通行,Impassable
 TERRAIN_EFFECT_CHASM,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
 TERRAIN_EFFECT_NONE,無特殊效果,No special effect
 TERRAIN_EFFECT_GREASE,進入後會中止移動,Entering ends movement
-TERRAIN_PLAIN,平地,Plain
-TERRAIN_ROUGH,崎嶇地面,Rough ground
-TERRAIN_SPIKES,地刺,Spikes
-TERRAIN_GREASE,油膩地面,Grease
-TERRAIN_MIRE,腐蝕泥沼,Corrosive mire
-TERRAIN_CLIFF,峭壁,Cliff wall
-TERRAIN_CHASM,懸崖,Chasm
+TERRAIN_NAME_PLAIN,平地,Plain
+TERRAIN_NAME_ROUGH,崎嶇地面,Rough ground
+TERRAIN_NAME_SPIKES,地刺,Spikes
+TERRAIN_NAME_GREASE,油膩地面,Grease
+TERRAIN_NAME_MIRE,腐蝕泥沼,Corrosive mire
+TERRAIN_NAME_CLIFF,峭壁,Cliff wall
+TERRAIN_NAME_CHASM,懸崖,Chasm
 COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
 COMBAT_LOG_FORCED_DEFEAT,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
 ATTACK_RESULT_DODGE,閃避,Dodge
@@ -48,14 +48,10 @@ ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
 灰燼谷伏擊,灰燼谷伏擊,Ash Valley Ambush
 測試：,測試：,"Test: "
 返回編輯器,返回編輯器,Back to Editor
-亞莉亞・劍士,亞莉亞・劍士,Aria · Fighter
-萊拉・遊俠,萊拉・遊俠,Lyra · Ranger
-米菈・術士,米菈・術士,Mira · Mage
-荒原狼 A,荒原狼 A,Wasteland Wolf A
-荒原狼 B,荒原狼 B,Wasteland Wolf B
-荒原狼 C,荒原狼 C,Wasteland Wolf C
-荒原狼 D,荒原狼 D,Wasteland Wolf D
-荒原狼 E,荒原狼 E,Wasteland Wolf E
+UNIT_NAME_ARIA,亞莉亞・劍士,Aria · Fighter
+UNIT_NAME_LYRA,萊拉・遊俠,Lyra · Ranger
+UNIT_NAME_MIRA,米菈・術士,Mira · Mage
+UNIT_NAME_WOLF,荒原狼,Wasteland Wolf
 近戰攻擊,近戰攻擊,Melee Attack
 遠程攻擊,遠程攻擊,Ranged Attack
 強力一擊,強力一擊,Power Strike

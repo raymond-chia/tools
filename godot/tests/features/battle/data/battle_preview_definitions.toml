@@ -57,8 +57,7 @@ max_range=4
 
 [[unit_types]]
 id="aria"
-visual="res://assets/units/fighter.svg"
-name="預覽測試角色"
+visual="fighter.svg"
 hp=10
 movement=2
 initiative=100
@@ -69,8 +68,7 @@ damage=5
 
 [[unit_types]]
 id="ogre"
-visual="res://assets/units/ogre.svg"
-name="預覽測試敵人"
+visual="ogre.svg"
 hp=20
 movement=2
 initiative=-100

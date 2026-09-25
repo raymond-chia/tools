@@ -17,7 +17,7 @@ func before_test() -> void:
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
-# 驗證懸停敵人的真實核心預覽、資源與傷害排版、金色外環，以及無格擋時的分段顯示。
+# 驗證懸停敵人的真實核心預覽、類型名稱翻譯、資源與傷害排版及金色外環。
 func test_attack_hit_preview() -> void:
 	await prepare_case(battle)
 	push_control_click(battle.ui.action_buttons.aimed_shot)
@@ -44,7 +44,7 @@ func test_attack_hit_preview() -> void:
 	assert_int(int(preview.block_remaining_hp)).is_equal(17)
 	assert_int(int(preview.dodge_remaining_hp)).is_equal(20)
 	assert_bool(battle.ui.attack_preview_panel.visible).override_failure_message("命中預覽面板應顯示").is_true()
-	assert_str(battle.ui.attack_preview_title.text).override_failure_message("面板標題應顯示目標名稱").contains(preview.target)
+	assert_str(battle.ui.attack_preview_title.text).override_failure_message("面板標題應顯示翻譯後的目標名稱").contains(tr(BattleConfig.unit_name_key(preview.target_type)))
 	assert_str(battle.ui.attack_preview_resources.text).override_failure_message("資源列應只顯示目標 HP 與 MP").is_equal("HP 20 / 20｜MP 1")
 	assert_str(battle.ui.attack_preview_damage.text).override_failure_message("獨立傷害欄應顯示正常命中傷害").is_equal("傷害 5")
 	assert_str(battle.ui.attack_preview_result_labels.hit.text).override_failure_message("左欄應顯示命中機率").is_equal("命中 70%")

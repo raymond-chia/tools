@@ -97,10 +97,9 @@ impl Game {
                     .world
                     .get::<Unit>(e)
                     .expect("已建立的戰鬥單位應具有 Unit 元件");
-                let target = unit.name.clone();
+                let target_type = unit.unit_type.clone();
                 let target_team = unit.team.clone();
                 let terrain_definition = terrain_type(self.world.resource::<Board>(), &k);
-                let terrain_name_key = terrain_definition.name_key.clone();
                 let log_key = terrain_definition
                     .forced_entry_log_key
                     .clone()
@@ -126,10 +125,10 @@ impl Game {
                         .resource_mut::<Log>()
                         .0
                         .push(CombatLogEvent::TerrainDamage {
-                            target,
+                            target: a.to_owned(),
+                            target_type,
                             target_team,
                             terrain: k,
-                            terrain_name_key,
                             log_key,
                             damage,
                             remaining_hp,
@@ -141,10 +140,10 @@ impl Game {
                         .resource_mut::<Log>()
                         .0
                         .push(CombatLogEvent::StatusApplied {
-                            target,
+                            target: a.to_owned(),
+                            target_type,
                             target_team,
                             status: k,
-                            status_name_key: terrain_name_key,
                         });
                 }
                 break;

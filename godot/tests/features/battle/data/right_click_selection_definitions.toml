@@ -31,8 +31,7 @@ effect_key="TERRAIN_EFFECT_NONE"
 
 [[unit_types]]
 id="aria"
-visual="res://assets/units/fighter.svg"
-name="測試劍士"
+visual="fighter.svg"
 hp=10
 movement=4
 initiative=1
@@ -43,8 +42,7 @@ damage=5
 
 [[unit_types]]
 id="lyra"
-visual="res://assets/units/archer.svg"
-name="測試遊俠"
+visual="archer.svg"
 hp=8
 movement=5
 initiative=2
@@ -55,8 +53,7 @@ damage=3
 
 [[unit_types]]
 id="ogre"
-visual="res://assets/units/ogre.svg"
-name="測試巨魔"
+visual="ogre.svg"
 width=2
 height=2
 hp=20

@@ -53,8 +53,7 @@ max_range=10
 
 [[unit_types]]
 id="aria"
-visual="res://assets/units/fighter.svg"
-name="測試法師"
+visual="fighter.svg"
 hp=100
 movement=3
 initiative=100
@@ -66,8 +65,7 @@ skills=["corrosive_mire", "shield_bash", "finishing_strike"]
 
 [[unit_types]]
 id="wolf_a"
-visual="res://assets/units/wolf.svg"
-name="測試木樁"
+visual="wolf.svg"
 hp=100
 movement=0
 initiative=-10
@@ -79,8 +77,7 @@ skills=[]
 
 [[unit_types]]
 id="ogre"
-visual="res://assets/units/ogre.svg"
-name="測試大型單位"
+visual="ogre.svg"
 width=2
 height=2
 hp=100

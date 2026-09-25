@@ -121,8 +121,7 @@ heal_amount=5
 
 [[unit_types]]
 id="aria"
-name="亞莉亞・劍士"
-visual="res://assets/units/fighter.svg"
+visual="fighter.svg"
 hp=18
 movement=5
 initiative=3
@@ -134,8 +133,7 @@ skills=["melee_attack","power_strike","shield_bash"]
 
 [[unit_types]]
 id="lyra"
-name="萊拉・遊俠"
-visual="res://assets/units/archer.svg"
+visual="archer.svg"
 hp=13
 movement=6
 initiative=5
@@ -147,8 +145,7 @@ skills=["ranged_attack","aimed_shot"]
 
 [[unit_types]]
 id="mira"
-name="米菈・術士"
-visual="res://assets/units/archer.svg"
+visual="archer.svg"
 hp=12
 movement=5
 initiative=2
@@ -159,64 +156,11 @@ damage=3
 skills=["corrosive_mire","heal"]
 
 [[unit_types]]
-id="wolf_a"
-name="荒原狼 A"
-visual="res://assets/units/wolf.svg"
-hp=9
-movement=5
-initiative=4
-dodge=3
-block=0
-attack=4
-damage=3
-skills=["melee_attack"]
-
-[[unit_types]]
-id="wolf_b"
-name="荒原狼 B"
-visual="res://assets/units/wolf.svg"
-hp=9
-movement=5
-initiative=2
-dodge=3
-block=0
-attack=4
-damage=3
-skills=["melee_attack"]
-
-[[unit_types]]
-id="wolf_c"
-name="荒原狼 C"
-visual="res://assets/units/wolf.svg"
+id="wolf"
+visual="wolf.svg"
 hp=9
 movement=5
 initiative=3
-dodge=3
-block=0
-attack=4
-damage=3
-skills=["melee_attack"]
-
-[[unit_types]]
-id="wolf_d"
-name="荒原狼 D"
-visual="res://assets/units/wolf.svg"
-hp=9
-movement=5
-initiative=1
-dodge=3
-block=0
-attack=4
-damage=3
-skills=["melee_attack"]
-
-[[unit_types]]
-id="wolf_e"
-name="荒原狼 E"
-visual="res://assets/units/wolf.svg"
-hp=9
-movement=5
-initiative=2
 dodge=3
 block=0
 attack=4

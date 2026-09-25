@@ -187,35 +187,35 @@ y=5
 
 [[units]]
 id="wolf_a"
-unit_type="wolf_a"
+unit_type="wolf"
 team={ enemy="wolves" }
 x=6
 y=3
 
 [[units]]
 id="wolf_b"
-unit_type="wolf_b"
+unit_type="wolf"
 team={ enemy="wolves" }
 x=7
 y=4
 
 [[units]]
 id="wolf_c"
-unit_type="wolf_c"
+unit_type="wolf"
 team={ enemy="wolves" }
 x=8
 y=2
 
 [[units]]
 id="wolf_d"
-unit_type="wolf_d"
+unit_type="wolf"
 team={ enemy="wolves" }
 x=8
 y=4
 
 [[units]]
 id="wolf_e"
-unit_type="wolf_e"
+unit_type="wolf"
 team={ enemy="wolves" }
 x=7
 y=5

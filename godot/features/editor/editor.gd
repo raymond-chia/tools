@@ -435,7 +435,7 @@ func add_definition() -> void:
 		id = base_id + "_%d" % count
 	checkpoint()
 	if category == "unit_types":
-		definitions.unit_types.append({"id":id,"name":id,"visual":"res://assets/units/fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"attack":3,"damage":3,"skills":["melee_attack"]})
+		definitions.unit_types.append({"id":id,"visual":"fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"attack":3,"damage":3,"skills":["melee_attack"]})
 	elif category == "skills":
 		definitions.skills.append({"id":id,"name":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"min_range":1,"max_range":1,"effect":"attack","ai_default":false})
 	else:

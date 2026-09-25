@@ -52,7 +52,7 @@ pub(crate) struct Hp {
 }
 #[derive(Component, Clone)]
 pub(crate) struct Unit {
-    pub(crate) name: String,
+    pub(crate) unit_type: String,
     pub(crate) visual: String,
     pub(crate) team: Team,
     pub(crate) movement: u32,
@@ -191,7 +191,7 @@ pub enum ForcedEntry {
 #[derive(Deserialize)]
 pub(crate) struct UnitDef {
     pub(crate) id: String,
-    pub(crate) name: String,
+    pub(crate) unit_type: String,
     pub(crate) visual: String,
     pub(crate) team: Team,
     pub(crate) x: i32,
@@ -278,9 +278,11 @@ pub enum CombatLogEvent {
     },
     Skill {
         actor: String,
+        actor_type: String,
         actor_team: Team,
         skill: String,
         target: String,
+        target_type: String,
         target_team: Team,
         roll: i32,
         die_sides: u32,
@@ -307,16 +309,18 @@ pub enum CombatLogEvent {
     },
     TerrainCreated {
         actor: String,
+        actor_type: String,
         actor_team: Team,
         skill: String,
         terrain: String,
-        terrain_name_key: String,
     },
     Healing {
         actor: String,
+        actor_type: String,
         actor_team: Team,
         skill: String,
         target: String,
+        target_type: String,
         target_team: Team,
         healing: i32,
         remaining_hp: i32,
@@ -324,15 +328,15 @@ pub enum CombatLogEvent {
     },
     StatusApplied {
         target: String,
+        target_type: String,
         target_team: Team,
         status: String,
-        status_name_key: String,
     },
     TerrainDamage {
         target: String,
+        target_type: String,
         target_team: Team,
         terrain: String,
-        terrain_name_key: String,
         log_key: String,
         damage: i32,
         remaining_hp: i32,
@@ -343,6 +347,7 @@ pub enum CombatLogEvent {
 #[derive(Clone, Serialize)]
 pub struct CollisionUnitLog {
     pub(crate) unit: String,
+    pub(crate) unit_type: String,
     pub(crate) team: Team,
     pub(crate) remaining_hp: i32,
     pub(crate) max_hp: i32,
@@ -351,6 +356,7 @@ pub struct CollisionUnitLog {
 #[derive(Clone, Serialize)]
 pub struct InitiativeRollLog {
     pub unit: String,
+    pub unit_type: String,
     pub team: Team,
     pub roll: i32,
     pub die_sides: u32,
@@ -360,7 +366,6 @@ pub struct InitiativeRollLog {
 #[derive(Serialize)]
 pub struct SkillRangeView {
     pub id: String,
-    pub name_key: String,
     pub details: Vec<DetailView>,
     pub cell_targeted: bool,
     pub enabled: bool,
@@ -387,6 +392,7 @@ pub enum SkillPreview {
 #[derive(Serialize)]
 pub struct HealingPreview {
     pub target: String,
+    pub target_type: String,
     pub target_hp: i32,
     pub target_max_hp: i32,
     pub target_mana: i32,
@@ -405,6 +411,7 @@ pub struct HealthSegmentsView {
 #[derive(Serialize)]
 pub struct AttackPreview {
     pub target: String,
+    pub target_type: String,
     pub target_hp: i32,
     pub target_max_hp: i32,
     pub target_mana: i32,
@@ -425,7 +432,7 @@ pub struct AttackPreview {
 #[derive(Serialize)]
 pub struct UnitView {
     pub id: String,
-    pub name: String,
+    pub unit_type: String,
     pub visual: String,
     pub team: Team,
     pub x: i32,
@@ -460,7 +467,6 @@ pub struct TerrainCellView {
     pub x: i32,
     pub y: i32,
     pub kind: String,
-    pub name_key: String,
     pub visual: String,
     pub passable: bool,
     pub base_kind: String,

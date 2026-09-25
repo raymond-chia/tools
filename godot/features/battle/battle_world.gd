@@ -27,7 +27,6 @@ var attack_preview_unit: Dictionary = {}
 var core
 var read_core_response: Callable
 var unit_nodes := {}
-var unit_ids_by_name := {}
 var movement_tweens := {}
 var hit_tweens := {}
 var attack_tweens := {}
@@ -71,8 +70,6 @@ func _process(delta: float) -> void:
 
 func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core) -> void:
 	var previous_state := state
-	remember_unit_names(previous_state.get("units", []))
-	remember_unit_names(snapshot.get("units", []))
 	state = snapshot
 	pending_action = action
 	inspected_cell = inspected
@@ -179,7 +176,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 			var new_attack_preview_ring := Sprite2D.new(); new_attack_preview_ring.name = "AttackPreviewRing"; new_attack_preview_ring.texture = BASE_ART; new_attack_preview_ring.visible = false; visual.add_child(new_attack_preview_ring)
 			var selection := Sprite2D.new(); selection.name = "Selection"; selection.texture = BASE_ART; visual.add_child(selection)
 			var base := Sprite2D.new(); base.name = "Base"; base.texture = BASE_ART; visual.add_child(base)
-			var body := Sprite2D.new(); body.name = "Body"; body.texture = load(unit.visual); visual.add_child(body)
+			var body := Sprite2D.new(); body.name = "Body"; body.texture = load(BattleConfig.unit_art_path(unit.visual)); visual.add_child(body)
 			units_layer.add_child(node)
 			unit_nodes[unit.id] = node
 		else:
@@ -256,15 +253,11 @@ func queue_new_combat_events(previous_state: Dictionary) -> void:
 		if event.type in ["skill", "healing", "terrain_damage"]:
 			combat_event_queue.append(event)
 			if event.get("downed", false):
-				var unit_id := unit_id_with_name(event.target)
-				if not unit_id.is_empty():
-					pending_death_ids[unit_id] = true
+				pending_death_ids[event.target] = true
 			if event.type == "skill":
 				for collision_unit in event.collision_units:
 					if collision_unit.downed:
-						var unit_id := unit_id_with_name(collision_unit.unit)
-						if not unit_id.is_empty():
-							pending_death_ids[unit_id] = true
+						pending_death_ids[collision_unit.unit] = true
 	if previous_log_size < state.log.size() or movements_changed:
 		queue_movements_before_log(state.log.size())
 
@@ -341,8 +334,7 @@ func present_skill_result(event: Dictionary) -> void:
 		if collision_unit.downed:
 			await animate_unit_death(collision_unit.unit)
 
-func present_unit_text(unit_name: String, text: String, color: Color, horizontal_offset := 0.0) -> void:
-	var unit_id := unit_id_with_name(unit_name)
+func present_unit_text(unit_id: String, text: String, color: Color, horizontal_offset := 0.0) -> void:
 	if unit_id.is_empty() or not unit_nodes.has(unit_id):
 		return
 	var label := Label.new()
@@ -362,8 +354,7 @@ func present_unit_text(unit_name: String, text: String, color: Color, horizontal
 	tween.tween_property(label, "modulate:a", 0.0, BattleConfig.FLOATING_TEXT_DURATION).set_delay(BattleConfig.FLOATING_TEXT_DURATION * 0.45)
 	tween.chain().tween_callback(label.queue_free)
 
-func animate_unit_hit(unit_name: String) -> Tween:
-	var unit_id := unit_id_with_name(unit_name)
+func animate_unit_hit(unit_id: String) -> Tween:
 	if unit_id.is_empty() or not unit_nodes.has(unit_id):
 		return null
 	var visual: Node2D = unit_nodes[unit_id].get_node("Visual")
@@ -379,9 +370,7 @@ func animate_unit_hit(unit_name: String) -> Tween:
 	hit_tweens[unit_id] = tween
 	return tween
 
-func animate_unit_attack(actor_name: String, target_name: String) -> Tween:
-	var actor_id := unit_id_with_name(actor_name)
-	var target_id := unit_id_with_name(target_name)
+func animate_unit_attack(actor_id: String, target_id: String) -> Tween:
 	if actor_id.is_empty() or target_id.is_empty() or not unit_nodes.has(actor_id) or not unit_nodes.has(target_id):
 		return null
 	var actor_visual: Node2D = unit_nodes[actor_id].get_node("Visual")
@@ -397,8 +386,7 @@ func animate_unit_attack(actor_name: String, target_name: String) -> Tween:
 	attack_tweens[actor_id] = tween
 	return tween
 
-func animate_unit_death(unit_name: String) -> void:
-	var unit_id := unit_id_with_name(unit_name)
+func animate_unit_death(unit_id: String) -> void:
 	if unit_id.is_empty() or not unit_nodes.has(unit_id):
 		return
 	var body: Sprite2D = unit_nodes[unit_id].get_node("Visual/Body")
@@ -411,8 +399,7 @@ func animate_unit_death(unit_name: String) -> void:
 	unit_nodes[unit_id].queue_free()
 	unit_nodes.erase(unit_id)
 
-func wait_for_unit_movement(unit_name: String) -> void:
-	var unit_id := unit_id_with_name(unit_name)
+func wait_for_unit_movement(unit_id: String) -> void:
 	if unit_id.is_empty() or not movement_tweens.has(unit_id):
 		return
 	var tween: Tween = movement_tweens[unit_id]
@@ -466,13 +453,6 @@ func unit_with_id(units: Array, unit_id: String) -> Dictionary:
 		if unit.id == unit_id:
 			return unit
 	return {}
-
-func remember_unit_names(units: Array) -> void:
-	for unit in units:
-		unit_ids_by_name[unit.name] = unit.id
-
-func unit_id_with_name(unit_name: String) -> String:
-	return unit_ids_by_name.get(unit_name, "")
 
 func footprint_center(unit: Dictionary) -> Vector2:
 	var first := cell_center(Vector2i(unit.x, unit.y))

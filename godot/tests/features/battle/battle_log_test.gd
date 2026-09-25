@@ -24,14 +24,14 @@ func test_new_round_log() -> void:
 	assert_int(int(event.round)).override_failure_message("新回合事件應記錄目前輪數").is_equal(1)
 	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示整數回合數").contains("── 第 1 輪 ──")
 
-# 驗證新回合事件提供已排序的先攻擲骰明細，且總值等於擲骰與加值之和。
+# 驗證新回合事件提供單位實例 ID 與已排序的先攻擲骰明細，且總值等於擲骰與加值之和。
 func test_new_round_log_contains_initiative_rolls() -> void:
 	var event: Dictionary = battle.state.log[0]
 	assert_str(event.type).is_equal("new_round")
 	assert_array(event.initiative_rolls).override_failure_message("新回合事件應提供先攻擲骰明細").is_not_empty()
 	assert_int(event.initiative_rolls.size()).is_equal(3)
 	var initiative_roll: Dictionary = event.initiative_rolls[0]
-	assert_str(initiative_roll.unit).is_equal("測試劍士")
+	assert_str(initiative_roll.unit).is_equal("aria")
 	assert_str(initiative_roll.team).is_equal("player")
 	assert_int(int(initiative_roll.modifier)).is_equal(100)
 	var previous_total := 1000
@@ -45,7 +45,7 @@ func test_log_entries_use_event_default_expansion() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合與先攻紀錄應預設摺疊").is_false()
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var skill_index := find_last_event_index("skill", "測試劍士")
+	var skill_index := find_last_event_index("skill", "aria")
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應預設展開").is_true()
 
 # 驗證切換一筆紀錄只改變該筆狀態，且新增紀錄後保留既有狀態。
@@ -55,23 +55,23 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	assert_str(battle.ui.battle_log.text).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var skill_index := find_last_event_index("skill", "測試劍士")
+	var skill_index := find_last_event_index("skill", "aria")
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新增紀錄後應保留既有展開狀態").is_true()
 	battle.ui.toggle_log_entry(skill_index)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("切換技能紀錄不應影響新回合紀錄").is_true()
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應可獨立摺疊").is_false()
 	assert_str(battle.ui.battle_log.text).override_failure_message("摺疊技能紀錄應隱藏攻擊判定明細").not_contains("攻擊加值 104")
 
-# 驗證技能紀錄包含雙方派系、判定數值、結果、暴擊、傷害與剩餘生命，且 UI 以整數顯示其意義。
+# 驗證技能紀錄包含實例 ID、雙方派系與判定結果，且 UI 依類型翻譯名稱並顯示數值。
 func test_skill_resolution_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var event := find_last_event("skill", "測試劍士")
+	var event := find_last_event("skill", "aria")
 	assert_dict(event).override_failure_message("應產生技能事件").is_not_empty()
-	assert_str(event.actor).is_equal("測試劍士")
+	assert_str(event.actor).is_equal("aria")
 	assert_str(event.actor_team).is_equal("player")
 	assert_str(event.skill).is_equal("精準斬擊")
-	assert_str(event.target).is_equal("測試木樁")
+	assert_str(event.target).is_equal("wolf_a")
 	assert_dict(event.target_team).contains_key_value("enemy", "targets")
 	assert_int(int(event.attack_modifier)).is_equal(104)
 	assert_int(int(event.attack_total)).is_equal(int(event.roll) + 104)
@@ -86,21 +86,21 @@ func test_skill_resolution_log() -> void:
 	var result_names := {"dodge": "[color=#f0c96a]閃避[/color]", "block": "[color=#f0c96a]格擋[/color]", "hit": "[color=#f0c96a]命中[/color]"}
 	var critical_text := "，暴擊" if event.critical else ""
 	var log_text: String = battle.ui.battle_log.text
-	assert_str(log_text).contains("[color=#63a9ff]測試劍士[/color] 使用「精準斬擊」影響 [color=#ff6868]測試木樁[/color]")
+	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「精準斬擊」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_ARIA"), tr("UNIT_NAME_WOLF_A")])
 	assert_str(log_text).contains("D20 擲骰 %d + 攻擊加值 104 = 攻擊總值 %d" % [int(event.roll), int(event.attack_total)])
 	assert_str(log_text).contains("目標防禦：閃避門檻 12／格擋門檻 15")
 	assert_str(log_text).contains("結果：%s%s，%d 傷害，HP %d/10000" % [result_names[event.result], critical_text, expected_damage, 10000 - expected_damage])
 
-# 驗證技能使生命歸零時會記錄倒下狀態與對應顯示文字。
+# 驗證技能使生命歸零時會記錄倒下狀態，並翻譯倒下單位名稱。
 func test_downed_unit_log() -> void:
 	assert_bool(battle.send(skill_command("wolf_b", "finishing_strike"))).override_failure_message("終結技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var event := find_last_event("skill", "測試劍士")
+	var event := find_last_event("skill", "aria")
 	assert_bool(event.downed).override_failure_message("生命歸零的目標應標記為倒下").is_true()
 	assert_int(int(event.remaining_hp)).override_failure_message("倒下目標的剩餘生命應為零").is_zero()
-	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]脆弱木樁[/color] 倒下")
+	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]%s[/color] 倒下" % tr("UNIT_NAME_WOLF_B"))
 
-# 驗證踩到地刺會停止移動、扣除固定傷害，並記錄完整的地形傷害結果。
+# 驗證踩到地刺會停止移動、扣除固定傷害，並以實例 ID 記錄與顯示結果。
 func test_spikes_damage_log() -> void:
 	var terrain := terrain_at(Vector2i(0, 2))
 	assert_str(terrain.kind).override_failure_message("測試地格應標記為地刺").is_equal("spikes")
@@ -109,7 +109,7 @@ func test_spikes_damage_log() -> void:
 	await wait_for_combat_events()
 	var event := find_last_event("terrain_damage")
 	assert_dict(event).override_failure_message("應產生地形傷害事件").is_not_empty()
-	assert_str(event.target).is_equal("測試劍士")
+	assert_str(event.target).is_equal("aria")
 	assert_str(event.target_team).is_equal("player")
 	assert_str(event.terrain).is_equal("spikes")
 	assert_int(int(event.damage)).is_equal(3)
@@ -120,7 +120,7 @@ func test_spikes_damage_log() -> void:
 	assert_int(int(actor.hp)).override_failure_message("踩到地刺後 snapshot 應反映剩餘生命").is_equal(47)
 	assert_int(int(actor.x)).is_equal(0)
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
-	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]測試劍士[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50")
+	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]%s[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50" % tr("UNIT_NAME_ARIA"))
 
 # 驗證十二次真實攻擊與自動回合完成後，長戰鬥紀錄仍可拖曳捲動。
 func test_battle_log_can_be_dragged_to_scroll() -> void:

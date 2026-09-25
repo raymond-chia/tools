@@ -1,6 +1,20 @@
 class_name BattleConfig
 extends RefCounted
 
+const UNIT_ART_DIR := "res://assets/units/"
+
+static func unit_art_path(visual: String) -> String:
+	return UNIT_ART_DIR + visual
+
+static func unit_name_key(unit_type: String) -> String:
+	return "UNIT_NAME_%s" % unit_type.to_upper()
+
+static func skill_name_key(skill_id: String) -> String:
+	return "SKILL_NAME_%s" % skill_id.to_upper()
+
+static func terrain_name_key(terrain_id: String) -> String:
+	return "TERRAIN_NAME_%s" % terrain_id.to_upper()
+
 const PREVIEW_IGNORED_ERROR_IDS := [
 	"cannot_move",
 	"cannot_use_skill",

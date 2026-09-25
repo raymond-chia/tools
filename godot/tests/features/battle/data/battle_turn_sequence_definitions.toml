@@ -22,8 +22,7 @@ ai_default=true
 
 [[unit_types]]
 id="aria"
-visual="res://assets/units/fighter.svg"
-name="測試劍士"
+visual="fighter.svg"
 hp=100
 movement=1
 initiative=0
@@ -34,8 +33,7 @@ damage=0
 
 [[unit_types]]
 id="wolf"
-visual="res://assets/units/wolf.svg"
-name="測試荒原狼"
+visual="wolf.svg"
 hp=100
 movement=1
 initiative=100

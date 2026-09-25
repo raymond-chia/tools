@@ -14,7 +14,6 @@ pub struct Definitions {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitType {
     pub id: String,
-    pub name: String,
     pub visual: String,
     #[serde(default = "one")]
     pub width: i32,
@@ -102,7 +101,7 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
             .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
         units.push(UnitDef {
             id: placement.id,
-            name: kind.name.clone(),
+            unit_type: kind.id.clone(),
             visual: kind.visual.clone(),
             team: placement.team,
             x: placement.x,

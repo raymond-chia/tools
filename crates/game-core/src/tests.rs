@@ -250,7 +250,7 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
             height: 1,
         },
         Unit {
-            name: "測試角色".into(),
+            unit_type: "test_actor".into(),
             visual: "test_actor".into(),
             team: Team::Player,
             movement,
@@ -306,7 +306,7 @@ fn spawn_unit(
             Pos(position),
             footprint,
             Unit {
-                name: "測試單位".into(),
+                unit_type: "test_unit".into(),
                 visual: "test_unit".into(),
                 team,
                 movement: 0,
@@ -365,7 +365,7 @@ fn flanking_world(
     (world, attacker, target)
 }
 
-// 驗證推擊撞上另一單位時停止移動，並讓被推單位與被撞單位都受到碰撞傷害。
+// 驗證推擊撞上另一單位時停止移動，並以實例 ID 記錄受碰撞傷害的單位。
 #[test]
 fn push_collision_damages_both_units() {
     let mut game = push_collision_game();
@@ -409,7 +409,8 @@ fn push_collision_damages_both_units() {
         100 - collision_damage
     );
     assert_eq!(collision_units.len(), 1);
-    assert_eq!(collision_units[0].unit, "碰撞單位");
+    assert_eq!(collision_units[0].unit, "blocker");
+    assert_eq!(collision_units[0].unit_type, "test_unit");
     assert_eq!(collision_units[0].remaining_hp, 100 - collision_damage);
 }
 
@@ -493,19 +494,19 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
             ai_default: true,
         }],
         units: vec![
-            push_collision_unit("actor", "攻擊者", Team::Player, 1),
-            push_collision_unit("target", "被推單位", Team::Enemy("test_enemy".into()), 2),
-            push_collision_unit("blocker", "碰撞單位", Team::Enemy("test_enemy".into()), 3),
+            push_collision_unit("actor", Team::Player, 1),
+            push_collision_unit("target", Team::Enemy("test_enemy".into()), 2),
+            push_collision_unit("blocker", Team::Enemy("test_enemy".into()), 3),
         ],
     };
     Game::from_definition(definition).expect("測試戰鬥定義應有效")
 }
 
-fn push_collision_unit(id: &str, name: &str, team: Team, x: i32) -> UnitDef {
+fn push_collision_unit(id: &str, team: Team, x: i32) -> UnitDef {
     let initiative = if team == Team::Player { 100 } else { 0 };
     UnitDef {
         id: id.into(),
-        name: name.into(),
+        unit_type: "test_unit".into(),
         visual: "test_unit".into(),
         team,
         x,

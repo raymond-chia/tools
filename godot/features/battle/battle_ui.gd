@@ -93,6 +93,8 @@ func _ready() -> void:
 	update_language_menu()
 	apply_ui_z_order()
 	$Root/AttackPreview/Margin/Content/HealthImpactBar.resized.connect(func(): position_health_markers.call_deferred())
+	for segment in attack_preview_health_segments.values():
+		segment.resized.connect(func(): position_health_markers.call_deferred())
 	$Root/InfoPanel/Margin/Content/Header.gui_input.connect(_on_header_gui_input)
 	$Root/InfoPanel/Margin/Content/Header/Close.pressed.connect(func(): inspection_closed.emit())
 	battle_log.meta_clicked.connect(_on_battle_log_meta_clicked)
@@ -151,8 +153,8 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	if battle_log.text != formatted_log:
 		battle_log.text = formatted_log
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
-	actor_name.text = tr(actor.name) if not actor.is_empty() else "—"
-	actor_portrait.texture = load(actor.visual) if not actor.is_empty() else null
+	actor_name.text = localized_unit_name(actor.unit_type) if not actor.is_empty() else "—"
+	actor_portrait.texture = load(BattleConfig.unit_art_path(actor.visual)) if not actor.is_empty() else null
 	movement.text = tr("剩餘移動 %d") % int(snapshot.turn.move_remaining)
 	present_turn_order(snapshot, selecting_delay)
 	delay_button.disabled = not snapshot.turn.can_delay
@@ -193,7 +195,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	var unit := unit_with_id(snapshot.units, terrain.unit_id)
 	unit_details.visible = not unit.is_empty()
 	if not unit.is_empty():
-		unit_name.text = tr(unit.name)
+		unit_name.text = localized_unit_name(unit.unit_type)
 		detail_values.team.text = tr("我方") if unit.team is String else tr("敵方") + "（%s）" % unit.team.enemy
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
 		detail_values.size.text = tr("大型") if unit.large else tr("一般")
@@ -202,7 +204,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
 		detail_values.attack.text = "%d" % int(unit.attack)
 		detail_values.damage.text = "%d" % int(unit.damage)
-	terrain_name.text = tr(terrain.name_key)
+	terrain_name.text = tr(BattleConfig.terrain_name_key(terrain.kind))
 	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("無法通行")
 	terrain_effect.text = localized_detail(terrain.effect_description)
 
@@ -221,11 +223,11 @@ func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 		slot.add_child(marker)
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(112.0, 72.0)
-		button.icon = load(unit.visual)
+		button.icon = load(BattleConfig.unit_art_path(unit.visual))
 		button.expand_icon = true
 		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
-		button.tooltip_text = tr(unit.name)
+		button.tooltip_text = localized_unit_name(unit.unit_type)
 		button.mouse_filter = Control.MOUSE_FILTER_STOP
 		button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true, selecting_delay))
 		button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false, selecting_delay))
@@ -268,14 +270,14 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 	attack_preview_critical.get_parent().visible = not is_healing
 	attack_preview_resources.text = tr("ATTACK_PREVIEW_RESOURCES") % [int(preview.target_hp), int(preview.target_max_hp), int(preview.target_mana)]
 	if is_healing:
-		attack_preview_title.text = tr("HEAL_PREVIEW_TITLE") % tr(preview.target)
+		attack_preview_title.text = tr("HEAL_PREVIEW_TITLE") % localized_unit_name(preview.target_type)
 		attack_preview_damage.text = tr("HEAL_PREVIEW_AMOUNT") % int(preview.healing)
 		attack_preview_markers.get_node("Hit").text = str(int(preview.remaining_hp))
 		present_health_segments(preview.health_segments)
 		healing_preview_segment.size_flags_stretch_ratio = float(preview.healing)
 		layout_attack_preview(pointer_position)
 		return
-	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % tr(preview.target)
+	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % localized_unit_name(preview.target_type)
 	attack_preview_damage.text = tr("ATTACK_PREVIEW_DAMAGE") % int(preview.hit_damage)
 	attack_preview_result_labels.hit.text = tr("ATTACK_PREVIEW_HIT") % int(preview.hit_chance)
 	attack_preview_result_labels.block.text = tr("ATTACK_PREVIEW_BLOCK") % int(preview.block_chance)
@@ -345,9 +347,9 @@ func format_log(events: Array) -> String:
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("── 第 %d 輪 ──") % int(event.round)])
 				if expanded:
 					for initiative_roll in event.initiative_rolls:
-						entries.append(tr("%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d") % [colored_unit(initiative_roll.unit, initiative_roll.team), int(initiative_roll.die_sides), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
+						entries.append(tr("%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d") % [colored_unit(initiative_roll.unit_type, initiative_roll.team), int(initiative_roll.die_sides), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
 			"skill", "healing":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」影響 %s") % [colored_unit(event.actor, event.actor_team), tr(event.skill), colored_unit(event.target, event.target_team)]])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」影響 %s") % [colored_unit(event.actor_type, event.actor_team), tr(event.skill), colored_unit(event.target_type, event.target_team)]])
 				if not expanded:
 					continue
 				if event.type == "healing":
@@ -364,26 +366,26 @@ func format_log(events: Array) -> String:
 				else:
 					entries.append(tr("結果：%s%s，%d 傷害，HP %d/%d") % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
 				if event.pushed:
-					entries.append(tr("%s 被沿攻擊方向推動 %d 格") % [colored_unit(event.target, event.target_team), int(event.push_distance)])
+					entries.append(tr("%s 被沿攻擊方向推動 %d 格") % [colored_unit(event.target_type, event.target_team), int(event.push_distance)])
 				elif event.push_blocked:
-					entries.append(tr("推擊受阻，%s 額外受到 %d 點碰撞傷害") % [colored_unit(event.target, event.target_team), int(event.collision_damage)])
+					entries.append(tr("推擊受阻，%s 額外受到 %d 點碰撞傷害") % [colored_unit(event.target_type, event.target_team), int(event.collision_damage)])
 					for collision_unit in event.collision_units:
-						entries.append(tr("%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d") % [colored_unit(collision_unit.unit, collision_unit.team), int(event.collision_damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
+						entries.append(tr("%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d") % [colored_unit(collision_unit.unit_type, collision_unit.team), int(event.collision_damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
 				if event.downed:
-					entries.append(tr("%s 倒下") % colored_unit(event.target, event.target_team))
+					entries.append(tr("%s 倒下") % colored_unit(event.target_type, event.target_team))
 				for collision_unit in event.collision_units:
 					if collision_unit.downed:
-						entries.append(tr("%s 倒下") % colored_unit(collision_unit.unit, collision_unit.team))
+						entries.append(tr("%s 倒下") % colored_unit(collision_unit.unit_type, collision_unit.team))
 			"terrain_created":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor, event.actor_team), tr(event.skill)]])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor_type, event.actor_team), tr(event.skill)]])
 				if expanded:
-					entries.append(tr("產生「%s」") % tr(event.terrain_name_key))
+					entries.append(tr("產生「%s」") % tr(BattleConfig.terrain_name_key(event.terrain)))
 			"status_applied":
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("狀態變化")])
 				if expanded:
-					entries.append(tr("%s 受到「%s」狀態影響") % [colored_unit(event.target, event.target_team), tr(event.status_name_key)])
+					entries.append(tr("%s 受到「%s」狀態影響") % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.status))])
 			"terrain_damage":
-				var log_text := tr(event.log_key) % [colored_unit(event.target, event.target_team), tr(event.terrain_name_key), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
+				var log_text := tr(event.log_key) % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.terrain)), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, log_text])
 	return "\n".join(entries)
 
@@ -427,8 +429,11 @@ func _on_log_visibility_toggled(hidden: bool) -> void:
 	log_panel.visible = not hidden
 	log_visibility_button.text = tr("顯示紀錄") if hidden else tr("隱藏紀錄")
 
-func colored_unit(unit: String, team: Variant) -> String:
-	return "[color=%s]%s[/color]" % [TEAM_COLORS["player" if team is String else "enemy"], tr(unit)]
+func localized_unit_name(unit_type: String) -> String:
+	return tr(BattleConfig.unit_name_key(unit_type))
+
+func colored_unit(unit_type: String, team: Variant) -> String:
+	return "[color=%s]%s[/color]" % [TEAM_COLORS["player" if team is String else "enemy"], localized_unit_name(unit_type)]
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)
@@ -476,7 +481,7 @@ func present_hovered_skill() -> void:
 		hovered_skill_details.text = localized_skill_details(hovered)
 
 func localized_skill_name(skill: Dictionary) -> String:
-	return tr(skill.name_key)
+	return tr(BattleConfig.skill_name_key(skill.id))
 
 func localized_skill_details(skill: Dictionary) -> String:
 	var lines: Array[String] = []

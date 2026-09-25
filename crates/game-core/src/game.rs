@@ -173,7 +173,7 @@ impl Game {
                     maximum: u.hp,
                 },
                 Unit {
-                    name: u.name,
+                    unit_type: u.unit_type,
                     visual: u.visual,
                     team: u.team,
                     movement: u.movement,
@@ -277,21 +277,29 @@ impl Game {
             .query::<(&Id, &Unit, Has<Downed>)>()
             .iter(&self.world)
             .filter(|(i, _, d)| active.contains(&i.0) && !*d)
-            .map(|(i, f, _)| (i.0.clone(), f.name.clone(), f.team.clone(), f.initiative))
+            .map(|(i, f, _)| {
+                (
+                    i.0.clone(),
+                    f.unit_type.clone(),
+                    f.team.clone(),
+                    f.initiative,
+                )
+            })
             .collect();
         let mut rolled: Vec<_> = entries
             .into_iter()
-            .map(|(id, name, team, modifier)| {
+            .map(|(id, unit_type, team, modifier)| {
                 let roll = die(&mut self.world, gameplay_config::INITIATIVE_DIE_SIDES) as i32;
-                (roll + modifier, id, name, team, roll, modifier)
+                (roll + modifier, id, unit_type, team, roll, modifier)
             })
             .collect();
         rolled.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
         let initiative_rolls = rolled
             .iter()
             .map(
-                |(total, _id, unit, team, roll, modifier)| InitiativeRollLog {
-                    unit: unit.clone(),
+                |(total, id, unit_type, team, roll, modifier)| InitiativeRollLog {
+                    unit: id.clone(),
+                    unit_type: unit_type.clone(),
                     team: team.clone(),
                     roll: *roll,
                     die_sides: gameplay_config::INITIATIVE_DIE_SIDES,
@@ -550,7 +558,7 @@ impl Game {
             })
             .map(|(entity, i, p, fp, h, f, d)| UnitView {
                 id: i.0.clone(),
-                name: f.name.clone(),
+                unit_type: f.unit_type.clone(),
                 visual: f.visual.clone(),
                 team: f.team.clone(),
                 x: p.0.x,
@@ -667,7 +675,6 @@ impl Game {
                         x,
                         y,
                         kind: kind.to_string(),
-                        name_key: definition.name_key.clone(),
                         visual: definition.visual.clone(),
                         passable: definition.passable,
                         base_kind: if base_cost > 1 { "rough" } else { "plain" }.to_string(),

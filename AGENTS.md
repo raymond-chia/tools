@@ -74,7 +74,7 @@
 
 - 凡是根據遊戲資料進行計算、比較、合法性判斷或結果分類，一律由 `game-core` 負責；不因用途是執行、預覽或顯示而例外。
 - Godot 只處理輸入、純介面狀態，以及核心已決定資料的排版、繪製與效果；不得從 snapshot 原始值重建規則。
-- Godot 需要衍生資訊時，先擴充 `game-core` 的 command、query 或 presentation snapshot；`godot-bridge` 只轉換輸入輸出，不得解讀或補算規則。
+- Godot 需要依遊戲規則衍生資訊時，先擴充 `game-core` 的 command、query 或 presentation snapshot；`godot-bridge` 只轉換輸入輸出，不得解讀或補算規則。
 - 修改 GDScript 前必須檢查上述邊界；發現規則推導時，先移回 `game-core`。
 
 ### Combat log

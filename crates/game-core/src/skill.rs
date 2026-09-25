@@ -84,7 +84,8 @@ impl Game {
             0
         };
         Ok(SkillPreview::Attack(AttackPreview {
-            target: target_unit.name.clone(),
+            target: target.to_owned(),
+            target_type: target_unit.unit_type.clone(),
             target_hp: target_hp.current,
             target_max_hp: target_hp.maximum,
             target_mana: gameplay_config::DEFAULT_MANA,
@@ -145,7 +146,8 @@ impl Game {
             .clone();
         if skill.effect == SkillEffect::Heal {
             let HealingPreview {
-                target: target_name,
+                target: target_id,
+                target_type,
                 target_hp: _,
                 target_max_hp: max_hp,
                 target_mana: _,
@@ -162,10 +164,12 @@ impl Game {
                 .resource_mut::<Log>()
                 .0
                 .push(CombatLogEvent::Healing {
-                    actor: attacker_unit.name,
+                    actor: a.to_owned(),
+                    actor_type: attacker_unit.unit_type,
                     actor_team: attacker_unit.team.clone(),
                     skill: skill.name,
-                    target: target_name,
+                    target: target_id,
+                    target_type,
                     target_team: target_unit.team.clone(),
                     healing,
                     remaining_hp,
@@ -319,7 +323,8 @@ impl Game {
                             .remove(&id);
                     }
                     collision_units.push(CollisionUnitLog {
-                        unit: unit.name,
+                        unit: id,
+                        unit_type: unit.unit_type,
                         team: unit.team.clone(),
                         remaining_hp,
                         max_hp,
@@ -338,10 +343,12 @@ impl Game {
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::Skill {
-                actor: attacker_unit.name,
+                actor: a.to_owned(),
+                actor_type: attacker_unit.unit_type,
                 actor_team: attacker_unit.team.clone(),
                 skill: skill.name,
-                target: target_unit.name,
+                target: target.to_owned(),
+                target_type: target_unit.unit_type,
                 target_team: target_unit.team.clone(),
                 roll: natural,
                 die_sides: gameplay_config::ATTACK_DIE_SIDES,
@@ -388,7 +395,6 @@ impl Game {
             None => return,
         };
         let terrain_definition = terrain_type(self.world.resource::<Board>(), &terrain);
-        let terrain_name_key = terrain_definition.name_key.clone();
         let log_key = terrain_definition
             .forced_entry_log_key
             .clone()
@@ -408,7 +414,7 @@ impl Game {
             .world
             .get::<Unit>(entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件");
-        let target = unit.name.clone();
+        let target_type = unit.unit_type.clone();
         let target_team = unit.team.clone();
         let mut hp = self
             .world
@@ -429,10 +435,10 @@ impl Game {
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::TerrainDamage {
-                target,
+                target: id.to_owned(),
+                target_type,
                 target_team,
                 terrain,
-                terrain_name_key,
                 log_key,
                 damage,
                 remaining_hp,
@@ -510,18 +516,15 @@ impl Game {
                 expires_after_round: current_round + duration - 1,
             },
         );
-        let terrain_name_key = terrain_type(self.world.resource::<Board>(), &terrain)
-            .name_key
-            .clone();
         self.world
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::TerrainCreated {
-                actor: unit.name,
+                actor: actor.to_owned(),
+                actor_type: unit.unit_type,
                 actor_team: unit.team.clone(),
                 skill: skill.name,
                 terrain,
-                terrain_name_key,
             });
         self.finish();
         Ok(())
@@ -539,9 +542,14 @@ fn healing_preview(world: &World, target: Entity, skill: &SkillDef) -> HealingPr
     .min(hp.maximum);
     HealingPreview {
         target: world
+            .get::<Id>(target)
+            .expect("已建立的戰鬥單位應具有 Id 元件")
+            .0
+            .clone(),
+        target_type: world
             .get::<Unit>(target)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
-            .name
+            .unit_type
             .clone(),
         target_hp: hp.current,
         target_max_hp: hp.maximum,
@@ -977,7 +985,6 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
             }
             SkillRangeView {
                 id: skill.id.clone(),
-                name_key: format!("SKILL_{}_NAME", skill.id.to_ascii_uppercase()),
                 details: skill_details(skill, board),
                 cell_targeted: skill.effect == SkillEffect::Mire,
                 enabled: can_use_skill(w.resource::<Turn>()),

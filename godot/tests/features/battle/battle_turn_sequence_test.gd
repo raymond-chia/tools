@@ -17,7 +17,7 @@ func before_test() -> void:
 	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
 	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
-# 驗證跨輪後先更新先攻順序，並在敵人攻擊動畫結束後才交給下一位。
+# 驗證跨輪後先更新先攻順序與翻譯後的敵人名稱，並在敵人攻擊動畫結束後才交給下一位。
 func test_new_round_order_precedes_enemy_action() -> void:
 	assert_str(battle.state.turn.actor).is_equal("aria")
 	assert_bool(battle.send({"type": "end_turn", "actor": "aria"})).override_failure_message("玩家應可結束回合").is_true()
@@ -27,7 +27,7 @@ func test_new_round_order_precedes_enemy_action() -> void:
 	assert_str(battle.state.turn.actor).override_failure_message("新輪第一位應是敵人").is_equal("wolf")
 	assert_str(battle.state.log[-1].type).override_failure_message("敵人行動前應先記錄新輪先攻").is_equal("new_round")
 	assert_int(int(battle.displayed_state.round)).override_failure_message("新輪順序應已交給介面顯示").is_equal(2)
-	assert_str(battle.ui.actor_name.text).override_failure_message("介面應先顯示新輪的敵方行動者").is_equal("測試荒原狼")
+	assert_str(battle.ui.actor_name.text).override_failure_message("介面應先顯示新輪的敵方行動者").is_equal(tr("UNIT_NAME_WOLF"))
 	assert_int(battle.ui.turn_order.get_child_count()).override_failure_message("介面應顯示下一位玩家").is_equal(1)
 	var round_start_log_size: int = battle.state.log.size()
 	for _frame in 60:
