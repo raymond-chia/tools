@@ -3,10 +3,10 @@ use crate::error::{self, GameError};
 use crate::game::{Game, die};
 use crate::gameplay_config;
 use crate::model::{
-    AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, DetailView, Downed,
-    Encounter, Footprint, ForcedEntry, GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log,
-    Phase, Pos, RollDegree, SkillDef, SkillEffect, SkillPreview, SkillRangeView, Skills,
-    TemporaryTerrain, TemporaryTerrains, TerrainTypeDef, Turn, Unit,
+    AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, DetailView, Encounter,
+    Footprint, ForcedEntry, GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, Phase, Pos,
+    RollDegree, SkillDef, SkillEffect, SkillPreview, SkillRangeView, Skills, TemporaryTerrain,
+    TemporaryTerrains, TerrainTypeDef, Turn, Unit,
 };
 use crate::movement::{
     fits, footprint_blocks_forced_entry, footprint_cells, footprint_distance, overlap,
@@ -223,11 +223,6 @@ impl Game {
             hp.current = (hp.current - damage).max(0);
             if hp.current == 0 {
                 downed = true;
-                self.world.entity_mut(te).insert(Downed);
-                self.world
-                    .resource_mut::<Encounter>()
-                    .participants
-                    .remove(target);
             }
         }
         let mut pushed = false;
@@ -260,7 +255,6 @@ impl Game {
                     .iter_entities()
                     .filter(|entity| {
                         entity.id() != te
-                            && entity.get::<Downed>().is_none()
                             && entity
                                 .get::<Pos>()
                                 .zip(entity.get::<Footprint>())
@@ -290,11 +284,6 @@ impl Game {
                 hp.current = (hp.current - collision_damage).max(0);
                 if hp.current == 0 {
                     downed = true;
-                    self.world.entity_mut(te).insert(Downed);
-                    self.world
-                        .resource_mut::<Encounter>()
-                        .participants
-                        .remove(target);
                 }
                 for blocking_entity in blocking_units {
                     let unit = self
@@ -316,21 +305,17 @@ impl Game {
                     let remaining_hp = hp.current;
                     let max_hp = hp.maximum;
                     let blocker_downed = remaining_hp == 0;
-                    if blocker_downed {
-                        self.world.entity_mut(blocking_entity).insert(Downed);
-                        self.world
-                            .resource_mut::<Encounter>()
-                            .participants
-                            .remove(&id);
-                    }
                     collision_units.push(CollisionUnitLog {
-                        unit: id,
+                        unit: id.clone(),
                         unit_type: unit.unit_type,
                         team: unit.team.clone(),
                         remaining_hp,
                         max_hp,
                         downed: blocker_downed,
                     });
+                    if blocker_downed {
+                        self.remove_unit(blocking_entity, &id);
+                    }
                 }
             }
         }
@@ -381,6 +366,9 @@ impl Game {
         if pushed {
             self.apply_pushed_terrain(te, target);
         }
+        if downed {
+            self.remove_unit(te, target);
+        }
         self.finish();
         Ok(())
     }
@@ -421,13 +409,6 @@ impl Game {
             let remaining_hp = hp.current;
             let max_hp = hp.maximum;
             let downed = remaining_hp == 0;
-            if downed {
-                self.world.entity_mut(entity).insert(Downed);
-                self.world
-                    .resource_mut::<Encounter>()
-                    .participants
-                    .remove(id);
-            }
             self.world
                 .resource_mut::<Log>()
                 .0
@@ -443,6 +424,7 @@ impl Game {
                     downed,
                 });
             if downed {
+                self.remove_unit(entity, id);
                 break;
             }
         }
@@ -578,9 +560,6 @@ fn validate_unit_skill_target(
     target_cell: GridPos,
     skill: &SkillDef,
 ) -> Result<(), GameError> {
-    if world.get::<Downed>(target).is_some() {
-        return Err(error::target_downed());
-    }
     let target_position = world
         .get::<Pos>(target)
         .expect("已建立的戰鬥單位應具有 Pos 元件")
@@ -719,7 +698,7 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
         .clone();
     let skills = world.resource::<Skills>();
     let has_supporter = world.iter_entities().any(|entity| {
-        if entity.id() == attacker || entity.id() == target || entity.get::<Downed>().is_some() {
+        if entity.id() == attacker || entity.id() == target {
             return false;
         }
         let unit = match entity.get::<Unit>() {

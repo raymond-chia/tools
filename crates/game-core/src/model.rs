@@ -36,20 +36,25 @@ pub enum AttackResult {
     Block,
     Hit,
 }
+
 #[derive(Component)]
 pub(crate) struct Id(pub(crate) String);
+
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Pos(pub(crate) GridPos);
+
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Footprint {
     pub(crate) width: i32,
     pub(crate) height: i32,
 }
+
 #[derive(Component)]
 pub(crate) struct Hp {
     pub(crate) current: i32,
     pub(crate) maximum: i32,
 }
+
 #[derive(Component, Clone)]
 pub(crate) struct Unit {
     pub(crate) unit_type: String,
@@ -63,8 +68,7 @@ pub(crate) struct Unit {
     pub(crate) damage: i32,
     pub(crate) skills: Vec<String>,
 }
-#[derive(Component)]
-pub(crate) struct Downed;
+
 #[derive(Resource, Clone)]
 pub(crate) struct Board {
     pub(crate) width: i32,
@@ -72,6 +76,7 @@ pub(crate) struct Board {
     pub(crate) terrains: HashMap<GridPos, Vec<String>>,
     pub(crate) terrain_types: HashMap<String, TerrainTypeDef>,
 }
+
 #[derive(Clone)]
 pub(crate) struct TemporaryTerrain {
     pub(crate) expires_after_round: u32,
@@ -438,7 +443,6 @@ pub struct UnitView {
     pub block: i32,
     pub attack: i32,
     pub damage: i32,
-    pub downed: bool,
     pub active: bool,
 }
 #[derive(Serialize)]

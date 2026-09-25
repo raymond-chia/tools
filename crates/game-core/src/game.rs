@@ -1,7 +1,7 @@
 //! 載入、命令分派、回合流程與快照。
 use crate::error::GameError;
 use crate::model::{
-    Board, CombatLogEvent, Command, Definition, Downed, Encounter, Footprint, GridPos, Hp, Id,
+    Board, CombatLogEvent, Command, Definition, Encounter, Footprint, GridPos, Hp, Id,
     InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
     SkillEffect, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView, TerrainEffectView,
     Turn, TurnView, Unit, UnitView,
@@ -14,7 +14,7 @@ use crate::skill::{
     can_use_skill, closest_occupied_cell, detail, effective_block, effective_dodge, skill_ranges,
 };
 use crate::{authoring, error, gameplay_config};
-use bevy_ecs::prelude::{Entity, Has, World};
+use bevy_ecs::prelude::{Entity, World};
 use std::collections::{HashMap, HashSet};
 
 pub struct Game {
@@ -270,10 +270,10 @@ impl Game {
         let active = self.world.resource::<Encounter>().participants.clone();
         let entries: Vec<_> = self
             .world
-            .query::<(&Id, &Unit, Has<Downed>)>()
+            .query::<(&Id, &Unit)>()
             .iter(&self.world)
-            .filter(|(i, _, d)| active.contains(&i.0) && !*d)
-            .map(|(i, f, _)| {
+            .filter(|(i, _)| active.contains(&i.0))
+            .map(|(i, f)| {
                 (
                     i.0.clone(),
                     f.unit_type.clone(),
@@ -347,10 +347,30 @@ impl Game {
     pub(crate) fn finish(&mut self) {
         self.world.resource_mut::<Turn>().phase = Phase::Ended;
     }
+    pub(crate) fn remove_unit(&mut self, entity: Entity, id: &str) {
+        let is_actor = self.world.resource::<Turn>().actor.as_deref() == Some(id);
+        let mut encounter = self.world.resource_mut::<Encounter>();
+        encounter.participants.remove(id);
+        if let Some(index) = encounter.order.iter().position(|unit_id| unit_id == id) {
+            encounter.order.remove(index);
+            if index < encounter.cursor {
+                encounter.cursor -= 1;
+            }
+        }
+        if is_actor {
+            let mut turn = self.world.resource_mut::<Turn>();
+            turn.actor = None;
+            turn.phase = Phase::Ended;
+        }
+        self.world.entity_mut(entity).despawn();
+    }
     fn advance_turn(&mut self) {
+        let actor_removed = self.world.resource::<Turn>().actor.is_none();
         let end = {
             let mut e = self.world.resource_mut::<Encounter>();
-            e.cursor += 1;
+            if !actor_removed {
+                e.cursor += 1;
+            }
             e.cursor >= e.order.len()
         };
         if end { self.roll_round() } else { self.begin() }
@@ -369,13 +389,11 @@ impl Game {
             .as_ref()
             .and_then(|actor| self.entity(actor))
             .is_some_and(|entity| {
-                self.world.get::<Downed>(entity).is_some()
-                    || self
-                        .world
-                        .get::<Unit>(entity)
-                        .expect("已建立的戰鬥單位應具有 Unit 元件")
-                        .team
-                        != Team::Player
+                self.world
+                    .get::<Unit>(entity)
+                    .expect("已建立的戰鬥單位應具有 Unit 元件")
+                    .team
+                    != Team::Player
             })
     }
     fn auto_step(&mut self) -> Result<(), GameError> {
@@ -426,10 +444,6 @@ impl Game {
             .clone()
             .ok_or(error::missing_initiative_unit())?;
         let e = self.entity(&a).ok_or(error::missing_initiative_unit())?;
-        if self.world.get::<Downed>(e).is_some() {
-            self.finish();
-            return Ok(());
-        }
         let t = match self.closest(e) {
             Some(v) => v,
             None => {
@@ -502,9 +516,7 @@ impl Game {
         let attacker = &self.world.get::<Unit>(e)?.team;
         self.world
             .iter_entities()
-            .filter(|q| {
-                q.get::<Unit>().is_some_and(|f| &f.team != attacker) && q.get::<Downed>().is_none()
-            })
+            .filter(|q| q.get::<Unit>().is_some_and(|f| &f.team != attacker))
             .min_by_key(|q| {
                 distance(
                     p,
@@ -517,7 +529,7 @@ impl Game {
         let mut p = false;
         let mut e = false;
         for q in self.world.iter_entities() {
-            if let Some(f) = q.get::<Unit>().filter(|_| q.get::<Downed>().is_none()) {
+            if let Some(f) = q.get::<Unit>() {
                 match &f.team {
                     Team::Player => p = true,
                     Team::Enemy(_) => e = true,
@@ -540,7 +552,6 @@ impl Game {
         let mut units: Vec<_> = self
             .world
             .iter_entities()
-            .filter(|entity| entity.get::<Downed>().is_none())
             .filter_map(|e| {
                 Some((
                     e.id(),
@@ -549,10 +560,9 @@ impl Game {
                     e.get::<Footprint>()?,
                     e.get::<Hp>()?,
                     e.get::<Unit>()?,
-                    e.get::<Downed>().is_some(),
                 ))
             })
-            .map(|(entity, i, p, fp, h, f, d)| UnitView {
+            .map(|(entity, i, p, fp, h, f)| UnitView {
                 id: i.0.clone(),
                 unit_type: f.unit_type.clone(),
                 visual: f.visual.clone(),
@@ -572,7 +582,6 @@ impl Game {
                 block: effective_block(&self.world, entity),
                 attack: f.attack,
                 damage: f.damage,
-                downed: d,
                 active: enc.participants.contains(&i.0),
             })
             .collect();
@@ -613,11 +622,7 @@ impl Game {
         let turn_order: Vec<_> = enc
             .order
             .iter()
-            .skip(enc.cursor + 1)
-            .filter(|unit_id| {
-                self.entity(unit_id)
-                    .is_some_and(|entity| self.world.get::<Downed>(entity).is_none())
-            })
+            .skip(enc.cursor + usize::from(turn.actor.is_some()))
             .cloned()
             .collect();
         let can_delay = player_turn

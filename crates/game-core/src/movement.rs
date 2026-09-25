@@ -3,8 +3,8 @@ use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::gameplay_config;
 use crate::model::{
-    Board, CombatLogEvent, Downed, Encounter, Footprint, ForcedEntry, GridPos, Hp, Id, Log,
-    MovePreview, Phase, Pos, Team, TemporaryTerrains, TerrainTypeDef, Turn, Unit,
+    Board, CombatLogEvent, Encounter, Footprint, ForcedEntry, GridPos, Hp, Id, Log, MovePreview,
+    Phase, Pos, Team, TemporaryTerrains, TerrainTypeDef, Turn, Unit,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::{
@@ -116,11 +116,7 @@ impl Game {
                     let max_hp = hp.maximum;
                     let downed = remaining_hp == 0;
                     if downed {
-                        self.world.entity_mut(e).insert(Downed);
-                        self.world
-                            .resource_mut::<Encounter>()
-                            .participants
-                            .remove(a);
+                        self.remove_unit(e, a);
                     }
                     self.world
                         .resource_mut::<Log>()
@@ -141,9 +137,12 @@ impl Game {
                     }
                 }
             }
-            if ends_movement || self.world.get::<Downed>(e).is_some() {
+            if ends_movement || self.world.get_entity(e).is_err() {
                 break;
             }
+        }
+        if self.world.get_entity(e).is_err() {
+            return Ok(());
         }
         let mut t = self.world.resource_mut::<Turn>();
         if turn.moves == 0 && spent <= first_budget {
@@ -325,7 +324,6 @@ pub(crate) fn overlap(a: GridPos, af: Footprint, b: GridPos, bf: Footprint) -> b
 pub(crate) fn occupied(w: &World, ignore: Entity, p: GridPos, f: Footprint) -> bool {
     w.iter_entities().any(|e| {
         e.id() != ignore
-            && e.get::<Downed>().is_none()
             && e.get::<Pos>()
                 .zip(e.get::<Footprint>())
                 .is_some_and(|(q, g)| overlap(p, f, q.0, *g))

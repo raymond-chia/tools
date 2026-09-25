@@ -19,7 +19,6 @@ const PREVIEW_IGNORED_ERROR_IDS := [
 	"cannot_move",
 	"cannot_use_skill",
 	"unreachable_destination",
-	"target_downed",
 	"target_too_close",
 	"target_too_far",
 	"heal_allies_only",

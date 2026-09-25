@@ -131,10 +131,6 @@ pub(crate) fn target_too_far() -> GameError {
     GameError::new("target_too_far", "目標距離太遠".to_owned())
 }
 
-pub(crate) fn target_downed() -> GameError {
-    GameError::new("target_downed", "目標已倒下".to_owned())
-}
-
 pub(crate) fn cell_not_on_target() -> GameError {
     GameError::new("cell_not_on_target", "所選格不屬於目標".to_owned())
 }
