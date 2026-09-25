@@ -108,6 +108,8 @@ pub(crate) struct Turn {
 pub(crate) struct Random(pub(crate) u64);
 #[derive(Resource, Default)]
 pub(crate) struct Log(pub(crate) Vec<CombatLogEvent>);
+#[derive(Resource, Default)]
+pub(crate) struct DeliveredLogCount(pub(crate) usize);
 #[derive(Resource)]
 pub(crate) struct ResultState(pub(crate) Outcome);
 #[derive(Resource)]

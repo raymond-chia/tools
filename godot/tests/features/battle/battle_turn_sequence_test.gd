@@ -25,11 +25,11 @@ func test_new_round_order_precedes_enemy_action() -> void:
 	while int(battle.state.round) < 2:
 		await runner.simulate_frames(1)
 	assert_str(battle.state.turn.actor).override_failure_message("新輪第一位應是敵人").is_equal("wolf")
-	assert_str(battle.state.log[-1].type).override_failure_message("敵人行動前應先記錄新輪先攻").is_equal("new_round")
+	assert_str(battle.ui.presented_log_events[-1].type).override_failure_message("敵人行動前應先記錄新輪先攻").is_equal("new_round")
 	assert_int(int(battle.displayed_state.round)).override_failure_message("新輪順序應已交給介面顯示").is_equal(2)
 	assert_str(battle.ui.actor_name.text).override_failure_message("介面應先顯示新輪的敵方行動者").is_equal(tr("UNIT_NAME_WOLF"))
 	assert_int(battle.ui.turn_order.get_child_count()).override_failure_message("介面應顯示下一位玩家").is_equal(1)
-	var round_start_log_size: int = battle.state.log.size()
+	var round_start_log_size: int = battle.ui.presented_log_events.size()
 	for _frame in 60:
 		if battle.world.is_presenting_combat_events():
 			break
@@ -38,7 +38,7 @@ func test_new_round_order_precedes_enemy_action() -> void:
 	assert_str(battle.state.turn.actor).override_failure_message("敵人攻擊動畫期間不可換成下一位").is_equal("wolf")
 	assert_str(battle.state.turn.phase).override_failure_message("敵人攻擊結算後應等待動畫完成才推進回合").is_equal("ended")
 	await wait_for_battle_idle()
-	assert_str(battle.state.log[round_start_log_size].type).override_failure_message("更新順序後敵人才進行攻擊").is_equal("skill")
+	assert_str(battle.ui.presented_log_events[round_start_log_size].type).override_failure_message("更新順序後敵人才進行攻擊").is_equal("skill")
 	assert_str(battle.state.turn.actor).override_failure_message("敵人動畫結束後應輪到玩家").is_equal("aria")
 
 func wait_for_battle_idle() -> void:

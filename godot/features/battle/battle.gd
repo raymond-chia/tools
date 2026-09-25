@@ -6,6 +6,7 @@ extends Node
 var core
 var state: Dictionary = {}
 var displayed_state: Dictionary = {}
+var pending_display_log: Array = []
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
 var inspected_skill := ""
@@ -68,6 +69,7 @@ func _ready() -> void:
 
 func _on_language_changed() -> void:
 	update_battle_title()
+	ui.refresh_log_language()
 	if back_button != null:
 		back_button.text = tr("返回編輯器")
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
@@ -86,8 +88,9 @@ func send(command: Dictionary) -> bool:
 		present()
 		return false
 	state = value
+	pending_display_log.append_array(value.log)
 	status = ""
-	present()
+	present(true)
 	advance_automatic_turn()
 	return true
 
@@ -108,15 +111,22 @@ func show_error(message: String) -> void:
 	status = message
 	ui.present_status(message)
 
-func present() -> void:
-	world.present(state, pending_action, inspected_cell, core)
+func present(new_snapshot := false) -> void:
+	world.present(state, pending_action, inspected_cell, core, new_snapshot)
 	if not world.is_presenting_combat_events():
-		displayed_state = state
+		show_current_state()
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
+	displayed_state.log = []
 
 func _on_combat_events_finished() -> void:
-	displayed_state = state
+	show_current_state()
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
+	displayed_state.log = []
+
+func show_current_state() -> void:
+	displayed_state = state.duplicate()
+	displayed_state.log = pending_display_log
+	pending_display_log = []
 
 func input_is_locked() -> bool:
 	return (not state.is_empty() and state.turn.auto_step) or world.is_presenting_combat_events()

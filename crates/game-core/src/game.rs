@@ -1,8 +1,8 @@
 //! 載入、命令分派、回合流程與快照。
 use crate::error::GameError;
 use crate::model::{
-    Board, CombatLogEvent, Command, Definition, Encounter, Footprint, GridPos, Hp, Id,
-    InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
+    Board, CombatLogEvent, Command, Definition, DeliveredLogCount, Encounter, Footprint, GridPos,
+    Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
     SkillEffect, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView, TerrainEffectView,
     Turn, TurnView, Unit, UnitView,
 };
@@ -87,6 +87,7 @@ impl Game {
         });
         w.insert_resource(Random(0xc0ffee));
         w.insert_resource(Log::default());
+        w.insert_resource(DeliveredLogCount::default());
         w.insert_resource(ResultState(Outcome::Ongoing));
         let mut skills = HashMap::new();
         let mut ai_default = None;
@@ -545,6 +546,9 @@ impl Game {
         }
     }
     pub fn snapshot(&mut self) -> Snapshot {
+        let delivered_count = self.world.resource::<DeliveredLogCount>().0;
+        let log = self.world.resource::<Log>().0[delivered_count..].to_vec();
+        self.world.resource_mut::<DeliveredLogCount>().0 += log.len();
         let b = self.world.resource::<Board>().clone();
         let temporary_terrains = self.world.resource::<TemporaryTerrains>().clone();
         let enc = self.world.resource::<Encounter>().clone();
@@ -754,7 +758,8 @@ impl Game {
             },
             round: enc.round,
             outcome: self.world.resource::<ResultState>().0,
-            log: self.world.resource::<Log>().0.iter().cloned().collect(),
+            // 完整紀錄每次複製並傳給 Godot，會隨回合數增加造成嚴重效能問題。
+            log,
             movements: self.movements.clone(),
         }
     }

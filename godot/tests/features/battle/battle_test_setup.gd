@@ -4,6 +4,7 @@ extends RefCounted
 static func load_and_start(battle, runner: GdUnitSceneRunner, definitions_path: String, map_path: String) -> String:
 	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
+	clear_combat_log(battle)
 	for child in battle.world.units_layer.get_children():
 		child.free()
 	battle.world.unit_nodes.clear()
@@ -19,3 +20,9 @@ static func load_and_start(battle, runner: GdUnitSceneRunner, definitions_path: 
 	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 	return ""
+
+static func clear_combat_log(battle) -> void:
+	battle.pending_display_log.clear()
+	battle.ui.presented_log_events.clear()
+	battle.ui.log_entry_expanded_states.clear()
+	battle.ui.battle_log.text = ""

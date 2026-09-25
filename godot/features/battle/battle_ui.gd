@@ -147,11 +147,14 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		delay_button.disabled = true
 		return
 	$Root/ActionBar/Margin/Layout/EndTurn.disabled = not snapshot.turn.can_end_turn
-	update_log_entry_states(snapshot.log)
-	presented_log_events = snapshot.log.duplicate(true)
-	var formatted_log := format_log(presented_log_events)
-	if battle_log.text != formatted_log:
-		battle_log.text = formatted_log
+	var new_events: Array = snapshot.log
+	if not new_events.is_empty():
+		var start_index := presented_log_events.size()
+		presented_log_events.append_array(new_events)
+		for index in range(start_index, presented_log_events.size()):
+			log_entry_expanded_states[index] = presented_log_events[index].type != "new_round"
+		# append_text 只解析新事件；重設整份文字會隨戰鬥輪數增加造成嚴重效能問題。
+		battle_log.append_text(("\n" if start_index > 0 else "") + format_log(new_events, start_index))
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
 	actor_name.text = localized_unit_name(actor.unit_type) if not actor.is_empty() else "—"
 	actor_portrait.texture = load(BattleConfig.unit_art_path(actor.visual)) if not actor.is_empty() else null
@@ -342,10 +345,11 @@ func position_pointer_popup(popup: Control, pointer_position: Vector2, pointer_o
 	var maximum_position: Vector2 = viewport_rect.end - popup.size
 	popup.position = popup_position.clamp(viewport_rect.position, maximum_position)
 
-func format_log(events: Array) -> String:
+func format_log(events: Array, start_index := 0) -> String:
 	var entries: Array[String] = []
-	for index in events.size():
-		var event = events[index]
+	for offset in events.size():
+		var index: int = start_index + offset
+		var event = events[offset]
 		var expanded: bool = log_entry_expanded_states[index]
 		var marker := "▼" if expanded else "▶"
 		match event.type:
@@ -397,21 +401,13 @@ func format_modifier_term(label: String, value: int) -> String:
 	var operator := " + " if value >= 0 else " − "
 	return "%s%s %d" % [operator, tr(label), absi(value)]
 
-func update_log_entry_states(events: Array) -> void:
-	var unchanged_count := 0
-	var comparable_count: int = mini(events.size(), presented_log_events.size())
-	while unchanged_count < comparable_count and events[unchanged_count] == presented_log_events[unchanged_count]:
-		unchanged_count += 1
-	for index in range(unchanged_count, presented_log_events.size()):
-		log_entry_expanded_states.erase(index)
-	for index in range(unchanged_count, events.size()):
-		if not log_entry_expanded_states.has(index):
-			log_entry_expanded_states[index] = events[index].type != "new_round"
-
 func toggle_log_entry(index: int) -> void:
 	if not log_entry_expanded_states.has(index):
 		return
 	log_entry_expanded_states[index] = not log_entry_expanded_states[index]
+	battle_log.text = format_log(presented_log_events)
+
+func refresh_log_language() -> void:
 	battle_log.text = format_log(presented_log_events)
 
 func _on_battle_log_meta_clicked(meta: Variant) -> void:

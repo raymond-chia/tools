@@ -18,15 +18,15 @@ func before_test() -> void:
 
 # 驗證開始戰鬥會記錄新回合，並以整數顯示回合數。
 func test_new_round_log() -> void:
-	var event: Dictionary = battle.state.log[0]
+	var event: Dictionary = battle.ui.presented_log_events[0]
 	assert_str(event.type).is_equal("new_round")
 	assert_dict(event).override_failure_message("應產生新回合事件").is_not_empty()
 	assert_int(int(event.round)).override_failure_message("新回合事件應記錄目前輪數").is_equal(1)
-	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示整數回合數").contains("── 第 1 輪 ──")
+	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應顯示整數回合數").contains("── 第 1 輪 ──")
 
 # 驗證新回合事件提供單位實例 ID 與已排序的先攻擲骰明細，且總值等於擲骰與加值之和。
 func test_new_round_log_contains_initiative_rolls() -> void:
-	var event: Dictionary = battle.state.log[0]
+	var event: Dictionary = battle.ui.presented_log_events[0]
 	assert_str(event.type).is_equal("new_round")
 	assert_array(event.initiative_rolls).override_failure_message("新回合事件應提供先攻擲骰明細").is_not_empty()
 	assert_int(event.initiative_rolls.size()).is_equal(3)
@@ -52,7 +52,7 @@ func test_log_entries_use_event_default_expansion() -> void:
 func test_log_entries_preserve_independent_expansion_states() -> void:
 	battle.ui.toggle_log_entry(0)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合紀錄應可獨立展開").is_true()
-	assert_str(battle.ui.battle_log.text).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
+	assert_str(formatted_log()).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
 	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
 	var skill_index := find_last_event_index("skill", "aria")
@@ -60,7 +60,7 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	battle.ui.toggle_log_entry(skill_index)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("切換技能紀錄不應影響新回合紀錄").is_true()
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應可獨立摺疊").is_false()
-	assert_str(battle.ui.battle_log.text).override_failure_message("摺疊技能紀錄應隱藏攻擊判定明細").not_contains("攻擊加值 104")
+	assert_str(formatted_log()).override_failure_message("摺疊技能紀錄應隱藏攻擊判定明細").not_contains("攻擊加值 104")
 
 # 驗證技能紀錄包含實例 ID、雙方派系與判定結果，且 UI 依類型翻譯名稱並顯示數值。
 func test_skill_resolution_log() -> void:
@@ -85,7 +85,7 @@ func test_skill_resolution_log() -> void:
 	assert_int(int(event.max_hp)).is_equal(10000)
 	var result_names := {"dodge": "[color=#f0c96a]閃避[/color]", "block": "[color=#f0c96a]格擋[/color]", "hit": "[color=#f0c96a]命中[/color]"}
 	var critical_text := "，暴擊" if event.critical else ""
-	var log_text: String = battle.ui.battle_log.text
+	var log_text: String = formatted_log()
 	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「精準斬擊」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_ARIA"), tr("UNIT_NAME_WOLF_A")])
 	assert_str(log_text).contains("D20 擲骰 %d + 攻擊加值 104 = 攻擊總值 %d" % [int(event.roll), int(event.attack_total)])
 	assert_str(log_text).contains("目標防禦：閃避門檻 12／格擋門檻 15")
@@ -98,7 +98,7 @@ func test_downed_unit_log() -> void:
 	var event := find_last_event("skill", "aria")
 	assert_bool(event.downed).override_failure_message("生命歸零的目標應標記為倒下").is_true()
 	assert_int(int(event.remaining_hp)).override_failure_message("倒下目標的剩餘生命應為零").is_zero()
-	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]%s[/color] 倒下" % tr("UNIT_NAME_WOLF_B"))
+	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]%s[/color] 倒下" % tr("UNIT_NAME_WOLF_B"))
 
 # 驗證踩到地刺會停止移動、扣除固定傷害，並以實例 ID 記錄與顯示結果。
 func test_spikes_damage_log() -> void:
@@ -120,7 +120,7 @@ func test_spikes_damage_log() -> void:
 	assert_int(int(actor.hp)).override_failure_message("踩到地刺後 snapshot 應反映剩餘生命").is_equal(47)
 	assert_int(int(actor.x)).is_equal(0)
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
-	assert_str(battle.ui.battle_log.text).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]%s[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50" % tr("UNIT_NAME_ARIA"))
+	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]%s[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50" % tr("UNIT_NAME_ARIA"))
 
 # 驗證十二次真實攻擊與自動回合完成後，長戰鬥紀錄仍可拖曳捲動。
 func test_battle_log_can_be_dragged_to_scroll() -> void:
@@ -165,20 +165,23 @@ func wait_for_combat_events() -> void:
 	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
+func formatted_log() -> String:
+	return battle.ui.format_log(battle.ui.presented_log_events)
+
 func skill_command(target: String, skill: String) -> Dictionary:
 	var unit := unit_with_id(target)
 	return {"type": "skill", "actor": "aria", "target": target, "x": int(unit.x), "y": int(unit.y), "skill": skill}
 
 func find_last_event(type: String, actor := "") -> Dictionary:
-	for index in range(battle.state.log.size() - 1, -1, -1):
-		var event: Dictionary = battle.state.log[index]
+	for index in range(battle.ui.presented_log_events.size() - 1, -1, -1):
+		var event: Dictionary = battle.ui.presented_log_events[index]
 		if event.type == type and (actor == "" or event.get("actor") == actor):
 			return event
 	return {}
 
 func find_last_event_index(type: String, actor := "") -> int:
-	for index in range(battle.state.log.size() - 1, -1, -1):
-		var event: Dictionary = battle.state.log[index]
+	for index in range(battle.ui.presented_log_events.size() - 1, -1, -1):
+		var event: Dictionary = battle.ui.presented_log_events[index]
 		if event.type == type and (actor == "" or event.get("actor") == actor):
 			return index
 	return -1

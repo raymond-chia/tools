@@ -33,6 +33,7 @@ var attack_tweens := {}
 var prepared_move_unit_id := ""
 var prepared_move_path: Array[Vector2i] = []
 var combat_event_queue: Array[Dictionary] = []
+var received_log_count := 0
 var playing_combat_events := false
 var pending_death_ids := {}
 var pending_movement_ids := {}
@@ -68,14 +69,15 @@ func _process(delta: float) -> void:
 		camera_tween.kill()
 	camera.position = clamp_camera_position(camera.position + direction.normalized() * BattleConfig.CAMERA_MOVE_SPEED * delta)
 
-func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core) -> void:
+func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core, new_snapshot: bool) -> void:
 	var previous_state := state
 	state = snapshot
 	pending_action = action
 	inspected_cell = inspected
 	core = game_core
 	if not state.is_empty():
-		queue_new_combat_events(previous_state)
+		if new_snapshot:
+			queue_new_combat_events(previous_state)
 		sync_unit_sprites(previous_state)
 		start_combat_event_queue()
 	update_move_preview()
@@ -245,11 +247,11 @@ func animate_unit_movement(unit_id: String, node: Node2D, destination: Vector2, 
 	movement_tweens[unit_id] = tween
 
 func queue_new_combat_events(previous_state: Dictionary) -> void:
-	var previous_log_size: int = previous_state.get("log", []).size()
+	var previous_log_count := received_log_count
 	var movements_changed: bool = previous_state.get("movements", []) != state.get("movements", [])
-	for index in range(previous_log_size, state.log.size()):
-		queue_movements_before_log(index)
-		var event: Dictionary = state.log[index]
+	for offset in state.log.size():
+		queue_movements_before_log(previous_log_count + offset)
+		var event: Dictionary = state.log[offset]
 		if event.type in ["skill", "healing", "terrain_damage"]:
 			combat_event_queue.append(event)
 			if event.get("downed", false):
@@ -258,8 +260,9 @@ func queue_new_combat_events(previous_state: Dictionary) -> void:
 				for collision_unit in event.collision_units:
 					if collision_unit.downed:
 						pending_death_ids[collision_unit.unit] = true
-	if previous_log_size < state.log.size() or movements_changed:
-		queue_movements_before_log(state.log.size())
+	if not state.log.is_empty() or movements_changed:
+		queue_movements_before_log(previous_log_count + state.log.size())
+	received_log_count += state.log.size()
 
 func queue_movements_before_log(log_index: int) -> void:
 	for movement in state.get("movements", []):
