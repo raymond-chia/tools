@@ -594,11 +594,11 @@ size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
 
-[node name="DamageLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1902669502]
+[node name="PowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1902669502]
 layout_mode = 2
-text = "傷害"
+text = "威力"
 
-[node name="DamageValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=82172087]
+[node name="PowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=82172087]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3

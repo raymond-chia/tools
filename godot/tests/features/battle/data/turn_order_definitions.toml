@@ -1,10 +1,11 @@
 [[skills]]
-id="test_ai_default"
+id="test_attack"
 ranged=false
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=1
+effect="attack"
 
 [terrain_types.rough]
 visual="rough"
@@ -20,8 +21,8 @@ initiative=1
 dodge=2
 block=3
 attack=4
-damage=5
-skills=["test_ai_default"]
+power=5
+skills=["test_attack"]
 [[unit_types]]
 id="lyra"
 visual="archer.svg"
@@ -31,8 +32,8 @@ initiative=2
 dodge=4
 block=1
 attack=5
-damage=3
-skills=["test_ai_default"]
+power=3
+skills=["test_attack"]
 [[unit_types]]
 id="mira"
 visual="archer.svg"
@@ -42,8 +43,8 @@ initiative=3
 dodge=3
 block=2
 attack=4
-damage=3
-skills=["test_ai_default"]
+power=3
+skills=["test_attack"]
 [[unit_types]]
 id="wolf_a"
 visual="wolf.svg"
@@ -53,5 +54,5 @@ initiative=-100
 dodge=2
 block=0
 attack=2
-damage=1
-skills=["test_ai_default"]
+power=1
+skills=["test_attack"]

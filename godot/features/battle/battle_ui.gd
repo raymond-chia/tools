@@ -29,7 +29,7 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 	"initiative": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/InitiativeValue,
 	"defense": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/DefenseValue,
 	"attack": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/AttackValue,
-	"damage": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/DamageValue,
+	"power": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/PowerValue,
 }
 @onready var terrain_name: Label = $Root/InfoPanel/Margin/Content/TerrainRows/TerrainValue
 @onready var terrain_cost: Label = $Root/InfoPanel/Margin/Content/TerrainRows/CostValue
@@ -206,7 +206,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.initiative.text = "%d" % int(unit.initiative)
 		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
 		detail_values.attack.text = "%d" % int(unit.attack)
-		detail_values.damage.text = "%d" % int(unit.damage)
+		detail_values.power.text = "%d" % int(unit.power)
 	var terrain_names: Array[String] = []
 	for kind in terrain.terrains:
 		terrain_names.append(tr(BattleConfig.terrain_name_key(kind)))

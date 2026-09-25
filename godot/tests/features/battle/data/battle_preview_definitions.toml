@@ -13,33 +13,37 @@ effect_key="TERRAIN_EFFECT_DAMAGE"
 id="melee_attack"
 ranged=false
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=1
+effect="attack"
 
 [[skills]]
 id="ranged_attack"
 ranged=true
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=3
+effect="attack"
 
 [[skills]]
 id="power_strike"
 ranged=false
 attack_bonus=2
-damage_bonus=2
+power_bonus=2
 min_range=1
 max_range=1
+effect="attack"
 
 [[skills]]
 id="aimed_shot"
 ranged=true
 attack_bonus=3
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=4
+effect="attack"
 
 [[unit_types]]
 id="aria"
@@ -50,7 +54,7 @@ initiative=100
 dodge=2
 block=3
 attack=5
-damage=5
+power=5
 skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]
 [[unit_types]]
 id="ogre"
@@ -61,5 +65,5 @@ initiative=-100
 dodge=1
 block=4
 attack=5
-damage=6
+power=6
 skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]

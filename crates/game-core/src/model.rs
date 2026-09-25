@@ -66,7 +66,7 @@ pub(crate) struct Unit {
     pub(crate) dodge: i32,
     pub(crate) block: i32,
     pub(crate) attack: i32,
-    pub(crate) damage: i32,
+    pub(crate) power: i32,
     /// 單位可使用的技能 ID。
     pub(crate) skills: Vec<String>,
 }
@@ -148,25 +148,21 @@ pub(crate) struct Definition {
 pub struct SkillDef {
     pub(crate) id: String,
     pub(crate) ranged: bool,
-    pub(crate) attack_bonus: i32,
-    pub(crate) damage_bonus: i32,
     pub(crate) min_range: i32,
     pub(crate) max_range: i32,
-    pub(crate) duration: Option<u32>,
-    pub(crate) heal_amount: Option<i32>,
-    pub(crate) terrain: Option<String>,
-    #[serde(default)]
+    #[serde(flatten)]
     pub(crate) effect: SkillEffect,
 }
-#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "effect", rename_all = "snake_case")]
 pub enum SkillEffect {
-    #[default]
-    Attack,
-    Push,
-    Mire,
-    Heal,
+    Attack { attack_bonus: i32, power_bonus: i32 },
+    Push { attack_bonus: i32, power_bonus: i32 },
+    Mire { terrain: String, duration: u32 },
+    Heal { power_bonus: i32 },
 }
+
 #[derive(Deserialize)]
 pub(crate) struct MapDef {
     pub(crate) width: i32,
@@ -223,7 +219,7 @@ pub(crate) struct UnitDef {
     pub(crate) dodge: i32,
     pub(crate) block: i32,
     pub(crate) attack: i32,
-    pub(crate) damage: i32,
+    pub(crate) power: i32,
     #[serde(default)]
     /// 此單位類型可使用的技能 ID。
     pub(crate) skills: Vec<String>,
@@ -461,7 +457,7 @@ pub struct UnitView {
     pub dodge: i32,
     pub block: i32,
     pub attack: i32,
-    pub damage: i32,
+    pub power: i32,
     pub active: bool,
 }
 #[derive(Serialize)]

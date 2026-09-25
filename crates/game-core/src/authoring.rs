@@ -25,7 +25,7 @@ pub struct UnitType {
     pub dodge: i32,
     pub block: i32,
     pub attack: i32,
-    pub damage: i32,
+    pub power: i32,
     #[serde(default)]
     pub skills: Vec<String>,
 }
@@ -113,7 +113,7 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
             dodge: kind.dodge,
             block: kind.block,
             attack: kind.attack,
-            damage: kind.damage,
+            power: kind.power,
             skills: kind.skills.clone(),
         });
     }

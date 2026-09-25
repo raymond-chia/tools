@@ -206,13 +206,6 @@ pub(crate) fn invalid_skill_range(id: &str) -> GameError {
     )
 }
 
-pub(crate) fn invalid_heal_amount(id: &str) -> GameError {
-    GameError::new(
-        "invalid_heal_amount",
-        format!("{id} {}", "的 heal_amount 必須大於 0"),
-    )
-}
-
 pub(crate) fn invalid_duration(id: &str) -> GameError {
     GameError::new(
         "invalid_duration",

@@ -377,8 +377,15 @@ func refresh_fields() -> void:
 	if entry.is_empty(): return
 	var display := entry.duplicate()
 	if category_key() == "skills":
-		for optional in {"duration": 2, "heal_amount": 5, "terrain": "mire"}:
-			if not display.has(optional): display[optional] = {"duration": 2, "heal_amount": 5, "terrain": "mire"}[optional]
+		match entry.effect:
+			"attack", "push":
+				if not display.has("attack_bonus"): display.attack_bonus = 0
+				if not display.has("power_bonus"): display.power_bonus = 0
+			"mire":
+				if not display.has("terrain"): display.terrain = "mire"
+				if not display.has("duration"): display.duration = 2
+			"heal":
+				if not display.has("power_bonus"): display.power_bonus = 0
 	for key in display.keys():
 		var label := Label.new()
 		label.text = key
@@ -414,6 +421,18 @@ func update_definition(key: String, value) -> void:
 	if entry.is_empty() or (entry.has(key) and entry[key] == value): return
 	checkpoint()
 	entry[key] = value
+	if category_key() == "skills" and key == "effect":
+		for field in ["attack_bonus", "power_bonus", "terrain", "duration"]:
+			entry.erase(field)
+		match value:
+			"attack", "push":
+				entry.attack_bonus = 0
+				entry.power_bonus = 0
+			"mire":
+				entry.terrain = "mire"
+				entry.duration = 2
+			"heal": entry.power_bonus = 0
+		refresh_fields()
 	refresh_tools()
 	refresh_grid()
 	validate_current()
@@ -428,9 +447,9 @@ func add_definition() -> void:
 		id = base_id + "_%d" % count
 	checkpoint()
 	if category == "unit_types":
-		definitions.unit_types.append({"id":id,"visual":"fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"attack":3,"damage":3,"skills":["melee_attack"]})
+		definitions.unit_types.append({"id":id,"visual":"fighter.svg","width":1,"height":1,"hp":10,"movement":5,"initiative":0,"dodge":2,"block":2,"attack":3,"power":3,"skills":["melee_attack"]})
 	elif category == "skills":
-		definitions.skills.append({"id":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"min_range":1,"max_range":1,"effect":"attack"})
+		definitions.skills.append({"id":id,"ranged":false,"attack_bonus":0,"power_bonus":0,"min_range":1,"max_range":1,"effect":"attack"})
 	else:
 		definitions.terrain_types[id] = {"visual":"plain","passable":true,"damage":0,"movement_cost_bonus":0,"dodge_penalty":0,"block_penalty":0,"forced_entry":"none","effect_key":"TERRAIN_EFFECT_NONE"}
 	refresh_tools()

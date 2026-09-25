@@ -19,7 +19,7 @@ func before_test() -> void:
 		"SKILL_TYPE_MELEE": "類型：近戰",
 		"SKILL_RANGE": "射程：%d 格",
 		"SKILL_ATTACK_BONUS": "攻擊加值：%+d",
-		"SKILL_DAMAGE_BONUS": "傷害加值：%+d",
+		"SKILL_POWER_BONUS": "力量加值：%+d",
 	})
 	add_test_translation("en", {
 		"SKILL_POWER_STRIKE_NAME": "Power Strike",
@@ -27,7 +27,7 @@ func before_test() -> void:
 		"SKILL_TYPE_MELEE": "Type: Melee",
 		"SKILL_RANGE": "Range: %d tiles",
 		"SKILL_ATTACK_BONUS": "Attack modifier: %+d",
-		"SKILL_DAMAGE_BONUS": "Damage modifier: %+d",
+		"SKILL_POWER_BONUS": "Power modifier: %+d",
 	})
 	runner = scene_runner(BATTLE_SCENE)
 	await runner.simulate_frames(1)
@@ -44,8 +44,8 @@ func after_test() -> void:
 # 驗證技能 hover 內容會隨目前語系翻譯，且標題不包含額外的狀態前綴。
 func test_skill_hover_uses_current_locale() -> void:
 	var cases := [
-		{"locale": "zh_TW", "title": "強力一擊", "details": "目標：敵方單位\n類型：近戰\n射程：1 格\n攻擊加值：+2\n傷害加值：+2"},
-		{"locale": "en", "title": "Power Strike", "details": "Target: Enemy unit\nType: Melee\nRange: 1 tiles\nAttack modifier: +2\nDamage modifier: +2"},
+		{"locale": "zh_TW", "title": "強力一擊", "details": "目標：敵方單位\n類型：近戰\n射程：1 格\n攻擊加值：+2\n力量加值：+2"},
+		{"locale": "en", "title": "Power Strike", "details": "Target: Enemy unit\nType: Melee\nRange: 1 tiles\nAttack modifier: +2\nPower modifier: +2"},
 	]
 	for test_case in cases:
 		TranslationServer.set_locale(test_case.locale)

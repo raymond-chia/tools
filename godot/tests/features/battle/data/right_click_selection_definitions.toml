@@ -1,18 +1,20 @@
 [[skills]]
-id="test_ai_default"
+id="test_attack"
 ranged=false
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=1
+effect="attack"
 
 [[skills]]
 id="melee"
 ranged=false
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=1
+effect="attack"
 
 [terrain_types.rough]
 visual="rough"
@@ -28,8 +30,8 @@ initiative=1
 dodge=2
 block=3
 attack=4
-damage=5
-skills=["test_ai_default","melee"]
+power=5
+skills=["test_attack","melee"]
 [[unit_types]]
 id="lyra"
 visual="archer.svg"
@@ -39,8 +41,8 @@ initiative=2
 dodge=4
 block=1
 attack=5
-damage=3
-skills=["test_ai_default","melee"]
+power=3
+skills=["test_attack","melee"]
 [[unit_types]]
 id="ogre"
 visual="ogre.svg"
@@ -52,5 +54,5 @@ initiative=0
 dodge=1
 block=4
 attack=5
-damage=6
-skills=["test_ai_default","melee"]
+power=6
+skills=["test_attack","melee"]

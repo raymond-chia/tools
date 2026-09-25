@@ -94,20 +94,13 @@ impl Game {
             if skill.min_range < 0 || skill.max_range < skill.min_range {
                 return Err(error::invalid_skill_range(&skill.id));
             }
-            if skill.effect == SkillEffect::Heal
-                && !matches!(skill.heal_amount, Some(amount) if amount > 0)
-            {
-                return Err(error::invalid_heal_amount(&skill.id));
-            }
-            if skill.duration == Some(0) {
-                return Err(error::invalid_duration(&skill.id));
-            }
-            if skill.effect == SkillEffect::Mire
-                && !skill.terrain.as_ref().is_some_and(|terrain| {
-                    w.resource::<Board>().terrain_types.contains_key(terrain)
-                })
-            {
-                return Err(error::invalid_skill_terrain(&skill.id));
+            if let SkillEffect::Mire { terrain, duration } = &skill.effect {
+                if *duration == 0 {
+                    return Err(error::invalid_duration(&skill.id));
+                }
+                if !w.resource::<Board>().terrain_types.contains_key(terrain) {
+                    return Err(error::invalid_skill_terrain(&skill.id));
+                }
             }
             if skills.insert(skill.id.clone(), skill).is_some() {
                 return Err(error::duplicate_skill_id());
@@ -166,7 +159,7 @@ impl Game {
                     dodge: u.dodge,
                     block: u.block,
                     attack: u.attack,
-                    damage: u.damage,
+                    power: u.power,
                     skills: u.skills,
                 },
             ));
@@ -446,7 +439,7 @@ impl Game {
             .get(first_skill)
             .expect("載入時已驗證單位技能 ID")
             .clone();
-        let target = if skill.effect == SkillEffect::Heal {
+        let target = if matches!(skill.effect, SkillEffect::Heal { .. }) {
             self.closest_wounded_ally(e, skill.min_range)
         } else {
             self.closest(e)
@@ -517,7 +510,7 @@ impl Game {
             },
         );
         if target_distance >= skill.min_range && target_distance <= skill.max_range {
-            if skill.effect == SkillEffect::Mire {
+            if matches!(skill.effect, SkillEffect::Mire { .. }) {
                 return self.use_cell_skill(&a, target_cell, skill);
             }
             let id = self
@@ -636,7 +629,7 @@ impl Game {
                 dodge: effective_dodge(&self.world, entity),
                 block: effective_block(&self.world, entity),
                 attack: f.attack,
-                damage: f.damage,
+                power: f.power,
                 active: enc.participants.contains(&i.0),
             })
             .collect();

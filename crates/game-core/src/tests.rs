@@ -234,7 +234,7 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
             dodge: 0,
             block: 0,
             attack: 0,
-            damage: 0,
+            power: 0,
             skills: Vec::new(),
         },
     ));
@@ -257,14 +257,12 @@ fn attack_skill(ranged: bool, range: i32) -> SkillDef {
             "melee_attack".into()
         },
         ranged,
-        attack_bonus: 0,
-        damage_bonus: 0,
         min_range: 1,
         max_range: range,
-        duration: None,
-        heal_amount: None,
-        terrain: None,
-        effect: SkillEffect::Attack,
+        effect: SkillEffect::Attack {
+            attack_bonus: 0,
+            power_bonus: 0,
+        },
     }
 }
 
@@ -288,7 +286,7 @@ fn spawn_unit(
                 dodge: 0,
                 block: 0,
                 attack: 5,
-                damage: 1,
+                power: 1,
                 skills,
             },
         ))
@@ -390,7 +388,14 @@ fn push_collision_damages_both_units() {
 // 驗證最小射程排除過近格子，施放失敗時會回傳固定 ID 與詳細訊息。
 #[test]
 fn skill_min_range_limits_preview_and_action() {
-    let mut game = game_with_skill_range_and_effect(2, 2, SkillEffect::Push);
+    let mut game = game_with_skill_range_and_effect(
+        2,
+        2,
+        SkillEffect::Push {
+            attack_bonus: 100,
+            power_bonus: 0,
+        },
+    );
     let actor = game.entity("actor").expect("測試攻擊者應存在");
     let range = super::skill::skill_ranges(&game.world, actor);
     assert!(!range[0].cells.contains(&GridPos { x: 2, y: 1 }));
@@ -405,18 +410,36 @@ fn skill_min_range_limits_preview_and_action() {
     assert_eq!(error.message(), "目標距離太近");
 }
 
-// 驗證最小與最大射程都為零時，自身格會出現在預覽且可施放治療。
+// 驗證零射程治療可對自己施放，且治療量為施放者力量加技能加值。
 #[test]
 fn zero_range_heal_targets_self() {
-    let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal);
+    let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal { power_bonus: 4 });
     let actor = game.entity("actor").expect("測試攻擊者應存在");
     let range = super::skill::skill_ranges(&game.world, actor);
     assert_eq!(range[0].cells, vec![GridPos { x: 1, y: 1 }]);
 
     game.start().expect("測試戰鬥應可開始");
+    game.world
+        .get_mut::<Hp>(actor)
+        .expect("施放者應有生命值")
+        .current = 90;
+    let preview = game
+        .preview_skill("actor", "actor", GridPos { x: 1, y: 1 }, "push")
+        .expect("零距離治療應可預覽");
+    match preview {
+        SkillPreview::Healing(healing) => assert_eq!(healing.healing, 5),
+        _ => panic!("治療技能應產生治療預覽"),
+    }
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
     game.use_skill("actor", "actor", GridPos { x: 1, y: 1 }, skill)
         .expect("零距離治療應可對自己施放");
+    assert_eq!(
+        game.world
+            .get::<Hp>(actor)
+            .expect("施放者應有生命值")
+            .current,
+        95
+    );
 }
 
 // 驗證敵方沒有技能時回報錯誤，且空技能清單不會自動取得所有技能。
@@ -440,7 +463,14 @@ fn enemy_without_skill_reports_error() {
 }
 
 fn push_collision_game() -> Game {
-    game_with_skill_range_and_effect(1, 1, SkillEffect::Push)
+    game_with_skill_range_and_effect(
+        1,
+        1,
+        SkillEffect::Push {
+            attack_bonus: 100,
+            power_bonus: 0,
+        },
+    )
 }
 
 fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: SkillEffect) -> Game {
@@ -468,17 +498,8 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
         skills: vec![SkillDef {
             id: "push".into(),
             ranged: false,
-            attack_bonus: 100,
-            damage_bonus: 0,
             min_range,
             max_range,
-            duration: None,
-            heal_amount: if effect == SkillEffect::Heal {
-                Some(5)
-            } else {
-                None
-            },
-            terrain: None,
             effect,
         }],
         units: vec![
@@ -507,7 +528,7 @@ fn push_collision_unit(id: &str, team: Team, x: i32) -> UnitDef {
         dodge: 0,
         block: 0,
         attack: 0,
-        damage: 1,
+        power: 1,
         skills: vec!["push".into()],
     }
 }

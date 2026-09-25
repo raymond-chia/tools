@@ -7,7 +7,7 @@ SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
 SKILL_NAME_CORROSIVE_MIRE,腐蝕泥沼,Corrosive Mire
 SKILL_NAME_HEAL,治癒術,Heal
 SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
-SKILL_EFFECT_HEAL,效果：回復 %d HP,Effect: Restores %d HP
+SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
 HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
 HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
 SKILL_TARGET_CELL,目標：地面格,Target: Ground cell
@@ -17,7 +17,7 @@ SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
 SKILL_RANGE,射程：%d 格,Range: %d tiles
 SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
 SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
-SKILL_DAMAGE_BONUS,傷害加值：%+d,Damage modifier: %+d
+SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too
 SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
 TERRAIN_EFFECT_MIRE,閃避與格擋 −%d，移動消耗 +%d，剩餘 %d 回合,"Dodge and block −%d, movement cost +%d, %d rounds remaining"
@@ -88,7 +88,7 @@ TEAM_NAME_WILD_ANIMALS,野生動物,Wild Animals
 先攻,先攻,Initiative
 閃避／格擋,閃避／格擋,Dodge / Block
 攻擊,攻擊,Attack
-傷害,傷害,Damage
+威力,威力,Power
 移動消耗,移動消耗,Move cost
 隱藏紀錄,隱藏紀錄,Hide Log
 顯示紀錄,顯示紀錄,Show Log

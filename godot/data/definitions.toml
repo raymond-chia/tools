@@ -40,31 +40,34 @@ forced_entry_log_key="COMBAT_LOG_FORCED_DEFEAT"
 id="melee_attack"
 ranged=false
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=1
+effect="attack"
 
 [[skills]]
 id="ranged_attack"
 ranged=true
 attack_bonus=0
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=5
+effect="attack"
 
 [[skills]]
 id="power_strike"
 ranged=false
 attack_bonus=2
-damage_bonus=2
+power_bonus=2
 min_range=1
 max_range=1
+effect="attack"
 
 [[skills]]
 id="shield_bash"
 ranged=false
 attack_bonus=1
-damage_bonus=-3
+power_bonus=-3
 min_range=1
 max_range=1
 effect="push"
@@ -73,15 +76,14 @@ effect="push"
 id="aimed_shot"
 ranged=true
 attack_bonus=3
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=6
+effect="attack"
 
 [[skills]]
 id="corrosive_mire"
 ranged=true
-attack_bonus=0
-damage_bonus=0
 min_range=0
 max_range=4
 effect="mire"
@@ -91,12 +93,10 @@ duration=2
 [[skills]]
 id="heal"
 ranged=true
-attack_bonus=0
-damage_bonus=0
+power_bonus=2
 min_range=0
 max_range=4
 effect="heal"
-heal_amount=5
 
 [[unit_types]]
 id="aria"
@@ -107,7 +107,7 @@ initiative=3
 dodge=3
 block=4
 attack=5
-damage=5
+power=5
 skills=["melee_attack","power_strike","shield_bash"]
 
 [[unit_types]]
@@ -119,7 +119,7 @@ initiative=5
 dodge=5
 block=1
 attack=6
-damage=4
+power=4
 skills=["ranged_attack","aimed_shot"]
 
 [[unit_types]]
@@ -131,7 +131,7 @@ initiative=2
 dodge=3
 block=2
 attack=4
-damage=3
+power=3
 skills=["corrosive_mire","heal"]
 
 [[unit_types]]
@@ -143,5 +143,5 @@ initiative=3
 dodge=3
 block=0
 attack=4
-damage=3
+power=3
 skills=["melee_attack"]

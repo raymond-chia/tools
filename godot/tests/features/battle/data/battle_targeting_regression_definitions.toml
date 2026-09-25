@@ -14,8 +14,6 @@ effect_key="TERRAIN_EFFECT_MIRE"
 [[skills]]
 id="corrosive_mire"
 ranged=true
-attack_bonus=0
-damage_bonus=0
 min_range=0
 max_range=10
 effect="mire"
@@ -26,7 +24,7 @@ duration=2
 id="shield_bash"
 ranged=false
 attack_bonus=100
-damage_bonus=0
+power_bonus=0
 min_range=1
 max_range=4
 effect="push"
@@ -35,9 +33,10 @@ effect="push"
 id="finishing_strike"
 ranged=false
 attack_bonus=100
-damage_bonus=100
+power_bonus=100
 min_range=1
 max_range=10
+effect="attack"
 
 [[unit_types]]
 id="aria"
@@ -48,7 +47,7 @@ initiative=100
 dodge=2
 block=3
 attack=5
-damage=5
+power=5
 skills=["corrosive_mire", "shield_bash", "finishing_strike"]
 
 [[unit_types]]
@@ -60,7 +59,7 @@ initiative=-10
 dodge=0
 block=0
 attack=0
-damage=0
+power=0
 skills=["corrosive_mire"]
 
 [[unit_types]]
@@ -74,5 +73,5 @@ initiative=-2
 dodge=5
 block=6
 attack=0
-damage=0
+power=0
 skills=["corrosive_mire"]
