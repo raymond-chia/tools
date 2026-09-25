@@ -17,18 +17,12 @@ damage_bonus=0
 min_range=1
 max_range=1
 
-[terrain_types.plain]
-name_key="TERRAIN_PLAIN"
-visual="plain"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-
 [terrain_types.rough]
 name_key="TERRAIN_ROUGH"
 visual="rough"
 passable=true
 effect_key="TERRAIN_EFFECT_NONE"
-
+movement_cost_bonus=1
 [[unit_types]]
 id="aria"
 visual="fighter.svg"

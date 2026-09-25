@@ -19,7 +19,7 @@ pub use model::{
     AttackPreview, AttackResult, CollisionUnitLog, CombatLogEvent, Command, DetailView,
     ForcedEntry, GridPos, HealingPreview, HealthSegmentsView, InitiativeRollLog, MovePreview,
     MovementTransition, Outcome, RollDegree, SkillDef, SkillEffect, SkillPreview, SkillRangeView,
-    Snapshot, Team, TerrainCellView, TerrainEffectView, TerrainTypeDef, TriggerDef, TurnView,
+    Snapshot, Team, TerrainCellView, TerrainEffectView, TerrainPlacement, TerrainTypeDef, TurnView,
     UnitView,
 };
 #[cfg(test)]

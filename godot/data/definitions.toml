@@ -1,20 +1,14 @@
-[terrain_types.plain]
-name_key="TERRAIN_PLAIN"
-visual="plain"
-passable=true
-effect_key="TERRAIN_EFFECT_NONE"
-
 [terrain_types.rough]
 name_key="TERRAIN_ROUGH"
 visual="rough"
 passable=true
 effect_key="TERRAIN_EFFECT_NONE"
+movement_cost_bonus=1
 
 [terrain_types.spikes]
 name_key="TERRAIN_SPIKES"
 visual="spikes"
 passable=true
-ends_movement=true
 damage=3
 effect_key="TERRAIN_EFFECT_DAMAGE"
 
@@ -22,7 +16,6 @@ effect_key="TERRAIN_EFFECT_DAMAGE"
 name_key="TERRAIN_GREASE"
 visual="grease"
 passable=true
-ends_movement=true
 effect_key="TERRAIN_EFFECT_GREASE"
 
 [terrain_types.mire]

@@ -9,10 +9,11 @@ use crate::model::{
     TemporaryTerrain, TemporaryTerrains, TerrainTypeDef, Turn, Unit,
 };
 use crate::movement::{
-    fits, footprint_blocks_forced_entry, footprint_cells, footprint_distance, overlap, terrain_at,
-    terrain_type,
+    fits, footprint_blocks_forced_entry, footprint_cells, footprint_distance, overlap,
+    terrain_type, terrains_at,
 };
 use bevy_ecs::prelude::{Entity, World};
+use std::collections::HashSet;
 
 impl Game {
     pub fn preview_skill(
@@ -389,62 +390,62 @@ impl Game {
             .get::<Pos>(entity)
             .expect("已建立的戰鬥單位應具有 Pos 元件")
             .0;
-        let terrain = terrain_at(&self.world, position);
-        let terrain = match terrain {
-            Some(value) => value,
-            None => return,
-        };
-        let terrain_definition = terrain_type(self.world.resource::<Board>(), &terrain);
-        let log_key = terrain_definition
-            .forced_entry_log_key
-            .clone()
-            .unwrap_or_else(|| "COMBAT_LOG_TERRAIN_DAMAGE".into());
-        let damage = if terrain_definition.forced_entry == ForcedEntry::Defeat {
+        for terrain in terrains_at(&self.world, position) {
+            let terrain_definition = terrain_type(self.world.resource::<Board>(), &terrain);
+            let log_key = terrain_definition
+                .forced_entry_log_key
+                .clone()
+                .unwrap_or_else(|| "COMBAT_LOG_TERRAIN_DAMAGE".into());
+            let damage = if terrain_definition.forced_entry == ForcedEntry::Defeat {
+                self.world
+                    .get::<Hp>(entity)
+                    .expect("被推動的單位應具有 Hp")
+                    .current
+            } else {
+                terrain_definition.damage
+            };
+            if damage == 0 {
+                continue;
+            }
+            let unit = self
+                .world
+                .get::<Unit>(entity)
+                .expect("已建立的戰鬥單位應具有 Unit 元件");
+            let target_type = unit.unit_type.clone();
+            let target_team = unit.team.clone();
+            let mut hp = self
+                .world
+                .get_mut::<Hp>(entity)
+                .expect("已建立的戰鬥單位應具有 Hp 元件");
+            hp.current = (hp.current - damage).max(0);
+            let remaining_hp = hp.current;
+            let max_hp = hp.maximum;
+            let downed = remaining_hp == 0;
+            if downed {
+                self.world.entity_mut(entity).insert(Downed);
+                self.world
+                    .resource_mut::<Encounter>()
+                    .participants
+                    .remove(id);
+            }
             self.world
-                .get::<Hp>(entity)
-                .expect("被推動的單位應具有 Hp")
-                .current
-        } else {
-            terrain_definition.damage
-        };
-        if damage == 0 {
-            return;
+                .resource_mut::<Log>()
+                .0
+                .push(CombatLogEvent::TerrainDamage {
+                    target: id.to_owned(),
+                    target_type,
+                    target_team,
+                    terrain,
+                    log_key,
+                    damage,
+                    remaining_hp,
+                    max_hp,
+                    downed,
+                });
+            if downed {
+                break;
+            }
         }
-        let unit = self
-            .world
-            .get::<Unit>(entity)
-            .expect("已建立的戰鬥單位應具有 Unit 元件");
-        let target_type = unit.unit_type.clone();
-        let target_team = unit.team.clone();
-        let mut hp = self
-            .world
-            .get_mut::<Hp>(entity)
-            .expect("已建立的戰鬥單位應具有 Hp 元件");
-        hp.current = (hp.current - damage).max(0);
-        let remaining_hp = hp.current;
-        let max_hp = hp.maximum;
-        let downed = remaining_hp == 0;
-        if downed {
-            self.world.entity_mut(entity).insert(Downed);
-            self.world
-                .resource_mut::<Encounter>()
-                .participants
-                .remove(id);
-        }
-        self.world
-            .resource_mut::<Log>()
-            .0
-            .push(CombatLogEvent::TerrainDamage {
-                target: id.to_owned(),
-                target_type,
-                target_team,
-                terrain,
-                log_key,
-                damage,
-                remaining_hp,
-                max_hp,
-                downed,
-            });
     }
     pub(crate) fn use_cell_skill(
         &mut self,
@@ -509,13 +510,17 @@ impl Game {
             .as_ref()
             .expect("載入時已驗證地形技能具有 terrain")
             .clone();
-        self.world.resource_mut::<TemporaryTerrains>().0.insert(
-            position,
-            TemporaryTerrain {
-                kind: terrain.clone(),
-                expires_after_round: current_round + duration - 1,
-            },
-        );
+        self.world
+            .resource_mut::<TemporaryTerrains>()
+            .0
+            .entry(position)
+            .or_default()
+            .insert(
+                terrain.clone(),
+                TemporaryTerrain {
+                    expires_after_round: current_round + duration - 1,
+                },
+            );
         self.world
             .resource_mut::<Log>()
             .0
@@ -887,14 +892,20 @@ fn footprint_terrain_penalty(
 ) -> i32 {
     (position.y..position.y + footprint.height)
         .flat_map(|y| (position.x..position.x + footprint.width).map(move |x| GridPos { x, y }))
-        .filter_map(|cell| {
-            temporary
+        .map(|cell| {
+            let mut seen = HashSet::new();
+            let fixed = board.terrains.get(&cell).into_iter().flatten();
+            let dynamic = temporary
                 .0
                 .get(&cell)
-                .map(|terrain| terrain.kind.as_str())
-                .or_else(|| board.triggers.get(&cell).map(String::as_str))
+                .into_iter()
+                .flat_map(|items| items.keys());
+            fixed
+                .chain(dynamic)
+                .filter(|kind| seen.insert(kind.as_str()))
+                .map(|kind| penalty(terrain_type(board, kind)))
+                .sum::<i32>()
         })
-        .map(|kind| penalty(terrain_type(board, kind)))
         .max()
         .unwrap_or(0)
 }

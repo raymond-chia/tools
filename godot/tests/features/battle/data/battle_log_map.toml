@@ -2,13 +2,10 @@ name="battle_log"
 
 width=4
 height=3
-costs=[
-1,1,1,1,
-1,1,1,1,
-1,1,1,1]
-triggers=[
-{x=0,y=2,kind="spikes"}]
-
+[[terrains]]
+x=0
+y=2
+kind="spikes"
 [[units]]
 id="aria"
 unit_type="aria"

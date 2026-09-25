@@ -37,19 +37,12 @@ pub(crate) fn empty_unit_placement_id() -> GameError {
     GameError::new("empty_unit_placement_id", "單位配置 id 不可為空".to_owned())
 }
 
-pub(crate) fn invalid_map_costs() -> GameError {
-    GameError::new("invalid_map_costs", "map.costs 數量與尺寸不符".to_owned())
+pub(crate) fn invalid_map_dimensions() -> GameError {
+    GameError::new("invalid_map_dimensions", "地圖尺寸必須為正數".to_owned())
 }
 
-pub(crate) fn zero_movement_cost() -> GameError {
-    GameError::new("zero_movement_cost", "movement cost 必須大於 0".to_owned())
-}
-
-pub(crate) fn trigger_out_of_bounds() -> GameError {
-    GameError::new(
-        "trigger_out_of_bounds",
-        "map trigger 超出地圖範圍".to_owned(),
-    )
+pub(crate) fn terrain_out_of_bounds() -> GameError {
+    GameError::new("terrain_out_of_bounds", "terrain 超出地圖範圍".to_owned())
 }
 
 pub(crate) fn duplicate_ai_default() -> GameError {
@@ -203,13 +196,6 @@ pub(crate) fn unknown_unit_type(id: &str) -> GameError {
     GameError::new("unknown_unit_type", format!("{} {id}", "找不到單位定義"))
 }
 
-pub(crate) fn missing_terrain_type(kind: &str) -> GameError {
-    GameError::new(
-        "missing_terrain_type",
-        format!("{} {kind}", "缺少必要地形種類"),
-    )
-}
-
 pub(crate) fn unknown_terrain_type(kind: &str) -> GameError {
     GameError::new(
         "unknown_terrain_type",
@@ -217,10 +203,10 @@ pub(crate) fn unknown_terrain_type(kind: &str) -> GameError {
     )
 }
 
-pub(crate) fn duplicate_terrain_cell(x: i32, y: i32) -> GameError {
+pub(crate) fn duplicate_terrain(x: i32, y: i32) -> GameError {
     GameError::new(
-        "duplicate_terrain_cell",
-        format!("{} ({x}, {y})", "地形格子重複"),
+        "duplicate_terrain",
+        format!("{} ({x}, {y})", "同一格的 terrain 重複"),
     )
 }
 

@@ -2,8 +2,6 @@ name="battle_turn_sequence"
 
 width=3
 height=2
-costs=[1,1,1,1,1,1]
-
 [[units]]
 id="aria"
 unit_type="aria"

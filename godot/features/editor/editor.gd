@@ -3,7 +3,7 @@ extends Control
 const DEFINITIONS_PATH := "res://data/definitions.toml"
 const MAP_DIR := "res://data/maps/"
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
-const MODES := ["地形筆刷", "放置單位", "移動單位", "刪除"]
+const MODES := ["地形增刪", "放置單位", "移動單位", "刪除"]
 const CATEGORIES := ["unit_types", "skills", "terrain_types"]
 
 @onready var map_list: OptionButton = $Layout/Toolbar/Maps
@@ -127,10 +127,7 @@ func new_map() -> void:
 	if dirty:
 		show_error("請先儲存目前修改，再建立地圖。")
 		return
-	var costs := []
-	costs.resize(80)
-	costs.fill(1)
-	map_data = {"name": "新地圖", "width": 10, "height": 8, "costs": costs, "triggers": [], "units": []}
+	map_data = {"name": "新地圖", "width": 10, "height": 8, "terrains": [], "units": []}
 	map_file = unique_map_path("new_map")
 	history.clear()
 	future.clear()
@@ -236,14 +233,9 @@ func resize_map() -> void:
 	var new_height := int(height_box.value)
 	if new_width == map_data.width and new_height == map_data.height: return
 	checkpoint()
-	var costs := []
-	for y in new_height:
-		for x in new_width:
-			costs.append(map_data.costs[y * map_data.width + x] if x < map_data.width and y < map_data.height else 1)
 	map_data.width = new_width
 	map_data.height = new_height
-	map_data.costs = costs
-	map_data.triggers = map_data.triggers.filter(func(t: Dictionary): return t.x < new_width and t.y < new_height)
+	map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x < new_width and t.y < new_height)
 	map_data.units = map_data.units.filter(func(u: Dictionary): return u.x < new_width and u.y < new_height)
 	refresh_grid()
 	validate_current()
@@ -259,14 +251,13 @@ func refresh_ui() -> void:
 	refresh_definitions()
 
 func refresh_tools() -> void:
-	var previous := terrain_list.get_item_text(terrain_list.selected) if terrain_list.item_count else "plain"
+	var previous := terrain_list.get_item_text(terrain_list.selected) if terrain_list.item_count else "rough"
 	terrain_list.clear()
-	for kind in ["plain", "rough"]:
-		terrain_list.add_item(kind)
+	terrain_list.add_item("rough")
 	var keys: Array = definitions.terrain_types.keys()
 	keys.sort()
 	for kind in keys:
-		if kind not in ["plain", "rough"]: terrain_list.add_item(kind)
+		if kind != "rough" and kind != "plain": terrain_list.add_item(kind)
 	for i in terrain_list.item_count:
 		if terrain_list.get_item_text(i) == previous: terrain_list.select(i)
 	if terrain_list.selected < 0: terrain_list.select(0)
@@ -281,24 +272,27 @@ func refresh_grid() -> void:
 	for y in int(map_data.height):
 		for x in int(map_data.width):
 			var cell := Vector2i(x, y)
-			var kind := terrain_at(cell)
+			var terrains := terrains_at(cell)
 			var unit := unit_at(cell)
 			var button := Button.new()
 			button.custom_minimum_size = Vector2(74, 56)
-			button.text = "%d,%d\n%s%s" % [x, y, kind, "\n" + unit.id if not unit.is_empty() else ""]
-			button.tooltip_text = "移動消耗 %d；%s" % [map_data.costs[y * map_data.width + x], kind]
-			button.modulate = Color("c8b9a4") if kind == "rough" else Color.WHITE
-			if kind not in ["plain", "rough"]: button.modulate = Color("e98c82")
+			var terrain_label := "plain" if terrains.is_empty() else terrains[0] + ("+%d" % (terrains.size() - 1) if terrains.size() > 1 else "")
+			button.text = "%d,%d\n%s%s" % [x, y, terrain_label, "\n" + unit.id if not unit.is_empty() else ""]
+			button.tooltip_text = ", ".join(terrains) if not terrains.is_empty() else "plain"
+			button.modulate = Color("e98c82") if not terrains.is_empty() else Color.WHITE
 			if not unit.is_empty(): button.modulate = Color("79b9f3") if unit.team is String else Color("ee9b94")
 			button.pressed.connect(func(): edit_cell(cell))
 			button.mouse_entered.connect(func():
 				if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and mode_list.selected == 0: edit_cell(cell))
 			grid.add_child(button)
 
-func terrain_at(cell: Vector2i) -> String:
-	for t in map_data.triggers:
-		if t.x == cell.x and t.y == cell.y: return t.kind
-	return "rough" if map_data.costs[cell.y * map_data.width + cell.x] > 1 else "plain"
+func terrains_at(cell: Vector2i) -> Array[String]:
+	var terrains: Array[String] = []
+	for terrain in map_data.terrains:
+		if terrain.x == cell.x and terrain.y == cell.y:
+			terrains.append(terrain.kind)
+	terrains.sort()
+	return terrains
 
 func unit_at(cell: Vector2i) -> Dictionary:
 	for unit in map_data.units:
@@ -316,11 +310,11 @@ func edit_cell(cell: Vector2i) -> void:
 	var current := unit_at(cell)
 	if mode == 0:
 		var kind := terrain_list.get_item_text(terrain_list.selected)
-		if terrain_at(cell) == kind: return
 		checkpoint()
-		map_data.triggers = map_data.triggers.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y)
-		map_data.costs[cell.y * map_data.width + cell.x] = 2 if kind == "rough" else 1
-		if kind not in ["plain", "rough"]: map_data.triggers.append({"x":cell.x,"y":cell.y,"kind":kind})
+		if kind in terrains_at(cell):
+			map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y or t.kind != kind)
+		else:
+			map_data.terrains.append({"x":cell.x,"y":cell.y,"kind":kind})
 	elif mode == 1:
 		if unit_list.item_count == 0: return
 		checkpoint()
@@ -345,13 +339,12 @@ func edit_cell(cell: Vector2i) -> void:
 				unit.y = cell.y
 		selected_unit = ""
 	else:
-		if current.is_empty() and terrain_at(cell) == "plain": return
+		if current.is_empty() and terrains_at(cell).is_empty(): return
 		checkpoint()
 		if not current.is_empty():
 			map_data.units = map_data.units.filter(func(u: Dictionary): return u.id != current.id)
 		else:
-			map_data.triggers = map_data.triggers.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y)
-			map_data.costs[cell.y * map_data.width + cell.x] = 1
+			map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y)
 	refresh_grid()
 	validate_current()
 
@@ -439,7 +432,7 @@ func add_definition() -> void:
 	elif category == "skills":
 		definitions.skills.append({"id":id,"name":id,"ranged":false,"attack_bonus":0,"damage_bonus":0,"min_range":1,"max_range":1,"effect":"attack","ai_default":false})
 	else:
-		definitions.terrain_types[id] = {"name_key":"TERRAIN_PLAIN","visual":"plain","passable":true,"ends_movement":false,"damage":0,"movement_cost_bonus":0,"dodge_penalty":0,"block_penalty":0,"forced_entry":"none","effect_key":"TERRAIN_EFFECT_NONE"}
+		definitions.terrain_types[id] = {"name_key":"TERRAIN_PLAIN","visual":"plain","passable":true,"damage":0,"movement_cost_bonus":0,"dodge_penalty":0,"block_penalty":0,"forced_entry":"none","effect_key":"TERRAIN_EFFECT_NONE"}
 	refresh_tools()
 	refresh_definitions()
 	definition_list.select(definition_list.item_count - 1)

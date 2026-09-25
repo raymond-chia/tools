@@ -2,13 +2,6 @@ name="turn_order"
 
 width=5
 height=5
-costs=[
-1,1,1,1,1,
-1,1,1,1,1,
-1,1,1,1,1,
-1,1,1,1,1,
-1,1,1,1,1]
-
 [[units]]
 id="aria"
 unit_type="aria"

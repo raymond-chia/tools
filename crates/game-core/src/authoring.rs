@@ -1,5 +1,5 @@
 //! Editor 與戰鬥共用的作者資料格式。
-use super::{Definition, MapDef, SkillDef, Team, TerrainTypeDef, TriggerDef, UnitDef};
+use super::{Definition, MapDef, SkillDef, Team, TerrainPlacement, TerrainTypeDef, UnitDef};
 use crate::error::{self, GameError};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -35,9 +35,8 @@ pub struct Map {
     pub name: String,
     pub width: i32,
     pub height: i32,
-    pub costs: Vec<u32>,
     #[serde(default)]
-    pub triggers: Vec<TriggerDef>,
+    pub terrains: Vec<TerrainPlacement>,
     #[serde(default)]
     pub units: Vec<UnitPlacement>,
 }
@@ -122,8 +121,7 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
         map: MapDef {
             width: map.width,
             height: map.height,
-            costs: map.costs,
-            triggers: map.triggers,
+            terrains: map.terrains,
         },
         terrain_types: definitions.terrain_types,
         skills: definitions.skills,

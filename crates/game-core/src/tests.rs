@@ -216,16 +216,14 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
     world.insert_resource(Board {
         width: 3,
         height: 3,
-        costs: vec![1; 9],
-        triggers: HashMap::from([(spikes, "spikes".into())]),
+        terrains: HashMap::from([(spikes, vec!["spikes".into()])]),
         terrain_types: HashMap::from([(
             "spikes".into(),
             TerrainTypeDef {
                 name_key: "TERRAIN_SPIKES".into(),
                 visual: "spikes".into(),
                 passable: true,
-                ends_movement: true,
-                damage: 0,
+                damage: 3,
                 movement_cost_bonus: 0,
                 dodge_penalty: 0,
                 block_penalty: 0,
@@ -455,7 +453,6 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
         name_key: "TERRAIN_PLAIN".into(),
         visual: "plain".into(),
         passable: true,
-        ends_movement: false,
         damage: 0,
         movement_cost_bonus: 0,
         dodge_penalty: 0,
@@ -468,8 +465,7 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
         map: MapDef {
             width: 5,
             height: 2,
-            costs: vec![1; 10],
-            triggers: Vec::new(),
+            terrains: Vec::new(),
         },
         terrain_types: HashMap::from([
             ("plain".into(), terrain.clone()),

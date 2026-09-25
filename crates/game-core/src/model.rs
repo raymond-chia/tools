@@ -69,17 +69,15 @@ pub(crate) struct Downed;
 pub(crate) struct Board {
     pub(crate) width: i32,
     pub(crate) height: i32,
-    pub(crate) costs: Vec<u32>,
-    pub(crate) triggers: HashMap<GridPos, String>,
+    pub(crate) terrains: HashMap<GridPos, Vec<String>>,
     pub(crate) terrain_types: HashMap<String, TerrainTypeDef>,
 }
 #[derive(Clone)]
 pub(crate) struct TemporaryTerrain {
-    pub(crate) kind: String,
     pub(crate) expires_after_round: u32,
 }
 #[derive(Resource, Default, Clone)]
-pub(crate) struct TemporaryTerrains(pub(crate) HashMap<GridPos, TemporaryTerrain>);
+pub(crate) struct TemporaryTerrains(pub(crate) HashMap<GridPos, HashMap<String, TemporaryTerrain>>);
 #[derive(Resource, Default, Clone)]
 pub(crate) struct Encounter {
     pub(crate) participants: HashSet<String>,
@@ -150,12 +148,11 @@ pub enum SkillEffect {
 pub(crate) struct MapDef {
     pub(crate) width: i32,
     pub(crate) height: i32,
-    pub(crate) costs: Vec<u32>,
     #[serde(default)]
-    pub(crate) triggers: Vec<TriggerDef>,
+    pub(crate) terrains: Vec<TerrainPlacement>,
 }
 #[derive(Clone, Deserialize, Serialize)]
-pub struct TriggerDef {
+pub struct TerrainPlacement {
     pub(crate) x: i32,
     pub(crate) y: i32,
     pub(crate) kind: String,
@@ -165,8 +162,6 @@ pub struct TerrainTypeDef {
     pub(crate) name_key: String,
     pub(crate) visual: String,
     pub(crate) passable: bool,
-    #[serde(default)]
-    pub(crate) ends_movement: bool,
     #[serde(default)]
     pub(crate) damage: i32,
     #[serde(default)]
@@ -249,7 +244,6 @@ pub enum Command {
 pub struct Snapshot {
     pub width: i32,
     pub height: i32,
-    pub costs: Vec<u32>,
     pub terrain_effects: Vec<TerrainEffectView>,
     pub terrain_cells: Vec<TerrainCellView>,
     pub units: Vec<UnitView>,
@@ -325,12 +319,6 @@ pub enum CombatLogEvent {
         healing: i32,
         remaining_hp: i32,
         max_hp: i32,
-    },
-    StatusApplied {
-        target: String,
-        target_type: String,
-        target_team: Team,
-        status: String,
     },
     TerrainDamage {
         target: String,
@@ -466,16 +454,13 @@ pub struct TerrainEffectView {
 pub struct TerrainCellView {
     pub x: i32,
     pub y: i32,
-    pub kind: String,
-    pub visual: String,
     pub passable: bool,
     pub base_kind: String,
+    pub terrains: Vec<String>,
     pub unit_id: Option<String>,
     pub cost: u32,
-    pub effect: String,
     pub damage: i32,
-    pub remaining_rounds: Option<u32>,
-    pub effect_description: DetailView,
+    pub effect_descriptions: Vec<DetailView>,
 }
 #[derive(Serialize)]
 pub struct TurnView {

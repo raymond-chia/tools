@@ -204,9 +204,15 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
 		detail_values.attack.text = "%d" % int(unit.attack)
 		detail_values.damage.text = "%d" % int(unit.damage)
-	terrain_name.text = tr(BattleConfig.terrain_name_key(terrain.kind))
+	var terrain_names: Array[String] = []
+	for kind in terrain.terrains:
+		terrain_names.append(tr(BattleConfig.terrain_name_key(kind)))
+	terrain_name.text = "、".join(terrain_names) if not terrain_names.is_empty() else tr(BattleConfig.terrain_name_key("plain"))
 	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("無法通行")
-	terrain_effect.text = localized_detail(terrain.effect_description)
+	var terrain_descriptions: Array[String] = []
+	for description in terrain.effect_descriptions:
+		terrain_descriptions.append(localized_detail(description))
+	terrain_effect.text = "；".join(terrain_descriptions) if not terrain_descriptions.is_empty() else tr("TERRAIN_EFFECT_NONE")
 
 func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 	clear_turn_order()
@@ -380,10 +386,6 @@ func format_log(events: Array) -> String:
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor_type, event.actor_team), tr(event.skill)]])
 				if expanded:
 					entries.append(tr("產生「%s」") % tr(BattleConfig.terrain_name_key(event.terrain)))
-			"status_applied":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("狀態變化")])
-				if expanded:
-					entries.append(tr("%s 受到「%s」狀態影響") % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.status))])
 			"terrain_damage":
 				var log_text := tr(event.log_key) % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.terrain)), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
 				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, log_text])

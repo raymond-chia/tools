@@ -89,10 +89,8 @@ impl Game {
                 .expect("已建立的戰鬥單位應具有 Pos 元件")
                 .0 = p;
             self.reveal(e);
-            if let Some(k) = terrain_at(&self.world, p) {
-                if !terrain_ends_movement(&self.world, p) {
-                    continue;
-                }
+            let ends_movement = terrain_ends_movement(&self.world, p);
+            for k in terrains_at(&self.world, p) {
                 let unit = self
                     .world
                     .get::<Unit>(e)
@@ -100,6 +98,9 @@ impl Game {
                 let target_type = unit.unit_type.clone();
                 let target_team = unit.team.clone();
                 let terrain_definition = terrain_type(self.world.resource::<Board>(), &k);
+                if terrain_definition.damage <= 0 {
+                    continue;
+                }
                 let log_key = terrain_definition
                     .forced_entry_log_key
                     .clone()
@@ -135,17 +136,12 @@ impl Game {
                             max_hp,
                             downed,
                         });
-                } else {
-                    self.world
-                        .resource_mut::<Log>()
-                        .0
-                        .push(CombatLogEvent::StatusApplied {
-                            target: a.to_owned(),
-                            target_type,
-                            target_team,
-                            status: k,
-                        });
+                    if downed {
+                        break;
+                    }
                 }
+            }
+            if ends_movement || self.world.get::<Downed>(e).is_some() {
                 break;
             }
         }
@@ -207,12 +203,12 @@ impl Game {
                 )
             })
             .ok_or(error::unreachable_destination())?;
-        if let Some(trigger_index) = path
+        if let Some(terrain_index) = path
             .iter()
             .skip(1)
             .position(|position| terrain_ends_movement(&self.world, *position))
         {
-            path.truncate(trigger_index + 2);
+            path.truncate(terrain_index + 2);
         }
         Ok(MovePlan {
             entity,
@@ -249,25 +245,36 @@ impl Game {
     }
 }
 
-pub(crate) fn terrain_at(w: &World, position: GridPos) -> Option<String> {
-    w.resource::<TemporaryTerrains>()
-        .0
+pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
+    let mut kinds = w
+        .resource::<Board>()
+        .terrains
         .get(&position)
-        .map(|terrain| terrain.kind.clone())
-        .or_else(|| w.resource::<Board>().triggers.get(&position).cloned())
+        .cloned()
+        .unwrap_or_default();
+    if let Some(temporary) = w.resource::<TemporaryTerrains>().0.get(&position) {
+        for kind in temporary.keys() {
+            if !kinds.contains(kind) {
+                kinds.push(kind.clone());
+            }
+        }
+    }
+    kinds.sort();
+    kinds
 }
 
 pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {
     let board = w.resource::<Board>();
-    let base = board.costs[(position.y * board.width + position.x) as usize];
-    base + terrain_at(w, position)
-        .map(|kind| terrain_type(board, &kind).movement_cost_bonus)
-        .unwrap_or(0)
+    1 + terrains_at(w, position)
+        .iter()
+        .map(|kind| terrain_type(board, kind).movement_cost_bonus)
+        .sum::<u32>()
 }
 
 pub(crate) fn terrain_ends_movement(w: &World, position: GridPos) -> bool {
-    terrain_at(w, position)
-        .is_some_and(|kind| terrain_type(w.resource::<Board>(), &kind).ends_movement)
+    terrains_at(w, position)
+        .iter()
+        .any(|kind| terrain_type(w.resource::<Board>(), kind).damage > 0)
 }
 
 pub(crate) fn footprint_on_impassable(
@@ -278,9 +285,9 @@ pub(crate) fn footprint_on_impassable(
     (position.y..position.y + footprint.height).any(|y| {
         (position.x..position.x + footprint.width).any(|x| {
             board
-                .triggers
+                .terrains
                 .get(&GridPos { x, y })
-                .is_some_and(|kind| !terrain_type(board, kind).passable)
+                .is_some_and(|kinds| kinds.iter().any(|kind| !terrain_type(board, kind).passable))
         })
     })
 }
@@ -292,10 +299,11 @@ pub(crate) fn footprint_blocks_forced_entry(
 ) -> bool {
     (position.y..position.y + footprint.height).any(|y| {
         (position.x..position.x + footprint.width).any(|x| {
-            board
-                .triggers
-                .get(&GridPos { x, y })
-                .is_some_and(|kind| terrain_type(board, kind).forced_entry == ForcedEntry::Blocked)
+            board.terrains.get(&GridPos { x, y }).is_some_and(|kinds| {
+                kinds
+                    .iter()
+                    .any(|kind| terrain_type(board, kind).forced_entry == ForcedEntry::Blocked)
+            })
         })
     })
 }

@@ -103,7 +103,7 @@ func test_downed_unit_log() -> void:
 # 驗證踩到地刺會停止移動、扣除固定傷害，並以實例 ID 記錄與顯示結果。
 func test_spikes_damage_log() -> void:
 	var terrain := terrain_at(Vector2i(0, 2))
-	assert_str(terrain.kind).override_failure_message("測試地格應標記為地刺").is_equal("spikes")
+	assert_array(terrain.terrains).override_failure_message("測試地格應包含地刺").contains("spikes")
 	assert_int(int(terrain.damage)).override_failure_message("地刺資訊應由核心提供固定傷害").is_equal(3)
 	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 0, "y": 2})).override_failure_message("移動到地刺地格應成功").is_true()
 	await wait_for_combat_events()

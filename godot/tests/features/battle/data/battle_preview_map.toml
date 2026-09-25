@@ -2,17 +2,14 @@ name="battle_preview"
 
 width=9
 height=7
-costs=[
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,2,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1,
-1,1,1,1,1,1,1,1,1]
-triggers=[
-{x=1,y=2,kind="spikes"}]
-
+[[terrains]]
+x=1
+y=2
+kind="spikes"
+[[terrains]]
+x=3
+y=4
+kind="rough"
 [[units]]
 id="aria"
 unit_type="aria"

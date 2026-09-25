@@ -62,10 +62,15 @@ func test_mire_movement_cost_and_duration() -> void:
 	await wait_for_combat_events()
 	var terrain := terrain_at(mire_cell)
 	assert_int(int(terrain.cost)).override_failure_message("泥沼地格應增加一點移動消耗").is_equal(2)
-	assert_int(int(terrain.remaining_rounds)).override_failure_message("進入下一輪後泥沼應剩餘一輪").is_equal(1)
+	var mire_effect: Dictionary = {}
+	for effect in battle.state.terrain_effects:
+		if effect.x == mire_cell.x and effect.y == mire_cell.y and effect.effect == "mire":
+			mire_effect = effect
+	assert_dict(mire_effect).override_failure_message("泥沼效果應位於施放格").is_not_empty()
+	assert_int(int(mire_effect.remaining_rounds)).override_failure_message("進入下一輪後泥沼應剩餘一輪").is_equal(1)
 	assert_bool(battle.send({"type": "end_turn", "actor": "aria"})).override_failure_message("應能結束下一輪以推進泥沼期限").is_true()
 	await wait_for_combat_events()
-	assert_str(terrain_at(mire_cell).kind).override_failure_message("兩輪結束後泥沼應恢復為原地形").is_equal("plain")
+	assert_array(terrain_at(mire_cell).terrains).override_failure_message("兩輪結束後泥沼應消失").is_empty()
 
 # 驗證推擊命中會沿攻擊者到目標的方向移動一格。
 func test_push_hit_moves_target_one_cell() -> void:

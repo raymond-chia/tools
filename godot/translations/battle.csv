@@ -125,8 +125,6 @@ D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %
 %s 倒下,%s 倒下,%s is defeated
 %s 使用「%s」,%s 使用「%s」,%s uses %s
 產生「%s」,產生「%s」,Creates %s
-狀態變化,狀態變化,Status change
-%s 受到「%s」狀態影響,%s 受到「%s」狀態影響,%s is affected by %s
 包抄,包抄,Flanking
 ERROR_PREFIX,錯誤：,"Error: "
 ERROR_CANNOT_ATTACK_ALLY,不能攻擊友軍,Cannot attack an ally
@@ -140,7 +138,7 @@ ERROR_DEFINITIONS_TOML_PARSE,定義檔格式錯誤,Definitions file format is in
 ERROR_DELAY_AFTER_ACTION,開始行動後不能延後,Cannot delay after acting
 ERROR_DUPLICATE_AI_DEFAULT,只能有一個 AI 預設技能,Only one AI default skill is allowed
 ERROR_DUPLICATE_SKILL_ID,技能 ID 重複,Duplicate skill ID
-ERROR_DUPLICATE_TERRAIN_CELL,地形格子重複,Duplicate terrain cell
+ERROR_DUPLICATE_TERRAIN,同一格的地形重複,Duplicate terrain on the same cell
 ERROR_DUPLICATE_UNIT_ID,單位 ID 重複,Duplicate unit ID
 ERROR_DUPLICATE_UNIT_PLACEMENT_ID,單位配置 ID 重複,Duplicate unit placement ID
 ERROR_DUPLICATE_UNIT_TYPE_ID,單位定義 ID 重複,Duplicate unit type ID
@@ -152,7 +150,7 @@ ERROR_HEAL_ALLIES_ONLY,只能治療自己或友軍,Can only heal yourself or all
 ERROR_INVALID_DELAY_TARGET,只能延後到尚未行動的單位之後,Can only delay after a unit that has not acted
 ERROR_INVALID_DURATION,技能持續時間必須大於 0,Skill duration must be greater than zero
 ERROR_INVALID_HEAL_AMOUNT,技能治療量必須大於 0,Skill healing amount must be greater than zero
-ERROR_INVALID_MAP_COSTS,地圖移動成本數量與尺寸不符,Map movement costs do not match its size
+ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be positive
 ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
 ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
 ERROR_INVALID_UNIT_SIZE_OR_HP,單位佔用尺寸與 HP 必須大於 0,Unit size and HP must be greater than zero
@@ -167,7 +165,6 @@ ERROR_MISSING_DELAY_TARGET,找不到延後目標,Delay target not found
 ERROR_MISSING_INITIATIVE_UNIT,找不到先攻單位,Initiative unit not found
 ERROR_MISSING_MOVE_UNIT,找不到移動單位,Moving unit not found
 ERROR_MISSING_TARGET,找不到目標,Target not found
-ERROR_MISSING_TERRAIN_TYPE,缺少必要的地形種類,A required terrain type is missing
 ERROR_NO_AUTO_STEP,目前沒有可推進的自動回合,No automatic turn can be advanced
 ERROR_OVERLAPPING_UNIT,單位與其他單位重疊,Unit overlaps another unit
 ERROR_TARGET_CELL_OUT_OF_BOUNDS,目標格超出地圖,Target cell is out of bounds
@@ -175,7 +172,7 @@ ERROR_TARGET_DOWNED,目標已倒下,Target is down
 ERROR_TARGET_TOO_CLOSE,目標距離太近,Target is too close
 ERROR_TARGET_TOO_FAR,目標距離太遠,Target is too far
 ERROR_TOML_SERIALIZE,無法儲存資料格式,Could not serialize data
-ERROR_TRIGGER_OUT_OF_BOUNDS,地圖觸發格超出範圍,Map trigger is out of bounds
+ERROR_TERRAIN_OUT_OF_BOUNDS,地形超出地圖範圍,Terrain is out of bounds
 ERROR_UNIT_CANNOT_USE_SKILL,此角色不能使用這個技能,This unit cannot use the skill
 ERROR_UNIT_ON_IMPASSABLE,單位不能放在峭壁或懸崖,Unit cannot be placed on a cliff or chasm
 ERROR_UNIT_OUT_OF_BOUNDS,單位超出地圖範圍,Unit is out of bounds
@@ -185,4 +182,3 @@ ERROR_UNKNOWN_UNIT_SKILL,單位使用了未知技能,A unit uses an unknown skil
 ERROR_UNKNOWN_UNIT_TYPE,找不到單位定義,Unit type not found
 ERROR_UNREACHABLE_DESTINATION,目的地不可達,Destination is unreachable
 ERROR_WRONG_TURN,現在不是該單位的回合,It is not this unit's turn
-ERROR_ZERO_MOVEMENT_COST,移動成本必須大於 0,Movement cost must be greater than zero

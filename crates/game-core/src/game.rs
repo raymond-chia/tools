@@ -37,51 +37,44 @@ impl Game {
         Self::from_definition(authoring::into_definition(definitions, map)?)
     }
     pub(crate) fn from_definition(d: Definition) -> Result<Self, GameError> {
-        if d.map.width <= 0
-            || d.map.height <= 0
-            || d.map
-                .width
-                .checked_mul(d.map.height)
-                .is_none_or(|cells| d.map.costs.len() != cells as usize)
+        if d.map.width <= 0 || d.map.height <= 0 || d.map.width.checked_mul(d.map.height).is_none()
         {
-            return Err(error::invalid_map_costs());
+            return Err(error::invalid_map_dimensions());
         }
-        if d.map.costs.contains(&0) {
-            return Err(error::zero_movement_cost());
-        }
-        if d.map.triggers.iter().any(|trigger| {
-            trigger.x < 0 || trigger.y < 0 || trigger.x >= d.map.width || trigger.y >= d.map.height
+        if d.map.terrains.iter().any(|terrain| {
+            terrain.x < 0 || terrain.y < 0 || terrain.x >= d.map.width || terrain.y >= d.map.height
         }) {
-            return Err(error::trigger_out_of_bounds());
+            return Err(error::terrain_out_of_bounds());
         }
-        for required in ["plain", "rough"] {
-            if !d.terrain_types.contains_key(required) {
-                return Err(error::missing_terrain_type(required));
-            }
-        }
-        for trigger in &d.map.triggers {
-            if !d.terrain_types.contains_key(&trigger.kind) {
-                return Err(error::unknown_terrain_type(&trigger.kind));
+        for terrain in &d.map.terrains {
+            if !d.terrain_types.contains_key(&terrain.kind) {
+                return Err(error::unknown_terrain_type(&terrain.kind));
             }
         }
         let mut terrain_positions = HashSet::new();
-        for trigger in &d.map.triggers {
-            if !terrain_positions.insert((trigger.x, trigger.y)) {
-                return Err(error::duplicate_terrain_cell(trigger.x, trigger.y));
+        for terrain in &d.map.terrains {
+            if !terrain_positions.insert((terrain.x, terrain.y, terrain.kind.as_str())) {
+                return Err(error::duplicate_terrain(terrain.x, terrain.y));
             }
         }
         let mut w = World::new();
-        let triggers = d
-            .map
-            .triggers
-            .into_iter()
-            .map(|t| (GridPos { x: t.x, y: t.y }, t.kind))
-            .collect();
+        let mut terrains: HashMap<GridPos, Vec<String>> = HashMap::new();
+        for terrain in d.map.terrains {
+            terrains
+                .entry(GridPos {
+                    x: terrain.x,
+                    y: terrain.y,
+                })
+                .or_default()
+                .push(terrain.kind);
+        }
+        for kinds in terrains.values_mut() {
+            kinds.sort();
+        }
         w.insert_resource(Board {
             width: d.map.width,
             height: d.map.height,
-            costs: d.map.costs,
-            triggers,
+            terrains,
             terrain_types: d.terrain_types,
         });
         w.insert_resource(Encounter::default());
@@ -270,7 +263,10 @@ impl Game {
         self.world
             .resource_mut::<TemporaryTerrains>()
             .0
-            .retain(|_, terrain| terrain.expires_after_round >= next_round);
+            .retain(|_, terrains| {
+                terrains.retain(|_, terrain| terrain.expires_after_round >= next_round);
+                !terrains.is_empty()
+            });
         let active = self.world.resource::<Encounter>().participants.clone();
         let entries: Vec<_> = self
             .world
@@ -637,56 +633,60 @@ impl Game {
                 let units = &units;
                 (0..b.width).map(move |x| {
                     let position = GridPos { x, y };
-                    let base_cost = board.costs[(y * board.width + x) as usize];
-                    let temporary_terrain = temporary.0.get(&position);
-                    let effect = temporary_terrain
-                        .map(|terrain| terrain.kind.clone())
-                        .or_else(|| board.triggers.get(&position).cloned())
-                        .unwrap_or_default();
+                    let terrains = crate::movement::terrains_at(world, position);
                     let cost = movement_cost(world, position);
-                    let kind = if !effect.is_empty() {
-                        effect.as_str()
-                    } else if base_cost > 1 {
-                        "rough"
-                    } else {
-                        "plain"
-                    };
-                    let definition = terrain_type(board, kind);
-                    let damage = definition.damage;
-                    let remaining_rounds = temporary_terrain
-                        .map(|terrain| terrain.expires_after_round.saturating_sub(enc.round) + 1);
-                    let effect_arguments = if remaining_rounds.is_some()
-                        && (definition.dodge_penalty > 0
-                            || definition.block_penalty > 0
-                            || definition.movement_cost_bonus > 0)
-                    {
-                        vec![
-                            definition.dodge_penalty.max(definition.block_penalty),
-                            definition.movement_cost_bonus as i32,
-                            remaining_rounds.unwrap_or(0) as i32,
-                        ]
-                    } else if damage > 0 {
-                        vec![damage]
-                    } else {
-                        Vec::new()
-                    };
-                    let effect_description = detail(&definition.effect_key, &effect_arguments);
+                    let damage = terrains
+                        .iter()
+                        .map(|kind| terrain_type(board, kind).damage)
+                        .sum();
+                    let effect_descriptions = terrains
+                        .iter()
+                        .filter(|kind| {
+                            terrain_type(board, kind).effect_key != "TERRAIN_EFFECT_NONE"
+                        })
+                        .map(|kind| {
+                            let definition = terrain_type(board, kind);
+                            let remaining = temporary
+                                .0
+                                .get(&position)
+                                .and_then(|items| items.get(kind))
+                                .map(|terrain| {
+                                    terrain.expires_after_round.saturating_sub(enc.round) + 1
+                                });
+                            let args = if let Some(rounds) = remaining {
+                                vec![
+                                    definition.dodge_penalty.max(definition.block_penalty),
+                                    definition.movement_cost_bonus as i32,
+                                    rounds as i32,
+                                ]
+                            } else if definition.damage > 0 {
+                                vec![definition.damage]
+                            } else {
+                                Vec::new()
+                            };
+                            detail(&definition.effect_key, &args)
+                        })
+                        .collect();
                     TerrainCellView {
                         x,
                         y,
-                        kind: kind.to_string(),
-                        visual: definition.visual.clone(),
-                        passable: definition.passable,
-                        base_kind: if base_cost > 1 { "rough" } else { "plain" }.to_string(),
+                        passable: terrains
+                            .iter()
+                            .all(|kind| terrain_type(board, kind).passable),
+                        base_kind: if terrains.iter().any(|kind| kind == "rough") {
+                            "rough"
+                        } else {
+                            "plain"
+                        }
+                        .to_string(),
+                        terrains,
                         unit_id: units
                             .iter()
                             .find(|unit| unit.occupied_cells.contains(&position))
                             .map(|unit| unit.id.clone()),
                         cost,
                         damage,
-                        remaining_rounds,
-                        effect_description,
-                        effect,
+                        effect_descriptions,
                     }
                 })
             })
@@ -694,35 +694,41 @@ impl Game {
         Snapshot {
             width: b.width,
             height: b.height,
-            costs: b.costs.clone(),
             terrain_effects: {
-                let mut effects: Vec<_> = b
-                    .triggers
-                    .clone()
-                    .into_iter()
-                    .filter(|(position, _)| !temporary_terrains.0.contains_key(position))
-                    .map(|(position, effect)| TerrainEffectView {
-                        x: position.x,
-                        y: position.y,
-                        damage: terrain_damage(&b, &effect),
-                        visual: terrain_type(&b, &effect).visual.clone(),
-                        effect,
-                        remaining_rounds: None,
-                    })
-                    .collect();
-                effects.extend(temporary_terrains.0.into_iter().map(|(position, terrain)| {
-                    TerrainEffectView {
-                        x: position.x,
-                        y: position.y,
-                        damage: terrain_damage(&b, &terrain.kind),
-                        visual: terrain_type(&b, &terrain.kind).visual.clone(),
-                        effect: terrain.kind,
-                        remaining_rounds: Some(
-                            terrain.expires_after_round.saturating_sub(enc.round) + 1,
-                        ),
+                let mut effects = Vec::new();
+                for (position, kinds) in &b.terrains {
+                    for kind in kinds {
+                        effects.push(TerrainEffectView {
+                            x: position.x,
+                            y: position.y,
+                            damage: terrain_damage(&b, kind),
+                            visual: terrain_type(&b, kind).visual.clone(),
+                            effect: kind.clone(),
+                            remaining_rounds: None,
+                        });
                     }
-                }));
-                effects.sort_by_key(|effect| (effect.y, effect.x));
+                }
+                for (position, kinds) in &temporary_terrains.0 {
+                    for (kind, terrain) in kinds {
+                        if b.terrains
+                            .get(position)
+                            .is_some_and(|items| items.contains(kind))
+                        {
+                            continue;
+                        }
+                        effects.push(TerrainEffectView {
+                            x: position.x,
+                            y: position.y,
+                            damage: terrain_damage(&b, kind),
+                            visual: terrain_type(&b, kind).visual.clone(),
+                            effect: kind.clone(),
+                            remaining_rounds: Some(
+                                terrain.expires_after_round.saturating_sub(enc.round) + 1,
+                            ),
+                        });
+                    }
+                }
+                effects.sort_by_key(|effect| (effect.y, effect.x, effect.effect.clone()));
                 effects
             },
             terrain_cells,
