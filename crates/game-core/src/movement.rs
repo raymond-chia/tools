@@ -88,7 +88,6 @@ impl Game {
                 .get_mut::<Pos>(e)
                 .expect("已建立的戰鬥單位應具有 Pos 元件")
                 .0 = p;
-            self.reveal(e);
             let ends_movement = terrain_ends_movement(&self.world, p);
             for k in terrains_at(&self.world, p) {
                 let unit = self
@@ -140,6 +139,7 @@ impl Game {
         if self.world.get_entity(e).is_err() {
             return Ok(());
         }
+        self.activate_nearby_enemies(e);
         let mut t = self.world.resource_mut::<Turn>();
         if turn.movement_segments_used == 0 && spent <= first_budget {
             t.movement_remaining = first_budget - spent;
@@ -218,23 +218,28 @@ impl Game {
             path,
         })
     }
-    fn reveal(&mut self, mover: Entity) {
+    fn activate_nearby_enemies(&mut self, mover: Entity) {
         let p = self
             .world
             .get::<Pos>(mover)
             .expect("已建立的戰鬥單位應具有 Pos 元件")
             .0;
+        let mover_footprint = *self
+            .world
+            .get::<Footprint>(mover)
+            .expect("移動單位應有佔用尺寸");
         let active = self.world.resource::<Encounter>().participants.clone();
         let add: Vec<_> = self
             .world
-            .query::<(&Id, &Pos, &Unit)>()
+            .query::<(&Id, &Pos, &Footprint, &Unit)>()
             .iter(&self.world)
-            .filter(|(i, q, f)| {
+            .filter(|(i, q, footprint, f)| {
                 f.team != Team::Player
                     && !active.contains(&i.0)
-                    && distance(p, q.0) <= gameplay_config::ENEMY_REVEAL_RANGE
+                    && footprint_distance(p, mover_footprint, q.0, **footprint)
+                        <= gameplay_config::ENCOUNTER_RANGE
             })
-            .map(|(i, _, _)| i.0)
+            .map(|(i, _, _, _)| i.0)
             .collect();
         if !add.is_empty() {
             self.world
@@ -314,6 +319,28 @@ pub(crate) fn footprint_cells(position: GridPos, footprint: Footprint) -> Vec<Gr
         .flat_map(|y| (position.x..position.x + footprint.width).map(move |x| GridPos { x, y }))
         .collect()
 }
+pub(crate) fn unit_at_cell(world: &World, position: GridPos) -> Option<Entity> {
+    world
+        .iter_entities()
+        .find(|entity| {
+            entity
+                .get::<Pos>()
+                .zip(entity.get::<Footprint>())
+                .is_some_and(|(pos, footprint)| {
+                    overlap(
+                        position,
+                        Footprint {
+                            width: 1,
+                            height: 1,
+                        },
+                        pos.0,
+                        *footprint,
+                    )
+                })
+        })
+        .map(|entity| entity.id())
+}
+
 pub(crate) fn fits(b: &Board, p: GridPos, f: Footprint) -> bool {
     p.x >= 0 && p.y >= 0 && p.x + f.width <= b.width && p.y + f.height <= b.height
 }

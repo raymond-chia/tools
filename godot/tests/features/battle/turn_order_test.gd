@@ -61,7 +61,7 @@ func load_test_documents() -> void:
 	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func empty_reachable_cell() -> Dictionary:

@@ -88,7 +88,7 @@ func add_test_translation(locale: String, messages: Dictionary) -> void:
 	test_translations.append(translation)
 
 func wait_for_combat_events() -> void:
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func emit_right_press(control: Control) -> void:

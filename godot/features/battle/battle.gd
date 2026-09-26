@@ -95,13 +95,13 @@ func send(command: Dictionary) -> bool:
 	return true
 
 func advance_automatic_turn() -> void:
-	if state.is_empty() or not state.turn.auto_step:
+	if state.is_empty() or not state.turn.can_continue:
 		return
 	if world.is_presenting_combat_events():
 		await world.combat_events_finished
 	await get_tree().create_timer(BattleConfig.COMBAT_EVENT_PAUSE).timeout
 	if is_inside_tree():
-		send({"type": "auto_step"})
+		send({"type": "continue"})
 
 func read_core_response(response: String, report_error := true) -> Dictionary:
 	var ignored_error_ids: Array = [] if report_error else BattleConfig.PREVIEW_IGNORED_ERROR_IDS
@@ -129,14 +129,14 @@ func show_current_state() -> void:
 	pending_display_log = []
 
 func input_is_locked() -> bool:
-	return (not state.is_empty() and state.turn.auto_step) or world.is_presenting_combat_events()
+	return (not state.is_empty() and state.turn.can_continue) or world.is_presenting_combat_events()
 
 func select_action(action: String) -> void:
 	if input_is_locked():
 		return
 	selecting_delay = false
 	pending_action = action
-	status = "請選擇施法格子。" if pending_action_targets_cell() else "請選擇技能目標。"
+	status = "請選擇技能目標。"
 	present()
 
 func _on_primary_clicked(unit_id: int, cell: Vector2i) -> void:
@@ -145,17 +145,15 @@ func _on_primary_clicked(unit_id: int, cell: Vector2i) -> void:
 	if selecting_delay:
 		return
 	if pending_action != "":
-		if pending_action_targets_cell():
-			use_pending_cell_action(cell)
-			return
-		if unit_id == 0:
-			status = "請選擇一個單位作為目標。"
-			present()
-			return
-		use_pending_action(unit_id, cell)
+		use_pending_action(cell)
 		return
 	if state.is_empty() or state.turn.actor == null or not world.is_cell_on_board(cell):
 		return
+	if state.battle_mode != "combat" and unit_id != 0:
+		for unit in state.units:
+			if unit.id == unit_id and unit.team == "player":
+				send({"type": "select_unit", "actor": unit_id})
+				return
 	world.prepare_move_animation(state.turn.actor, cell)
 	if not send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y}):
 		world.cancel_move_animation()
@@ -188,29 +186,16 @@ func _on_skill_inspection_requested(skill_id: String) -> void:
 	inspected_skill = "" if inspected_skill == skill_id else skill_id
 	present()
 
-func use_pending_action(target: int, cell: Vector2i) -> void:
-	var actor: int = state.turn.actor
-	var succeeded := send({"type": "skill", "actor": actor, "target": target, "x": cell.x, "y": cell.y, "skill": pending_action})
-	if succeeded:
-		pending_action = ""
-		present()
-
-func use_pending_cell_action(cell: Vector2i) -> void:
+func use_pending_action(cell: Vector2i) -> void:
 	if not world.is_cell_on_board(cell):
 		status = "請選擇地圖上的格子。"
 		present()
 		return
 	var actor: int = state.turn.actor
-	var succeeded := send({"type": "cell_skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action})
+	var succeeded := send({"type": "skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action})
 	if succeeded:
 		pending_action = ""
 		present()
-
-func pending_action_targets_cell() -> bool:
-	for skill_range in state.skill_ranges:
-		if skill_range.id == pending_action:
-			return skill_range.cell_targeted
-	return false
 
 func _on_end_turn_requested() -> void:
 	if input_is_locked():
@@ -243,6 +228,8 @@ func _on_delay_target_selected(unit_id: int) -> void:
 func _on_turn_order_focus_requested(unit_id: int) -> void:
 	if input_is_locked():
 		return
+	if not state.is_empty() and state.battle_mode != "combat":
+		send({"type": "select_unit", "actor": unit_id})
 	world.focus_unit(unit_id)
 	if world.unit_id_at_cell(inspected_cell) == 0:
 		return

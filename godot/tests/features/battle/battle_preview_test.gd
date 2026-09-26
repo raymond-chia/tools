@@ -342,7 +342,7 @@ func test_skill_availability_after_movement() -> void:
 
 		assert_bool(battle.state.turn.can_skill).override_failure_message("%s：技能可用狀態應正確" % test_case.name).is_equal(test_case.can_skill)
 		assert_bool(battle.ui.action_buttons.aimed_shot.disabled).override_failure_message("%s：技能按鈕狀態應正確" % test_case.name).is_equal(not test_case.can_skill)
-		assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "target": OGRE_ID, "x": 3, "y": 1, "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
+		assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": 3, "y": 1, "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
 
 # 載入專用 TOML，必要時以真實攻擊建立缺血情境，再取得核心的完整預覽。
 func query_attack_preview(target_id: int, skill_id: String, preparation_skill := "") -> Dictionary:
@@ -366,17 +366,17 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 	if not preparation_skill.is_empty():
 		# 固定亂數種子，讓建立缺血情境的攻擊穩定普通命中。
 		preview_core.set_random_seed(1)
-		var damaged: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "skill", "actor": ARIA_ID, "target": target_id, "x": int(target.x), "y": int(target.y), "skill": preparation_skill})))
+		var damaged: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "skill", "actor": ARIA_ID, "x": int(target.x), "y": int(target.y), "skill": preparation_skill})))
 		assert_bool(damaged.has("error")).override_failure_message("建立缺血情境的真實攻擊應成功").is_false()
 		if damaged.has("error"):
 			return {}
 		# 準備攻擊會結束玩家回合，推進自動回合後才能再次查詢技能預覽。
-		while damaged.turn.auto_step:
-			damaged = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "auto_step"})))
+		while damaged.turn.can_continue:
+			damaged = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "continue"})))
 			assert_bool(damaged.has("error")).override_failure_message("準備攻擊後的自動回合應成功推進").is_false()
 			if damaged.has("error"):
 				return {}
-	var preview: Dictionary = JSON.parse_string(preview_core.preview_skill(ARIA_ID, target_id, int(target.x), int(target.y), skill_id))
+	var preview: Dictionary = JSON.parse_string(preview_core.preview_skill(ARIA_ID, int(target.x), int(target.y), skill_id))
 	assert_bool(preview.has("error")).override_failure_message("核心應成功產生 %s 的 %s 預覽" % [target_id, skill_id]).is_false()
 	return preview
 
@@ -388,7 +388,7 @@ func prepare_case(battle) -> void:
 	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events(target_battle) -> void:
-	while target_battle.state.turn.auto_step or target_battle.world.is_presenting_combat_events():
+	while target_battle.state.turn.can_continue or target_battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func actor_cell(battle) -> Vector2i:

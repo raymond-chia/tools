@@ -100,6 +100,20 @@ pub(crate) struct Encounter {
     pub(crate) round: u32,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BattleMode {
+    Exploring,
+    AttackPending,
+    Combat,
+}
+
+#[derive(Resource)]
+pub(crate) struct Exploration {
+    pub(crate) mode: BattleMode,
+    // 每個玩家單位的回合狀態表
+    pub(crate) turns: HashMap<i64, Turn>,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Phase {
     Ready,
@@ -231,20 +245,16 @@ pub(crate) fn one() -> i32 {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Command {
     Start,
-    AutoStep,
+    Continue,
+    SelectUnit {
+        actor: i64,
+    },
     Move {
         actor: i64,
         x: i32,
         y: i32,
     },
     Skill {
-        actor: i64,
-        target: i64,
-        x: i32,
-        y: i32,
-        skill: String,
-    },
-    CellSkill {
         actor: i64,
         x: i32,
         y: i32,
@@ -272,6 +282,7 @@ pub struct Snapshot {
     pub turn_order: Vec<i64>,
     pub turn: TurnView,
     pub round: u32,
+    pub battle_mode: String,
     pub outcome: Outcome,
     pub log: Vec<CombatLogEvent>,
     pub movements: Vec<MovementTransition>,
@@ -527,7 +538,7 @@ pub struct TerrainCellView {
 pub struct TurnView {
     pub actor: Option<i64>,
     pub phase: String,
-    pub auto_step: bool,
+    pub can_continue: bool,
     pub move_remaining: u32,
     pub can_move: bool,
     pub can_skill: bool,

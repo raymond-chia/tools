@@ -2,7 +2,7 @@ extends RefCounted
 
 # 使用專用 TOML 重新建立真實戰鬥場景，供各測試保留自己的操作與斷言。
 static func load_and_start(battle, runner: GdUnitSceneRunner, definitions_path: String, map_path: String) -> String:
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 	clear_combat_log(battle)
 	for child in battle.world.units_layer.get_children():
@@ -17,7 +17,7 @@ static func load_and_start(battle, runner: GdUnitSceneRunner, definitions_path: 
 	battle.world.setup_map(loaded)
 	if not battle.send({"type": "start"}):
 		return "專用測試戰鬥啟動失敗：%s" % battle.status
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 	return ""
 

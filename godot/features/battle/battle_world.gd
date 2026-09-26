@@ -535,7 +535,7 @@ func update_attack_preview() -> void:
 	if target.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
-	var value: Dictionary = read_core_response.call(core.preview_skill(state.turn.actor, target.id, hovered.x, hovered.y, pending_action), false)
+	var value: Dictionary = read_core_response.call(core.preview_skill(state.turn.actor, hovered.x, hovered.y, pending_action), false)
 	if value.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return

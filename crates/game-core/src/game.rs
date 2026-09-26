@@ -1,15 +1,15 @@
 //! 載入、命令分派、回合流程與快照。
 use crate::error::GameError;
 use crate::model::{
-    Board, CombatLogEvent, Command, Definition, DeliveredLogCount, Encounter, Footprint, GridPos,
-    Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
-    SkillEffect, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
-    TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, Turn, TurnView, Unit,
-    UnitView,
+    BattleMode, Board, CombatLogEvent, Command, Definition, DeliveredLogCount, Encounter,
+    Exploration, Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome,
+    Phase, Pos, Random, ResultState, SkillEffect, Skills, Snapshot, Team, TemporaryTerrains,
+    TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, Turn,
+    TurnView, Unit, UnitView,
 };
 use crate::movement::{
     distance, entity_distance, fits, footprint_cells, footprint_distance, footprint_on_impassable,
-    movement_cost, movement_ranges, terrain_damage, terrain_type, toward_skill_range,
+    movement_cost, movement_ranges, terrain_damage, terrain_type, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, closest_occupied_cell, effective_block, effective_dodge, skill_ranges,
@@ -79,6 +79,10 @@ impl Game {
             terrain_types: d.terrain_types,
         });
         w.insert_resource(Encounter::default());
+        w.insert_resource(Exploration {
+            mode: BattleMode::Exploring,
+            turns: HashMap::new(),
+        });
         w.insert_resource(TemporaryTerrains::default());
         w.insert_resource(Turn {
             actor: None,
@@ -182,25 +186,19 @@ impl Game {
         }
         match c {
             Command::Start => self.start(),
-            Command::AutoStep => self.auto_step(),
-            Command::Move { actor, x, y } => self.move_to(actor, GridPos { x, y }),
-            Command::Skill {
-                actor,
-                target,
-                x,
-                y,
-                skill,
-            } => {
-                let definition = self
-                    .world
-                    .resource::<Skills>()
-                    .definitions
-                    .get(&skill)
-                    .cloned()
-                    .ok_or_else(|| error::unknown_skill(&skill))?;
-                self.use_skill(actor, target, GridPos { x, y }, definition)
+            Command::Continue => self.continue_battle(),
+            Command::SelectUnit { actor } => self.select_exploration_unit(actor),
+            Command::Move { actor, x, y } => {
+                self.move_to(actor, GridPos { x, y })?;
+                if self.world.resource::<Exploration>().mode == BattleMode::Exploring
+                    && self.has_active_enemy()
+                {
+                    self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
+                    self.roll_round();
+                }
+                Ok(())
             }
-            Command::CellSkill { actor, x, y, skill } => {
+            Command::Skill { actor, x, y, skill } => {
                 let definition = self
                     .world
                     .resource::<Skills>()
@@ -208,7 +206,26 @@ impl Game {
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| error::unknown_skill(&skill))?;
-                self.use_cell_skill(actor, GridPos { x, y }, definition)
+                let attack = matches!(
+                    definition.effect,
+                    SkillEffect::Attack { .. } | SkillEffect::Push { .. }
+                );
+                let target_id = unit_at_cell(&self.world, GridPos { x, y })
+                    .and_then(|entity| self.world.get::<Id>(entity).map(|id| id.0));
+                self.use_skill_at_cell(actor, GridPos { x, y }, definition)?;
+                if attack && self.world.resource::<Exploration>().mode == BattleMode::Exploring {
+                    self.world.resource_mut::<Exploration>().mode = BattleMode::AttackPending;
+                    if let Some(id) = target_id {
+                        if self.entity(id).is_some() {
+                            self.world
+                                .resource_mut::<Encounter>()
+                                .participants
+                                .insert(id);
+                        }
+                    }
+                    self.activate_enemies_near_players();
+                }
+                Ok(())
             }
             Command::EndTurn { actor } => {
                 self.ensure(actor)?;
@@ -218,27 +235,180 @@ impl Game {
             Command::Delay { actor, after } => self.delay(actor, after),
         }?;
         self.outcome();
+        if self.world.resource::<Exploration>().mode != BattleMode::Combat
+            && self.world.resource::<Turn>().phase == Phase::Ended
+            && self.world.resource::<ResultState>().0 == Outcome::Ongoing
+        {
+            self.advance_exploration();
+        }
         Ok(())
     }
     pub fn set_random_seed(&mut self, seed: u64) {
         self.world.resource_mut::<Random>().0 = seed;
     }
     pub(crate) fn start(&mut self) -> Result<(), GameError> {
-        if self.world.resource::<Encounter>().round > 0 {
+        if self.world.resource::<Turn>().actor.is_some() {
             return Ok(());
         }
-        let ids: Vec<_> = self
+        let players: Vec<_> = self
             .world
-            .query::<&Id>()
+            .query::<(&Id, &Unit)>()
             .iter(&self.world)
-            .map(|i| i.0)
+            .filter(|(_, unit)| unit.team == Team::Player)
+            .map(|(id, _)| id.0)
             .collect();
+        let mut players = players;
+        players.sort();
         self.world
             .resource_mut::<Encounter>()
             .participants
-            .extend(ids);
-        self.roll_round();
+            .extend(players.iter().copied());
+        if self.activate_enemies_near_players() {
+            self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
+            self.roll_round();
+        } else {
+            self.reset_exploration_turns(&players);
+        }
         Ok(())
+    }
+    fn has_active_enemy(&self) -> bool {
+        self.world
+            .resource::<Encounter>()
+            .participants
+            .iter()
+            .any(|id| {
+                self.entity(*id).is_some_and(|entity| {
+                    self.world
+                        .get::<Unit>(entity)
+                        .expect("單位應具有 Unit")
+                        .team
+                        != Team::Player
+                })
+            })
+    }
+    fn activate_enemies_near_players(&mut self) -> bool {
+        let players: Vec<_> = self
+            .world
+            .iter_entities()
+            .filter(|entity| {
+                entity
+                    .get::<Unit>()
+                    .is_some_and(|unit| unit.team == Team::Player)
+            })
+            .map(|entity| entity.id())
+            .collect();
+        let enemies: Vec<_> = self
+            .world
+            .iter_entities()
+            .filter(|entity| {
+                entity
+                    .get::<Unit>()
+                    .is_some_and(|unit| unit.team != Team::Player)
+            })
+            .filter(|entity| {
+                players.iter().any(|player| {
+                    entity_distance(&self.world, *player, entity.id())
+                        <= gameplay_config::ENCOUNTER_RANGE
+                })
+            })
+            .filter_map(|entity| entity.get::<Id>().map(|id| id.0))
+            .collect();
+        let found = !enemies.is_empty();
+        self.world
+            .resource_mut::<Encounter>()
+            .participants
+            .extend(enemies);
+        found
+    }
+    fn reset_exploration_turns(&mut self, players: &[i64]) {
+        let mut turns = HashMap::new();
+        for id in players {
+            if let Some(entity) = self.entity(*id) {
+                let movement = self
+                    .world
+                    .get::<Unit>(entity)
+                    .expect("玩家單位應具有 Unit")
+                    .movement;
+                turns.insert(
+                    *id,
+                    Turn {
+                        actor: Some(*id),
+                        phase: Phase::Ready,
+                        movement_remaining: movement,
+                        movement_segments_used: 0,
+                    },
+                );
+            }
+        }
+        let next = players.iter().find_map(|id| turns.get(id).cloned());
+        self.world.resource_mut::<Exploration>().turns = turns;
+        if let Some(turn) = next {
+            *self.world.resource_mut::<Turn>() = turn;
+        }
+    }
+    fn select_exploration_unit(&mut self, actor: i64) -> Result<(), GameError> {
+        if self.world.resource::<Exploration>().mode == BattleMode::Combat {
+            return Err(error::wrong_turn());
+        }
+        if self.world.resource::<Turn>().actor == Some(actor) {
+            return Ok(());
+        }
+        let next = self
+            .world
+            .resource::<Exploration>()
+            .turns
+            .get(&actor)
+            .cloned()
+            .ok_or(error::wrong_turn())?;
+        let current = self.world.resource::<Turn>().clone();
+        if let Some(id) = current.actor {
+            self.world
+                .resource_mut::<Exploration>()
+                .turns
+                .insert(id, current);
+        }
+        *self.world.resource_mut::<Turn>() = next;
+        Ok(())
+    }
+    fn advance_exploration(&mut self) {
+        let actor = self.world.resource::<Turn>().actor;
+        if let Some(id) = actor {
+            self.world.resource_mut::<Exploration>().turns.remove(&id);
+        }
+        let mut remaining: Vec<_> = self
+            .world
+            .resource::<Exploration>()
+            .turns
+            .keys()
+            .copied()
+            .collect();
+        remaining.sort();
+        if let Some(id) = remaining.first() {
+            let next = self
+                .world
+                .resource::<Exploration>()
+                .turns
+                .get(id)
+                .expect("剩餘單位應有回合")
+                .clone();
+            *self.world.resource_mut::<Turn>() = next;
+        } else if self.world.resource::<Exploration>().mode == BattleMode::AttackPending {
+            self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
+            self.roll_round();
+        } else {
+            let mut players: Vec<_> = self
+                .world
+                .iter_entities()
+                .filter(|entity| {
+                    entity
+                        .get::<Unit>()
+                        .is_some_and(|unit| unit.team == Team::Player)
+                })
+                .filter_map(|entity| entity.get::<Id>().map(|id| id.0))
+                .collect();
+            players.sort();
+            self.reset_exploration_turns(&players);
+        }
     }
     fn roll_round(&mut self) {
         let next_round = self.world.resource::<Encounter>().round + 1;
@@ -322,6 +492,7 @@ impl Game {
         self.world.resource_mut::<Turn>().phase = Phase::Ended;
     }
     pub(crate) fn remove_unit(&mut self, entity: Entity, id: i64) {
+        self.world.resource_mut::<Exploration>().turns.remove(&id);
         let is_actor = self.world.resource::<Turn>().actor == Some(id);
         let mut encounter = self.world.resource_mut::<Encounter>();
         encounter.participants.remove(&id);
@@ -349,9 +520,9 @@ impl Game {
         };
         if end { self.roll_round() } else { self.begin() }
     }
-    fn auto_step_available(&self) -> bool {
+    fn can_continue(&self) -> bool {
         if self.world.resource::<ResultState>().0 != Outcome::Ongoing
-            || self.world.resource::<Encounter>().round == 0
+            || self.world.resource::<Exploration>().mode != BattleMode::Combat
         {
             return false;
         }
@@ -369,9 +540,9 @@ impl Game {
                     != Team::Player
             })
     }
-    fn auto_step(&mut self) -> Result<(), GameError> {
-        if !self.auto_step_available() {
-            return Err(error::no_auto_step());
+    fn continue_battle(&mut self) -> Result<(), GameError> {
+        if !self.can_continue() {
+            return Err(error::cannot_continue());
         }
         if self.world.resource::<Turn>().phase == Phase::Ended {
             self.advance_turn();
@@ -656,13 +827,27 @@ impl Game {
             Vec::new()
         };
         let can_skill = player_turn && can_use_skill(&turn);
-        let turn_order: Vec<_> = enc
-            .order
-            .iter()
-            .skip(enc.cursor + usize::from(turn.actor.is_some()))
-            .cloned()
-            .collect();
-        let can_delay = player_turn
+        let exploring = self.world.resource::<Exploration>().mode != BattleMode::Combat;
+        let turn_order: Vec<_> = if exploring {
+            let mut available: Vec<_> = self
+                .world
+                .resource::<Exploration>()
+                .turns
+                .keys()
+                .copied()
+                .filter(|id| Some(*id) != turn.actor)
+                .collect();
+            available.sort();
+            available
+        } else {
+            enc.order
+                .iter()
+                .skip(enc.cursor + usize::from(turn.actor.is_some()))
+                .cloned()
+                .collect()
+        };
+        let can_delay = !exploring
+            && player_turn
             && turn.phase == Phase::Ready
             && turn.movement_segments_used == 0
             && turn.actor.is_some()
@@ -784,13 +969,19 @@ impl Game {
                 can_end_turn: player_turn && turn.phase != Phase::Ended,
                 actor: turn.actor,
                 phase: format!("{:?}", turn.phase).to_lowercase(),
-                auto_step: self.auto_step_available(),
+                can_continue: self.can_continue(),
                 move_remaining: turn.movement_remaining,
                 can_move,
                 can_skill,
                 can_delay,
             },
             round: enc.round,
+            battle_mode: match self.world.resource::<Exploration>().mode {
+                BattleMode::Exploring => "exploring",
+                BattleMode::AttackPending => "attack_pending",
+                BattleMode::Combat => "combat",
+            }
+            .to_owned(),
             outcome: self.world.resource::<ResultState>().0,
             // 完整紀錄每次複製並傳給 Godot，會隨回合數增加造成嚴重效能問題。
             log,

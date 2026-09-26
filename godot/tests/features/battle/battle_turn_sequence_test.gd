@@ -45,5 +45,5 @@ func test_new_round_order_precedes_enemy_action() -> void:
 	assert_int(battle.state.turn.actor).override_failure_message("敵人動畫結束後應輪到玩家").is_equal(ARIA_ID)
 
 func wait_for_battle_idle() -> void:
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)

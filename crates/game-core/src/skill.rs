@@ -11,7 +11,7 @@ use crate::model::{
 };
 use crate::movement::{
     fits, footprint_blocks_push, footprint_cells, footprint_distance, overlap, terrain_type,
-    terrains_at,
+    terrains_at, unit_at_cell,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::HashSet;
@@ -20,7 +20,6 @@ impl Game {
     pub fn preview_skill(
         &self,
         actor: i64,
-        target: i64,
         target_cell: GridPos,
         skill_id: &str,
     ) -> Result<SkillPreview, GameError> {
@@ -29,7 +28,7 @@ impl Game {
             return Err(error::cannot_use_skill());
         }
         let attacker = self.entity(actor).ok_or(error::missing_attacker())?;
-        let target_entity = self.entity(target).ok_or(error::missing_target())?;
+        let target_entity = unit_at_cell(&self.world, target_cell).ok_or(error::missing_target())?;
         let skill = self
             .world
             .resource::<Skills>()
@@ -54,6 +53,11 @@ impl Game {
             .world
             .get::<Unit>(target_entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件");
+        let target = self
+            .world
+            .get::<Id>(target_entity)
+            .expect("目標單位應具有 Id")
+            .0;
         let target_hp = self
             .world
             .get::<Hp>(target_entity)
@@ -121,6 +125,20 @@ impl Game {
                 missing: target_hp.maximum - target_hp.current,
             },
         }))
+    }
+    pub(crate) fn use_skill_at_cell(
+        &mut self,
+        actor: i64,
+        position: GridPos,
+        skill: SkillDef,
+    ) -> Result<(), GameError> {
+        if matches!(skill.effect, SkillEffect::Mire { .. }) {
+            return self.use_cell_skill(actor, position, skill);
+        }
+        let target = unit_at_cell(&self.world, position)
+            .and_then(|entity| self.world.get::<Id>(entity).map(|id| id.0))
+            .ok_or(error::missing_target())?;
+        self.use_skill(actor, target, position, skill)
     }
     pub(crate) fn use_skill(
         &mut self,

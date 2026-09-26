@@ -56,8 +56,8 @@ pub(crate) fn missing_ai_skill(id: i64) -> GameError {
     GameError::new("missing_ai_skill", format!("敵方單位 {id} 沒有技能"))
 }
 
-pub(crate) fn no_auto_step() -> GameError {
-    GameError::new("no_auto_step", "目前沒有可推進的自動回合".to_owned())
+pub(crate) fn cannot_continue() -> GameError {
+    GameError::new("cannot_continue", "目前沒有可推進的自動回合".to_owned())
 }
 
 pub(crate) fn delay_after_action() -> GameError {

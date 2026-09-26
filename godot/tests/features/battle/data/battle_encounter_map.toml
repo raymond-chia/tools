@@ -1,0 +1,24 @@
+name="battle_encounter"
+width=16
+height=3
+
+[[units]]
+id=1
+unit_type="aria"
+team="player"
+x=1
+y=1
+
+[[units]]
+id=2
+unit_type="aria"
+team="player"
+x=1
+y=2
+
+[[units]]
+id=3
+unit_type="wolf"
+team={ enemy="wolves" }
+x=13
+y=1

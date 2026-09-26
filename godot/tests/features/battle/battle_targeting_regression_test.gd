@@ -62,7 +62,7 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 func test_mire_movement_cost_and_duration() -> void:
 	await load_test_documents()
 	var mire_cell := Vector2i(1, 1)
-	assert_bool(battle.send({"type": "cell_skill", "actor": ARIA_ID, "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
+	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
 	await wait_for_combat_events()
 	var terrain := terrain_at(mire_cell)
 	assert_int(int(terrain.cost)).override_failure_message("泥沼地格應增加一點移動消耗").is_equal(2)
@@ -79,7 +79,7 @@ func test_mire_movement_cost_and_duration() -> void:
 # 驗證推擊命中會沿攻擊者到目標的方向移動一格。
 func test_push_hit_moves_target_one_cell() -> void:
 	await load_test_documents()
-	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "target": WOLF_A_ID, "x": 2, "y": 1, "skill": "shield_bash"})).override_failure_message("推擊應成功命中測試目標").is_true()
+	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": 2, "y": 1, "skill": "shield_bash"})).override_failure_message("推擊應成功命中測試目標").is_true()
 	var target := unit_with_id(WOLF_A_ID)
 	assert_int(int(target.x)).override_failure_message("目標應沿攻擊方向向右移動一格").is_equal(3)
 	assert_int(int(target.y)).is_equal(1)
@@ -90,7 +90,7 @@ func test_push_hit_moves_target_one_cell() -> void:
 # 驗證大型目標無法被推出地圖時不移動，並受到碰撞傷害。
 func test_blocked_push_deals_collision_damage() -> void:
 	await load_test_documents()
-	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "target": OGRE_ID, "x": 4, "y": 1, "skill": "shield_bash"})).override_failure_message("對地圖邊界的大型目標推擊應完成結算").is_true()
+	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": 4, "y": 1, "skill": "shield_bash"})).override_failure_message("對地圖邊界的大型目標推擊應完成結算").is_true()
 	var target := unit_with_id(OGRE_ID)
 	assert_int(int(target.x)).override_failure_message("受阻的大型目標不應移動").is_equal(4)
 	assert_int(int(target.hp)).override_failure_message("受阻推擊應造成兩點碰撞傷害及技能傷害").is_equal(93)
@@ -101,7 +101,7 @@ func test_blocked_push_deals_collision_damage() -> void:
 # 驗證攻擊動畫與自動回合完成後，倒下單位的格子可再次進入。
 func test_downed_unit_does_not_block_cell() -> void:
 	await load_test_documents()
-	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "target": WOLF_A_ID, "x": 2, "y": 1, "skill": "finishing_strike"})).override_failure_message("終結攻擊應使測試目標倒下").is_true()
+	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": 2, "y": 1, "skill": "finishing_strike"})).override_failure_message("終結攻擊應使測試目標倒下").is_true()
 	await wait_for_combat_events()
 	assert_dict(unit_with_id(WOLF_A_ID)).override_failure_message("倒下單位不應出現在 presentation snapshot").is_empty()
 	assert_bool(battle.send({"type": "move", "actor": ARIA_ID, "x": 2, "y": 1})).override_failure_message("屍體所在格應可進入").is_true()
@@ -115,7 +115,7 @@ func load_test_documents() -> void:
 	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func push_left_click(local_position: Vector2) -> void:

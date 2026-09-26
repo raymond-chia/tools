@@ -1,5 +1,5 @@
 use super::*;
-use crate::model::Encounter;
+use crate::model::{BattleMode, Encounter, Exploration};
 
 const ACTOR_ID: i64 = 1;
 const TARGET_ID: i64 = 2;
@@ -213,6 +213,10 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
         )]),
     });
     world.insert_resource(TemporaryTerrains::default());
+    world.insert_resource(Exploration {
+        mode: BattleMode::Combat,
+        turns: HashMap::new(),
+    });
     world.insert_resource(Turn {
         actor: Some(ACTOR_ID),
         phase: Phase::Ready,
@@ -425,7 +429,7 @@ fn zero_range_heal_targets_self() {
         .expect("施放者應有生命值")
         .current = 90;
     let preview = game
-        .preview_skill(ACTOR_ID, ACTOR_ID, GridPos { x: 1, y: 1 }, "push")
+        .preview_skill(ACTOR_ID, GridPos { x: 1, y: 1 }, "push")
         .expect("零距離治療應可預覽");
     match preview {
         SkillPreview::Healing(healing) => assert_eq!(healing.healing, 5),
@@ -456,7 +460,8 @@ fn enemy_without_skill_reports_error() {
     game.world.resource_mut::<Turn>().actor = Some(TARGET_ID);
     game.world.resource_mut::<Turn>().phase = Phase::Ready;
     game.world.resource_mut::<Encounter>().round = 1;
-    let error = match game.command(Command::AutoStep) {
+    game.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
+    let error = match game.command(Command::Continue) {
         Ok(_) => panic!("沒有技能的敵方應回報錯誤"),
         Err(error) => error,
     };

@@ -166,7 +166,7 @@ func load_test_documents() -> void:
 	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
-	while battle.state.turn.auto_step or battle.world.is_presenting_combat_events():
+	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
 func formatted_log() -> String:
@@ -174,7 +174,7 @@ func formatted_log() -> String:
 
 func skill_command(target: int, skill: String) -> Dictionary:
 	var unit := unit_with_id(target)
-	return {"type": "skill", "actor": ARIA_ID, "target": target, "x": int(unit.x), "y": int(unit.y), "skill": skill}
+	return {"type": "skill", "actor": ARIA_ID, "x": int(unit.x), "y": int(unit.y), "skill": skill}
 
 func find_last_event(type: String, actor := 0) -> Dictionary:
 	for index in range(battle.ui.presented_log_events.size() - 1, -1, -1):
