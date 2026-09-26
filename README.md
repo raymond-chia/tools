@@ -1,7 +1,6 @@
 # 重要指令
 
-- uv run .\scripts\godot.py
-  - 編譯、跑 godot 模擬遊戲
+- `uv run scripts/run.py`
 
 # 檢查
 

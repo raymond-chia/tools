@@ -36,6 +36,19 @@ def run_game() -> int:
     return result.returncode
 
 
+def run_editor() -> int:
+    result = subprocess.run(
+        [
+            GODOT_EXECUTABLE,
+            "--path",
+            str(PROJECT_DIRECTORY),
+            "--scene",
+            "res://features/editor/editor.tscn",
+        ]
+    )
+    return result.returncode
+
+
 def run_godot_tests() -> int:
     GODOT_TEST_LOG.parent.mkdir(exist_ok=True)
     GDUNIT_REPORT_DIRECTORY.mkdir(exist_ok=True)
@@ -73,6 +86,7 @@ def run_rust_tests() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command")
+    commands.add_parser("editor", help="啟動遊戲資料編輯器")
     test_command = commands.add_parser("test", help="執行測試")
     test_command.add_argument("target", choices=("godot", "rust"))
     parser.set_defaults(target=None)
@@ -90,6 +104,8 @@ def main() -> int:
             run = run_rust_tests
         case ("test", "godot"):
             run = run_godot_tests
+        case ("editor", None):
+            run = run_editor
         case (None, None):
             run = run_game
 
