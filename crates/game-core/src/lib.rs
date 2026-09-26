@@ -16,14 +16,15 @@ use bevy_ecs::prelude::{Entity, World};
 pub use error::GameError;
 pub use game::Game;
 pub use model::{
-    AttackPreview, AttackResult, CollisionUnitLog, CombatLogEvent, Command, GridPos,
+    AttackPreview, AttackResult, BattleMode, CollisionUnitLog, CombatLogEvent, Command, GridPos,
     HealingPreview, HealthSegmentsView, InitiativeRollLog, MovePreview, MovementTransition,
-    Outcome, RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview,
-    SkillRangeView, SkillTargetKind, Snapshot, Team, TerrainCellView, TerrainDescriptionView,
-    TerrainEffectView, TerrainEntryRule, TerrainPlacement, TerrainTypeDef, TurnView, UnitView,
+    Outcome, Phase, RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect,
+    SkillPreview, SkillRangeView, SkillTargetKind, Snapshot, Team, TerrainCellView,
+    TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainPlacement, TerrainTypeDef,
+    TurnView, UnitView,
 };
 #[cfg(test)]
-use model::{Board, Footprint, Hp, Id, Log, Phase, Pos, Skills, TemporaryTerrains, Turn, Unit};
+use model::{Board, Footprint, Hp, Id, Log, Pos, Skills, TemporaryTerrains, Turn, Unit};
 use model::{Definition, MapDef, UnitDef};
 pub use skill::degree;
 #[cfg(test)]

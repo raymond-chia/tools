@@ -100,8 +100,9 @@ pub(crate) struct Encounter {
     pub(crate) round: u32,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BattleMode {
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleMode {
     Exploring,
     AttackPending,
     Combat,
@@ -114,8 +115,9 @@ pub(crate) struct Exploration {
     pub(crate) turns: HashMap<i64, Turn>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum Phase {
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Phase {
     Ready,
     Moving,
     AfterMove,
@@ -237,6 +239,7 @@ pub(crate) struct UnitDef {
     /// 此單位類型可使用的技能 ID。
     pub(crate) skills: Vec<String>,
 }
+
 pub(crate) fn one() -> i32 {
     1
 }
@@ -268,6 +271,7 @@ pub enum Command {
         after: i64,
     },
 }
+
 #[derive(Serialize)]
 pub struct Snapshot {
     pub width: i32,
@@ -282,17 +286,19 @@ pub struct Snapshot {
     pub turn_order: Vec<i64>,
     pub turn: TurnView,
     pub round: u32,
-    pub battle_mode: String,
+    pub battle_mode: BattleMode,
     pub outcome: Outcome,
     pub log: Vec<CombatLogEvent>,
     pub movements: Vec<MovementTransition>,
 }
+
 #[derive(Clone, Serialize)]
 pub struct MovementTransition {
     pub unit_id: i64,
     pub path: Vec<GridPos>,
     pub before_log_index: usize,
 }
+
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CombatLogEvent {
@@ -362,6 +368,7 @@ pub enum CombatLogEvent {
         downed: bool,
     },
 }
+
 #[derive(Clone, Serialize)]
 pub struct CollisionUnitLog {
     pub(crate) unit: i64,
@@ -371,6 +378,7 @@ pub struct CollisionUnitLog {
     pub(crate) max_hp: i32,
     pub(crate) downed: bool,
 }
+
 #[derive(Clone, Serialize)]
 pub struct InitiativeRollLog {
     pub unit: i64,
@@ -381,25 +389,26 @@ pub struct InitiativeRollLog {
     pub modifier: i32,
     pub total: i32,
 }
+
 #[derive(Serialize)]
 pub struct SkillRangeView {
     pub id: String,
     pub details: SkillDetailsView,
-    pub cell_targeted: bool,
-    pub enabled: bool,
+    pub usable: bool,
     pub cells: Vec<GridPos>,
 }
+
 #[derive(Serialize)]
 pub struct SkillDetailsView {
     pub target: SkillTargetKind,
     pub ranged: bool,
     pub min_range: i32,
     pub max_range: i32,
-    pub range_is_interval: bool,
     pub attack_bonus: Option<i32>,
     pub power_bonus: Option<i32>,
     pub effect: SkillDetailEffect,
 }
+
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillTargetKind {
@@ -407,6 +416,7 @@ pub enum SkillTargetKind {
     Ally,
     Enemy,
 }
+
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SkillDetailEffect {
@@ -420,11 +430,13 @@ pub enum SkillDetailEffect {
     },
     Heal,
 }
+
 #[derive(Serialize)]
 pub struct TerrainDescriptionView {
     pub terrain: String,
     pub values: TerrainDescriptionValues,
 }
+
 #[derive(Serialize)]
 pub struct TerrainDescriptionValues {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -436,6 +448,7 @@ pub struct TerrainDescriptionValues {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub damage: Option<i32>,
 }
+
 #[derive(Serialize)]
 pub struct MovePreview {
     pub first: Vec<GridPos>,
@@ -443,12 +456,14 @@ pub struct MovePreview {
     pub interrupted: bool,
     pub total_cost: u32,
 }
+
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SkillPreview {
     Attack(AttackPreview),
     Healing(HealingPreview),
 }
+
 #[derive(Serialize)]
 pub struct HealingPreview {
     pub target: i64,
@@ -461,6 +476,7 @@ pub struct HealingPreview {
     pub missing_hp: i32,
     pub health_segments: HealthSegmentsView,
 }
+
 #[derive(Serialize)]
 pub struct HealthSegmentsView {
     pub hit: i32,
@@ -468,6 +484,7 @@ pub struct HealthSegmentsView {
     pub damage: i32,
     pub missing: i32,
 }
+
 #[derive(Serialize)]
 pub struct AttackPreview {
     pub target: i64,
@@ -489,6 +506,7 @@ pub struct AttackPreview {
     pub critical_hit_damage: i32,
     pub health_segments: HealthSegmentsView,
 }
+
 #[derive(Serialize)]
 pub struct UnitView {
     pub id: i64,
@@ -497,11 +515,8 @@ pub struct UnitView {
     pub team: Team,
     pub x: i32,
     pub y: i32,
-    pub width: i32,
-    pub height: i32,
     pub large: bool,
     pub occupied_cells: Vec<GridPos>,
-    pub health_ratio: f32,
     pub hp: i32,
     pub max_hp: i32,
     pub movement: u32,
@@ -510,8 +525,8 @@ pub struct UnitView {
     pub block: i32,
     pub attack: i32,
     pub power: i32,
-    pub active: bool,
 }
+
 #[derive(Serialize)]
 pub struct TerrainEffectView {
     pub x: i32,
@@ -521,6 +536,7 @@ pub struct TerrainEffectView {
     pub damage: i32,
     pub remaining_rounds: Option<u32>,
 }
+
 #[derive(Serialize)]
 pub struct TerrainCellView {
     pub x: i32,
@@ -534,10 +550,11 @@ pub struct TerrainCellView {
     pub damage: i32,
     pub effect_descriptions: Vec<TerrainDescriptionView>,
 }
+
 #[derive(Serialize)]
 pub struct TurnView {
     pub actor: Option<i64>,
-    pub phase: String,
+    pub phase: Phase,
     pub can_continue: bool,
     pub move_remaining: u32,
     pub can_move: bool,

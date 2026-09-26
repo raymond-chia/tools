@@ -311,7 +311,7 @@ func test_pointer_popups_use_available_quadrant() -> void:
 # 驗證單次點擊可抵達第一段或第二段目的地，並正確扣除兩段移動力。
 func test_single_click_movement() -> void:
 	var test_data := [
-		{"name": "抵達第一段", "offset": Vector2i(2, 0), "remaining": 0.0, "phase": "aftermove"},
+		{"name": "抵達第一段", "offset": Vector2i(2, 0), "remaining": 0.0, "phase": "after_move"},
 		{"name": "抵達第二段", "offset": Vector2i(3, 0), "remaining": 1.0, "phase": "moving"},
 	]
 	for test_case in test_data:

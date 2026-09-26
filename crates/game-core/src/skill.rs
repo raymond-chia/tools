@@ -998,8 +998,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
             SkillRangeView {
                 id: skill.id.clone(),
                 details: skill_details(skill, board),
-                cell_targeted: matches!(skill.effect, SkillEffect::Mire { .. }),
-                enabled: can_use_skill(w.resource::<Turn>()),
+                usable: can_use_skill(w.resource::<Turn>()),
                 cells,
             }
         })
@@ -1049,7 +1048,6 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
         ranged: skill.ranged,
         min_range: skill.min_range,
         max_range: skill.max_range,
-        range_is_interval: skill.min_range != skill.max_range,
         attack_bonus,
         power_bonus,
         effect,

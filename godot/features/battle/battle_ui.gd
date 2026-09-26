@@ -172,7 +172,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		action_buttons[action].disabled = true
 		if not skill.is_empty():
 			action_buttons[action].text = localized_skill_name(skill)
-			action_buttons[action].disabled = not skill.enabled
+			action_buttons[action].disabled = not skill.usable
 		action_buttons[action].button_pressed = action == pending_action
 	present_hovered_skill()
 	var inspected_skill := skill_with_id(presented_skills, inspected_skill_id)
@@ -487,7 +487,7 @@ func localized_skill_details(skill: Dictionary) -> String:
 	var lines: Array[String] = []
 	lines.append(tr("SKILL_TARGET_%s" % details.target.to_upper()))
 	lines.append(tr("SKILL_TYPE_RANGED") if details.ranged else tr("SKILL_TYPE_MELEE"))
-	if details.range_is_interval:
+	if details.min_range != details.max_range:
 		lines.append(tr("SKILL_RANGE_INTERVAL") % [int(details.min_range), int(details.max_range)])
 	else:
 		lines.append(tr("SKILL_RANGE") % int(details.max_range))

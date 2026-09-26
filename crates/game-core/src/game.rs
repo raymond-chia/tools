@@ -780,11 +780,8 @@ impl Game {
                 team: f.team.clone(),
                 x: p.0.x,
                 y: p.0.y,
-                width: fp.width,
-                height: fp.height,
                 large: fp.width > 1 || fp.height > 1,
                 occupied_cells: footprint_cells(p.0, *fp),
-                health_ratio: h.current as f32 / h.maximum as f32,
                 hp: h.current,
                 max_hp: h.maximum,
                 movement: f.movement,
@@ -793,7 +790,6 @@ impl Game {
                 block: effective_block(&self.world, entity),
                 attack: f.attack,
                 power: f.power,
-                active: enc.participants.contains(&i.0),
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
@@ -968,7 +964,7 @@ impl Game {
             turn: TurnView {
                 can_end_turn: player_turn && turn.phase != Phase::Ended,
                 actor: turn.actor,
-                phase: format!("{:?}", turn.phase).to_lowercase(),
+                phase: turn.phase,
                 can_continue: self.can_continue(),
                 move_remaining: turn.movement_remaining,
                 can_move,
@@ -976,12 +972,7 @@ impl Game {
                 can_delay,
             },
             round: enc.round,
-            battle_mode: match self.world.resource::<Exploration>().mode {
-                BattleMode::Exploring => "exploring",
-                BattleMode::AttackPending => "attack_pending",
-                BattleMode::Combat => "combat",
-            }
-            .to_owned(),
+            battle_mode: self.world.resource::<Exploration>().mode,
             outcome: self.world.resource::<ResultState>().0,
             // 完整紀錄每次複製並傳給 Godot，會隨回合數增加造成嚴重效能問題。
             log,

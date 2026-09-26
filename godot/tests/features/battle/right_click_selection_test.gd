@@ -133,8 +133,9 @@ func target_point(battle, target: String) -> Vector2:
 	if target == "empty":
 		return battle.world.cell_center(find_empty_cell(battle.state))
 	var unit := find_unit(battle.state.units, int(target.get_slice(":", 1)))
-	if unit.width > 1 or unit.height > 1:
-		return battle.world.cell_center(Vector2i(unit.x + unit.width - 1, unit.y))
+	if unit.large:
+		var last_cell: Dictionary = unit.occupied_cells[-1]
+		return battle.world.cell_center(Vector2i(last_cell.x, unit.y))
 	return battle.world.footprint_center(unit)
 
 func target_cell(battle, target: String) -> Vector2i:
@@ -150,8 +151,11 @@ func find_empty_cell(state: Dictionary) -> Vector2i:
 			var cell := Vector2i(x, y)
 			var occupied := false
 			for unit in state.units:
-				if cell.x >= unit.x and cell.x < unit.x + unit.width and cell.y >= unit.y and cell.y < unit.y + unit.height:
-					occupied = true
+				for unit_cell in unit.occupied_cells:
+					if unit_cell.x == cell.x and unit_cell.y == cell.y:
+						occupied = true
+						break
+				if occupied:
 					break
 			if not occupied:
 				return cell

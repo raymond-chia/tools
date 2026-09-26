@@ -238,7 +238,7 @@ func animate_unit_movement(unit_id: int, node: Node2D, destination: Vector2, uni
 			var path_cell := Vector2i(cell)
 			var cell_center_position := cell_center(path_cell)
 			if unit.large:
-				var last_cell: Vector2i = path_cell + Vector2i(unit.width - 1, unit.height - 1)
+				var last_cell: Vector2i = path_cell + footprint_offset(unit)
 				cell_center_position = (cell_center_position + cell_center(last_cell)) * 0.5
 			tween.tween_property(node, "position", cell_center_position, BattleConfig.UNIT_MOVE_STEP_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		cancel_move_animation()
@@ -429,7 +429,7 @@ func animate_movement_event(event: Dictionary) -> void:
 		var path_cell := Vector2i(int(cell_value.x), int(cell_value.y))
 		var destination := cell_center(path_cell)
 		if unit.large:
-			var last_cell := path_cell + Vector2i(unit.width - 1, unit.height - 1)
+			var last_cell := path_cell + footprint_offset(unit)
 			destination = (destination + cell_center(last_cell)) * 0.5
 		tween.tween_property(node, "position", destination, BattleConfig.UNIT_MOVE_STEP_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	pending_movement_ids.erase(unit_id)
@@ -459,8 +459,12 @@ func unit_with_id(units: Array, unit_id: int) -> Dictionary:
 
 func footprint_center(unit: Dictionary) -> Vector2:
 	var first := cell_center(Vector2i(unit.x, unit.y))
-	var last := cell_center(Vector2i(unit.x + unit.width - 1, unit.y + unit.height - 1))
+	var last := cell_center(Vector2i(unit.x, unit.y) + footprint_offset(unit))
 	return (first + last) * 0.5
+
+func footprint_offset(unit: Dictionary) -> Vector2i:
+	var last_cell: Dictionary = unit.occupied_cells[-1]
+	return Vector2i(last_cell.x - unit.x, last_cell.y - unit.y)
 
 func unit_at_cell(cell: Vector2i) -> Dictionary:
 	var terrain := terrain_at_cell(cell)
@@ -500,7 +504,7 @@ func selected_skill_range() -> Array:
 func pending_action_targets_cell() -> bool:
 	for skill_range in state.skill_ranges:
 		if skill_range.id == pending_action:
-			return skill_range.cell_targeted
+			return skill_range.details.target == "cell"
 	return false
 
 func clear_move_preview() -> void:
@@ -615,4 +619,4 @@ func _draw() -> void:
 		var center := footprint_center(unit)
 		var width: float = 96 if unit.large else 60
 		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width,7)),Color("281e25"))
-		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width*unit.health_ratio,7)),Color("62d27c"))
+		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width*float(unit.hp)/float(unit.max_hp),7)),Color("62d27c"))
