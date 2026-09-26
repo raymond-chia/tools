@@ -2,6 +2,10 @@ extends GdUnitTestSuite
 
 const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
 
+const ARIA_ID := 1
+const LYRA_ID := 2
+const OGRE_ID := 3
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/right_click_selection_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/right_click_selection_map.toml"
@@ -18,11 +22,11 @@ func before_test() -> void:
 # 驗證右鍵可查看一般單位、大型單位與空地，並可取消或切換目前查看目標。
 func test_inspection_changes_from_right_click() -> void:
 	var test_data := [
-		{"name": "查看一般單位", "initial": "none", "click": "unit:aria", "expected": "unit:aria"},
-		{"name": "查看大型單位", "initial": "none", "click": "unit:ogre", "expected": "unit:ogre"},
+		{"name": "查看一般單位", "initial": "none", "click": "unit:%d" % ARIA_ID, "expected": "unit:%d" % ARIA_ID},
+		{"name": "查看大型單位", "initial": "none", "click": "unit:%d" % OGRE_ID, "expected": "unit:%d" % OGRE_ID},
 		{"name": "查看空地", "initial": "none", "click": "empty", "expected": "empty"},
-		{"name": "再次查看同一單位", "initial": "unit:aria", "click": "unit:aria", "expected": "none"},
-		{"name": "切換查看單位", "initial": "unit:aria", "click": "unit:lyra", "expected": "unit:lyra"},
+		{"name": "再次查看同一單位", "initial": "unit:%d" % ARIA_ID, "click": "unit:%d" % ARIA_ID, "expected": "none"},
+		{"name": "切換查看單位", "initial": "unit:%d" % ARIA_ID, "click": "unit:%d" % LYRA_ID, "expected": "unit:%d" % LYRA_ID},
 	]
 	for test_case in test_data:
 		await prepare_case(battle, test_case.initial)
@@ -37,11 +41,11 @@ func test_inspection_changes_from_right_click() -> void:
 # 驗證技能待選時會先查看尚未顯示的單位，只有重複查看或點空地才取消技能。
 func test_pending_action_right_click_priority() -> void:
 	var test_data := [
-		{"name": "未查看時先顯示單位", "initial": "none", "click": "unit:aria", "result": "inspect"},
-		{"name": "查看空地時先顯示單位", "initial": "empty", "click": "unit:aria", "result": "inspect"},
-		{"name": "查看其他單位時切換單位", "initial": "unit:aria", "click": "unit:lyra", "result": "inspect"},
-		{"name": "重複查看同一單位時取消技能", "initial": "unit:aria", "click": "unit:aria", "result": "cancel"},
-		{"name": "右鍵空地時取消技能", "initial": "unit:aria", "click": "empty", "result": "cancel"},
+		{"name": "未查看時先顯示單位", "initial": "none", "click": "unit:%d" % ARIA_ID, "result": "inspect"},
+		{"name": "查看空地時先顯示單位", "initial": "empty", "click": "unit:%d" % ARIA_ID, "result": "inspect"},
+		{"name": "查看其他單位時切換單位", "initial": "unit:%d" % ARIA_ID, "click": "unit:%d" % LYRA_ID, "result": "inspect"},
+		{"name": "重複查看同一單位時取消技能", "initial": "unit:%d" % ARIA_ID, "click": "unit:%d" % ARIA_ID, "result": "cancel"},
+		{"name": "右鍵空地時取消技能", "initial": "unit:%d" % ARIA_ID, "click": "empty", "result": "cancel"},
 	]
 	for test_case in test_data:
 		await prepare_case(battle, test_case.initial)
@@ -65,21 +69,21 @@ func test_ignored_right_click_inputs() -> void:
 		{"name": "右鍵放開", "input": "released"},
 	]
 	for test_case in test_data:
-		await prepare_case(battle, "unit:aria")
+		await prepare_case(battle, "unit:%d" % ARIA_ID)
 		var state_before_input: Dictionary = battle.state.duplicate(true)
 
 		if test_case.input == "outside":
 			push_mouse_button(battle.ui.root, Vector2(10.0, battle.ui.root.size.y - 10.0), true)
 		else:
-			push_mouse_button(battle.world, target_point(battle, "unit:lyra"), false)
+			push_mouse_button(battle.world, target_point(battle, "unit:%d" % LYRA_ID), false)
 
-		assert_inspection(battle, "unit:aria", test_case.name)
+		assert_inspection(battle, "unit:%d" % ARIA_ID, test_case.name)
 		assert_str(battle.pending_action).override_failure_message("%s：不應改變技能狀態" % test_case.name).is_empty()
 		assert_dict(battle.state).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
 
 # 驗證單位詳情可從標題列以左鍵拖曳，且放開左鍵後即停止移動。
 func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
-	await prepare_case(battle, "unit:aria")
+	await prepare_case(battle, "unit:%d" % ARIA_ID)
 	var info_panel: Panel = battle.ui.info_panel
 	var header: Control = info_panel.get_node("Margin/Content/Header")
 	var initial_position := info_panel.position
@@ -95,7 +99,7 @@ func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
 
 # 驗證詳情面板遇到無斷點長文字時，所有可見內容仍留在左右邊界內。
 func test_inspection_content_stays_inside_panel_width() -> void:
-	await prepare_case(battle, "unit:aria")
+	await prepare_case(battle, "unit:%d" % ARIA_ID)
 	var info_panel: Panel = battle.ui.info_panel
 	var unit_name: Label = info_panel.get_node("Margin/Content/UnitDetails/UnitName")
 	var terrain_effect: Label = info_panel.get_node("Margin/Content/TerrainRows/EffectValue")
@@ -128,7 +132,7 @@ func wait_for_combat_events(target_battle) -> void:
 func target_point(battle, target: String) -> Vector2:
 	if target == "empty":
 		return battle.world.cell_center(find_empty_cell(battle.state))
-	var unit := find_unit(battle.state.units, target.get_slice(":", 1))
+	var unit := find_unit(battle.state.units, int(target.get_slice(":", 1)))
 	if unit.width > 1 or unit.height > 1:
 		return battle.world.cell_center(Vector2i(unit.x + unit.width - 1, unit.y))
 	return battle.world.footprint_center(unit)
@@ -153,7 +157,7 @@ func find_empty_cell(state: Dictionary) -> Vector2i:
 				return cell
 	return Vector2i(-1, -1)
 
-func find_unit(units: Array, id: String) -> Dictionary:
+func find_unit(units: Array, id: int) -> Dictionary:
 	for unit in units:
 		if unit.id == id:
 			return unit
@@ -161,7 +165,7 @@ func find_unit(units: Array, id: String) -> Dictionary:
 
 func assert_inspection(battle, expected_target: String, case_name: String) -> void:
 	assert_vector(battle.inspected_cell).override_failure_message("%s：查看格應正確" % case_name).is_equal(target_cell(battle, expected_target))
-	var selected_unit_id := expected_target.get_slice(":", 1) if expected_target.begins_with("unit:") else ""
+	var selected_unit_id := int(expected_target.get_slice(":", 1)) if expected_target.begins_with("unit:") else 0
 	for unit_id in battle.world.unit_nodes:
 		var selection = battle.world.unit_nodes[unit_id].get_node("Visual/Selection")
 		assert_bool(selection.visible).override_failure_message("%s：%s 的選取圈可見性應正確" % [case_name, unit_id]).is_equal(unit_id == selected_unit_id)

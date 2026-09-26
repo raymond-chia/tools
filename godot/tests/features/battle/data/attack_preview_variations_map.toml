@@ -5,35 +5,35 @@ name="attack_preview_variations"
 width=9
 height=7
 [[units]]
-id="aria"
+id=1
 unit_type="aria"
 team="player"
 x=1
 y=3
 
 [[units]]
-id="ogre"
+id=2
 unit_type="ogre"
 team={ enemy="targets" }
 x=3
 y=1
 
 [[units]]
-id="wolf_a"
+id=3
 unit_type="wolf_a"
 team={ enemy="targets" }
 x=3
 y=3
 
 [[units]]
-id="wolf_b"
+id=4
 unit_type="wolf_b"
 team={ enemy="targets" }
 x=4
 y=3
 
 [[units]]
-id="lyra"
+id=5
 unit_type="lyra"
 team={ enemy="targets" }
 x=3

@@ -38,7 +38,7 @@ pub enum AttackResult {
 }
 
 #[derive(Component)]
-pub(crate) struct Id(pub(crate) String);
+pub(crate) struct Id(pub(crate) i64);
 
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Pos(pub(crate) GridPos);
@@ -93,9 +93,9 @@ pub(crate) struct TemporaryTerrains(pub(crate) HashMap<GridPos, HashMap<String, 
 #[derive(Resource, Default, Clone)]
 pub(crate) struct Encounter {
     /// 比 order 多了剛加入的單位
-    pub(crate) participants: HashSet<String>,
+    pub(crate) participants: HashSet<i64>,
     /// 本回合依行動順序排列的單位 ID。
-    pub(crate) order: Vec<String>,
+    pub(crate) order: Vec<i64>,
     pub(crate) cursor: usize,
     pub(crate) round: u32,
 }
@@ -111,7 +111,7 @@ pub(crate) enum Phase {
 #[derive(Resource, Clone)]
 pub(crate) struct Turn {
     // option 用於當前行動單位死亡
-    pub(crate) actor: Option<String>,
+    pub(crate) actor: Option<i64>,
     pub(crate) phase: Phase,
     pub(crate) movement_remaining: u32,
     pub(crate) movement_segments_used: u8,
@@ -199,9 +199,10 @@ pub enum TerrainEntryRule {
     Blocked,
     InstantDownWhenPushed,
 }
+
 #[derive(Deserialize)]
 pub(crate) struct UnitDef {
-    pub(crate) id: String,
+    pub(crate) id: i64,
     pub(crate) unit_type: String,
     pub(crate) visual: String,
     pub(crate) team: Team,
@@ -232,29 +233,29 @@ pub enum Command {
     Start,
     AutoStep,
     Move {
-        actor: String,
+        actor: i64,
         x: i32,
         y: i32,
     },
     Skill {
-        actor: String,
-        target: String,
+        actor: i64,
+        target: i64,
         x: i32,
         y: i32,
         skill: String,
     },
     CellSkill {
-        actor: String,
+        actor: i64,
         x: i32,
         y: i32,
         skill: String,
     },
     EndTurn {
-        actor: String,
+        actor: i64,
     },
     Delay {
-        actor: String,
-        after: String,
+        actor: i64,
+        after: i64,
     },
 }
 #[derive(Serialize)]
@@ -268,7 +269,7 @@ pub struct Snapshot {
     pub second_reachable: Vec<GridPos>,
     pub skill_ranges: Vec<SkillRangeView>,
     /// 本回合尚未行動、依行動順序排列的單位 ID。
-    pub turn_order: Vec<String>,
+    pub turn_order: Vec<i64>,
     pub turn: TurnView,
     pub round: u32,
     pub outcome: Outcome,
@@ -277,7 +278,7 @@ pub struct Snapshot {
 }
 #[derive(Clone, Serialize)]
 pub struct MovementTransition {
-    pub unit_id: String,
+    pub unit_id: i64,
     pub path: Vec<GridPos>,
     pub before_log_index: usize,
 }
@@ -289,11 +290,11 @@ pub enum CombatLogEvent {
         initiative_rolls: Vec<InitiativeRollLog>,
     },
     Skill {
-        actor: String,
+        actor: i64,
         actor_type: String,
         actor_team: Team,
         skill: String,
-        target: String,
+        target: i64,
         target_type: String,
         target_team: Team,
         roll: i32,
@@ -320,18 +321,18 @@ pub enum CombatLogEvent {
         collision_units: Vec<CollisionUnitLog>,
     },
     TerrainCreated {
-        actor: String,
+        actor: i64,
         actor_type: String,
         actor_team: Team,
         skill: String,
         terrain: String,
     },
     Healing {
-        actor: String,
+        actor: i64,
         actor_type: String,
         actor_team: Team,
         skill: String,
-        target: String,
+        target: i64,
         target_type: String,
         target_team: Team,
         healing: i32,
@@ -339,7 +340,7 @@ pub enum CombatLogEvent {
         max_hp: i32,
     },
     TerrainDamage {
-        target: String,
+        target: i64,
         target_type: String,
         target_team: Team,
         terrain: String,
@@ -352,7 +353,7 @@ pub enum CombatLogEvent {
 }
 #[derive(Clone, Serialize)]
 pub struct CollisionUnitLog {
-    pub(crate) unit: String,
+    pub(crate) unit: i64,
     pub(crate) unit_type: String,
     pub(crate) team: Team,
     pub(crate) remaining_hp: i32,
@@ -361,7 +362,7 @@ pub struct CollisionUnitLog {
 }
 #[derive(Clone, Serialize)]
 pub struct InitiativeRollLog {
-    pub unit: String,
+    pub unit: i64,
     pub unit_type: String,
     pub team: Team,
     pub roll: i32,
@@ -439,7 +440,7 @@ pub enum SkillPreview {
 }
 #[derive(Serialize)]
 pub struct HealingPreview {
-    pub target: String,
+    pub target: i64,
     pub target_type: String,
     pub target_hp: i32,
     pub target_max_hp: i32,
@@ -458,7 +459,7 @@ pub struct HealthSegmentsView {
 }
 #[derive(Serialize)]
 pub struct AttackPreview {
-    pub target: String,
+    pub target: i64,
     pub target_type: String,
     pub target_hp: i32,
     pub target_max_hp: i32,
@@ -479,7 +480,7 @@ pub struct AttackPreview {
 }
 #[derive(Serialize)]
 pub struct UnitView {
-    pub id: String,
+    pub id: i64,
     pub unit_type: String,
     pub visual: String,
     pub team: Team,
@@ -517,14 +518,14 @@ pub struct TerrainCellView {
     pub base_kind: String,
     /// 此格的地形種類 ID，包含固定與暫時地形。
     pub terrains: Vec<String>,
-    pub unit_id: Option<String>,
+    pub unit_id: Option<i64>,
     pub cost: u32,
     pub damage: i32,
     pub effect_descriptions: Vec<TerrainDescriptionView>,
 }
 #[derive(Serialize)]
 pub struct TurnView {
-    pub actor: Option<String>,
+    pub actor: Option<i64>,
     pub phase: String,
     pub auto_step: bool,
     pub move_remaining: u32,

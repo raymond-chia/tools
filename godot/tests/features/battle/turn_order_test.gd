@@ -18,8 +18,8 @@ func before_test() -> void:
 
 # 驗證延後模式以橫棒標示插入位置，並將目前單位排到所選單位之後。
 func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
-	var delayed_actor: String = battle.state.turn.actor
-	var target_actor: String = battle.state.turn_order[0]
+	var delayed_actor: int = battle.state.turn.actor
+	var target_actor: int = battle.state.turn_order[0]
 	var target_slot: VBoxContainer = battle.ui.turn_order.get_child(battle.ui.turn_order.get_child_count() - 1)
 	var marker: ColorRect = target_slot.get_child(0)
 
@@ -37,13 +37,13 @@ func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
 	await wait_for_combat_events()
 
 	assert_str(battle.status).override_failure_message("延後指令應成功").is_empty()
-	assert_str(battle.state.turn.actor).override_failure_message("所選單位應成為目前行動者；預期 %s，實際 %s" % [target_actor, battle.state.turn.actor]).is_equal(target_actor)
-	assert_str(battle.state.turn_order[0]).override_failure_message("原行動者應排在所選單位之後；預期 %s，實際 %s" % [delayed_actor, battle.state.turn_order[0]]).is_equal(delayed_actor)
+	assert_int(battle.state.turn.actor).override_failure_message("所選單位應成為目前行動者；預期 %s，實際 %s" % [target_actor, battle.state.turn.actor]).is_equal(target_actor)
+	assert_int(battle.state.turn_order[0]).override_failure_message("原行動者應排在所選單位之後；預期 %s，實際 %s" % [delayed_actor, battle.state.turn_order[0]]).is_equal(delayed_actor)
 	assert_bool(battle.selecting_delay).override_failure_message("完成延後後應離開位置選擇模式").is_false()
 
 # 驗證目前單位一旦移動，本回合便不能再延後。
 func test_delay_is_disabled_after_moving() -> void:
-	var actor: String = battle.state.turn.actor
+	var actor: int = battle.state.turn.actor
 	var destination := empty_reachable_cell()
 
 	assert_dict(destination).override_failure_message("測試資料應提供未占用的可達格").is_not_empty()

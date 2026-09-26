@@ -3,14 +3,14 @@ name="battle_turn_sequence"
 width=3
 height=2
 [[units]]
-id="aria"
+id=1
 unit_type="aria"
 team="player"
 x=0
 y=0
 
 [[units]]
-id="wolf"
+id=2
 unit_type="wolf"
 team={ enemy="wolves" }
 x=2

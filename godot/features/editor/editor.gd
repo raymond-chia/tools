@@ -26,7 +26,7 @@ var definitions: Dictionary = {}
 var map_data: Dictionary = {}
 var map_file := ""
 var dirty := false
-var selected_unit := ""
+var selected_unit := 0
 var history: Array = []
 var future: Array = []
 var refreshing := false
@@ -118,7 +118,7 @@ func open_selected_map() -> void:
 	map_file = path
 	history.clear()
 	future.clear()
-	selected_unit = ""
+	selected_unit = 0
 	dirty = false
 	refresh_ui()
 	validate_current()
@@ -131,7 +131,7 @@ func new_map() -> void:
 	map_file = unique_map_path("new_map")
 	history.clear()
 	future.clear()
-	selected_unit = ""
+	selected_unit = 0
 	dirty = true
 	refresh_ui()
 	validate_current()
@@ -277,7 +277,7 @@ func refresh_grid() -> void:
 			var button := Button.new()
 			button.custom_minimum_size = Vector2(74, 56)
 			var terrain_label := "plain" if terrains.is_empty() else terrains[0] + ("+%d" % (terrains.size() - 1) if terrains.size() > 1 else "")
-			button.text = "%d,%d\n%s%s" % [x, y, terrain_label, "\n" + unit.id if not unit.is_empty() else ""]
+			button.text = "%d,%d\n%s%s" % [x, y, terrain_label, "\n" + str(unit.id) if not unit.is_empty() else ""]
 			button.tooltip_text = ", ".join(terrains) if not terrains.is_empty() else "plain"
 			button.modulate = Color("e98c82") if not terrains.is_empty() else Color.WHITE
 			if not unit.is_empty(): button.modulate = Color("79b9f3") if unit.team is String else Color("ee9b94")
@@ -319,15 +319,13 @@ func edit_cell(cell: Vector2i) -> void:
 		if unit_list.item_count == 0: return
 		checkpoint()
 		var kind := unit_list.get_item_text(unit_list.selected)
-		var id := kind + "_1"
-		var number := 1
+		var id := 1
 		while map_data.units.any(func(u: Dictionary): return u.id == id):
-			number += 1
-			id = kind + "_%d" % number
+			id += 1
 		var team: Variant = "player" if team_list.selected == 0 else {"enemy": faction_field.text.strip_edges()}
 		map_data.units.append({"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y})
 	elif mode == 2:
-		if selected_unit.is_empty():
+		if selected_unit == 0:
 			if current.is_empty(): return
 			selected_unit = current.id
 			status_label.text = "選取 %s；點擊目標格移動。" % selected_unit
@@ -337,7 +335,7 @@ func edit_cell(cell: Vector2i) -> void:
 			if unit.id == selected_unit:
 				unit.x = cell.x
 				unit.y = cell.y
-		selected_unit = ""
+		selected_unit = 0
 	else:
 		if current.is_empty() and terrains_at(cell).is_empty(): return
 		checkpoint()

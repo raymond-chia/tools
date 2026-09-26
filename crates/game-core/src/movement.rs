@@ -32,7 +32,7 @@ struct MovePlan {
 }
 
 impl Game {
-    pub fn preview_move(&self, actor: &str, end: GridPos) -> Result<MovePreview, GameError> {
+    pub fn preview_move(&self, actor: i64, end: GridPos) -> Result<MovePreview, GameError> {
         let MovePlan {
             entity: _,
             turn: _,
@@ -73,7 +73,7 @@ impl Game {
             total_cost: spent,
         })
     }
-    pub(crate) fn move_to(&mut self, a: &str, end: GridPos) -> Result<(), GameError> {
+    pub(crate) fn move_to(&mut self, a: i64, end: GridPos) -> Result<(), GameError> {
         let MovePlan {
             entity: e,
             turn,
@@ -118,7 +118,7 @@ impl Game {
                         .resource_mut::<Log>()
                         .0
                         .push(CombatLogEvent::TerrainDamage {
-                            target: a.to_owned(),
+                            target: a,
                             target_type,
                             target_team,
                             terrain: k,
@@ -157,7 +157,7 @@ impl Game {
         }
         Ok(())
     }
-    fn move_plan(&self, actor: &str, end: GridPos) -> Result<MovePlan, GameError> {
+    fn move_plan(&self, actor: i64, end: GridPos) -> Result<MovePlan, GameError> {
         self.ensure(actor)?;
         let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
         let allowance = self
@@ -234,7 +234,7 @@ impl Game {
                     && !active.contains(&i.0)
                     && distance(p, q.0) <= gameplay_config::ENEMY_REVEAL_RANGE
             })
-            .map(|(i, _, _)| i.0.clone())
+            .map(|(i, _, _)| i.0)
             .collect();
         if !add.is_empty() {
             self.world

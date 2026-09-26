@@ -3,28 +3,28 @@ name="turn_order"
 width=5
 height=5
 [[units]]
-id="aria"
+id=1
 unit_type="aria"
 team="player"
 x=0
 y=0
 
 [[units]]
-id="lyra"
+id=2
 unit_type="lyra"
 team="player"
 x=4
 y=0
 
 [[units]]
-id="mira"
+id=3
 unit_type="mira"
 team="player"
 x=4
 y=4
 
 [[units]]
-id="wolf_a"
+id=4
 unit_type="wolf_a"
 team={ enemy="wolves" }
 x=2

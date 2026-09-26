@@ -19,8 +19,8 @@ use std::collections::HashSet;
 impl Game {
     pub fn preview_skill(
         &self,
-        actor: &str,
-        target: &str,
+        actor: i64,
+        target: i64,
         target_cell: GridPos,
         skill_id: &str,
     ) -> Result<SkillPreview, GameError> {
@@ -87,7 +87,7 @@ impl Game {
             0
         };
         Ok(SkillPreview::Attack(AttackPreview {
-            target: target.to_owned(),
+            target,
             target_type: target_unit.unit_type.clone(),
             target_hp: target_hp.current,
             target_max_hp: target_hp.maximum,
@@ -124,8 +124,8 @@ impl Game {
     }
     pub(crate) fn use_skill(
         &mut self,
-        a: &str,
-        target: &str,
+        a: i64,
+        target: i64,
         target_cell: GridPos,
         skill: SkillDef,
     ) -> Result<(), GameError> {
@@ -167,7 +167,7 @@ impl Game {
                 .resource_mut::<Log>()
                 .0
                 .push(CombatLogEvent::Healing {
-                    actor: a.to_owned(),
+                    actor: a,
                     actor_type: attacker_unit.unit_type,
                     actor_team: attacker_unit.team.clone(),
                     skill: skill.id,
@@ -307,7 +307,7 @@ impl Game {
                     let max_hp = hp.maximum;
                     let blocker_downed = remaining_hp == 0;
                     collision_units.push(CollisionUnitLog {
-                        unit: id.clone(),
+                        unit: id,
                         unit_type: unit.unit_type,
                         team: unit.team.clone(),
                         remaining_hp,
@@ -315,7 +315,7 @@ impl Game {
                         downed: blocker_downed,
                     });
                     if blocker_downed {
-                        self.remove_unit(blocking_entity, &id);
+                        self.remove_unit(blocking_entity, id);
                     }
                 }
             }
@@ -330,11 +330,11 @@ impl Game {
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::Skill {
-                actor: a.to_owned(),
+                actor: a,
                 actor_type: attacker_unit.unit_type,
                 actor_team: attacker_unit.team.clone(),
                 skill: skill.id,
-                target: target.to_owned(),
+                target,
                 target_type: target_unit.unit_type,
                 target_team: target_unit.team.clone(),
                 roll: natural,
@@ -373,7 +373,7 @@ impl Game {
         self.finish();
         Ok(())
     }
-    fn apply_pushed_terrain(&mut self, entity: Entity, id: &str) {
+    fn apply_pushed_terrain(&mut self, entity: Entity, id: i64) {
         let position = self
             .world
             .get::<Pos>(entity)
@@ -412,7 +412,7 @@ impl Game {
                 .resource_mut::<Log>()
                 .0
                 .push(CombatLogEvent::TerrainDamage {
-                    target: id.to_owned(),
+                    target: id,
                     target_type,
                     target_team,
                     terrain,
@@ -430,7 +430,7 @@ impl Game {
     }
     pub(crate) fn use_cell_skill(
         &mut self,
-        actor: &str,
+        actor: i64,
         position: GridPos,
         skill: SkillDef,
     ) -> Result<(), GameError> {
@@ -502,7 +502,7 @@ impl Game {
             .resource_mut::<Log>()
             .0
             .push(CombatLogEvent::TerrainCreated {
-                actor: actor.to_owned(),
+                actor,
                 actor_type: unit.unit_type,
                 actor_team: unit.team.clone(),
                 skill: skill.id,

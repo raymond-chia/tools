@@ -33,8 +33,11 @@ pub(crate) fn duplicate_unit_type_id() -> GameError {
     GameError::new("duplicate_unit_type_id", "單位定義 id 重複".to_owned())
 }
 
-pub(crate) fn empty_unit_placement_id() -> GameError {
-    GameError::new("empty_unit_placement_id", "單位配置 id 不可為空".to_owned())
+pub(crate) fn invalid_unit_placement_id() -> GameError {
+    GameError::new(
+        "invalid_unit_placement_id",
+        "單位配置 id 必須為正整數".to_owned(),
+    )
 }
 
 pub(crate) fn invalid_map_dimensions() -> GameError {
@@ -49,7 +52,7 @@ pub(crate) fn duplicate_skill_id() -> GameError {
     GameError::new("duplicate_skill_id", "duplicate skill id".to_owned())
 }
 
-pub(crate) fn missing_ai_skill(id: &str) -> GameError {
+pub(crate) fn missing_ai_skill(id: i64) -> GameError {
     GameError::new("missing_ai_skill", format!("敵方單位 {id} 沒有技能"))
 }
 
@@ -167,14 +170,14 @@ pub(crate) fn invalid_unit_type(id: &str) -> GameError {
     )
 }
 
-pub(crate) fn unknown_unit_skill(id: &str, skill: &str) -> GameError {
+pub(crate) fn unknown_unit_skill(id: impl std::fmt::Display, skill: &str) -> GameError {
     GameError::new(
         "unknown_unit_skill",
         format!("{id} {} {skill}", "使用未知技能"),
     )
 }
 
-pub(crate) fn duplicate_unit_placement_id(id: &str) -> GameError {
+pub(crate) fn duplicate_unit_placement_id(id: i64) -> GameError {
     GameError::new(
         "duplicate_unit_placement_id",
         format!("{}{id}", "單位配置 id 重複："),
@@ -220,29 +223,29 @@ pub(crate) fn invalid_skill_terrain(id: &str) -> GameError {
     )
 }
 
-pub(crate) fn duplicate_unit_id(id: &str) -> GameError {
+pub(crate) fn duplicate_unit_id(id: i64) -> GameError {
     GameError::new("duplicate_unit_id", format!("{} {id}", "重複 id"))
 }
 
-pub(crate) fn invalid_unit_size_or_hp(id: &str) -> GameError {
+pub(crate) fn invalid_unit_size_or_hp(id: i64) -> GameError {
     GameError::new(
         "invalid_unit_size_or_hp",
         format!("{id} {}", "的佔用尺寸與 HP 必須大於 0"),
     )
 }
 
-pub(crate) fn unit_out_of_bounds(id: &str) -> GameError {
+pub(crate) fn unit_out_of_bounds(id: i64) -> GameError {
     GameError::new("unit_out_of_bounds", format!("{id} {}", "超出地圖"))
 }
 
-pub(crate) fn unit_on_impassable(id: &str) -> GameError {
+pub(crate) fn unit_on_impassable(id: i64) -> GameError {
     GameError::new(
         "unit_on_impassable",
         format!("{id} {}", "不可放置在峭壁或懸崖"),
     )
 }
 
-pub(crate) fn overlapping_unit(id: &str) -> GameError {
+pub(crate) fn overlapping_unit(id: i64) -> GameError {
     GameError::new("overlapping_unit", format!("{id} {}", "與其他單位重疊"))
 }
 

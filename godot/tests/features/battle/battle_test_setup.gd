@@ -10,9 +10,9 @@ static func load_and_start(battle, runner: GdUnitSceneRunner, definitions_path: 
 	battle.world.unit_nodes.clear()
 	var definitions := FileAccess.get_file_as_string(definitions_path)
 	var map := FileAccess.get_file_as_string(map_path)
-	var loaded: Dictionary = JSON.parse_string(battle.core.load_documents(definitions, map))
-	if loaded.has("error"):
-		return "專用 TOML 載入失敗：%s" % loaded.error
+	var loaded: Dictionary = CoreResponse.read(battle.core.load_documents(definitions, map), battle.show_error)
+	if loaded.is_empty():
+		return "專用 TOML 載入失敗：%s" % battle.status
 	battle.state = loaded
 	battle.world.setup_map(loaded)
 	if not battle.send({"type": "start"}):

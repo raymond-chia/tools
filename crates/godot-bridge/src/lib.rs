@@ -84,10 +84,10 @@ impl TacticalGame {
         }
     }
     #[func]
-    fn preview_move(&self, actor: GString, x: i32, y: i32) -> GString {
+    fn preview_move(&self, actor: i64, x: i32, y: i32) -> GString {
         let lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
         match lock.as_ref() {
-            Some(game) => match game.preview_move(&actor.to_string(), GridPos { x, y }) {
+            Some(game) => match game.preview_move(actor, GridPos { x, y }) {
                 Ok(preview) => json_response(serde_json::to_string(&preview)),
                 Err(e) => error(e),
             },
@@ -95,25 +95,15 @@ impl TacticalGame {
         }
     }
     #[func]
-    fn preview_skill(
-        &self,
-        actor: GString,
-        target: GString,
-        x: i32,
-        y: i32,
-        skill: GString,
-    ) -> GString {
+    fn preview_skill(&self, actor: i64, target: i64, x: i32, y: i32, skill: GString) -> GString {
         let lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
         match lock.as_ref() {
-            Some(game) => match game.preview_skill(
-                &actor.to_string(),
-                &target.to_string(),
-                GridPos { x, y },
-                &skill.to_string(),
-            ) {
-                Ok(preview) => json_response(serde_json::to_string(&preview)),
-                Err(e) => error(e),
-            },
+            Some(game) => {
+                match game.preview_skill(actor, target, GridPos { x, y }, &skill.to_string()) {
+                    Ok(preview) => json_response(serde_json::to_string(&preview)),
+                    Err(e) => error(e),
+                }
+            }
             None => bridge_error(GAME_NOT_LOADED, "尚未載入定義".into()),
         }
     }

@@ -139,7 +139,7 @@ func select_action(action: String) -> void:
 	status = "請選擇施法格子。" if pending_action_targets_cell() else "請選擇技能目標。"
 	present()
 
-func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
+func _on_primary_clicked(unit_id: int, cell: Vector2i) -> void:
 	if input_is_locked():
 		return
 	if selecting_delay:
@@ -148,7 +148,7 @@ func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
 		if pending_action_targets_cell():
 			use_pending_cell_action(cell)
 			return
-		if unit_id == "":
+		if unit_id == 0:
 			status = "請選擇一個單位作為目標。"
 			present()
 			return
@@ -160,10 +160,10 @@ func _on_primary_clicked(unit_id: String, cell: Vector2i) -> void:
 	if not send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y}):
 		world.cancel_move_animation()
 
-func _on_inspection_clicked(unit_id: String, cell: Vector2i) -> void:
+func _on_inspection_clicked(unit_id: int, cell: Vector2i) -> void:
 	if input_is_locked():
 		return
-	if pending_action != "" and (unit_id == "" or world.unit_occupies_cell_id(unit_id, inspected_cell)):
+	if pending_action != "" and (unit_id == 0 or world.unit_occupies_cell_id(unit_id, inspected_cell)):
 		pending_action = ""
 		status = "已取消技能。"
 		present()
@@ -188,8 +188,8 @@ func _on_skill_inspection_requested(skill_id: String) -> void:
 	inspected_skill = "" if inspected_skill == skill_id else skill_id
 	present()
 
-func use_pending_action(target: String, cell: Vector2i) -> void:
-	var actor: String = state.turn.actor
+func use_pending_action(target: int, cell: Vector2i) -> void:
+	var actor: int = state.turn.actor
 	var succeeded := send({"type": "skill", "actor": actor, "target": target, "x": cell.x, "y": cell.y, "skill": pending_action})
 	if succeeded:
 		pending_action = ""
@@ -200,7 +200,7 @@ func use_pending_cell_action(cell: Vector2i) -> void:
 		status = "請選擇地圖上的格子。"
 		present()
 		return
-	var actor: String = state.turn.actor
+	var actor: int = state.turn.actor
 	var succeeded := send({"type": "cell_skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action})
 	if succeeded:
 		pending_action = ""
@@ -231,20 +231,20 @@ func _on_delay_selection_requested() -> void:
 	status = ""
 	present()
 
-func _on_delay_target_selected(unit_id: String) -> void:
+func _on_delay_target_selected(unit_id: int) -> void:
 	if input_is_locked():
 		return
 	if not selecting_delay or state.is_empty() or state.turn.actor == null:
 		return
-	var actor: String = state.turn.actor
+	var actor: int = state.turn.actor
 	selecting_delay = false
 	send({"type": "delay", "actor": actor, "after": unit_id})
 
-func _on_turn_order_focus_requested(unit_id: String) -> void:
+func _on_turn_order_focus_requested(unit_id: int) -> void:
 	if input_is_locked():
 		return
 	world.focus_unit(unit_id)
-	if world.unit_id_at_cell(inspected_cell).is_empty():
+	if world.unit_id_at_cell(inspected_cell) == 0:
 		return
 	inspected_cell = world.unit_cell(unit_id)
 	inspected_skill = ""

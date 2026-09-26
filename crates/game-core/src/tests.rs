@@ -1,6 +1,10 @@
 use super::*;
 use crate::model::Encounter;
 
+const ACTOR_ID: i64 = 1;
+const TARGET_ID: i64 = 2;
+const BLOCKER_ID: i64 = 3;
+
 // 驗證命中結果、不同固定格擋減傷與暴擊順序均符合傷害公式。
 #[test]
 fn attack_damage_uses_expected_formula() {
@@ -159,7 +163,7 @@ fn move_preview_chooses_safest_path_within_first_phase() {
     for case in cases {
         let (game, actor_position, spikes, destination) = movement_preview_game(case.movement);
         let preview = game
-            .preview_move("actor", destination)
+            .preview_move(ACTOR_ID, destination)
             .expect("目的地應能在第一階段朝目標移動");
         let expected_last = if case.interrupted {
             spikes
@@ -210,13 +214,13 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
     });
     world.insert_resource(TemporaryTerrains::default());
     world.insert_resource(Turn {
-        actor: Some("actor".into()),
+        actor: Some(ACTOR_ID),
         phase: Phase::Ready,
         movement_remaining: movement,
         movement_segments_used: 0,
     });
     world.spawn((
-        Id("actor".into()),
+        Id(ACTOR_ID),
         Pos(actor_position),
         Footprint {
             width: 1,
@@ -345,11 +349,11 @@ fn push_collision_damages_both_units() {
         .get("push")
         .expect("測試推擊技能應存在")
         .clone();
-    game.use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill)
+    game.use_skill(ACTOR_ID, TARGET_ID, GridPos { x: 2, y: 1 }, skill)
         .expect("推擊應成功結算");
 
-    let target = game.entity("target").expect("測試目標應存在");
-    let blocker = game.entity("blocker").expect("測試碰撞單位應存在");
+    let target = game.entity(TARGET_ID).expect("測試目標應存在");
+    let blocker = game.entity(BLOCKER_ID).expect("測試碰撞單位應存在");
     let log = game.world.resource::<Log>();
     let (damage, collision_damage, collision_units) = match log.0.last() {
         Some(CombatLogEvent::Skill {
@@ -377,7 +381,7 @@ fn push_collision_damages_both_units() {
         100 - collision_damage
     );
     assert_eq!(collision_units.len(), 1);
-    assert_eq!(collision_units[0].unit, "blocker");
+    assert_eq!(collision_units[0].unit, BLOCKER_ID);
     assert_eq!(collision_units[0].unit_type, "test_unit");
     assert_eq!(collision_units[0].remaining_hp, 100 - collision_damage);
 }
@@ -393,7 +397,7 @@ fn skill_min_range_limits_preview_and_action() {
             power_bonus: 0,
         },
     );
-    let actor = game.entity("actor").expect("測試攻擊者應存在");
+    let actor = game.entity(ACTOR_ID).expect("測試攻擊者應存在");
     let range = super::skill::skill_ranges(&game.world, actor);
     assert!(!range[0].cells.contains(&GridPos { x: 2, y: 1 }));
     assert!(range[0].cells.contains(&GridPos { x: 3, y: 1 }));
@@ -401,7 +405,7 @@ fn skill_min_range_limits_preview_and_action() {
     game.start().expect("測試戰鬥應可開始");
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
     let error = game
-        .use_skill("actor", "target", GridPos { x: 2, y: 1 }, skill)
+        .use_skill(ACTOR_ID, TARGET_ID, GridPos { x: 2, y: 1 }, skill)
         .expect_err("過近的目標應被拒絕");
     assert_eq!(error.id(), "target_too_close");
     assert_eq!(error.message(), "目標距離太近");
@@ -411,7 +415,7 @@ fn skill_min_range_limits_preview_and_action() {
 #[test]
 fn zero_range_heal_targets_self() {
     let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal { power_bonus: 4 });
-    let actor = game.entity("actor").expect("測試攻擊者應存在");
+    let actor = game.entity(ACTOR_ID).expect("測試攻擊者應存在");
     let range = super::skill::skill_ranges(&game.world, actor);
     assert_eq!(range[0].cells, vec![GridPos { x: 1, y: 1 }]);
 
@@ -421,14 +425,14 @@ fn zero_range_heal_targets_self() {
         .expect("施放者應有生命值")
         .current = 90;
     let preview = game
-        .preview_skill("actor", "actor", GridPos { x: 1, y: 1 }, "push")
+        .preview_skill(ACTOR_ID, ACTOR_ID, GridPos { x: 1, y: 1 }, "push")
         .expect("零距離治療應可預覽");
     match preview {
         SkillPreview::Healing(healing) => assert_eq!(healing.healing, 5),
         _ => panic!("治療技能應產生治療預覽"),
     }
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
-    game.use_skill("actor", "actor", GridPos { x: 1, y: 1 }, skill)
+    game.use_skill(ACTOR_ID, ACTOR_ID, GridPos { x: 1, y: 1 }, skill)
         .expect("零距離治療應可對自己施放");
     assert_eq!(
         game.world
@@ -443,13 +447,13 @@ fn zero_range_heal_targets_self() {
 #[test]
 fn enemy_without_skill_reports_error() {
     let mut game = push_collision_game();
-    let enemy = game.entity("target").expect("測試敵方應存在");
+    let enemy = game.entity(TARGET_ID).expect("測試敵方應存在");
     game.world
         .get_mut::<Unit>(enemy)
         .expect("敵方應有資料")
         .skills
         .clear();
-    game.world.resource_mut::<Turn>().actor = Some("target".into());
+    game.world.resource_mut::<Turn>().actor = Some(TARGET_ID);
     game.world.resource_mut::<Turn>().phase = Phase::Ready;
     game.world.resource_mut::<Encounter>().round = 1;
     let error = match game.command(Command::AutoStep) {
@@ -497,18 +501,18 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
             effect,
         }],
         units: vec![
-            push_collision_unit("actor", Team::Player, 1),
-            push_collision_unit("target", Team::Enemy("test_enemy".into()), 2),
-            push_collision_unit("blocker", Team::Enemy("test_enemy".into()), 3),
+            push_collision_unit(ACTOR_ID, Team::Player, 1),
+            push_collision_unit(TARGET_ID, Team::Enemy("test_enemy".into()), 2),
+            push_collision_unit(BLOCKER_ID, Team::Enemy("test_enemy".into()), 3),
         ],
     };
     Game::from_definition(definition).expect("測試戰鬥定義應有效")
 }
 
-fn push_collision_unit(id: &str, team: Team, x: i32) -> UnitDef {
+fn push_collision_unit(id: i64, team: Team, x: i32) -> UnitDef {
     let initiative = if team == Team::Player { 100 } else { 0 };
     UnitDef {
-        id: id.into(),
+        id,
         unit_type: "test_unit".into(),
         visual: "test_unit".into(),
         team,

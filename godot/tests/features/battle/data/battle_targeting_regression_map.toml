@@ -3,21 +3,21 @@ name="battle_targeting_regression"
 width=6
 height=4
 [[units]]
-id="aria"
+id=1
 unit_type="aria"
 team="player"
 x=0
 y=1
 
 [[units]]
-id="wolf_a"
+id=2
 unit_type="wolf_a"
 team={ enemy="targets" }
 x=2
 y=1
 
 [[units]]
-id="ogre"
+id=3
 unit_type="ogre"
 team={ enemy="ogres" }
 x=4

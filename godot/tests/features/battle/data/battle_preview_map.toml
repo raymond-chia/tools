@@ -11,14 +11,14 @@ x=3
 y=4
 kind="rough"
 [[units]]
-id="aria"
+id=1
 unit_type="aria"
 team="player"
 x=1
 y=3
 
 [[units]]
-id="ogre"
+id=2
 unit_type="ogre"
 team={ enemy="ogres" }
 x=3

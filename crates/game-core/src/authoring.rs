@@ -44,7 +44,7 @@ pub struct Map {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitPlacement {
-    pub id: String,
+    pub id: i64,
     pub unit_type: String,
     pub team: Team,
     pub x: i32,
@@ -90,11 +90,11 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
     let mut used_ids = HashSet::new();
     let mut units = Vec::new();
     for placement in map.units {
-        if placement.id.trim().is_empty() {
-            return Err(error::empty_unit_placement_id());
+        if placement.id <= 0 {
+            return Err(error::invalid_unit_placement_id());
         }
-        if !used_ids.insert(placement.id.clone()) {
-            return Err(error::duplicate_unit_placement_id(&placement.id));
+        if !used_ids.insert(placement.id) {
+            return Err(error::duplicate_unit_placement_id(placement.id));
         }
         let kind = types
             .get(&placement.unit_type)

@@ -3,8 +3,8 @@ extends CanvasLayer
 signal action_selected(action: String)
 signal end_turn_requested
 signal delay_selection_requested
-signal delay_target_selected(unit_id: String)
-signal turn_order_focus_requested(unit_id: String)
+signal delay_target_selected(unit_id: int)
+signal turn_order_focus_requested(unit_id: int)
 signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
 signal language_changed
@@ -249,7 +249,7 @@ func clear_turn_order() -> void:
 		turn_order.remove_child(child)
 		child.queue_free()
 
-func _on_turn_order_pressed(unit_id: String, selecting_delay: bool) -> void:
+func _on_turn_order_pressed(unit_id: int, selecting_delay: bool) -> void:
 	if selecting_delay:
 		delay_target_selected.emit(unit_id)
 		return

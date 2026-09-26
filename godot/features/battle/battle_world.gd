@@ -1,7 +1,7 @@
 extends Node2D
 
-signal primary_clicked(unit_id: String, cell: Vector2i)
-signal inspection_clicked(unit_id: String, cell: Vector2i)
+signal primary_clicked(unit_id: int, cell: Vector2i)
+signal inspection_clicked(unit_id: int, cell: Vector2i)
 signal move_preview_changed(total_cost, pointer_position: Vector2)
 signal attack_preview_changed(preview: Dictionary, pointer_position: Vector2)
 signal combat_events_finished
@@ -30,7 +30,7 @@ var unit_nodes := {}
 var movement_tweens := {}
 var hit_tweens := {}
 var attack_tweens := {}
-var prepared_move_unit_id := ""
+var prepared_move_unit_id := 0
 var prepared_move_path: Array[Vector2i] = []
 var combat_event_queue: Array[Dictionary] = []
 var received_log_count := 0
@@ -104,7 +104,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var cell := point_to_cell(local_event.position)
 	var unit := unit_at_cell(cell)
-	var unit_id: String = unit.id if not unit.is_empty() else ""
+	var unit_id: int = unit.id if not unit.is_empty() else 0
 	if local_event.button_index == MOUSE_BUTTON_LEFT:
 		primary_clicked.emit(unit_id, cell)
 		get_viewport().set_input_as_handled()
@@ -118,7 +118,7 @@ func cell_center(cell: Vector2i) -> Vector2:
 func point_to_cell(point: Vector2) -> Vector2i:
 	return ground.local_to_map(point - ground.position)
 
-func focus_unit(unit_id: String) -> void:
+func focus_unit(unit_id: int) -> void:
 	var unit := unit_with_id(state.get("units", []), unit_id)
 	if unit.is_empty():
 		return
@@ -147,11 +147,11 @@ func clamp_camera_position(position: Vector2) -> Vector2:
 		return position.clamp(camera_bounds.position, camera_bounds.end)
 	return position
 
-func unit_id_at_cell(cell: Vector2i) -> String:
+func unit_id_at_cell(cell: Vector2i) -> int:
 	var unit := unit_at_cell(cell)
-	return unit.id if not unit.is_empty() else ""
+	return unit.id if not unit.is_empty() else 0
 
-func unit_cell(unit_id: String) -> Vector2i:
+func unit_cell(unit_id: int) -> Vector2i:
 	var unit := unit_with_id(state.get("units", []), unit_id)
 	if unit.is_empty():
 		return Vector2i(-1, -1)
@@ -173,7 +173,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 		var is_new := not unit_nodes.has(unit.id)
 		if is_new:
 			node = Node2D.new()
-			node.name = unit.id
+			node.name = str(unit.id)
 			var visual := Node2D.new(); visual.name = "Visual"; node.add_child(visual)
 			var new_attack_preview_ring := Sprite2D.new(); new_attack_preview_ring.name = "AttackPreviewRing"; new_attack_preview_ring.texture = BASE_ART; new_attack_preview_ring.visible = false; visual.add_child(new_attack_preview_ring)
 			var selection := Sprite2D.new(); selection.name = "Selection"; selection.texture = BASE_ART; visual.add_child(selection)
@@ -214,7 +214,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 		body.scale = Vector2(0.88, 0.88) if large else Vector2(0.72, 0.72)
 		body.modulate = Color.WHITE
 
-func prepare_move_animation(unit_id: String, destination: Vector2i) -> void:
+func prepare_move_animation(unit_id: int, destination: Vector2i) -> void:
 	prepared_move_unit_id = unit_id
 	prepared_move_path.clear()
 	for cell in first_move_path:
@@ -227,10 +227,10 @@ func prepare_move_animation(unit_id: String, destination: Vector2i) -> void:
 		cancel_move_animation()
 
 func cancel_move_animation() -> void:
-	prepared_move_unit_id = ""
+	prepared_move_unit_id = 0
 	prepared_move_path.clear()
 
-func animate_unit_movement(unit_id: String, node: Node2D, destination: Vector2, unit: Dictionary) -> void:
+func animate_unit_movement(unit_id: int, node: Node2D, destination: Vector2, unit: Dictionary) -> void:
 	stop_tween(movement_tweens, unit_id)
 	var tween := create_tween().bind_node(node)
 	if unit_id == prepared_move_unit_id and not prepared_move_path.is_empty():
@@ -337,8 +337,8 @@ func present_skill_result(event: Dictionary) -> void:
 		if collision_unit.downed:
 			await animate_unit_death(collision_unit.unit)
 
-func present_unit_text(unit_id: String, text: String, color: Color, horizontal_offset := 0.0) -> void:
-	if unit_id.is_empty() or not unit_nodes.has(unit_id):
+func present_unit_text(unit_id: int, text: String, color: Color, horizontal_offset := 0.0) -> void:
+	if unit_id == 0 or not unit_nodes.has(unit_id):
 		return
 	var label := Label.new()
 	label.text = text
@@ -357,8 +357,8 @@ func present_unit_text(unit_id: String, text: String, color: Color, horizontal_o
 	tween.tween_property(label, "modulate:a", 0.0, BattleConfig.FLOATING_TEXT_DURATION).set_delay(BattleConfig.FLOATING_TEXT_DURATION * 0.45)
 	tween.chain().tween_callback(label.queue_free)
 
-func animate_unit_hit(unit_id: String) -> Tween:
-	if unit_id.is_empty() or not unit_nodes.has(unit_id):
+func animate_unit_hit(unit_id: int) -> Tween:
+	if unit_id == 0 or not unit_nodes.has(unit_id):
 		return null
 	var visual: Node2D = unit_nodes[unit_id].get_node("Visual")
 	stop_tween(hit_tweens, unit_id)
@@ -373,8 +373,8 @@ func animate_unit_hit(unit_id: String) -> Tween:
 	hit_tweens[unit_id] = tween
 	return tween
 
-func animate_unit_attack(actor_id: String, target_id: String) -> Tween:
-	if actor_id.is_empty() or target_id.is_empty() or not unit_nodes.has(actor_id) or not unit_nodes.has(target_id):
+func animate_unit_attack(actor_id: int, target_id: int) -> Tween:
+	if actor_id == 0 or target_id == 0 or not unit_nodes.has(actor_id) or not unit_nodes.has(target_id):
 		return null
 	var actor_visual: Node2D = unit_nodes[actor_id].get_node("Visual")
 	var direction: Vector2 = unit_nodes[actor_id].position.direction_to(unit_nodes[target_id].position)
@@ -389,8 +389,8 @@ func animate_unit_attack(actor_id: String, target_id: String) -> Tween:
 	attack_tweens[actor_id] = tween
 	return tween
 
-func animate_unit_death(unit_id: String) -> void:
-	if unit_id.is_empty() or not unit_nodes.has(unit_id):
+func animate_unit_death(unit_id: int) -> void:
+	if unit_id == 0 or not unit_nodes.has(unit_id):
 		return
 	var body: Sprite2D = unit_nodes[unit_id].get_node("Visual/Body")
 	var tween := create_tween().bind_node(body).set_parallel(true)
@@ -402,21 +402,21 @@ func animate_unit_death(unit_id: String) -> void:
 	unit_nodes[unit_id].queue_free()
 	unit_nodes.erase(unit_id)
 
-func wait_for_unit_movement(unit_id: String) -> void:
-	if unit_id.is_empty() or not movement_tweens.has(unit_id):
+func wait_for_unit_movement(unit_id: int) -> void:
+	if unit_id == 0 or not movement_tweens.has(unit_id):
 		return
 	var tween: Tween = movement_tweens[unit_id]
 	if tween.is_valid() and tween.is_running():
 		await tween.finished
 
-func unit_has_movement_transition(unit_id: String) -> bool:
+func unit_has_movement_transition(unit_id: int) -> bool:
 	for movement in state.get("movements", []):
 		if movement.unit_id == unit_id:
 			return true
 	return false
 
 func animate_movement_event(event: Dictionary) -> void:
-	var unit_id: String = event.unit_id
+	var unit_id: int = event.unit_id
 	if not unit_nodes.has(unit_id):
 		return
 	var unit := unit_with_id(state.units, unit_id)
@@ -436,22 +436,22 @@ func animate_movement_event(event: Dictionary) -> void:
 	movement_tweens[unit_id] = tween
 	await tween.finished
 
-func stop_unit_tweens(unit_id: String) -> void:
+func stop_unit_tweens(unit_id: int) -> void:
 	stop_tween(movement_tweens, unit_id)
 	stop_tween(hit_tweens, unit_id)
 	stop_tween(attack_tweens, unit_id)
 
-func has_active_tween(tweens: Dictionary, unit_id: String) -> bool:
+func has_active_tween(tweens: Dictionary, unit_id: int) -> bool:
 	return tweens.has(unit_id) and tweens[unit_id].is_valid()
 
-func stop_tween(tweens: Dictionary, unit_id: String) -> void:
+func stop_tween(tweens: Dictionary, unit_id: int) -> void:
 	if tweens.has(unit_id):
 		var tween: Tween = tweens[unit_id]
 		if tween.is_valid():
 			tween.kill()
 		tweens.erase(unit_id)
 
-func unit_with_id(units: Array, unit_id: String) -> Dictionary:
+func unit_with_id(units: Array, unit_id: int) -> Dictionary:
 	for unit in units:
 		if unit.id == unit_id:
 			return unit
@@ -471,7 +471,7 @@ func unit_at_cell(cell: Vector2i) -> Dictionary:
 			return unit
 	return {}
 
-func unit_occupies_cell_id(unit_id: String, cell: Vector2i) -> bool:
+func unit_occupies_cell_id(unit_id: int, cell: Vector2i) -> bool:
 	var terrain := terrain_at_cell(cell)
 	return not terrain.is_empty() and terrain.unit_id == unit_id
 
@@ -545,7 +545,7 @@ func update_attack_preview() -> void:
 	attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 
 func sync_attack_preview_ring() -> void:
-	var preview_unit_id: String = "" if attack_preview_unit.is_empty() else attack_preview_unit.id
+	var preview_unit_id: int = 0 if attack_preview_unit.is_empty() else attack_preview_unit.id
 	for unit_id in unit_nodes:
 		var attack_preview_ring: Sprite2D = unit_nodes[unit_id].get_node("Visual/AttackPreviewRing")
 		attack_preview_ring.visible = unit_id == preview_unit_id

@@ -163,56 +163,56 @@ y=7
 kind="chasm"
 
 [[units]]
-id="aria"
+id=1
 unit_type="aria"
 team="player"
 x=1
 y=3
 
 [[units]]
-id="lyra"
+id=2
 unit_type="lyra"
 team="player"
 x=2
 y=4
 
 [[units]]
-id="mira"
+id=3
 unit_type="mira"
 team="player"
 x=1
 y=5
 
 [[units]]
-id="wolf_a"
+id=4
 unit_type="wolf"
 team={ enemy="wild_animals" }
 x=6
 y=3
 
 [[units]]
-id="wolf_b"
+id=5
 unit_type="wolf"
 team={ enemy="wild_animals" }
 x=7
 y=4
 
 [[units]]
-id="wolf_c"
+id=6
 unit_type="wolf"
 team={ enemy="wild_animals" }
 x=8
 y=2
 
 [[units]]
-id="wolf_d"
+id=7
 unit_type="wolf"
 team={ enemy="wild_animals" }
 x=8
 y=4
 
 [[units]]
-id="wolf_e"
+id=8
 unit_type="wolf"
 team={ enemy="wild_animals" }
 x=7

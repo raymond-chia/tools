@@ -2,6 +2,12 @@ extends GdUnitTestSuite
 
 const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
 
+const ARIA_ID := 1
+const OGRE_ID := 2
+const WOLF_A_ID := 3
+const WOLF_B_ID := 4
+const LYRA_ID := 5
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_preview_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_preview_map.toml"
@@ -63,7 +69,7 @@ func test_attack_hit_preview() -> void:
 	assert_bool(attack_preview_ring.visible).override_failure_message("命中預覽目標應顯示金色單位外環").is_true()
 	assert_bool(attack_preview_ring.scale.x > target_base.scale.x and attack_preview_ring.scale.y > target_base.scale.y).override_failure_message("金色預覽環應套在單位原光環外側").is_true()
 	assert_bool(attack_preview_ring.modulate == Color("ffe17a")).override_failure_message("命中預覽目標外環應為金色").is_true()
-	var zero_block_preview := query_attack_preview("wolf_b", "preview_5")
+	var zero_block_preview := query_attack_preview(WOLF_B_ID, "preview_5")
 	battle.ui.present_attack_preview(zero_block_preview, Vector2.ZERO)
 	assert_str(battle.ui.attack_preview_result_labels.block.text).override_failure_message("格擋率為零時中間欄仍應顯示格擋機率").is_equal("格擋 0%")
 	assert_bool(battle.ui.attack_preview_health_segments.block.visible).override_failure_message("沒有格擋結果時不應顯示黃色情境").is_false()
@@ -81,19 +87,19 @@ func test_attack_preview_visual_variations() -> void:
 	battle.world.set_process_unhandled_input(false)
 	var test_data := [
 		# 殘餘 HP 端點靠近時，放大的數字應上下錯開而不重疊。
-		{"name": "數字靠近", "target": "ogre", "skill": "preview_5", "preparation": "setup_damage_20", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 80, "target_max_hp": 100, "hit_remaining_hp": 75, "block_remaining_hp": 77, "expected_segments": [75, 2, 3, 20]},
+		{"name": "數字靠近", "target": OGRE_ID, "skill": "preview_5", "preparation": "setup_damage_20", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 80, "target_max_hp": 100, "hit_remaining_hp": 75, "block_remaining_hp": 77, "expected_segments": [75, 2, 3, 20]},
 		# 四色同時出現時，確認顏色順序與相鄰分段連續。
-		{"name": "四色血條", "target": "wolf_a", "skill": "preview_5", "preparation": "setup_damage_4", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
+		{"name": "四色血條", "target": WOLF_A_ID, "skill": "preview_5", "preparation": "setup_damage_4", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
 		# 格擋完全吸收傷害時，黃色代表減免傷害且紅色隱藏。
-		{"name": "完全格擋", "target": "lyra", "skill": "preview_2", "preparation": "", "dodge": 15, "block": 50, "hit": 35, "damage": 2, "target_hp": 20, "target_max_hp": 20, "hit_remaining_hp": 18, "block_remaining_hp": 20, "expected_segments": [18, 2, 0, 0]},
+		{"name": "完全格擋", "target": LYRA_ID, "skill": "preview_2", "preparation": "", "dodge": 15, "block": 50, "hit": 35, "damage": 2, "target_hp": 20, "target_max_hp": 20, "hit_remaining_hp": 18, "block_remaining_hp": 20, "expected_segments": [18, 2, 0, 0]},
 		# 沒有格擋率時，紅色顯示普通命中傷害且深色保留既有損失生命。
-		{"name": "無格擋的高傷害命中", "target": "wolf_b", "skill": "preview_7", "preparation": "setup_damage_4", "dodge": 40, "block": 0, "hit": 60, "damage": 7, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 9, "block_remaining_hp": 11, "expected_segments": [9, 0, 7, 4]},
+		{"name": "無格擋的高傷害命中", "target": WOLF_B_ID, "skill": "preview_7", "preparation": "setup_damage_4", "dodge": 40, "block": 0, "hit": 60, "damage": 7, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 9, "block_remaining_hp": 11, "expected_segments": [9, 0, 7, 4]},
 		# 致死命中隱藏綠色後，黃色仍須從血條左端開始。
-		{"name": "致死命中", "target": "wolf_a", "skill": "preview_16", "preparation": "setup_damage_4", "dodge": 10, "block": 20, "hit": 70, "damage": 16, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 0, "block_remaining_hp": 2, "expected_segments": [0, 2, 14, 4]},
+		{"name": "致死命中", "target": WOLF_A_ID, "skill": "preview_16", "preparation": "setup_damage_4", "dodge": 10, "block": 20, "hit": 70, "damage": 16, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 0, "block_remaining_hp": 2, "expected_segments": [0, 2, 14, 4]},
 		# 滿血且無傷害時，只剩綠色且仍填滿整條血條。
-		{"name": "只有綠色", "target": "wolf_a", "skill": "preview_0", "preparation": "", "dodge": 10, "block": 20, "hit": 70, "damage": 0, "target_hp": 20, "target_max_hp": 20, "hit_remaining_hp": 20, "block_remaining_hp": 20, "expected_segments": [20, 0, 0, 0]},
+		{"name": "只有綠色", "target": WOLF_A_ID, "skill": "preview_0", "preparation": "", "dodge": 10, "block": 20, "hit": 70, "damage": 0, "target_hp": 20, "target_max_hp": 20, "hit_remaining_hp": 20, "block_remaining_hp": 20, "expected_segments": [20, 0, 0, 0]},
 		# 已隱藏的分段重新出現時，排版與比例仍須正確。
-		{"name": "恢復四色血條", "target": "wolf_a", "skill": "preview_5", "preparation": "setup_damage_4", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
+		{"name": "恢復四色血條", "target": WOLF_A_ID, "skill": "preview_5", "preparation": "setup_damage_4", "dodge": 10, "block": 20, "hit": 70, "damage": 5, "target_hp": 16, "target_max_hp": 20, "hit_remaining_hp": 11, "block_remaining_hp": 13, "expected_segments": [11, 2, 3, 4]},
 	]
 	for test_case in test_data:
 		var preview := query_attack_preview(test_case.target, test_case.skill, test_case.preparation)
@@ -331,15 +337,15 @@ func test_skill_availability_after_movement() -> void:
 	for test_case in test_data:
 		await prepare_case(battle)
 		for destination in test_case.destinations:
-			assert_bool(battle.send({"type": "move", "actor": "aria", "x": destination.x, "y": destination.y})).override_failure_message("%s：測試移動應成功" % test_case.name).is_true()
+			assert_bool(battle.send({"type": "move", "actor": ARIA_ID, "x": destination.x, "y": destination.y})).override_failure_message("%s：測試移動應成功" % test_case.name).is_true()
 		await wait_for_combat_events(battle)
 
 		assert_bool(battle.state.turn.can_skill).override_failure_message("%s：技能可用狀態應正確" % test_case.name).is_equal(test_case.can_skill)
 		assert_bool(battle.ui.action_buttons.aimed_shot.disabled).override_failure_message("%s：技能按鈕狀態應正確" % test_case.name).is_equal(not test_case.can_skill)
-		assert_bool(battle.send({"type": "skill", "actor": "aria", "target": "ogre", "x": 3, "y": 1, "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
+		assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "target": OGRE_ID, "x": 3, "y": 1, "skill": "aimed_shot"})).override_failure_message("%s：技能施放結果應符合移動段數" % test_case.name).is_equal(test_case.can_skill)
 
 # 載入專用 TOML，必要時以真實攻擊建立缺血情境，再取得核心的完整預覽。
-func query_attack_preview(target_id: String, skill_id: String, preparation_skill := "") -> Dictionary:
+func query_attack_preview(target_id: int, skill_id: String, preparation_skill := "") -> Dictionary:
 	var preview_core := TacticalGame.new()
 	var definitions := FileAccess.get_file_as_string(ATTACK_VARIATIONS_DEFINITIONS)
 	var map := FileAccess.get_file_as_string(ATTACK_VARIATIONS_MAP)
@@ -360,7 +366,7 @@ func query_attack_preview(target_id: String, skill_id: String, preparation_skill
 	if not preparation_skill.is_empty():
 		# 固定亂數種子，讓建立缺血情境的攻擊穩定普通命中。
 		preview_core.set_random_seed(1)
-		var damaged: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "skill", "actor": "aria", "target": target_id, "x": int(target.x), "y": int(target.y), "skill": preparation_skill})))
+		var damaged: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "skill", "actor": ARIA_ID, "target": target_id, "x": int(target.x), "y": int(target.y), "skill": preparation_skill})))
 		assert_bool(damaged.has("error")).override_failure_message("建立缺血情境的真實攻擊應成功").is_false()
 		if damaged.has("error"):
 			return {}
@@ -370,7 +376,7 @@ func query_attack_preview(target_id: String, skill_id: String, preparation_skill
 			assert_bool(damaged.has("error")).override_failure_message("準備攻擊後的自動回合應成功推進").is_false()
 			if damaged.has("error"):
 				return {}
-	var preview: Dictionary = JSON.parse_string(preview_core.preview_skill("aria", target_id, int(target.x), int(target.y), skill_id))
+	var preview: Dictionary = JSON.parse_string(preview_core.preview_skill(ARIA_ID, target_id, int(target.x), int(target.y), skill_id))
 	assert_bool(preview.has("error")).override_failure_message("核心應成功產生 %s 的 %s 預覽" % [target_id, skill_id]).is_false()
 	return preview
 

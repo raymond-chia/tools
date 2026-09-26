@@ -2,6 +2,10 @@ extends GdUnitTestSuite
 
 const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
 
+const ARIA_ID := 1
+const WOLF_A_ID := 2
+const WOLF_B_ID := 3
+
 const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_log_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_log_map.toml"
@@ -31,7 +35,7 @@ func test_new_round_log_contains_initiative_rolls() -> void:
 	assert_array(event.initiative_rolls).override_failure_message("新回合事件應提供先攻擲骰明細").is_not_empty()
 	assert_int(event.initiative_rolls.size()).is_equal(3)
 	var initiative_roll: Dictionary = event.initiative_rolls[0]
-	assert_str(initiative_roll.unit).is_equal("aria")
+	assert_int(initiative_roll.unit).is_equal(ARIA_ID)
 	assert_str(initiative_roll.team).is_equal("player")
 	assert_int(int(initiative_roll.modifier)).is_equal(100)
 	var previous_total := 1000
@@ -43,9 +47,9 @@ func test_new_round_log_contains_initiative_rolls() -> void:
 # 驗證每筆紀錄依事件類型決定預設展開狀態。
 func test_log_entries_use_event_default_expansion() -> void:
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合與先攻紀錄應預設摺疊").is_false()
-	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	assert_bool(battle.send(skill_command(WOLF_A_ID, "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var skill_index := find_last_event_index("skill", "aria")
+	var skill_index := find_last_event_index("skill", ARIA_ID)
 	assert_bool(battle.ui.log_entry_expanded_states[skill_index]).override_failure_message("技能紀錄應預設展開").is_true()
 
 # 驗證切換一筆紀錄只改變該筆狀態，且新增紀錄後保留既有狀態。
@@ -53,9 +57,9 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 	battle.ui.toggle_log_entry(0)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新回合紀錄應可獨立展開").is_true()
 	assert_str(formatted_log()).override_failure_message("展開新回合紀錄應顯示先攻明細").contains("先攻總值")
-	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	assert_bool(battle.send(skill_command(WOLF_A_ID, "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var skill_index := find_last_event_index("skill", "aria")
+	var skill_index := find_last_event_index("skill", ARIA_ID)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("新增紀錄後應保留既有展開狀態").is_true()
 	battle.ui.toggle_log_entry(skill_index)
 	assert_bool(battle.ui.log_entry_expanded_states[0]).override_failure_message("切換技能紀錄不應影響新回合紀錄").is_true()
@@ -64,14 +68,14 @@ func test_log_entries_preserve_independent_expansion_states() -> void:
 
 # 驗證技能紀錄，且 UI 依技能 ID 翻譯名稱並顯示數值。
 func test_skill_resolution_log() -> void:
-	assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
+	assert_bool(battle.send(skill_command(WOLF_A_ID, "precise_strike"))).override_failure_message("測試技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var event := find_last_event("skill", "aria")
+	var event := find_last_event("skill", ARIA_ID)
 	assert_dict(event).override_failure_message("應產生技能事件").is_not_empty()
-	assert_str(event.actor).is_equal("aria")
+	assert_int(event.actor).is_equal(ARIA_ID)
 	assert_str(event.actor_team).is_equal("player")
 	assert_str(event.skill).is_equal("precise_strike")
-	assert_str(event.target).is_equal("wolf_a")
+	assert_int(event.target).is_equal(WOLF_A_ID)
 	assert_dict(event.target_team).contains_key_value("enemy", "targets")
 	assert_int(int(event.attack_modifier)).is_equal(104)
 	assert_int(int(event.attack_total)).is_equal(int(event.roll) + 104)
@@ -93,9 +97,9 @@ func test_skill_resolution_log() -> void:
 
 # 驗證技能使生命歸零時會記錄倒下狀態，並翻譯倒下單位名稱。
 func test_downed_unit_log() -> void:
-	assert_bool(battle.send(skill_command("wolf_b", "finishing_strike"))).override_failure_message("終結技能應成功施放").is_true()
+	assert_bool(battle.send(skill_command(WOLF_B_ID, "finishing_strike"))).override_failure_message("終結技能應成功施放").is_true()
 	await wait_for_combat_events()
-	var event := find_last_event("skill", "aria")
+	var event := find_last_event("skill", ARIA_ID)
 	assert_bool(event.downed).override_failure_message("生命歸零的目標應標記為倒下").is_true()
 	assert_int(int(event.remaining_hp)).override_failure_message("倒下目標的剩餘生命應為零").is_zero()
 	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應以敵方顏色顯示倒下單位").contains("[color=#ff6868]%s[/color] 倒下" % tr("UNIT_NAME_WOLF_B"))
@@ -105,18 +109,18 @@ func test_spikes_damage_log() -> void:
 	var terrain := terrain_at(Vector2i(0, 2))
 	assert_array(terrain.terrains).override_failure_message("測試地格應包含地刺").contains("spikes")
 	assert_int(int(terrain.damage)).override_failure_message("地刺資訊應由核心提供固定傷害").is_equal(3)
-	assert_bool(battle.send({"type": "move", "actor": "aria", "x": 0, "y": 2})).override_failure_message("移動到地刺地格應成功").is_true()
+	assert_bool(battle.send({"type": "move", "actor": ARIA_ID, "x": 0, "y": 2})).override_failure_message("移動到地刺地格應成功").is_true()
 	await wait_for_combat_events()
 	var event := find_last_event("terrain_damage")
 	assert_dict(event).override_failure_message("應產生地形傷害事件").is_not_empty()
-	assert_str(event.target).is_equal("aria")
+	assert_int(event.target).is_equal(ARIA_ID)
 	assert_str(event.target_team).is_equal("player")
 	assert_str(event.terrain).is_equal("spikes")
 	assert_int(int(event.damage)).is_equal(3)
 	assert_int(int(event.remaining_hp)).is_equal(47)
 	assert_int(int(event.max_hp)).is_equal(50)
 	assert_bool(event.downed).is_false()
-	var actor := unit_with_id("aria")
+	var actor := unit_with_id(ARIA_ID)
 	assert_int(int(actor.hp)).override_failure_message("踩到地刺後 snapshot 應反映剩餘生命").is_equal(47)
 	assert_int(int(actor.x)).is_equal(0)
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
@@ -128,7 +132,7 @@ func test_battle_log_can_be_dragged_to_scroll() -> void:
 	# 如果不隱藏，會嚴重拖延測試時間
 	battle.ui.log_panel.hide()
 	for index in 12:
-		assert_bool(battle.send(skill_command("wolf_a", "precise_strike"))).override_failure_message("第 %d 次測試攻擊應成功" % index).is_true()
+		assert_bool(battle.send(skill_command(WOLF_A_ID, "precise_strike"))).override_failure_message("第 %d 次測試攻擊應成功" % index).is_true()
 		await wait_for_combat_events()
 	battle.ui.log_panel.show()
 	await runner.simulate_frames(2)
@@ -168,21 +172,21 @@ func wait_for_combat_events() -> void:
 func formatted_log() -> String:
 	return battle.ui.format_log(battle.ui.presented_log_events)
 
-func skill_command(target: String, skill: String) -> Dictionary:
+func skill_command(target: int, skill: String) -> Dictionary:
 	var unit := unit_with_id(target)
-	return {"type": "skill", "actor": "aria", "target": target, "x": int(unit.x), "y": int(unit.y), "skill": skill}
+	return {"type": "skill", "actor": ARIA_ID, "target": target, "x": int(unit.x), "y": int(unit.y), "skill": skill}
 
-func find_last_event(type: String, actor := "") -> Dictionary:
+func find_last_event(type: String, actor := 0) -> Dictionary:
 	for index in range(battle.ui.presented_log_events.size() - 1, -1, -1):
 		var event: Dictionary = battle.ui.presented_log_events[index]
-		if event.type == type and (actor == "" or event.get("actor") == actor):
+		if event.type == type and (actor == 0 or event.get("actor") == actor):
 			return event
 	return {}
 
-func find_last_event_index(type: String, actor := "") -> int:
+func find_last_event_index(type: String, actor := 0) -> int:
 	for index in range(battle.ui.presented_log_events.size() - 1, -1, -1):
 		var event: Dictionary = battle.ui.presented_log_events[index]
-		if event.type == type and (actor == "" or event.get("actor") == actor):
+		if event.type == type and (actor == 0 or event.get("actor") == actor):
 			return index
 	return -1
 
@@ -192,7 +196,7 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 			return terrain
 	return {}
 
-func unit_with_id(id: String) -> Dictionary:
+func unit_with_id(id: int) -> Dictionary:
 	for unit in battle.state.units:
 		if unit.id == id:
 			return unit
