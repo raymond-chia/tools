@@ -15,7 +15,7 @@ const CATEGORIES := ["unit_types", "skills", "terrain_types"]
 @onready var unit_list: OptionButton = $Layout/Body/MapPanel/Tools/Unit
 @onready var team_list: OptionButton = $Layout/Body/MapPanel/Tools/Team
 @onready var faction_field: LineEdit = $Layout/Body/MapPanel/Tools/Faction
-@onready var grid: GridContainer = $Layout/Body/MapPanel/GridScroll/Grid
+@onready var map_view = $Layout/Body/MapPanel/MapViewportContainer/MapViewport/Map
 @onready var category_list: OptionButton = $Layout/Body/SidePanel/Category
 @onready var definition_list: OptionButton = $Layout/Body/SidePanel/Definition
 @onready var fields: GridContainer = $Layout/Body/SidePanel/InspectorScroll/Fields
@@ -30,6 +30,13 @@ var selected_unit := 0
 var history: Array = []
 var future: Array = []
 var refreshing := false
+var selected_cell := Vector2i(-1, -1)
+
+func _process(delta: float) -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is LineEdit or focused is TextEdit:
+		return
+	map_view.move_camera(delta)
 
 func _ready() -> void:
 	core = TacticalGame.new()
@@ -42,6 +49,8 @@ func _ready() -> void:
 	mode_list.select(0)
 	team_list.select(0)
 	category_list.select(0)
+	map_view.cell_pressed.connect(edit_cell)
+	mode_list.item_selected.connect(func(_index: int): refresh_grid())
 	$Layout/Toolbar/New.pressed.connect(new_map)
 	$Layout/Toolbar/Open.pressed.connect(open_selected_map)
 	$Layout/Toolbar/Save.pressed.connect(save_map)
@@ -65,6 +74,7 @@ func _ready() -> void:
 	var parsed := CoreResponse.read(core.definitions_to_json(source), show_error)
 	if parsed.is_empty():
 		return
+	restore_definition_integers(parsed)
 	definitions = parsed
 	refresh_map_list()
 	if get_tree().root.has_meta("editor_session"):
@@ -114,11 +124,13 @@ func open_selected_map() -> void:
 	var parsed := CoreResponse.read(core.map_to_json(source), show_error)
 	if parsed.is_empty():
 		return
+	restore_map_integers(parsed)
 	map_data = parsed
 	map_file = path
 	history.clear()
 	future.clear()
 	selected_unit = 0
+	selected_cell = Vector2i(-1, -1)
 	dirty = false
 	refresh_ui()
 	validate_current()
@@ -132,6 +144,7 @@ func new_map() -> void:
 	history.clear()
 	future.clear()
 	selected_unit = 0
+	selected_cell = Vector2i(-1, -1)
 	dirty = true
 	refresh_ui()
 	validate_current()
@@ -189,6 +202,27 @@ func play_map() -> void:
 
 func serialize_documents() -> Dictionary:
 	return CoreResponse.read(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
+
+# Godot 解析 JSON 時將數字轉成 float；送回核心前還原文件格式中的整數欄位。
+func restore_definition_integers(value: Dictionary) -> void:
+	for terrain in value.terrain_types.values():
+		restore_integers(terrain, ["damage", "extra_movement_cost", "dodge_penalty", "block_penalty"])
+	for skill in value.skills:
+		restore_integers(skill, ["min_range", "max_range", "attack_bonus", "power_bonus", "duration"])
+	for unit in value.unit_types:
+		restore_integers(unit, ["width", "height", "hp", "movement", "initiative", "dodge", "block", "attack", "power"])
+
+func restore_map_integers(value: Dictionary) -> void:
+	restore_integers(value, ["width", "height"])
+	for terrain in value.terrains:
+		restore_integers(terrain, ["x", "y"])
+	for unit in value.units:
+		restore_integers(unit, ["id", "x", "y"])
+
+func restore_integers(value: Dictionary, keys: Array[String]) -> void:
+	for key in keys:
+		if value.has(key):
+			value[key] = int(value[key])
 
 func validate_current() -> void:
 	if serialize_documents().is_empty():
@@ -267,24 +301,8 @@ func refresh_tools() -> void:
 	if unit_list.item_count > 0: unit_list.select(0)
 
 func refresh_grid() -> void:
-	for child in grid.get_children(): child.queue_free()
-	grid.columns = int(map_data.width)
-	for y in int(map_data.height):
-		for x in int(map_data.width):
-			var cell := Vector2i(x, y)
-			var terrains := terrains_at(cell)
-			var unit := unit_at(cell)
-			var button := Button.new()
-			button.custom_minimum_size = Vector2(74, 56)
-			var terrain_label := "plain" if terrains.is_empty() else terrains[0] + ("+%d" % (terrains.size() - 1) if terrains.size() > 1 else "")
-			button.text = "%d,%d\n%s%s" % [x, y, terrain_label, "\n" + str(unit.id) if not unit.is_empty() else ""]
-			button.tooltip_text = ", ".join(terrains) if not terrains.is_empty() else "plain"
-			button.modulate = Color("e98c82") if not terrains.is_empty() else Color.WHITE
-			if not unit.is_empty(): button.modulate = Color("79b9f3") if unit.team is String else Color("ee9b94")
-			button.pressed.connect(func(): edit_cell(cell))
-			button.mouse_entered.connect(func():
-				if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and mode_list.selected == 0: edit_cell(cell))
-			grid.add_child(button)
+	map_view.drag_paint = mode_list.selected == 0
+	map_view.present(map_data, definitions, selected_cell)
 
 func terrains_at(cell: Vector2i) -> Array[String]:
 	var terrains: Array[String] = []
@@ -306,6 +324,7 @@ func unit_type(id: String) -> Dictionary:
 	return {}
 
 func edit_cell(cell: Vector2i) -> void:
+	selected_cell = cell
 	var mode := mode_list.selected
 	var current := unit_at(cell)
 	if mode == 0:
@@ -329,6 +348,7 @@ func edit_cell(cell: Vector2i) -> void:
 			if current.is_empty(): return
 			selected_unit = current.id
 			status_label.text = "選取 %s；點擊目標格移動。" % selected_unit
+			refresh_grid()
 			return
 		checkpoint()
 		for unit in map_data.units:

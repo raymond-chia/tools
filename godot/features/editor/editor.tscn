@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://features/editor/editor.gd" id="1"]
 [ext_resource type="Theme" path="res://features/battle/battle_theme.tres" id="2"]
+[ext_resource type="Script" path="res://features/editor/editor_map.gd" id="3"]
 
 [node name="Editor" type="Control"]
 anchors_preset = 15
@@ -27,7 +28,7 @@ layout_mode = 2
 
 [node name="New" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "New"
+text = "新地圖"
 
 [node name="Maps" type="OptionButton" parent="Layout/Toolbar"]
 custom_minimum_size = Vector2(170, 0)
@@ -35,27 +36,27 @@ layout_mode = 2
 
 [node name="Open" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "Open"
+text = "開啟"
 
 [node name="Save" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "Save"
+text = "儲存"
 
 [node name="Duplicate" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "Duplicate"
+text = "複製"
 
 [node name="Undo" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "Undo"
+text = "復原"
 
 [node name="Redo" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "Redo"
+text = "重做"
 
 [node name="Play" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
-text = "Test / Play"
+text = "▶ 試玩"
 
 [node name="Body" type="HSplitContainer" parent="Layout"]
 layout_mode = 2
@@ -117,12 +118,28 @@ layout_mode = 2
 text = "enemies"
 placeholder_text = "敵方派系"
 
-[node name="GridScroll" type="ScrollContainer" parent="Layout/Body/MapPanel"]
+[node name="MapViewportContainer" type="SubViewportContainer" parent="Layout/Body/MapPanel"]
 layout_mode = 2
 size_flags_vertical = 3
+stretch = true
 
-[node name="Grid" type="GridContainer" parent="Layout/Body/MapPanel/GridScroll"]
-layout_mode = 2
+[node name="MapViewport" type="SubViewport" parent="Layout/Body/MapPanel/MapViewportContainer"]
+handle_input_locally = false
+size = Vector2i(640, 480)
+render_target_update_mode = 4
+
+[node name="Map" type="Control" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport"]
+mouse_filter = 0
+script = ExtResource("3")
+
+[node name="Ground" type="TileMapLayer" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport/Map"]
+z_index = -10
+
+[node name="Units" type="Node2D" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport/Map"]
+z_index = 1
+y_sort_enabled = true
+
+[node name="Camera2D" type="Camera2D" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport"]
 
 [node name="SidePanel" type="VBoxContainer" parent="Layout/Body"]
 custom_minimum_size = Vector2(330, 0)
