@@ -6,14 +6,11 @@ signal move_preview_changed(total_cost, pointer_position: Vector2)
 signal attack_preview_changed(preview: Dictionary, pointer_position: Vector2)
 signal combat_events_finished
 
-const TILE_SIZE := Vector2i(64, 32)
 const UI_FONT := preload("res://assets/fonts/NotoSans.ttf")
-const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
-const BASE_ART := preload("res://assets/units/faction_base.svg")
 
 @onready var ground: TileMapLayer = $Ground
 @onready var units_layer: Node2D = $Units
-@onready var camera: Camera2D = get_node("../Camera2D")
+@onready var camera: MapCamera = get_node("../Camera2D")
 var state: Dictionary = {}
 var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
@@ -37,37 +34,13 @@ var received_log_count := 0
 var playing_combat_events := false
 var pending_death_ids := {}
 var pending_movement_ids := {}
-var camera_tween: Tween
-var camera_bounds := Rect2()
-
 func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
-	var tiles := TileSet.new()
-	tiles.tile_size = TILE_SIZE
-	tiles.tile_shape = TileSet.TILE_SHAPE_ISOMETRIC
-	tiles.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_RIGHT
-	var atlas := TileSetAtlasSource.new()
-	atlas.texture = GROUND_ART
-	atlas.texture_region_size = TILE_SIZE
-	atlas.create_tile(Vector2i(0, 0))
-	atlas.create_tile(Vector2i(1, 0))
-	tiles.add_source(atlas, 0)
-	ground.tile_set = tiles
-	for terrain in state.terrain_cells:
-		var atlas_cell := Vector2i(1, 0) if terrain.base_kind == "rough" else Vector2i.ZERO
-		ground.set_cell(Vector2i(terrain.x, terrain.y), 0, atlas_cell)
-	update_camera_bounds()
+	BattleVisuals.setup_ground(ground, state.terrain_cells)
+	camera.configure_board(self, ground, state.width, state.height)
 
 func _process(delta: float) -> void:
-	var direction := Vector2(
-		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
-		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W))
-	)
-	if direction.is_zero_approx():
-		return
-	if camera_tween != null and camera_tween.is_valid():
-		camera_tween.kill()
-	camera.position = clamp_camera_position(camera.position + direction.normalized() * BattleConfig.CAMERA_MOVE_SPEED * delta)
+	camera.move_with_input(delta)
 
 func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core, new_snapshot: bool) -> void:
 	var previous_state := state
@@ -122,30 +95,7 @@ func focus_unit(unit_id: int) -> void:
 	var unit := unit_with_id(state.get("units", []), unit_id)
 	if unit.is_empty():
 		return
-	if camera_tween != null and camera_tween.is_valid():
-		camera_tween.kill()
-	camera_tween = create_tween().bind_node(camera)
-	var destination := clamp_camera_position(to_global(footprint_center(unit)))
-	camera_tween.tween_property(camera, "position", destination, BattleConfig.CAMERA_FOCUS_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-
-func update_camera_bounds() -> void:
-	if state.terrain_cells.is_empty():
-		camera_bounds = Rect2()
-		return
-	var first_terrain: Dictionary = state.terrain_cells[0]
-	var first_center := to_global(cell_center(Vector2i(first_terrain.x, first_terrain.y)))
-	var minimum := first_center
-	var maximum := first_center
-	for terrain in state.terrain_cells.slice(1):
-		var center := to_global(cell_center(Vector2i(terrain.x, terrain.y)))
-		minimum = minimum.min(center)
-		maximum = maximum.max(center)
-	camera_bounds = Rect2(minimum, maximum - minimum).grow(BattleConfig.CAMERA_BOUNDS_MARGIN)
-
-func clamp_camera_position(position: Vector2) -> Vector2:
-	if camera_bounds.has_area():
-		return position.clamp(camera_bounds.position, camera_bounds.end)
-	return position
+	camera.focus_on(to_global(footprint_center(unit)))
 
 func unit_id_at_cell(cell: Vector2i) -> int:
 	var unit := unit_at_cell(cell)
@@ -172,14 +122,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 		var node: Node2D
 		var is_new := not unit_nodes.has(unit.id)
 		if is_new:
-			node = Node2D.new()
-			node.name = str(unit.id)
-			var visual := Node2D.new(); visual.name = "Visual"; node.add_child(visual)
-			var new_attack_preview_ring := Sprite2D.new(); new_attack_preview_ring.name = "AttackPreviewRing"; new_attack_preview_ring.texture = BASE_ART; new_attack_preview_ring.visible = false; visual.add_child(new_attack_preview_ring)
-			var selection := Sprite2D.new(); selection.name = "Selection"; selection.texture = BASE_ART; visual.add_child(selection)
-			var base := Sprite2D.new(); base.name = "Base"; base.texture = BASE_ART; visual.add_child(base)
-			var body := Sprite2D.new(); body.name = "Body"; body.texture = load(BattleConfig.unit_art_path(unit.visual)); visual.add_child(body)
-			units_layer.add_child(node)
+			node = BattleVisuals.create_unit_node(unit.id, unit.visual, units_layer)
 			unit_nodes[unit.id] = node
 		else:
 			node = unit_nodes[unit.id]
@@ -199,20 +142,7 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 			animate_unit_movement(unit.id, node, center, unit)
 		node.z_index = int(center.y)
 		var large: bool = unit.large
-		var base_scale := Vector2(1.7, 1.7) if large else Vector2.ONE
-		var attack_preview_ring: Sprite2D = node.get_node("Visual/AttackPreviewRing")
-		attack_preview_ring.scale = base_scale * BattleConfig.ATTACK_PREVIEW_RING_SCALE
-		attack_preview_ring.modulate = Color("ffe17a")
-		var selection: Sprite2D = node.get_node("Visual/Selection")
-		selection.scale = base_scale * 1.18
-		selection.modulate = Color("ffe17a")
-		selection.visible = unit_occupies_cell(unit, inspected_cell)
-		node.get_node("Visual/Base").scale = base_scale
-		node.get_node("Visual/Base").modulate = Color("63a9ff") if unit.team is String else Color("ff6868")
-		var body: Sprite2D = node.get_node("Visual/Body")
-		body.position.y = -55 if large else -43
-		body.scale = Vector2(0.88, 0.88) if large else Vector2(0.72, 0.72)
-		body.modulate = Color.WHITE
+		BattleVisuals.style_unit_node(node, large, unit.team, unit_occupies_cell(unit, inspected_cell))
 
 func prepare_move_animation(unit_id: int, destination: Vector2i) -> void:
 	prepared_move_unit_id = unit_id
@@ -458,9 +388,7 @@ func unit_with_id(units: Array, unit_id: int) -> Dictionary:
 	return {}
 
 func footprint_center(unit: Dictionary) -> Vector2:
-	var first := cell_center(Vector2i(unit.x, unit.y))
-	var last := cell_center(Vector2i(unit.x, unit.y) + footprint_offset(unit))
-	return (first + last) * 0.5
+	return BattleVisuals.footprint_center(ground, unit)
 
 func footprint_offset(unit: Dictionary) -> Vector2i:
 	var last_cell: Dictionary = unit.occupied_cells[-1]
@@ -566,25 +494,6 @@ func draw_move_path(path: Array, color: Color) -> void:
 		var to := cell_center(Vector2i(path[index].x, path[index].y))
 		draw_dashed_line(from,to,color,3.0,8.0,true,true)
 
-func draw_spikes(cell: Vector2i) -> void:
-	var center := cell_center(cell)
-	var spike_color := Color("d9d5ca")
-	for offset_x in [-18.0, -6.0, 6.0, 18.0]:
-		var base := center + Vector2(offset_x, 5.0)
-		draw_colored_polygon(PackedVector2Array([base + Vector2(-5.0, 0.0), base + Vector2(5.0, 0.0), base + Vector2(0.0, -18.0)]), spike_color)
-
-func draw_cliff(cell: Vector2i) -> void:
-	var center := cell_center(cell)
-	var top := diamond(center)
-	draw_colored_polygon(top, Color("59636c"))
-	draw_polyline(PackedVector2Array([center + Vector2(-32, 0), center + Vector2(0, 16), center + Vector2(32, 0)]), Color("303840"), 5.0)
-	draw_colored_polygon(PackedVector2Array([center + Vector2(-22, -2), center + Vector2(-8, -13), center + Vector2(3, 1)]), Color("818b91"))
-
-func draw_chasm(cell: Vector2i) -> void:
-	var center := cell_center(cell)
-	draw_colored_polygon(diamond(center), Color("11131d"))
-	draw_polyline(PackedVector2Array([center + Vector2(-32, 0), center + Vector2(0, -16), center + Vector2(32, 0)]), Color("b7774b"), 4.0)
-
 func _draw() -> void:
 	if state.is_empty():
 		return
@@ -604,19 +513,5 @@ func _draw() -> void:
 			draw_marker(Vector2i(interrupted_path[-1].x,interrupted_path[-1].y),Color(0.9,0.05,0.02,0.34),Color("ff4938"),4.0)
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
-	for effect in state.terrain_effects:
-		if effect.visual == "cliff":
-			draw_cliff(Vector2i(effect.x, effect.y))
-		elif effect.visual == "chasm":
-			draw_chasm(Vector2i(effect.x, effect.y))
-		elif effect.visual == "spikes":
-			draw_spikes(Vector2i(effect.x, effect.y))
-		elif effect.visual == "grease":
-			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,20,Color(0.6,0.3,0.85,0.72)); draw_set_transform(Vector2.ZERO)
-		elif effect.visual == "mire":
-			var center := cell_center(Vector2i(effect.x, effect.y)); draw_set_transform(center,0,Vector2(1,0.5)); draw_circle(Vector2.ZERO,23,Color(0.2,0.55,0.28,0.76)); draw_circle(Vector2(-9,1),5,Color(0.58,0.86,0.38,0.72)); draw_set_transform(Vector2.ZERO)
-	for unit in state.units:
-		var center := footprint_center(unit)
-		var width: float = 96 if unit.large else 60
-		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width,7)),Color("281e25"))
-		draw_rect(Rect2(center+Vector2(-width*0.5,20),Vector2(width*float(unit.hp)/float(unit.max_hp),7)),Color("62d27c"))
+	BattleVisuals.draw_terrain_effects(self, ground, state.terrain_effects)
+	BattleVisuals.draw_unit_health(self, ground, state.units)

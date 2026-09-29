@@ -4,12 +4,12 @@
 [ext_resource type="Script" uid="uid://deai6ca2tbw2a" path="res://features/battle/battle_world.gd" id="2"]
 [ext_resource type="Script" uid="uid://d1qgddtm0w0tj" path="res://features/battle/battle_ui.gd" id="3"]
 [ext_resource type="Theme" path="res://features/battle/battle_theme.tres" id="4"]
+[ext_resource type="Script" path="res://features/map_camera.gd" id="5"]
 
 [node name="Battle" type="Node" unique_id=341550505]
 script = ExtResource("1")
 
 [node name="World" type="Node2D" parent="." unique_id=1134298430]
-scale = Vector2(1.5, 1.5)
 script = ExtResource("2")
 
 [node name="Ground" type="TileMapLayer" parent="World" unique_id=1570646684]
@@ -21,7 +21,8 @@ z_index = 1
 y_sort_enabled = true
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=480117644]
-position = Vector2(960, 540)
+position = Vector2(640, 360)
+script = ExtResource("5")
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=380245762]
 script = ExtResource("3")
