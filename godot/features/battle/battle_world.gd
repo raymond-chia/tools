@@ -443,7 +443,7 @@ func clear_move_preview() -> void:
 
 func update_move_preview() -> void:
 	clear_move_preview()
-	if is_presenting_combat_events() or pending_action != "" or core == null or state.is_empty() or state.turn.actor == null or not is_cell_on_board(hovered):
+	if is_presenting_combat_events() or pending_action != "" or core == null or state.is_empty() or state.turn.actor == null or state.turn.can_continue or not is_cell_on_board(hovered):
 		move_preview_changed.emit(move_preview_total_cost, get_viewport().get_mouse_position())
 		return
 	var preview: Dictionary = read_core_response.call(core.preview_move(state.turn.actor, hovered.x, hovered.y), false)

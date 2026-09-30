@@ -59,10 +59,11 @@ impl TacticalGame {
     }
     #[func]
     fn preview_from_json(&self, definitions: GString, map: GString) -> GString {
-        let definitions: authoring::Definitions = match serde_json::from_str(&definitions.to_string()) {
-            Ok(value) => value,
-            Err(e) => return bridge_error("definitions_json_parse", e.to_string()),
-        };
+        let definitions: authoring::Definitions =
+            match serde_json::from_str(&definitions.to_string()) {
+                Ok(value) => value,
+                Err(e) => return bridge_error("definitions_json_parse", e.to_string()),
+            };
         let map: authoring::Map = match serde_json::from_str(&map.to_string()) {
             Ok(value) => value,
             Err(e) => return bridge_error("map_json_parse", e.to_string()),

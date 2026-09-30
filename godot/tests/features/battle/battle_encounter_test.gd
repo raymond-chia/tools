@@ -51,3 +51,22 @@ func test_attack_contact_waits_for_player_faction() -> void:
 	assert_str(battle.state.battle_mode).is_equal("combat")
 	assert_int(int(battle.state.round)).is_equal(1)
 	assert_int(battle.state.turn.actor).is_equal(3)
+
+# 驗證敵方自動回合清除玩家移動預覽，滑鼠移動也不會顯示敵人的路徑與花費。
+func test_enemy_turn_hides_mouse_move_preview() -> void:
+	battle.world.hovered = Vector2i(2, 1)
+	battle.world.update_move_preview()
+	assert_bool(battle.world.first_move_path.is_empty()).is_false()
+	assert_bool(battle.ui.move_cost_popup.visible).is_true()
+	assert_bool(battle.send({"type": "skill", "actor": 1, "x": 13, "y": 1, "skill": "long_shot"})).is_true()
+	assert_bool(battle.send({"type": "end_turn", "actor": 2})).is_true()
+	assert_bool(battle.state.turn.can_continue).is_true()
+	assert_bool(battle.world.first_move_path.is_empty()).is_true()
+	assert_bool(battle.ui.move_cost_popup.visible).is_false()
+	var target: Vector2 = battle.world.cell_center(Vector2i(12, 1))
+	var mouse_motion := InputEventMouseMotion.new()
+	mouse_motion.position = battle.world.get_global_transform_with_canvas() * target
+	battle.world._unhandled_input(mouse_motion)
+	assert_bool(battle.world.first_move_path.is_empty()).is_true()
+	assert_bool(battle.world.second_move_path.is_empty()).is_true()
+	assert_bool(battle.ui.move_cost_popup.visible).is_false()
