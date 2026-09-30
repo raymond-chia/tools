@@ -7,7 +7,11 @@ import sys
 
 ROOT_DIRECTORY = Path(__file__).resolve().parents[1]
 PROJECT_DIRECTORY = ROOT_DIRECTORY / "godot"
-BRIDGE_LIBRARY = "godot_bridge.dll" if sys.platform == "win32" else "libgodot_bridge.so"
+BRIDGE_LIBRARY = {
+    "win32": "godot_bridge.dll",
+    "linux": "libgodot_bridge.so",
+    "darwin": "libgodot_bridge.dylib",
+}[sys.platform]
 GODOT_EXECUTABLE = "godot.cmd" if sys.platform == "win32" else "godot"
 GDUNIT_TEST_SCRIPT = "res://addons/gdUnit4/bin/GdUnitCmdTool.gd"
 GODOT_TEST_LOG = ROOT_DIRECTORY / "ignore-tmp" / "godot-tests.log"
