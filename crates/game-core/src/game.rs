@@ -3,9 +3,9 @@ use crate::error::GameError;
 use crate::model::{
     BattleMode, Board, CombatLogEvent, Command, Definition, DeliveredLogCount, Encounter,
     Exploration, Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome,
-    Phase, Pos, Random, ResultState, SkillEffect, Skills, Snapshot, Team, TemporaryTerrains,
-    TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, Turn,
-    TurnView, Unit, UnitView,
+    Phase, Pos, Random, ResultState, SkillEffect, SkillTargetKind, Skills, Snapshot, Team,
+    TemporaryTerrains, TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView,
+    TerrainEffectView, Turn, TurnView, Unit, UnitView,
 };
 use crate::movement::{
     distance, entity_distance, fits, footprint_cells, footprint_distance, footprint_on_impassable,
@@ -13,6 +13,7 @@ use crate::movement::{
 };
 use crate::skill::{
     can_use_skill, closest_occupied_cell, effective_block, effective_dodge, skill_ranges,
+    target_kind,
 };
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, World};
@@ -206,10 +207,7 @@ impl Game {
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| error::unknown_skill(&skill))?;
-                let attack = matches!(
-                    definition.effect,
-                    SkillEffect::Attack { .. } | SkillEffect::Push { .. }
-                );
+                let attack = target_kind(&definition.effect) == SkillTargetKind::Enemy;
                 let target_id = unit_at_cell(&self.world, GridPos { x, y })
                     .and_then(|entity| self.world.get::<Id>(entity).map(|id| id.0));
                 self.use_skill_at_cell(actor, GridPos { x, y }, definition)?;
@@ -602,7 +600,7 @@ impl Game {
             .get(first_skill)
             .expect("載入時已驗證單位技能 ID")
             .clone();
-        let target = if matches!(skill.effect, SkillEffect::Heal { .. }) {
+        let target = if target_kind(&skill.effect) == SkillTargetKind::Ally {
             self.closest_wounded_ally(e, skill.min_range)
         } else {
             self.closest(e)
@@ -673,16 +671,7 @@ impl Game {
             },
         );
         if target_distance >= skill.min_range && target_distance <= skill.max_range {
-            if matches!(skill.effect, SkillEffect::Mire { .. }) {
-                return self.use_cell_skill(a, target_cell, skill);
-            }
-            let id = self
-                .world
-                .get::<Id>(t)
-                .expect("已建立的戰鬥單位應具有 Id 元件")
-                .0
-                .clone();
-            self.use_skill(a, id, target_cell, skill)?
+            self.use_skill_at_cell(a, target_cell, skill)?
         } else {
             self.finish()
         }

@@ -124,7 +124,7 @@ fn attack_modifier_uses_expected_flanking_bonus() {
         );
 
         assert_eq!(
-            attack_modifier(&world, attacker, target, &skill),
+            attack_modifier(&world, attacker, target, &skill, 0),
             case.expected_modifier,
             "{}",
             case.name

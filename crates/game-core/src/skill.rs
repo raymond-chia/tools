@@ -35,15 +35,27 @@ impl Game {
             .definitions
             .get(skill_id)
             .ok_or_else(|| error::unknown_skill(skill_id))?;
-        validate_unit_skill_target(&self.world, attacker, target_entity, target_cell, skill)?;
-        if matches!(skill.effect, SkillEffect::Heal { .. }) {
-            return Ok(SkillPreview::Healing(healing_preview(
-                &self.world,
-                attacker,
-                target_entity,
-                skill,
-            )));
-        }
+        let (attack_bonus, power_bonus) = match validate_unit_skill_target(
+            &self.world,
+            attacker,
+            target_entity,
+            target_cell,
+            skill,
+        )? {
+            UnitSkillEffect::Heal { power_bonus } => {
+                return Ok(SkillPreview::Healing(healing_preview(
+                    &self.world,
+                    attacker,
+                    target_entity,
+                    power_bonus,
+                )));
+            }
+            UnitSkillEffect::Attack {
+                attack_bonus,
+                power_bonus,
+                push: _,
+            } => (attack_bonus, power_bonus),
+        };
 
         let attacker_unit = self
             .world
@@ -62,7 +74,7 @@ impl Game {
             .world
             .get::<Hp>(target_entity)
             .expect("已建立的戰鬥單位應具有 Hp 元件");
-        let modifier = attack_modifier(&self.world, attacker, target_entity, skill);
+        let modifier = attack_modifier(&self.world, attacker, target_entity, skill, attack_bonus);
         let dodge_target =
             gameplay_config::BASE_DEFENSE + effective_dodge(&self.world, target_entity);
         let block_target = dodge_target + effective_block(&self.world, target_entity);
@@ -76,7 +88,7 @@ impl Game {
                 AttackResult::Hit => hit_count += 1,
             }
         }
-        let hit_damage = attacker_unit.power + skill_power_bonus(&skill.effect);
+        let hit_damage = attacker_unit.power + power_bonus;
         let block_damage = attack_damage(
             hit_damage,
             AttackResult::Block,
@@ -132,7 +144,7 @@ impl Game {
         position: GridPos,
         skill: SkillDef,
     ) -> Result<(), GameError> {
-        if matches!(skill.effect, SkillEffect::Mire { .. }) {
+        if target_kind(&skill.effect) == SkillTargetKind::Cell {
             return self.use_cell_skill(actor, position, skill);
         }
         let target = unit_at_cell(&self.world, position)
@@ -154,7 +166,7 @@ impl Game {
         }
         let ae = self.entity(a).ok_or(error::missing_attacker())?;
         let te = self.entity(target).ok_or(error::missing_target())?;
-        validate_unit_skill_target(&self.world, ae, te, target_cell, &skill)?;
+        let effect = validate_unit_skill_target(&self.world, ae, te, target_cell, &skill)?;
         let attacker_unit = self
             .world
             .get::<Unit>(ae)
@@ -165,46 +177,53 @@ impl Game {
             .get::<Unit>(te)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        if matches!(skill.effect, SkillEffect::Heal { .. }) {
-            let HealingPreview {
-                target: target_id,
-                target_type,
-                target_hp: _,
-                target_max_hp: max_hp,
-                target_mana: _,
-                healing,
-                remaining_hp,
-                missing_hp: _,
-                health_segments: _,
-            } = healing_preview(&self.world, ae, te, &skill);
-            self.world
-                .get_mut::<Hp>(te)
-                .expect("已建立的戰鬥單位應具有 Hp 元件")
-                .current = remaining_hp;
-            self.world
-                .resource_mut::<Log>()
-                .0
-                .push(CombatLogEvent::Healing {
-                    actor: a,
-                    actor_type: attacker_unit.unit_type,
-                    actor_team: attacker_unit.team.clone(),
-                    skill: skill.id,
+        let (attack_bonus, power_bonus, push) = match effect {
+            UnitSkillEffect::Attack {
+                attack_bonus,
+                power_bonus,
+                push,
+            } => (attack_bonus, power_bonus, push),
+            UnitSkillEffect::Heal { power_bonus } => {
+                let HealingPreview {
                     target: target_id,
                     target_type,
-                    target_team: target_unit.team.clone(),
+                    target_hp: _,
+                    target_max_hp: max_hp,
+                    target_mana: _,
                     healing,
                     remaining_hp,
-                    max_hp,
-                });
-            self.finish();
-            return Ok(());
-        }
+                    missing_hp: _,
+                    health_segments: _,
+                } = healing_preview(&self.world, ae, te, power_bonus);
+                self.world
+                    .get_mut::<Hp>(te)
+                    .expect("已建立的戰鬥單位應具有 Hp 元件")
+                    .current = remaining_hp;
+                self.world
+                    .resource_mut::<Log>()
+                    .0
+                    .push(CombatLogEvent::Healing {
+                        actor: a,
+                        actor_type: attacker_unit.unit_type,
+                        actor_team: attacker_unit.team.clone(),
+                        skill: skill.id,
+                        target: target_id,
+                        target_type,
+                        target_team: target_unit.team.clone(),
+                        healing,
+                        remaining_hp,
+                        max_hp,
+                    });
+                self.finish();
+                return Ok(());
+            }
+        };
         let AttackModifierBreakdown {
             attack_stat_modifier,
             skill_attack_modifier,
             flanking_modifier,
             total: modifier,
-        } = attack_modifier_breakdown(&self.world, ae, te, &skill);
+        } = attack_modifier_breakdown(&self.world, ae, te, &skill, attack_bonus);
         let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
         let target_block = effective_block(&self.world, te);
@@ -219,7 +238,7 @@ impl Game {
             gameplay_config::BASE_DEFENSE + target_dodge,
             gameplay_config::BASE_DEFENSE + target_dodge + target_block,
         );
-        let base_damage = attacker_unit.power + skill_power_bonus(&skill.effect);
+        let base_damage = attacker_unit.power + power_bonus;
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
@@ -249,10 +268,7 @@ impl Game {
         let mut push_blocked = false;
         let mut collision_damage = 0;
         let mut collision_units = Vec::new();
-        if matches!(skill.effect, SkillEffect::Push { .. })
-            && result == AttackResult::Hit
-            && !downed
-        {
+        if push && result == AttackResult::Hit && !downed {
             let direction = push_direction(&self.world, ae, target_cell);
             let current = self
                 .world
@@ -446,7 +462,7 @@ impl Game {
             }
         }
     }
-    pub(crate) fn use_cell_skill(
+    fn use_cell_skill(
         &mut self,
         actor: i64,
         position: GridPos,
@@ -462,9 +478,15 @@ impl Game {
             .get::<Unit>(entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        if !unit.skills.contains(&skill.id) || !matches!(skill.effect, SkillEffect::Mire { .. }) {
+        if !unit.skills.contains(&skill.id) {
             return Err(error::unit_cannot_use_skill());
         }
+        let (terrain, duration) = match &skill.effect {
+            SkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
+            SkillEffect::Attack { .. } | SkillEffect::Push { .. } | SkillEffect::Heal { .. } => {
+                return Err(error::unit_cannot_use_skill());
+            }
+        };
         let board = self.world.resource::<Board>();
         if !fits(
             board,
@@ -501,10 +523,6 @@ impl Game {
             return Err(error::target_too_far());
         }
         let current_round = self.world.resource::<Encounter>().round;
-        let (terrain, duration) = match &skill.effect {
-            SkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
-            _ => unreachable!("已確認此技能為地形技能"),
-        };
         self.world
             .resource_mut::<TemporaryTerrains>()
             .0
@@ -535,7 +553,7 @@ fn healing_preview(
     world: &World,
     actor: Entity,
     target: Entity,
-    skill: &SkillDef,
+    power_bonus: i32,
 ) -> HealingPreview {
     let hp = world
         .get::<Hp>(target)
@@ -544,8 +562,7 @@ fn healing_preview(
         .get::<Unit>(actor)
         .expect("施放者應具有 Unit 元件")
         .power;
-    let remaining_hp =
-        (hp.current + (power + skill_power_bonus(&skill.effect)).max(0)).min(hp.maximum);
+    let remaining_hp = (hp.current + (power + power_bonus).max(0)).min(hp.maximum);
     HealingPreview {
         target: world
             .get::<Id>(target)
@@ -572,13 +589,34 @@ fn healing_preview(
     }
 }
 
+/// 技能指定的目標種類；以技能種類決定行為時一律經過此函式。
+pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
+    match effect {
+        SkillEffect::Attack { .. } | SkillEffect::Push { .. } => SkillTargetKind::Enemy,
+        SkillEffect::Heal { .. } => SkillTargetKind::Ally,
+        SkillEffect::Mire { .. } => SkillTargetKind::Cell,
+    }
+}
+
+/// 以單位為目標的技能效果，只能由 validate_unit_skill_target 驗證後取得。
+enum UnitSkillEffect {
+    Attack {
+        attack_bonus: i32,
+        power_bonus: i32,
+        push: bool,
+    },
+    Heal {
+        power_bonus: i32,
+    },
+}
+
 fn validate_unit_skill_target(
     world: &World,
     attacker: Entity,
     target: Entity,
     target_cell: GridPos,
     skill: &SkillDef,
-) -> Result<(), GameError> {
+) -> Result<UnitSkillEffect, GameError> {
     let target_position = world
         .get::<Pos>(target)
         .expect("已建立的戰鬥單位應具有 Pos 元件")
@@ -603,16 +641,39 @@ fn validate_unit_skill_target(
     let target_unit = world
         .get::<Unit>(target)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    if !attacker_unit.skills.contains(&skill.id) || matches!(skill.effect, SkillEffect::Mire { .. })
-    {
+    if !attacker_unit.skills.contains(&skill.id) {
         return Err(error::unit_cannot_use_skill());
     }
-    if matches!(skill.effect, SkillEffect::Heal { .. }) {
-        if attacker_unit.team != target_unit.team {
+    let effect = match &skill.effect {
+        SkillEffect::Attack {
+            attack_bonus,
+            power_bonus,
+        } => UnitSkillEffect::Attack {
+            attack_bonus: *attack_bonus,
+            power_bonus: *power_bonus,
+            push: false,
+        },
+        SkillEffect::Push {
+            attack_bonus,
+            power_bonus,
+        } => UnitSkillEffect::Attack {
+            attack_bonus: *attack_bonus,
+            power_bonus: *power_bonus,
+            push: true,
+        },
+        SkillEffect::Heal { power_bonus } => UnitSkillEffect::Heal {
+            power_bonus: *power_bonus,
+        },
+        SkillEffect::Mire { .. } => return Err(error::unit_cannot_use_skill()),
+    };
+    match effect {
+        UnitSkillEffect::Heal { .. } if attacker_unit.team != target_unit.team => {
             return Err(error::heal_allies_only());
         }
-    } else if attacker_unit.team == target_unit.team {
-        return Err(error::cannot_attack_ally());
+        UnitSkillEffect::Attack { .. } if attacker_unit.team == target_unit.team => {
+            return Err(error::cannot_attack_ally());
+        }
+        UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
     }
     let attacker_position = world
         .get::<Pos>(attacker)
@@ -636,7 +697,7 @@ fn validate_unit_skill_target(
     if target_distance > skill.max_range {
         return Err(error::target_too_far());
     }
-    Ok(())
+    Ok(effect)
 }
 
 fn attack_result(
@@ -678,8 +739,9 @@ pub(crate) fn attack_modifier(
     attacker: Entity,
     target: Entity,
     skill: &SkillDef,
+    attack_bonus: i32,
 ) -> i32 {
-    attack_modifier_breakdown(world, attacker, target, skill).total
+    attack_modifier_breakdown(world, attacker, target, skill, attack_bonus).total
 }
 
 fn attack_modifier_breakdown(
@@ -687,12 +749,13 @@ fn attack_modifier_breakdown(
     attacker: Entity,
     target: Entity,
     skill: &SkillDef,
+    attack_bonus: i32,
 ) -> AttackModifierBreakdown {
     let unit = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit");
     let attack_stat_modifier = unit.attack;
-    let skill_attack_modifier = skill_attack_bonus(&skill.effect);
+    let skill_attack_modifier = attack_bonus;
     let flanking_modifier = flanking_bonus(world, attacker, target, skill);
     AttackModifierBreakdown {
         attack_stat_modifier,
@@ -733,10 +796,7 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
             .filter_map(|skill_id| skills.definitions.get(skill_id))
             .filter(|support_skill| {
                 !support_skill.ranged
-                    && matches!(
-                        support_skill.effect,
-                        SkillEffect::Attack { .. } | SkillEffect::Push { .. }
-                    )
+                    && target_kind(&support_skill.effect) == SkillTargetKind::Enemy
             })
             .any(|support_skill| {
                 target_side_within_range(
@@ -986,10 +1046,8 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
                         },
                     );
                     if (skill.min_range..=skill.max_range).contains(&cell_distance)
-                        && (matches!(
-                            skill.effect,
-                            SkillEffect::Mire { .. } | SkillEffect::Heal { .. }
-                        ) || cell_distance > 0)
+                        && (target_kind(&skill.effect) != SkillTargetKind::Enemy
+                            || cell_distance > 0)
                     {
                         cells.push(cell);
                     }
@@ -1007,13 +1065,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
 }
 
 fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
-    let target = if matches!(skill.effect, SkillEffect::Mire { .. }) {
-        SkillTargetKind::Cell
-    } else if matches!(skill.effect, SkillEffect::Heal { .. }) {
-        SkillTargetKind::Ally
-    } else {
-        SkillTargetKind::Enemy
-    };
+    let target = target_kind(&skill.effect);
     let (attack_bonus, power_bonus, effect) = match &skill.effect {
         SkillEffect::Attack {
             attack_bonus,
@@ -1051,23 +1103,5 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
         attack_bonus,
         power_bonus,
         effect,
-    }
-}
-
-fn skill_power_bonus(effect: &SkillEffect) -> i32 {
-    match effect {
-        SkillEffect::Attack { power_bonus, .. }
-        | SkillEffect::Push { power_bonus, .. }
-        | SkillEffect::Heal { power_bonus } => *power_bonus,
-        SkillEffect::Mire { .. } => unreachable!("地形技能不使用力量加值"),
-    }
-}
-
-fn skill_attack_bonus(effect: &SkillEffect) -> i32 {
-    match effect {
-        SkillEffect::Attack { attack_bonus, .. } | SkillEffect::Push { attack_bonus, .. } => {
-            *attack_bonus
-        }
-        _ => unreachable!("只有攻擊技能使用攻擊加值"),
     }
 }

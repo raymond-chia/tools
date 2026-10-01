@@ -409,7 +409,7 @@ pub struct SkillDetailsView {
     pub effect: SkillDetailEffect,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillTargetKind {
     Cell,
