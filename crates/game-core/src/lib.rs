@@ -8,6 +8,7 @@ mod gameplay_config;
 mod model;
 mod movement;
 mod skill;
+mod terrain;
 #[cfg(test)]
 mod tests;
 
@@ -25,7 +26,6 @@ pub use model::{
 };
 #[cfg(test)]
 use model::{Board, Footprint, Hp, Id, Log, Pos, Skills, TemporaryTerrains, Turn, Unit};
-use model::{Definition, MapDef, UnitDef};
 pub use skill::degree;
 #[cfg(test)]
 use skill::{attack_damage, attack_modifier};

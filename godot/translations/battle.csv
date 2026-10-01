@@ -140,7 +140,6 @@ ERROR_DEFINITIONS_TOML_PARSE,定義檔格式錯誤,Definitions file format is in
 ERROR_DELAY_AFTER_ACTION,開始行動後不能延後,Cannot delay after acting
 ERROR_DUPLICATE_SKILL_ID,技能 ID 重複,Duplicate skill ID
 ERROR_DUPLICATE_TERRAIN,同一格的地形重複,Duplicate terrain on the same cell
-ERROR_DUPLICATE_UNIT_ID,單位 ID 重複,Duplicate unit ID
 ERROR_DUPLICATE_UNIT_PLACEMENT_ID,單位配置 ID 重複,Duplicate unit placement ID
 ERROR_DUPLICATE_UNIT_SKILL,單位定義重複指定技能,Unit type has a duplicate skill
 ERROR_DUPLICATE_UNIT_TYPE_ID,單位定義 ID 重複,Duplicate unit type ID
@@ -154,7 +153,6 @@ ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be 
 ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
 ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
 ERROR_INVALID_TERRAIN_VALUES,地形傷害、閃避懲罰與格擋懲罰不可為負數,"Terrain damage, dodge penalty, and block penalty cannot be negative"
-ERROR_INVALID_UNIT_SIZE_OR_HP,單位佔用尺寸與 HP 必須大於 0,Unit size and HP must be greater than zero
 ERROR_INVALID_UNIT_TYPE,單位定義的 ID、HP 或佔用尺寸無效,"Unit type ID, HP, or size is invalid"
 ERROR_JSON_SERIALIZE,無法轉換資料,Could not convert data
 ERROR_MAP_JSON_PARSE,地圖資料格式錯誤,Map data format is invalid

@@ -151,15 +151,6 @@ pub(crate) struct Skills {
     pub(crate) definitions: HashMap<String, SkillDef>,
 }
 
-#[derive(Deserialize)]
-pub(crate) struct Definition {
-    pub(crate) map: MapDef,
-    /// Key 是地形種類 ID。
-    pub(crate) terrain_types: HashMap<String, TerrainTypeDef>,
-    pub(crate) skills: Vec<SkillDef>,
-    pub(crate) units: Vec<UnitDef>,
-}
-
 #[derive(Clone, Deserialize, Serialize)]
 pub struct SkillDef {
     pub(crate) id: String,
@@ -177,14 +168,6 @@ pub enum SkillEffect {
     Push { attack_bonus: i32, power_bonus: i32 },
     Mire { terrain: String, duration: u32 },
     Heal { power_bonus: i32 },
-}
-
-#[derive(Deserialize)]
-pub(crate) struct MapDef {
-    pub(crate) width: i32,
-    pub(crate) height: i32,
-    #[serde(default)]
-    pub(crate) terrains: Vec<TerrainPlacement>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -214,34 +197,6 @@ pub enum TerrainEntryRule {
     Walkable,
     Blocked,
     InstantDownWhenPushed,
-}
-
-#[derive(Deserialize)]
-pub(crate) struct UnitDef {
-    pub(crate) id: i64,
-    pub(crate) unit_type: String,
-    pub(crate) visual: String,
-    pub(crate) team: Team,
-    pub(crate) x: i32,
-    pub(crate) y: i32,
-    #[serde(default = "one")]
-    pub(crate) width: i32,
-    #[serde(default = "one")]
-    pub(crate) height: i32,
-    pub(crate) hp: i32,
-    pub(crate) movement: u32,
-    pub(crate) initiative: i32,
-    pub(crate) dodge: i32,
-    pub(crate) block: i32,
-    pub(crate) attack: i32,
-    pub(crate) power: i32,
-    #[serde(default)]
-    /// 此單位類型可使用的技能 ID。
-    pub(crate) skills: Vec<String>,
-}
-
-pub(crate) fn one() -> i32 {
-    1
 }
 
 #[derive(Deserialize)]

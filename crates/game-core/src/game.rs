@@ -1,19 +1,22 @@
 //! 載入、命令分派、回合流程與快照。
 use crate::error::GameError;
 use crate::model::{
-    BattleMode, Board, CombatLogEvent, Command, Definition, DeliveredLogCount, Encounter,
-    Exploration, Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome,
-    Phase, Pos, Random, ResultState, SkillEffect, SkillTargetKind, Skills, Snapshot, Team,
-    TemporaryTerrains, TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView,
-    TerrainEffectView, Turn, TurnView, Unit, UnitView,
+    BattleMode, Board, CombatLogEvent, Command, DeliveredLogCount, Encounter, Exploration,
+    Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos,
+    Random, ResultState, SkillEffect, SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains,
+    TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, Turn,
+    TurnView, Unit, UnitView,
 };
 use crate::movement::{
-    distance, entity_distance, fits, footprint_cells, footprint_distance, footprint_on_impassable,
-    movement_cost, movement_ranges, terrain_damage, terrain_type, toward_skill_range, unit_at_cell,
+    can_move, distance, entity_distance, fits, footprint_cells, footprint_distance,
+    movement_ranges, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, closest_occupied_cell, effective_block, effective_dodge, skill_ranges,
     target_kind,
+};
+use crate::terrain::{
+    footprint_on_impassable, movement_cost, terrain_damage, terrain_type, terrains_at,
 };
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, World};
@@ -38,36 +41,122 @@ impl Game {
             toml::from_str(map).map_err(|e| error::map_toml_parse(e.to_string()))?;
         Self::from_authoring(definitions, map)
     }
+    /// 驗證作者資料並建立戰鬥；所有載入驗證集中於此。
     pub fn from_authoring(
         definitions: authoring::Definitions,
         map: authoring::Map,
     ) -> Result<Self, GameError> {
-        Self::from_definition(authoring::into_definition(definitions, map)?)
-    }
-    pub(crate) fn from_definition(d: Definition) -> Result<Self, GameError> {
-        if d.map.width <= 0 || d.map.height <= 0 || d.map.width.checked_mul(d.map.height).is_none()
+        let authoring::Definitions {
+            terrain_types,
+            skills,
+            unit_types,
+        } = definitions;
+        let authoring::Map {
+            name,
+            width,
+            height,
+            terrains: terrain_placements,
+            units: placements,
+        } = map;
+        if name.trim().is_empty() {
+            return Err(error::empty_map_name());
+        }
+        if placements
+            .iter()
+            .any(|unit| matches!(&unit.team, Team::Enemy(name) if name.trim().is_empty()))
         {
+            return Err(error::empty_enemy_faction());
+        }
+        // 地形數值不以負值反轉成治療或加成。
+        if let Some(kind) = terrain_types
+            .iter()
+            .filter(|(_, terrain)| {
+                terrain.damage < 0 || terrain.dodge_penalty < 0 || terrain.block_penalty < 0
+            })
+            .map(|(kind, _)| kind)
+            .min()
+        {
+            return Err(error::invalid_terrain_values(kind));
+        }
+        let skill_ids: HashSet<_> = skills.iter().map(|skill| skill.id.as_str()).collect();
+        let mut types = HashMap::new();
+        for kind in unit_types {
+            if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
+                return Err(error::invalid_unit_type(&kind.id));
+            }
+            if let Some(unknown) = kind
+                .skills
+                .iter()
+                .find(|skill| !skill_ids.contains(skill.as_str()))
+            {
+                return Err(error::unknown_unit_skill(&kind.id, unknown));
+            }
+            let mut unit_skills = HashSet::new();
+            if let Some(duplicate) = kind
+                .skills
+                .iter()
+                .find(|skill| !unit_skills.insert(skill.as_str()))
+            {
+                return Err(error::duplicate_unit_skill(&kind.id, duplicate));
+            }
+            if types.insert(kind.id.clone(), kind).is_some() {
+                return Err(error::duplicate_unit_type_id());
+            }
+        }
+        let mut used_ids = HashSet::new();
+        for placement in &placements {
+            if placement.id <= 0 {
+                return Err(error::invalid_unit_placement_id());
+            }
+            if !used_ids.insert(placement.id) {
+                return Err(error::duplicate_unit_placement_id(placement.id));
+            }
+            let kind = types
+                .get(&placement.unit_type)
+                .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
+            // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
+            if matches!(placement.team, Team::Enemy(_)) && kind.skills.is_empty() {
+                return Err(error::missing_ai_skill(placement.id));
+            }
+        }
+        if width <= 0 || height <= 0 || width.checked_mul(height).is_none() {
             return Err(error::invalid_map_dimensions());
         }
-        if d.map.terrains.iter().any(|terrain| {
-            terrain.x < 0 || terrain.y < 0 || terrain.x >= d.map.width || terrain.y >= d.map.height
+        if terrain_placements.iter().any(|terrain| {
+            terrain.x < 0 || terrain.y < 0 || terrain.x >= width || terrain.y >= height
         }) {
             return Err(error::terrain_out_of_bounds());
         }
-        for terrain in &d.map.terrains {
-            if !d.terrain_types.contains_key(&terrain.kind) {
+        for terrain in &terrain_placements {
+            if !terrain_types.contains_key(&terrain.kind) {
                 return Err(error::unknown_terrain_type(&terrain.kind));
             }
         }
         let mut terrain_positions = HashSet::new();
-        for terrain in &d.map.terrains {
+        for terrain in &terrain_placements {
             if !terrain_positions.insert((terrain.x, terrain.y, terrain.kind.as_str())) {
                 return Err(error::duplicate_terrain(terrain.x, terrain.y));
             }
         }
-        let mut w = World::new();
+        let mut skill_definitions = HashMap::new();
+        for skill in skills {
+            if skill.min_range < 0 || skill.max_range < skill.min_range {
+                return Err(error::invalid_skill_range(&skill.id));
+            }
+            if let SkillEffect::Mire { terrain, duration } = &skill.effect {
+                if *duration == 0 {
+                    return Err(error::invalid_duration(&skill.id));
+                }
+                if !terrain_types.contains_key(terrain) {
+                    return Err(error::invalid_skill_terrain(&skill.id));
+                }
+            }
+            if skill_definitions.insert(skill.id.clone(), skill).is_some() {
+                return Err(error::duplicate_skill_id());
+            }
+        }
         let mut terrains: HashMap<GridPos, Vec<String>> = HashMap::new();
-        for terrain in d.map.terrains {
+        for terrain in terrain_placements {
             terrains
                 .entry(GridPos {
                     x: terrain.x,
@@ -79,11 +168,12 @@ impl Game {
         for kinds in terrains.values_mut() {
             kinds.sort();
         }
+        let mut w = World::new();
         w.insert_resource(Board {
-            width: d.map.width,
-            height: d.map.height,
+            width,
+            height,
             terrains,
-            terrain_types: d.terrain_types,
+            terrain_types,
         });
         w.insert_resource(Encounter::default());
         w.insert_resource(Exploration {
@@ -101,78 +191,69 @@ impl Game {
         w.insert_resource(Log::default());
         w.insert_resource(DeliveredLogCount::default());
         w.insert_resource(ResultState(Outcome::Ongoing));
-        let mut skills = HashMap::new();
-        for skill in d.skills {
-            if skill.min_range < 0 || skill.max_range < skill.min_range {
-                return Err(error::invalid_skill_range(&skill.id));
-            }
-            if let SkillEffect::Mire { terrain, duration } = &skill.effect {
-                if *duration == 0 {
-                    return Err(error::invalid_duration(&skill.id));
-                }
-                if !w.resource::<Board>().terrain_types.contains_key(terrain) {
-                    return Err(error::invalid_skill_terrain(&skill.id));
-                }
-            }
-            if skills.insert(skill.id.clone(), skill).is_some() {
-                return Err(error::duplicate_skill_id());
-            }
-        }
         w.insert_resource(Skills {
-            definitions: skills,
+            definitions: skill_definitions,
         });
-        let mut ids = HashSet::new();
+        // 佔用格判斷需要已建立的棋盤，因此在建立 Board 後驗證。
         let mut occupied = HashSet::new();
-        for u in d.units {
-            if !ids.insert(u.id) {
-                return Err(error::duplicate_unit_id(u.id));
-            }
-            let f = Footprint {
-                width: u.width,
-                height: u.height,
-            };
-            if f.width <= 0 || f.height <= 0 || u.hp <= 0 {
-                return Err(error::invalid_unit_size_or_hp(u.id));
-            }
-            let p = GridPos { x: u.x, y: u.y };
+        for placement in placements {
+            let authoring::UnitPlacement {
+                id,
+                unit_type,
+                team,
+                x,
+                y,
+            } = placement;
+            let authoring::UnitType {
+                id: _,
+                visual,
+                width,
+                height,
+                hp,
+                movement,
+                initiative,
+                dodge,
+                block,
+                attack,
+                power,
+                skills,
+            } = types
+                .get(&unit_type)
+                .expect("單位配置的類型已在上方驗證")
+                .clone();
+            let f = Footprint { width, height };
+            let p = GridPos { x, y };
             if !fits(w.resource::<Board>(), p, f) {
-                return Err(error::unit_out_of_bounds(u.id));
+                return Err(error::unit_out_of_bounds(id));
             }
             if footprint_on_impassable(&w, p, f) {
-                return Err(error::unit_on_impassable(u.id));
+                return Err(error::unit_on_impassable(id));
             }
             if footprint_cells(p, f)
                 .iter()
                 .any(|cell| !occupied.insert(*cell))
             {
-                return Err(error::overlapping_unit(u.id));
-            }
-            if let Some(unknown) = u
-                .skills
-                .iter()
-                .find(|skill| !w.resource::<Skills>().definitions.contains_key(*skill))
-            {
-                return Err(error::unknown_unit_skill(u.id, unknown));
+                return Err(error::overlapping_unit(id));
             }
             w.spawn((
-                Id(u.id),
+                Id(id),
                 Pos(p),
                 f,
                 Hp {
-                    current: u.hp,
-                    maximum: u.hp,
+                    current: hp,
+                    maximum: hp,
                 },
                 Unit {
-                    unit_type: u.unit_type,
-                    visual: u.visual,
-                    team: u.team,
-                    movement: u.movement,
-                    initiative: u.initiative,
-                    dodge: u.dodge,
-                    block: u.block,
-                    attack: u.attack,
-                    power: u.power,
-                    skills: u.skills,
+                    unit_type,
+                    visual,
+                    team,
+                    movement,
+                    initiative,
+                    dodge,
+                    block,
+                    attack,
+                    power,
+                    skills,
                 },
             ));
         }
@@ -574,7 +655,7 @@ impl Game {
     fn delay(&mut self, actor: i64, after: i64) -> Result<(), GameError> {
         self.ensure(actor)?;
         let turn = self.world.resource::<Turn>();
-        if turn.phase != Phase::Ready || turn.movement_segments_used != 0 {
+        if !can_delay(turn) {
             return Err(error::delay_after_action());
         }
         let encounter = self.world.resource::<Encounter>();
@@ -815,9 +896,7 @@ impl Game {
                     .team
                     == Team::Player
             });
-        let can_move = player_turn
-            && matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
-            && turn.movement_segments_used < 2;
+        let can_move = player_turn && can_move(&turn);
         let movement_ranges = if can_move {
             turn.actor
                 .and_then(|actor| self.entity(actor))
@@ -856,8 +935,7 @@ impl Game {
         };
         let can_delay = !exploring
             && player_turn
-            && turn.phase == Phase::Ready
-            && turn.movement_segments_used == 0
+            && can_delay(&turn)
             && turn.actor.is_some()
             && !turn_order.is_empty();
         let terrain_cells = (0..b.height)
@@ -868,7 +946,7 @@ impl Game {
                 let units = &units;
                 (0..b.width).map(move |x| {
                     let position = GridPos { x, y };
-                    let terrains = crate::movement::terrains_at(world, position);
+                    let terrains = terrains_at(world, position);
                     let cost = movement_cost(world, position);
                     let damage = terrains
                         .iter()
@@ -991,6 +1069,11 @@ impl Game {
             movements: self.movements.clone(),
         }
     }
+}
+
+/// 尚未開始行動（未移動、未使用技能）才能延後。
+fn can_delay(turn: &Turn) -> bool {
+    turn.phase == Phase::Ready && turn.movement_segments_used == 0
 }
 
 pub(crate) fn die(w: &mut World, s: u32) -> u32 {

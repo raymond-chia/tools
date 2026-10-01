@@ -170,7 +170,7 @@ pub(crate) fn invalid_unit_type(id: &str) -> GameError {
     )
 }
 
-pub(crate) fn unknown_unit_skill(id: impl std::fmt::Display, skill: &str) -> GameError {
+pub(crate) fn unknown_unit_skill(id: &str, skill: &str) -> GameError {
     GameError::new(
         "unknown_unit_skill",
         format!("{id} {} {skill}", "使用未知技能"),
@@ -237,17 +237,6 @@ pub(crate) fn invalid_skill_terrain(id: &str) -> GameError {
     GameError::new(
         "invalid_skill_terrain",
         format!("{id} {}", "必須指定已定義的 terrain"),
-    )
-}
-
-pub(crate) fn duplicate_unit_id(id: i64) -> GameError {
-    GameError::new("duplicate_unit_id", format!("{} {id}", "重複 id"))
-}
-
-pub(crate) fn invalid_unit_size_or_hp(id: i64) -> GameError {
-    GameError::new(
-        "invalid_unit_size_or_hp",
-        format!("{id} {}", "的佔用尺寸與 HP 必須大於 0"),
     )
 }
 

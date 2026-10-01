@@ -1,9 +1,9 @@
 //! 原始資料格式，供編輯器與正式遊戲載入文件時使用。
-//! 載入後會轉成 model.rs 的核心資料；本檔宣告的格式不作為戰鬥運行時資料。
-use super::{Definition, MapDef, SkillDef, Team, TerrainPlacement, TerrainTypeDef, UnitDef};
+//! 由 Game::from_authoring 驗證並建立戰鬥；本檔宣告的格式不作為戰鬥運行時資料。
+use super::{SkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Definitions {
@@ -53,105 +53,6 @@ pub struct UnitPlacement {
 
 fn one() -> i32 {
     1
-}
-
-pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Definition, GameError> {
-    if map.name.trim().is_empty() {
-        return Err(error::empty_map_name());
-    }
-    if map
-        .units
-        .iter()
-        .any(|unit| matches!(&unit.team, Team::Enemy(name) if name.trim().is_empty()))
-    {
-        return Err(error::empty_enemy_faction());
-    }
-    let skill_ids: HashSet<_> = definitions
-        .skills
-        .iter()
-        .map(|skill| skill.id.as_str())
-        .collect();
-    // 地形數值不以負值反轉成治療或加成。
-    if let Some(kind) = definitions
-        .terrain_types
-        .iter()
-        .filter(|(_, terrain)| {
-            terrain.damage < 0 || terrain.dodge_penalty < 0 || terrain.block_penalty < 0
-        })
-        .map(|(kind, _)| kind)
-        .min()
-    {
-        return Err(error::invalid_terrain_values(kind));
-    }
-    let mut types = HashMap::new();
-    for kind in definitions.unit_types {
-        if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
-            return Err(error::invalid_unit_type(&kind.id));
-        }
-        if let Some(unknown) = kind
-            .skills
-            .iter()
-            .find(|skill| !skill_ids.contains(skill.as_str()))
-        {
-            return Err(error::unknown_unit_skill(&kind.id, unknown));
-        }
-        let mut unit_skills = HashSet::new();
-        if let Some(duplicate) = kind
-            .skills
-            .iter()
-            .find(|skill| !unit_skills.insert(skill.as_str()))
-        {
-            return Err(error::duplicate_unit_skill(&kind.id, duplicate));
-        }
-        if types.insert(kind.id.clone(), kind).is_some() {
-            return Err(error::duplicate_unit_type_id());
-        }
-    }
-    let mut used_ids = HashSet::new();
-    let mut units = Vec::new();
-    for placement in map.units {
-        if placement.id <= 0 {
-            return Err(error::invalid_unit_placement_id());
-        }
-        if !used_ids.insert(placement.id) {
-            return Err(error::duplicate_unit_placement_id(placement.id));
-        }
-        let kind = types
-            .get(&placement.unit_type)
-            .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
-        // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
-        if matches!(placement.team, Team::Enemy(_)) && kind.skills.is_empty() {
-            return Err(error::missing_ai_skill(placement.id));
-        }
-        units.push(UnitDef {
-            id: placement.id,
-            unit_type: kind.id.clone(),
-            visual: kind.visual.clone(),
-            team: placement.team,
-            x: placement.x,
-            y: placement.y,
-            width: kind.width,
-            height: kind.height,
-            hp: kind.hp,
-            movement: kind.movement,
-            initiative: kind.initiative,
-            dodge: kind.dodge,
-            block: kind.block,
-            attack: kind.attack,
-            power: kind.power,
-            skills: kind.skills.clone(),
-        });
-    }
-    Ok(Definition {
-        map: MapDef {
-            width: map.width,
-            height: map.height,
-            terrains: map.terrains,
-        },
-        terrain_types: definitions.terrain_types,
-        skills: definitions.skills,
-        units,
-    })
 }
 
 pub fn definitions_to_json(text: &str) -> Result<String, GameError> {

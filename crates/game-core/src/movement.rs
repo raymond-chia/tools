@@ -4,24 +4,16 @@ use crate::game::{DamageResult, Game};
 use crate::gameplay_config;
 use crate::model::{
     Board, CombatLogEvent, Encounter, Footprint, GridPos, Id, Log, MovePreview, Phase, Pos, Team,
-    TemporaryTerrains, TerrainEntryRule, TerrainTypeDef, Turn, Unit,
+    Turn, Unit,
+};
+use crate::terrain::{
+    footprint_on_impassable, movement_cost, terrain_ends_movement, terrain_type, terrains_at,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap, HashSet},
 };
-
-pub(crate) fn terrain_type<'a>(board: &'a Board, kind: &str) -> &'a TerrainTypeDef {
-    board
-        .terrain_types
-        .get(kind)
-        .expect("載入時已驗證所有地形種類")
-}
-
-pub(crate) fn terrain_damage(board: &Board, kind: &str) -> i32 {
-    terrain_type(board, kind).damage
-}
 
 struct MovePlan {
     entity: Entity,
@@ -158,9 +150,7 @@ impl Game {
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .movement;
         let turn = self.world.resource::<Turn>().clone();
-        if !matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
-            || turn.movement_segments_used >= 2
-        {
+        if !can_move(&turn) {
             return Err(error::cannot_move());
         }
         let start = self
@@ -240,67 +230,6 @@ impl Game {
                 .extend(add);
         }
     }
-}
-
-pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
-    let mut kinds = w
-        .resource::<Board>()
-        .terrains
-        .get(&position)
-        .cloned()
-        .unwrap_or_default();
-    if let Some(temporary) = w.resource::<TemporaryTerrains>().0.get(&position) {
-        for kind in temporary.keys() {
-            if !kinds.contains(kind) {
-                kinds.push(kind.clone());
-            }
-        }
-    }
-    kinds.sort();
-    kinds
-}
-
-pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {
-    let board = w.resource::<Board>();
-    1 + terrains_at(w, position)
-        .iter()
-        .map(|kind| terrain_type(board, kind).extra_movement_cost)
-        .sum::<u32>()
-}
-
-pub(crate) fn terrain_ends_movement(w: &World, position: GridPos) -> bool {
-    terrains_at(w, position)
-        .iter()
-        .any(|kind| terrain_type(w.resource::<Board>(), kind).damage > 0)
-}
-
-/// 佔用範圍內任一格（含暫時地形）的進入規則符合條件。
-fn footprint_has_entry_rule(
-    w: &World,
-    position: GridPos,
-    footprint: Footprint,
-    matches_rule: impl Fn(TerrainEntryRule) -> bool,
-) -> bool {
-    let board = w.resource::<Board>();
-    footprint_cells(position, footprint)
-        .into_iter()
-        .any(|cell| {
-            terrains_at(w, cell)
-                .iter()
-                .any(|kind| matches_rule(terrain_type(board, kind).entry_rule))
-        })
-}
-
-pub(crate) fn footprint_on_impassable(w: &World, position: GridPos, footprint: Footprint) -> bool {
-    footprint_has_entry_rule(w, position, footprint, |rule| {
-        rule != TerrainEntryRule::Walkable
-    })
-}
-
-pub(crate) fn footprint_blocks_push(w: &World, position: GridPos, footprint: Footprint) -> bool {
-    footprint_has_entry_rule(w, position, footprint, |rule| {
-        rule == TerrainEntryRule::Blocked
-    })
 }
 
 pub(crate) fn footprint_cells(position: GridPos, footprint: Footprint) -> Vec<GridPos> {
@@ -537,10 +466,14 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     v.sort_by_key(|p| (p.y, p.x));
     v
 }
+/// 本回合是否還能移動；每回合最多兩段移動。
+pub(crate) fn can_move(turn: &Turn) -> bool {
+    matches!(turn.phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
+        && turn.movement_segments_used < 2
+}
+
+/// 呼叫端須先以 can_move 確認仍可移動。
 pub(crate) fn movement_ranges(w: &World, e: Entity, turn: &Turn) -> (Vec<GridPos>, Vec<GridPos>) {
-    if turn.movement_segments_used >= 2 {
-        return (Vec::new(), Vec::new());
-    }
     let allowance = w
         .get::<Unit>(e)
         .expect("已建立的戰鬥單位應具有 Unit 元件")

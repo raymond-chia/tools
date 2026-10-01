@@ -6,15 +6,11 @@ use crate::model::{
     AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
     GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, Phase, Pos, RollDegree, SkillDef,
     SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView,
-    SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, TerrainEntryRule, TerrainTypeDef,
-    Turn, Unit,
+    SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, TerrainEntryRule, Turn, Unit,
 };
-use crate::movement::{
-    fits, footprint_blocks_push, footprint_cells, footprint_distance, overlap, terrain_type,
-    terrains_at, unit_at_cell,
-};
+use crate::movement::{fits, footprint_cells, footprint_distance, overlap, unit_at_cell};
+use crate::terrain::{footprint_blocks_push, footprint_terrain_penalty, terrain_type, terrains_at};
 use bevy_ecs::prelude::{Entity, World};
-use std::collections::HashSet;
 
 impl Game {
     pub fn preview_skill(
@@ -888,13 +884,8 @@ pub(crate) fn effective_dodge(w: &World, entity: Entity) -> i32 {
     let footprint = *w
         .get::<Footprint>(entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let penalty = footprint_terrain_penalty(
-        w.resource::<Board>(),
-        w.resource::<TemporaryTerrains>(),
-        position,
-        footprint,
-        |terrain| terrain.dodge_penalty,
-    );
+    let penalty =
+        footprint_terrain_penalty(w, position, footprint, |terrain| terrain.dodge_penalty);
     (unit.dodge - penalty).max(0)
 }
 
@@ -909,41 +900,9 @@ pub(crate) fn effective_block(w: &World, entity: Entity) -> i32 {
     let footprint = *w
         .get::<Footprint>(entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let penalty = footprint_terrain_penalty(
-        w.resource::<Board>(),
-        w.resource::<TemporaryTerrains>(),
-        position,
-        footprint,
-        |terrain| terrain.block_penalty,
-    );
+    let penalty =
+        footprint_terrain_penalty(w, position, footprint, |terrain| terrain.block_penalty);
     (unit.block - penalty).max(0)
-}
-
-fn footprint_terrain_penalty(
-    board: &Board,
-    temporary: &TemporaryTerrains,
-    position: GridPos,
-    footprint: Footprint,
-    penalty: impl Fn(&TerrainTypeDef) -> i32,
-) -> i32 {
-    (position.y..position.y + footprint.height)
-        .flat_map(|y| (position.x..position.x + footprint.width).map(move |x| GridPos { x, y }))
-        .map(|cell| {
-            let mut seen = HashSet::new();
-            let fixed = board.terrains.get(&cell).into_iter().flatten();
-            let dynamic = temporary
-                .0
-                .get(&cell)
-                .into_iter()
-                .flat_map(|items| items.keys());
-            fixed
-                .chain(dynamic)
-                .filter(|kind| seen.insert(kind.as_str()))
-                .map(|kind| penalty(terrain_type(board, kind)))
-                .sum::<i32>()
-        })
-        .max()
-        .unwrap_or(0)
 }
 
 fn push_direction(w: &World, attacker: Entity, target_cell: GridPos) -> GridPos {

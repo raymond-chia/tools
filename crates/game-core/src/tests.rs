@@ -508,12 +508,7 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
         dodge_penalty: 0,
         block_penalty: 0,
     };
-    let definition = Definition {
-        map: MapDef {
-            width: 5,
-            height: 2,
-            terrains: Vec::new(),
-        },
+    let definitions = authoring::Definitions {
         terrain_types: HashMap::from([
             ("plain".into(), terrain.clone()),
             ("rough".into(), terrain),
@@ -525,24 +520,32 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
             max_range,
             effect,
         }],
-        units: vec![
-            push_collision_unit(ACTOR_ID, Team::Player, 1),
-            push_collision_unit(TARGET_ID, Team::Enemy("test_enemy".into()), 2),
-            push_collision_unit(BLOCKER_ID, Team::Enemy("test_enemy".into()), 3),
+        unit_types: vec![
+            push_collision_unit_type("test_player", 100),
+            push_collision_unit_type("test_unit", 0),
         ],
     };
-    Game::from_definition(definition).expect("測試戰鬥定義應有效")
+    let map = authoring::Map {
+        name: "test_map".into(),
+        width: 5,
+        height: 2,
+        terrains: Vec::new(),
+        units: vec![
+            push_collision_placement(ACTOR_ID, "test_player", Team::Player, 1),
+            push_collision_placement(TARGET_ID, "test_unit", Team::Enemy("test_enemy".into()), 2),
+            push_collision_placement(BLOCKER_ID, "test_unit", Team::Enemy("test_enemy".into()), 3),
+        ],
+    };
+    match Game::from_authoring(definitions, map) {
+        Ok(game) => game,
+        Err(error) => panic!("測試戰鬥定義應有效：{}", error.message()),
+    }
 }
 
-fn push_collision_unit(id: i64, team: Team, x: i32) -> UnitDef {
-    let initiative = if team == Team::Player { 100 } else { 0 };
-    UnitDef {
-        id,
-        unit_type: "test_unit".into(),
-        visual: "test_unit".into(),
-        team,
-        x,
-        y: 1,
+fn push_collision_unit_type(id: &str, initiative: i32) -> authoring::UnitType {
+    authoring::UnitType {
+        id: id.into(),
+        visual: id.into(),
         width: 1,
         height: 1,
         hp: 100,
@@ -553,5 +556,20 @@ fn push_collision_unit(id: i64, team: Team, x: i32) -> UnitDef {
         attack: 0,
         power: 1,
         skills: vec!["push".into()],
+    }
+}
+
+fn push_collision_placement(
+    id: i64,
+    unit_type: &str,
+    team: Team,
+    x: i32,
+) -> authoring::UnitPlacement {
+    authoring::UnitPlacement {
+        id,
+        unit_type: unit_type.into(),
+        team,
+        x,
+        y: 1,
     }
 }
