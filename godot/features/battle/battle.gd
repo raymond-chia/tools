@@ -13,8 +13,15 @@ var inspected_skill := ""
 var selecting_delay := false
 var status := "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 var battle_name := ""
-var testing_battle := false
+var editor_preview := false
 var back_button: Button
+var definitions_document := ""
+var map_document := ""
+
+func configure(definitions_text: String, map_text: String, from_editor := false) -> void:
+	definitions_document = definitions_text
+	map_document = map_text
+	editor_preview = from_editor
 
 func _ready() -> void:
 	world.primary_clicked.connect(_on_primary_clicked)
@@ -32,32 +39,17 @@ func _ready() -> void:
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	ui.language_changed.connect(_on_language_changed)
 	core = TacticalGame.new()
-	var testing := get_tree().root.has_meta("test_map")
-	testing_battle = testing
-	var definitions_text := ""
-	var map_text := ""
-	if testing:
-		definitions_text = get_tree().root.get_meta("test_definitions")
-		map_text = get_tree().root.get_meta("test_map")
+	if editor_preview:
 		back_button = Button.new()
 		back_button.text = tr("返回編輯器")
 		back_button.position = Vector2(900, 20)
 		back_button.pressed.connect(return_to_editor)
 		ui.get_node("Root").add_child(back_button)
-	else:
-		var definitions_file := FileAccess.open("res://data/definitions.toml", FileAccess.READ)
-		var map_file := FileAccess.open("res://data/maps/ash_valley.toml", FileAccess.READ)
-		if definitions_file == null or map_file == null:
-			show_error("無法讀取戰鬥資料：%s" % error_string(FileAccess.get_open_error()))
-			present()
-			return
-		definitions_text = definitions_file.get_as_text()
-		map_text = map_file.get_as_text()
-	state = read_core_response(core.load_documents(definitions_text, map_text))
+	state = read_core_response(core.load_documents(definitions_document, map_document))
 	if state.is_empty():
 		present()
 		return
-	var map_info := read_core_response(core.map_to_json(map_text))
+	var map_info := read_core_response(core.map_to_json(map_document))
 	if map_info.is_empty():
 		present()
 		return
@@ -75,11 +67,9 @@ func _on_language_changed() -> void:
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
 
 func update_battle_title() -> void:
-	$UI/Root/BattleTitle.text = (tr("測試：") if testing_battle else "") + tr(battle_name)
+	$UI/Root/BattleTitle.text = (tr("測試：") if editor_preview else "") + tr(battle_name)
 
 func return_to_editor() -> void:
-	get_tree().root.remove_meta("test_definitions")
-	get_tree().root.remove_meta("test_map")
 	get_tree().change_scene_to_file("res://features/editor/editor.tscn")
 
 func send(command: Dictionary) -> bool:

@@ -2,7 +2,6 @@ extends GdUnitTestSuite
 
 const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
 
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/turn_order_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/turn_order_map.toml"
 
@@ -10,11 +9,11 @@ var battle
 var runner: GdUnitSceneRunner
 
 func before_test() -> void:
-	runner = scene_runner(BATTLE_SCENE)
+	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await load_test_documents()
+	await BattleTestSetup.wait_until_idle(battle, runner)
 
 # 驗證延後模式以橫棒標示插入位置，並將目前單位排到所選單位之後。
 func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:
@@ -53,12 +52,6 @@ func test_delay_is_disabled_after_moving() -> void:
 
 	assert_bool(battle.state.turn.can_delay).override_failure_message("移動後核心應禁止延後").is_false()
 	assert_bool(battle.ui.delay_button.disabled).override_failure_message("移動後延後按鈕應停用").is_true()
-
-func load_test_documents() -> void:
-	battle.pending_action = ""
-	battle.selecting_delay = false
-	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
-	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
 	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():

@@ -2,7 +2,6 @@ extends GdUnitTestSuite
 
 const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
 
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_preview_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_preview_map.toml"
 
@@ -29,11 +28,10 @@ func before_test() -> void:
 		"SKILL_ATTACK_BONUS": "Attack modifier: %+d",
 		"SKILL_POWER_BONUS": "Power modifier: %+d",
 	})
-	runner = scene_runner(BATTLE_SCENE)
+	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
-	assert_str(setup_error).override_failure_message(setup_error).is_empty()
+	await BattleTestSetup.wait_until_idle(battle, runner)
 
 func after_test() -> void:
 	TranslationServer.set_locale(original_locale)

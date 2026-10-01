@@ -2,7 +2,7 @@ extends Control
 
 const DEFINITIONS_PATH := "res://data/definitions.toml"
 const MAP_DIR := "res://data/maps/"
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
+const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
 const MODES := ["地形增刪", "放置單位", "移動單位", "刪除"]
 const CATEGORIES := ["unit_types", "skills", "terrain_types"]
 
@@ -196,9 +196,9 @@ func play_map() -> void:
 		show_error("試玩需要至少一名玩家與一名敵方單位。")
 		return
 	get_tree().root.set_meta("editor_session", {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "dirty": dirty, "history": history.duplicate(true), "future": future.duplicate(true)})
-	get_tree().root.set_meta("test_definitions", result.definitions)
-	get_tree().root.set_meta("test_map", result.map)
-	get_tree().change_scene_to_file(BATTLE_SCENE)
+	var battle := BATTLE_SCENE.instantiate()
+	battle.configure(result.definitions, result.map, true)
+	get_tree().change_scene_to_node(battle)
 
 func serialize_documents() -> Dictionary:
 	return CoreResponse.read(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)

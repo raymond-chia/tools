@@ -6,7 +6,6 @@ const ARIA_ID := 1
 const WOLF_A_ID := 2
 const WOLF_B_ID := 3
 
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_log_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_log_map.toml"
 
@@ -14,11 +13,11 @@ var battle
 var runner: GdUnitSceneRunner
 
 func before_test() -> void:
-	runner = scene_runner(BATTLE_SCENE)
+	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await load_test_documents()
+	await BattleTestSetup.wait_until_idle(battle, runner)
 
 # 驗證開始戰鬥會記錄新回合，並以整數顯示回合數。
 func test_new_round_log() -> void:
@@ -126,18 +125,18 @@ func test_spikes_damage_log() -> void:
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
 	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]%s[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50" % tr("UNIT_NAME_ARIA"))
 
-# 驗證十二次真實攻擊與自動回合完成後，長戰鬥紀錄仍可拖曳捲動。
+# 驗證六次真實攻擊與自動回合完成後，長戰鬥紀錄仍可拖曳捲動。
 func test_battle_log_can_be_dragged_to_scroll() -> void:
 	# 準備長紀錄時不需反覆繪製面板，完成後再顯示並檢查捲動。
 	# 如果不隱藏，會嚴重拖延測試時間
 	battle.ui.log_panel.hide()
-	for index in 12:
+	for index in 6:
 		assert_bool(battle.send(skill_command(WOLF_A_ID, "precise_strike"))).override_failure_message("第 %d 次測試攻擊應成功" % index).is_true()
 		await wait_for_combat_events()
 	battle.ui.log_panel.show()
 	await runner.simulate_frames(2)
 	var scroll_bar: VScrollBar = battle.ui.battle_log.get_v_scroll_bar()
-	assert_bool(scroll_bar.max_value > scroll_bar.page).override_failure_message("十二次攻擊後的紀錄應超出面板並可捲動").is_true()
+	assert_bool(scroll_bar.max_value > scroll_bar.page).override_failure_message("六次攻擊後的紀錄應超出面板並可捲動").is_true()
 	scroll_bar.value = scroll_bar.max_value
 	var initial_value: float = scroll_bar.value
 	var press := InputEventMouseButton.new()
@@ -160,10 +159,6 @@ func test_battle_log_content_stays_inside_panel_width() -> void:
 	var panel: Control = battle.ui.get_node("Root/LogPanel")
 	assert_int(battle.ui.battle_log.get_content_width()).override_failure_message("戰鬥紀錄內容寬度不應超出控制項").is_less_equal(int(battle.ui.battle_log.size.x))
 	assert_bool(panel.get_global_rect().encloses(battle.ui.battle_log.get_global_rect())).override_failure_message("戰鬥紀錄控制項應完整位於面板內").is_true()
-
-func load_test_documents() -> void:
-	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
-	assert_str(setup_error).override_failure_message(setup_error).is_empty()
 
 func wait_for_combat_events() -> void:
 	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():

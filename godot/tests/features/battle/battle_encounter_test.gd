@@ -1,7 +1,6 @@
 extends GdUnitTestSuite
 
 const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_encounter_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_encounter_map.toml"
 
@@ -9,12 +8,11 @@ var battle
 var runner: GdUnitSceneRunner
 
 func before_test() -> void:
-	runner = scene_runner(BATTLE_SCENE)
+	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
-	assert_str(setup_error).override_failure_message(setup_error).is_empty()
+	await BattleTestSetup.wait_until_idle(battle, runner)
 
 func after_test() -> void:
 	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():

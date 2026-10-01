@@ -8,7 +8,6 @@ const WOLF_A_ID := 3
 const WOLF_B_ID := 4
 const LYRA_ID := 5
 
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_preview_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_preview_map.toml"
 const ATTACK_VARIATIONS_DEFINITIONS := "res://tests/features/battle/data/attack_preview_variations_definitions.toml"
@@ -18,7 +17,7 @@ var battle
 var runner: GdUnitSceneRunner
 
 func before_test() -> void:
-	runner = scene_runner(BATTLE_SCENE)
+	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()

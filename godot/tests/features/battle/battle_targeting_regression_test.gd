@@ -6,7 +6,6 @@ const ARIA_ID := 1
 const WOLF_A_ID := 2
 const OGRE_ID := 3
 
-const BATTLE_SCENE := "res://features/battle/battle.tscn"
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_targeting_regression_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_targeting_regression_map.toml"
 
@@ -14,7 +13,7 @@ var battle
 var runner: GdUnitSceneRunner
 
 func before_test() -> void:
-	runner = scene_runner(BATTLE_SCENE)
+	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
