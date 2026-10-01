@@ -278,7 +278,7 @@ impl Game {
                 y: current.y + direction.y * gameplay_config::PUSH_DISTANCE,
             };
             let terrain_allows_push = fits(self.world.resource::<Board>(), destination, footprint)
-                && !footprint_blocks_push(self.world.resource::<Board>(), destination, footprint);
+                && !footprint_blocks_push(&self.world, destination, footprint);
             let blocking_units: Vec<Entity> = if terrain_allows_push {
                 self.world
                     .iter_entities()

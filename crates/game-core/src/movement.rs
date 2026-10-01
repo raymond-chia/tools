@@ -274,35 +274,32 @@ pub(crate) fn terrain_ends_movement(w: &World, position: GridPos) -> bool {
         .any(|kind| terrain_type(w.resource::<Board>(), kind).damage > 0)
 }
 
-pub(crate) fn footprint_on_impassable(
-    board: &Board,
+/// 佔用範圍內任一格（含暫時地形）的進入規則符合條件。
+fn footprint_has_entry_rule(
+    w: &World,
     position: GridPos,
     footprint: Footprint,
+    matches_rule: impl Fn(TerrainEntryRule) -> bool,
 ) -> bool {
-    (position.y..position.y + footprint.height).any(|y| {
-        (position.x..position.x + footprint.width).any(|x| {
-            board.terrains.get(&GridPos { x, y }).is_some_and(|kinds| {
-                kinds
-                    .iter()
-                    .any(|kind| terrain_type(board, kind).entry_rule != TerrainEntryRule::Walkable)
-            })
+    let board = w.resource::<Board>();
+    footprint_cells(position, footprint)
+        .into_iter()
+        .any(|cell| {
+            terrains_at(w, cell)
+                .iter()
+                .any(|kind| matches_rule(terrain_type(board, kind).entry_rule))
         })
+}
+
+pub(crate) fn footprint_on_impassable(w: &World, position: GridPos, footprint: Footprint) -> bool {
+    footprint_has_entry_rule(w, position, footprint, |rule| {
+        rule != TerrainEntryRule::Walkable
     })
 }
 
-pub(crate) fn footprint_blocks_push(
-    board: &Board,
-    position: GridPos,
-    footprint: Footprint,
-) -> bool {
-    (position.y..position.y + footprint.height).any(|y| {
-        (position.x..position.x + footprint.width).any(|x| {
-            board.terrains.get(&GridPos { x, y }).is_some_and(|kinds| {
-                kinds
-                    .iter()
-                    .any(|kind| terrain_type(board, kind).entry_rule == TerrainEntryRule::Blocked)
-            })
-        })
+pub(crate) fn footprint_blocks_push(w: &World, position: GridPos, footprint: Footprint) -> bool {
+    footprint_has_entry_rule(w, position, footprint, |rule| {
+        rule == TerrainEntryRule::Blocked
     })
 }
 
@@ -434,7 +431,7 @@ fn paths(w: &World, e: Entity, start: GridPos, f: Footprint, budget: u32) -> Pat
                 x: state.position.x + dx,
                 y: state.position.y + dy,
             };
-            if !fits(board, n, f) || occupied(w, e, n, f) || footprint_on_impassable(board, n, f) {
+            if !fits(board, n, f) || occupied(w, e, n, f) || footprint_on_impassable(w, n, f) {
                 continue;
             }
             let next_state = PathState {

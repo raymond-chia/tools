@@ -1,5 +1,5 @@
 use super::*;
-use crate::model::{BattleMode, Encounter, Exploration};
+use crate::model::{BattleMode, Exploration};
 
 const ACTOR_ID: i64 = 1;
 const TARGET_ID: i64 = 2;
@@ -447,22 +447,42 @@ fn zero_range_heal_targets_self() {
     );
 }
 
-// 驗證敵方沒有技能時回報錯誤，且空技能清單不會自動取得所有技能。
+// 驗證載入時拒絕沒有技能的敵方單位，空技能清單不會自動取得所有技能。
 #[test]
-fn enemy_without_skill_reports_error() {
-    let mut game = push_collision_game();
-    let enemy = game.entity(TARGET_ID).expect("測試敵方應存在");
-    game.world
-        .get_mut::<Unit>(enemy)
-        .expect("敵方應有資料")
-        .skills
-        .clear();
-    game.world.resource_mut::<Turn>().actor = Some(TARGET_ID);
-    game.world.resource_mut::<Turn>().phase = Phase::Ready;
-    game.world.resource_mut::<Encounter>().round = 1;
-    game.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
-    let error = match game.command(Command::Continue) {
-        Ok(_) => panic!("沒有技能的敵方應回報錯誤"),
+fn enemy_without_skill_rejected_on_load() {
+    let definitions = authoring::Definitions {
+        terrain_types: HashMap::new(),
+        skills: Vec::new(),
+        unit_types: vec![authoring::UnitType {
+            id: "test_unit".into(),
+            visual: "test_unit".into(),
+            width: 1,
+            height: 1,
+            hp: 10,
+            movement: 1,
+            initiative: 0,
+            dodge: 0,
+            block: 0,
+            attack: 0,
+            power: 1,
+            skills: Vec::new(),
+        }],
+    };
+    let map = authoring::Map {
+        name: "test_map".into(),
+        width: 2,
+        height: 1,
+        terrains: Vec::new(),
+        units: vec![authoring::UnitPlacement {
+            id: TARGET_ID,
+            unit_type: "test_unit".into(),
+            team: Team::Enemy("test_enemy".into()),
+            x: 0,
+            y: 0,
+        }],
+    };
+    let error = match Game::from_authoring(definitions, map) {
+        Ok(_) => panic!("沒有技能的敵方應在載入時被拒絕"),
         Err(error) => error,
     };
     assert_eq!(error.id(), "missing_ai_skill");

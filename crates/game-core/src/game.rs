@@ -138,7 +138,7 @@ impl Game {
             if !fits(w.resource::<Board>(), p, f) {
                 return Err(error::unit_out_of_bounds(u.id));
             }
-            if footprint_on_impassable(w.resource::<Board>(), p, f) {
+            if footprint_on_impassable(&w, p, f) {
                 return Err(error::unit_on_impassable(u.id));
             }
             if footprint_cells(p, f)
@@ -615,7 +615,7 @@ impl Game {
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .skills
             .first()
-            .ok_or_else(|| error::missing_ai_skill(a))?;
+            .expect("載入時已驗證敵方單位至少有一個技能");
         let skill = self
             .world
             .resource::<Skills>()

@@ -71,15 +71,17 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
         .iter()
         .map(|skill| skill.id.as_str())
         .collect();
-    // 地形傷害以負值表示治療不在規則內；負值會讓移動停止、尋路危險度與顯示判斷失準。
+    // 地形數值不以負值反轉成治療或加成。
     if let Some(kind) = definitions
         .terrain_types
         .iter()
-        .filter(|(_, terrain)| terrain.damage < 0)
+        .filter(|(_, terrain)| {
+            terrain.damage < 0 || terrain.dodge_penalty < 0 || terrain.block_penalty < 0
+        })
         .map(|(kind, _)| kind)
         .min()
     {
-        return Err(error::invalid_terrain_damage(kind));
+        return Err(error::invalid_terrain_values(kind));
     }
     let mut types = HashMap::new();
     for kind in definitions.unit_types {
@@ -92,6 +94,14 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
             .find(|skill| !skill_ids.contains(skill.as_str()))
         {
             return Err(error::unknown_unit_skill(&kind.id, unknown));
+        }
+        let mut unit_skills = HashSet::new();
+        if let Some(duplicate) = kind
+            .skills
+            .iter()
+            .find(|skill| !unit_skills.insert(skill.as_str()))
+        {
+            return Err(error::duplicate_unit_skill(&kind.id, duplicate));
         }
         if types.insert(kind.id.clone(), kind).is_some() {
             return Err(error::duplicate_unit_type_id());
@@ -109,6 +119,10 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
         let kind = types
             .get(&placement.unit_type)
             .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
+        // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
+        if matches!(placement.team, Team::Enemy(_)) && kind.skills.is_empty() {
+            return Err(error::missing_ai_skill(placement.id));
+        }
         units.push(UnitDef {
             id: placement.id,
             unit_type: kind.id.clone(),

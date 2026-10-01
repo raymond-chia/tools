@@ -202,10 +202,20 @@ pub(crate) fn duplicate_terrain(x: i32, y: i32) -> GameError {
     )
 }
 
-pub(crate) fn invalid_terrain_damage(kind: &str) -> GameError {
+pub(crate) fn invalid_terrain_values(kind: &str) -> GameError {
     GameError::new(
-        "invalid_terrain_damage",
-        format!("{kind} {}", "的 damage 不可為負數"),
+        "invalid_terrain_values",
+        format!(
+            "{kind} {}",
+            "的 damage、dodge_penalty 與 block_penalty 不可為負數"
+        ),
+    )
+}
+
+pub(crate) fn duplicate_unit_skill(id: &str, skill: &str) -> GameError {
+    GameError::new(
+        "duplicate_unit_skill",
+        format!("{id} {} {skill}", "重複指定技能"),
     )
 }
 
