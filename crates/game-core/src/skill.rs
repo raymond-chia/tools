@@ -1,6 +1,6 @@
 //! 技能驗證、預覽、效果與戰鬥計算。
 use crate::error::{self, GameError};
-use crate::game::{Game, die};
+use crate::game::{DamageResult, Game, die};
 use crate::gameplay_config;
 use crate::model::{
     AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
@@ -88,7 +88,7 @@ impl Game {
                 AttackResult::Hit => hit_count += 1,
             }
         }
-        let hit_damage = attacker_unit.power + power_bonus;
+        let hit_damage = skill_power(attacker_unit.power, power_bonus);
         let block_damage = attack_damage(
             hit_damage,
             AttackResult::Block,
@@ -238,7 +238,7 @@ impl Game {
             gameplay_config::BASE_DEFENSE + target_dodge,
             gameplay_config::BASE_DEFENSE + target_dodge + target_block,
         );
-        let base_damage = attacker_unit.power + power_bonus;
+        let base_damage = skill_power(attacker_unit.power, power_bonus);
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
@@ -253,17 +253,11 @@ impl Game {
             critical,
         );
         let damage_reduction = raw_damage - damage;
-        let mut downed = false;
-        if damage > 0 {
-            let mut hp = self
-                .world
-                .get_mut::<Hp>(te)
-                .expect("已建立的戰鬥單位應具有 Hp 元件");
-            hp.current = (hp.current - damage).max(0);
-            if hp.current == 0 {
-                downed = true;
-            }
-        }
+        let DamageResult {
+            mut remaining_hp,
+            mut max_hp,
+            mut downed,
+        } = self.apply_damage(te, target, damage);
         let mut pushed = false;
         let mut push_blocked = false;
         let mut collision_damage = 0;
@@ -312,14 +306,11 @@ impl Game {
             } else {
                 push_blocked = true;
                 collision_damage = gameplay_config::COLLISION_DAMAGE;
-                let mut hp = self
-                    .world
-                    .get_mut::<Hp>(te)
-                    .expect("已建立的戰鬥單位應具有 Hp 元件");
-                hp.current = (hp.current - collision_damage).max(0);
-                if hp.current == 0 {
-                    downed = true;
-                }
+                DamageResult {
+                    remaining_hp,
+                    max_hp,
+                    downed,
+                } = self.apply_damage(te, target, collision_damage);
                 for blocking_entity in blocking_units {
                     let unit = self
                         .world
@@ -332,34 +323,22 @@ impl Game {
                         .expect("佔用格子的戰鬥單位應具有 Id 元件")
                         .0
                         .clone();
-                    let mut hp = self
-                        .world
-                        .get_mut::<Hp>(blocking_entity)
-                        .expect("佔用格子的戰鬥單位應具有 Hp 元件");
-                    hp.current = (hp.current - collision_damage).max(0);
-                    let remaining_hp = hp.current;
-                    let max_hp = hp.maximum;
-                    let blocker_downed = remaining_hp == 0;
+                    let DamageResult {
+                        remaining_hp,
+                        max_hp,
+                        downed,
+                    } = self.apply_damage(blocking_entity, id, collision_damage);
                     collision_units.push(CollisionUnitLog {
                         unit: id,
                         unit_type: unit.unit_type,
                         team: unit.team.clone(),
                         remaining_hp,
                         max_hp,
-                        downed: blocker_downed,
+                        downed,
                     });
-                    if blocker_downed {
-                        self.remove_unit(blocking_entity, id);
-                    }
                 }
             }
         }
-        let hp = self
-            .world
-            .get::<Hp>(te)
-            .expect("已建立的戰鬥單位應具有 Hp 元件");
-        let remaining_hp = hp.current;
-        let max_hp = hp.maximum;
         self.world
             .resource_mut::<Log>()
             .0
@@ -401,9 +380,6 @@ impl Game {
         if pushed {
             self.apply_pushed_terrain(te, target);
         }
-        if downed {
-            self.remove_unit(te, target);
-        }
         self.finish();
         Ok(())
     }
@@ -434,14 +410,11 @@ impl Game {
                 .expect("已建立的戰鬥單位應具有 Unit 元件");
             let target_type = unit.unit_type.clone();
             let target_team = unit.team.clone();
-            let mut hp = self
-                .world
-                .get_mut::<Hp>(entity)
-                .expect("已建立的戰鬥單位應具有 Hp 元件");
-            hp.current = (hp.current - damage).max(0);
-            let remaining_hp = hp.current;
-            let max_hp = hp.maximum;
-            let downed = remaining_hp == 0;
+            let DamageResult {
+                remaining_hp,
+                max_hp,
+                downed,
+            } = self.apply_damage(entity, id, damage);
             self.world
                 .resource_mut::<Log>()
                 .0
@@ -457,7 +430,6 @@ impl Game {
                     downed,
                 });
             if downed {
-                self.remove_unit(entity, id);
                 break;
             }
         }
@@ -562,7 +534,7 @@ fn healing_preview(
         .get::<Unit>(actor)
         .expect("施放者應具有 Unit 元件")
         .power;
-    let remaining_hp = (hp.current + (power + power_bonus).max(0)).min(hp.maximum);
+    let remaining_hp = (hp.current + skill_power(power, power_bonus)).min(hp.maximum);
     HealingPreview {
         target: world
             .get::<Id>(target)
@@ -587,6 +559,11 @@ fn healing_preview(
             missing: hp.maximum - remaining_hp,
         },
     }
+}
+
+/// 技能造成的基礎傷害或治療量；加值為負時最低為 0，不會反轉成治療或傷害。
+fn skill_power(power: i32, power_bonus: i32) -> i32 {
+    (power + power_bonus).max(0)
 }
 
 /// 技能指定的目標種類；以技能種類決定行為時一律經過此函式。

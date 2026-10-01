@@ -71,6 +71,16 @@ pub(super) fn into_definition(definitions: Definitions, map: Map) -> Result<Defi
         .iter()
         .map(|skill| skill.id.as_str())
         .collect();
+    // 地形傷害以負值表示治療不在規則內；負值會讓移動停止、尋路危險度與顯示判斷失準。
+    if let Some(kind) = definitions
+        .terrain_types
+        .iter()
+        .filter(|(_, terrain)| terrain.damage < 0)
+        .map(|(kind, _)| kind)
+        .min()
+    {
+        return Err(error::invalid_terrain_damage(kind));
+    }
     let mut types = HashMap::new();
     for kind in definitions.unit_types {
         if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {

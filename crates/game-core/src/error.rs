@@ -202,6 +202,13 @@ pub(crate) fn duplicate_terrain(x: i32, y: i32) -> GameError {
     )
 }
 
+pub(crate) fn invalid_terrain_damage(kind: &str) -> GameError {
+    GameError::new(
+        "invalid_terrain_damage",
+        format!("{kind} {}", "的 damage 不可為負數"),
+    )
+}
+
 pub(crate) fn invalid_skill_range(id: &str) -> GameError {
     GameError::new(
         "invalid_skill_range",

@@ -154,6 +154,7 @@ ERROR_INVALID_HEAL_AMOUNT,技能治療量必須大於 0,Skill healing amount mus
 ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be positive
 ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
 ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
+ERROR_INVALID_TERRAIN_DAMAGE,地形傷害不可為負數,Terrain damage cannot be negative
 ERROR_INVALID_UNIT_SIZE_OR_HP,單位佔用尺寸與 HP 必須大於 0,Unit size and HP must be greater than zero
 ERROR_INVALID_UNIT_TYPE,單位定義的 ID、HP 或佔用尺寸無效,"Unit type ID, HP, or size is invalid"
 ERROR_JSON_SERIALIZE,無法轉換資料,Could not convert data

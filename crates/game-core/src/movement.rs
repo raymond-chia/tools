@@ -1,10 +1,10 @@
 //! 空間、地形通行、路徑搜尋與移動。
 use crate::error::{self, GameError};
-use crate::game::Game;
+use crate::game::{DamageResult, Game};
 use crate::gameplay_config;
 use crate::model::{
-    Board, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Id, Log, MovePreview, Phase, Pos,
-    Team, TemporaryTerrains, TerrainEntryRule, TerrainTypeDef, Turn, Unit,
+    Board, CombatLogEvent, Encounter, Footprint, GridPos, Id, Log, MovePreview, Phase, Pos, Team,
+    TemporaryTerrains, TerrainEntryRule, TerrainTypeDef, Turn, Unit,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::{
@@ -101,35 +101,27 @@ impl Game {
                     continue;
                 }
                 let damage = terrain_definition.damage;
-                if damage > 0 {
-                    let mut hp = self
-                        .world
-                        .get_mut::<Hp>(e)
-                        .expect("已建立的戰鬥單位應具有 Hp 元件");
-                    hp.current = (hp.current - damage).max(0);
-                    let remaining_hp = hp.current;
-                    let max_hp = hp.maximum;
-                    let downed = remaining_hp == 0;
-                    if downed {
-                        self.remove_unit(e, a);
-                    }
-                    self.world
-                        .resource_mut::<Log>()
-                        .0
-                        .push(CombatLogEvent::TerrainDamage {
-                            target: a,
-                            target_type,
-                            target_team,
-                            terrain: k,
-                            instant_down: false,
-                            damage,
-                            remaining_hp,
-                            max_hp,
-                            downed,
-                        });
-                    if downed {
-                        break;
-                    }
+                let DamageResult {
+                    remaining_hp,
+                    max_hp,
+                    downed,
+                } = self.apply_damage(e, a, damage);
+                self.world
+                    .resource_mut::<Log>()
+                    .0
+                    .push(CombatLogEvent::TerrainDamage {
+                        target: a,
+                        target_type,
+                        target_team,
+                        terrain: k,
+                        instant_down: false,
+                        damage,
+                        remaining_hp,
+                        max_hp,
+                        downed,
+                    });
+                if downed {
+                    break;
                 }
             }
             if ends_movement || self.world.get_entity(e).is_err() {

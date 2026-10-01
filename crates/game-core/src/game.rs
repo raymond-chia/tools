@@ -24,6 +24,12 @@ pub struct Game {
     pub(crate) movements: Vec<MovementTransition>,
 }
 
+pub(crate) struct DamageResult {
+    pub(crate) remaining_hp: i32,
+    pub(crate) max_hp: i32,
+    pub(crate) downed: bool,
+}
+
 impl Game {
     pub fn from_documents(definitions: &str, map: &str) -> Result<Self, GameError> {
         let definitions: authoring::Definitions = toml::from_str(definitions)
@@ -488,6 +494,23 @@ impl Game {
     }
     pub(crate) fn finish(&mut self) {
         self.world.resource_mut::<Turn>().phase = Phase::Ended;
+    }
+    /// 扣除生命值；歸零時立即移除單位，因此呼叫端應改用回傳值而非再讀取 Hp。
+    pub(crate) fn apply_damage(&mut self, entity: Entity, id: i64, amount: i32) -> DamageResult {
+        let mut hp = self
+            .world
+            .get_mut::<Hp>(entity)
+            .expect("已建立的戰鬥單位應具有 Hp 元件");
+        hp.current = (hp.current - amount).max(0);
+        let result = DamageResult {
+            remaining_hp: hp.current,
+            max_hp: hp.maximum,
+            downed: hp.current == 0,
+        };
+        if result.downed {
+            self.remove_unit(entity, id);
+        }
+        result
     }
     pub(crate) fn remove_unit(&mut self, entity: Entity, id: i64) {
         self.world.resource_mut::<Exploration>().turns.remove(&id);
