@@ -200,17 +200,32 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
         width: 3,
         height: 3,
         terrains: HashMap::from([(spikes, vec!["spikes".into()])]),
-        terrain_types: HashMap::from([(
-            "spikes".into(),
-            TerrainTypeDef {
-                visual: "spikes".into(),
-                entry_rule: TerrainEntryRule::Walkable,
-                damage: 3,
-                extra_movement_cost: 0,
-                dodge_penalty: 0,
-                block_penalty: 0,
-            },
-        )]),
+        terrain_types: HashMap::from([
+            (
+                "spikes".into(),
+                TerrainTypeDef {
+                    visual: "spikes".into(),
+                    layer: TerrainLayer::Overlay,
+                    entry_rule: TerrainEntryRule::Walkable,
+                    damage: 3,
+                    extra_movement_cost: 0,
+                    dodge_penalty: 0,
+                    block_penalty: 0,
+                },
+            ),
+            (
+                "plain".into(),
+                TerrainTypeDef {
+                    visual: "plain".into(),
+                    layer: TerrainLayer::Ground,
+                    entry_rule: TerrainEntryRule::Walkable,
+                    damage: 0,
+                    extra_movement_cost: 0,
+                    dodge_penalty: 0,
+                    block_penalty: 0,
+                },
+            ),
+        ]),
     });
     world.insert_resource(TemporaryTerrains::default());
     world.insert_resource(Exploration {
@@ -451,7 +466,18 @@ fn zero_range_heal_targets_self() {
 #[test]
 fn enemy_without_skill_rejected_on_load() {
     let definitions = authoring::Definitions {
-        terrain_types: HashMap::new(),
+        terrain_types: HashMap::from([(
+            "plain".into(),
+            TerrainTypeDef {
+                visual: "plain".into(),
+                layer: TerrainLayer::Ground,
+                entry_rule: TerrainEntryRule::Walkable,
+                damage: 0,
+                extra_movement_cost: 0,
+                dodge_penalty: 0,
+                block_penalty: 0,
+            },
+        )]),
         skills: Vec::new(),
         unit_types: vec![authoring::UnitType {
             id: "test_unit".into(),
@@ -502,6 +528,7 @@ fn push_collision_game() -> Game {
 fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: SkillEffect) -> Game {
     let terrain = TerrainTypeDef {
         visual: "plain".into(),
+        layer: TerrainLayer::Ground,
         entry_rule: TerrainEntryRule::Walkable,
         damage: 0,
         extra_movement_cost: 0,

@@ -210,7 +210,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	var terrain_names: Array[String] = []
 	for kind in terrain.terrains:
 		terrain_names.append(tr(BattleConfig.terrain_name_key(kind)))
-	terrain_name.text = "、".join(terrain_names) if not terrain_names.is_empty() else tr(BattleConfig.terrain_name_key("plain"))
+	terrain_name.text = "、".join(terrain_names)
 	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("無法通行")
 	var terrain_descriptions: Array[String] = []
 	for description in terrain.effect_descriptions:

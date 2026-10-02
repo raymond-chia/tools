@@ -1,6 +1,7 @@
 //! 地形種類查詢與地形對移動、通行、防禦的影響；固定與暫時地形一律經由 terrains_at 合併。
+use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::model::{
-    Board, Footprint, GridPos, TemporaryTerrains, TerrainEntryRule, TerrainTypeDef,
+    Board, Footprint, GridPos, TemporaryTerrains, TerrainEntryRule, TerrainLayer, TerrainTypeDef,
 };
 use crate::movement::footprint_cells;
 use bevy_ecs::prelude::World;
@@ -16,13 +17,10 @@ pub(crate) fn terrain_damage(board: &Board, kind: &str) -> i32 {
     terrain_type(board, kind).damage
 }
 
+/// 回傳此格所有地形；未放置 ground 時補上預設地面。
 pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
-    let mut kinds = w
-        .resource::<Board>()
-        .terrains
-        .get(&position)
-        .cloned()
-        .unwrap_or_default();
+    let board = w.resource::<Board>();
+    let mut kinds = board.terrains.get(&position).cloned().unwrap_or_default();
     if let Some(temporary) = w.resource::<TemporaryTerrains>().0.get(&position) {
         for kind in temporary.keys() {
             if !kinds.contains(kind) {
@@ -30,8 +28,17 @@ pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
             }
         }
     }
+    if ground_at(board, &kinds).is_none() {
+        kinds.push(DEFAULT_GROUND_TERRAIN.to_owned());
+    }
     kinds.sort();
     kinds
+}
+
+pub(crate) fn ground_at<'a>(board: &Board, kinds: &'a [String]) -> Option<&'a String> {
+    kinds
+        .iter()
+        .find(|kind| terrain_type(board, kind).layer == TerrainLayer::Ground)
 }
 
 pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {

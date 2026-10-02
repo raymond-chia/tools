@@ -57,13 +57,14 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 	assert_str(battle.status).override_failure_message("點擊射程內的占用格應成功結算").is_empty()
 	assert_int(int(unit_with_id(OGRE_ID).hp)).override_failure_message("同一大型單位的近側占用格應可被命中").is_equal(93)
 
-# 驗證等待自動回合完成後，泥沼增加移動消耗且只維持兩個回合。
+# 驗證泥沼存在時保留普通地面並增加移動消耗，兩輪後只移除泥沼。
 func test_mire_movement_cost_and_duration() -> void:
 	await load_test_documents()
 	var mire_cell := Vector2i(1, 1)
 	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
 	await wait_for_combat_events()
 	var terrain := terrain_at(mire_cell)
+	assert_array(terrain.terrains).override_failure_message("泥沼存在時應保留原有普通地面").contains("plain")
 	assert_int(int(terrain.cost)).override_failure_message("泥沼地格應增加一點移動消耗").is_equal(2)
 	var mire_effect: Dictionary = {}
 	for effect in battle.state.terrain_effects:
@@ -73,7 +74,8 @@ func test_mire_movement_cost_and_duration() -> void:
 	assert_int(int(mire_effect.remaining_rounds)).override_failure_message("進入下一輪後泥沼應剩餘一輪").is_equal(1)
 	assert_bool(battle.send({"type": "end_turn", "actor": ARIA_ID})).override_failure_message("應能結束下一輪以推進泥沼期限").is_true()
 	await wait_for_combat_events()
-	assert_array(terrain_at(mire_cell).terrains).override_failure_message("兩輪結束後泥沼應消失").is_empty()
+	assert_array(terrain_at(mire_cell).terrains).override_failure_message("兩輪結束後泥沼應消失").not_contains("mire")
+	assert_array(terrain_at(mire_cell).terrains).override_failure_message("泥沼消失後應保留原有地面").contains("plain")
 
 # 驗證推擊命中會沿攻擊者到目標的方向移動一格。
 func test_push_hit_moves_target_one_cell() -> void:

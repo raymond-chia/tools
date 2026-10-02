@@ -59,6 +59,10 @@ text = "重做"
 layout_mode = 2
 text = "▶ 試玩"
 
+[node name="Database" type="Button" parent="Layout/Toolbar"]
+layout_mode = 2
+text = "資料庫"
+
 [node name="Body" type="HSplitContainer" parent="Layout"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -146,6 +150,7 @@ script = ExtResource("4")
 [node name="SidePanel" type="VBoxContainer" parent="Layout/Body"]
 custom_minimum_size = Vector2(330, 0)
 layout_mode = 2
+visible = false
 
 [node name="Category" type="OptionButton" parent="Layout/Body/SidePanel"]
 layout_mode = 2

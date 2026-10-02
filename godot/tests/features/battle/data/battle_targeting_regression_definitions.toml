@@ -1,8 +1,15 @@
+[terrain_types.plain]
+layer="ground"
+visual="plain"
+entry_rule="walkable"
+
 [terrain_types.rough]
+layer="ground"
 visual="rough"
 entry_rule="walkable"
 extra_movement_cost=1
 [terrain_types.mire]
+layer="overlay"
 visual="mire"
 entry_rule="walkable"
 extra_movement_cost=1

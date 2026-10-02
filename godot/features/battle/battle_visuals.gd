@@ -4,6 +4,8 @@ extends RefCounted
 const TILE_SIZE := Vector2i(64, 32)
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
+# ground 地形的 visual 對應到 GROUND_ART 內的地磚座標。
+const GROUND_TILES := {"plain": Vector2i(0, 0), "rough": Vector2i(1, 0), "cliff": Vector2i(2, 0), "chasm": Vector2i(3, 0)}
 
 static func setup_ground(ground: TileMapLayer, terrain_cells: Array) -> void:
 	var tiles := TileSet.new()
@@ -13,13 +15,16 @@ static func setup_ground(ground: TileMapLayer, terrain_cells: Array) -> void:
 	var atlas := TileSetAtlasSource.new()
 	atlas.texture = GROUND_ART
 	atlas.texture_region_size = TILE_SIZE
-	atlas.create_tile(Vector2i(0, 0))
-	atlas.create_tile(Vector2i(1, 0))
+	for atlas_cell in GROUND_TILES.values():
+		atlas.create_tile(atlas_cell)
 	tiles.add_source(atlas, 0)
 	ground.tile_set = tiles
+	paint_ground(ground, terrain_cells)
+
+static func paint_ground(ground: TileMapLayer, terrain_cells: Array) -> void:
 	ground.clear()
 	for terrain in terrain_cells:
-		var atlas_cell := Vector2i(1, 0) if terrain.base_kind == "rough" else Vector2i.ZERO
+		var atlas_cell: Vector2i = GROUND_TILES.get(terrain.ground_visual, GROUND_TILES.plain)
 		ground.set_cell(Vector2i(terrain.x, terrain.y), 0, atlas_cell)
 
 static func create_unit_node(unit_id: int, visual_name: String, units_layer: Node2D) -> Node2D:
@@ -88,13 +93,6 @@ static func draw_unit_health(canvas: CanvasItem, ground: TileMapLayer, units: Ar
 
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
 	match visual:
-		"cliff":
-			canvas.draw_colored_polygon(diamond(center), Color("59636c"))
-			canvas.draw_polyline(PackedVector2Array([center + Vector2(-32, 0), center + Vector2(0, 16), center + Vector2(32, 0)]), Color("303840"), 5.0)
-			canvas.draw_colored_polygon(PackedVector2Array([center + Vector2(-22, -2), center + Vector2(-8, -13), center + Vector2(3, 1)]), Color("818b91"))
-		"chasm":
-			canvas.draw_colored_polygon(diamond(center), Color("11131d"))
-			canvas.draw_polyline(PackedVector2Array([center + Vector2(-32, 0), center + Vector2(0, -16), center + Vector2(32, 0)]), Color("b7774b"), 4.0)
 		"spikes":
 			for offset_x in [-18.0, -6.0, 6.0, 18.0]:
 				var base := center + Vector2(offset_x, 5.0)

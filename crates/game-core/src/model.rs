@@ -180,6 +180,7 @@ pub struct TerrainPlacement {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainTypeDef {
     pub(crate) visual: String,
+    pub(crate) layer: TerrainLayer,
     pub(crate) entry_rule: TerrainEntryRule,
     #[serde(default)]
     pub(crate) damage: i32,
@@ -189,6 +190,14 @@ pub struct TerrainTypeDef {
     pub(crate) dodge_penalty: i32,
     #[serde(default)]
     pub(crate) block_penalty: i32,
+}
+
+/// 每格剛好一個 ground（未指定時為預設地面），overlay 疊在 ground 上且數量不限。
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TerrainLayer {
+    Ground,
+    Overlay,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -497,7 +506,8 @@ pub struct TerrainCellView {
     pub x: i32,
     pub y: i32,
     pub passable: bool,
-    pub base_kind: String,
+    /// 此格 ground 地形的 visual；overlay 由 terrain_effects 呈現。
+    pub ground_visual: String,
     /// 此格的地形種類 ID，包含固定與暫時地形。
     pub terrains: Vec<String>,
     pub unit_id: Option<i64>,

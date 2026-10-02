@@ -4,8 +4,8 @@ use crate::model::{
     BattleMode, Board, CombatLogEvent, Command, DeliveredLogCount, Encounter, Exploration,
     Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos,
     Random, ResultState, SkillEffect, SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains,
-    TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, Turn,
-    TurnView, Unit, UnitView,
+    TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView,
+    TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
 use crate::movement::{
     can_move, distance, entity_distance, fits, footprint_cells, footprint_distance,
@@ -16,7 +16,7 @@ use crate::skill::{
     target_kind,
 };
 use crate::terrain::{
-    footprint_on_impassable, movement_cost, terrain_damage, terrain_type, terrains_at,
+    footprint_on_impassable, ground_at, movement_cost, terrain_damage, terrain_type, terrains_at,
 };
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, World};
@@ -78,6 +78,12 @@ impl Game {
         {
             return Err(error::invalid_terrain_values(kind));
         }
+        if terrain_types
+            .get(gameplay_config::DEFAULT_GROUND_TERRAIN)
+            .is_none_or(|terrain| terrain.layer != TerrainLayer::Ground)
+        {
+            return Err(error::missing_default_ground_terrain());
+        }
         let skill_ids: HashSet<_> = skills.iter().map(|skill| skill.id.as_str()).collect();
         let mut types = HashMap::new();
         for kind in unit_types {
@@ -133,9 +139,15 @@ impl Game {
             }
         }
         let mut terrain_positions = HashSet::new();
+        let mut ground_positions = HashSet::new();
         for terrain in &terrain_placements {
             if !terrain_positions.insert((terrain.x, terrain.y, terrain.kind.as_str())) {
                 return Err(error::duplicate_terrain(terrain.x, terrain.y));
+            }
+            if terrain_types[&terrain.kind].layer == TerrainLayer::Ground
+                && !ground_positions.insert((terrain.x, terrain.y))
+            {
+                return Err(error::multiple_ground_terrains(terrain.x, terrain.y));
             }
         }
         let mut skill_definitions = HashMap::new();
@@ -147,8 +159,12 @@ impl Game {
                 if *duration == 0 {
                     return Err(error::invalid_duration(&skill.id));
                 }
-                if !terrain_types.contains_key(terrain) {
+                let Some(definition) = terrain_types.get(terrain) else {
                     return Err(error::invalid_skill_terrain(&skill.id));
+                };
+                // 暫時地形疊在既有地形上，不能是 ground，否則同格會有兩個 ground。
+                if definition.layer != TerrainLayer::Overlay {
+                    return Err(error::skill_terrain_not_overlay(&skill.id));
                 }
             }
             if skill_definitions.insert(skill.id.clone(), skill).is_some() {
@@ -954,7 +970,6 @@ impl Game {
                         .sum();
                     let effect_descriptions = terrains
                         .iter()
-                        .filter(|kind| kind.as_str() != "rough")
                         .map(|kind| {
                             let definition = terrain_type(board, kind);
                             let remaining = temporary
@@ -987,12 +1002,12 @@ impl Game {
                             terrain_type(board, kind).entry_rule
                                 == crate::model::TerrainEntryRule::Walkable
                         }),
-                        base_kind: if terrains.iter().any(|kind| kind == "rough") {
-                            "rough"
-                        } else {
-                            "plain"
-                        }
-                        .to_string(),
+                        ground_visual: terrain_type(
+                            board,
+                            ground_at(board, &terrains).expect("terrains_at 必含 ground"),
+                        )
+                        .visual
+                        .clone(),
                         terrains,
                         unit_id: units
                             .iter()
@@ -1011,7 +1026,11 @@ impl Game {
             terrain_effects: {
                 let mut effects = Vec::new();
                 for (position, kinds) in &b.terrains {
-                    for kind in kinds {
+                    // ground 由 terrain_cells 的 ground_visual 呈現，這裡只列 overlay。
+                    for kind in kinds
+                        .iter()
+                        .filter(|kind| terrain_type(&b, kind).layer == TerrainLayer::Overlay)
+                    {
                         effects.push(TerrainEffectView {
                             x: position.x,
                             y: position.y,

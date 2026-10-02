@@ -1,3 +1,8 @@
+[terrain_types.plain]
+layer="ground"
+visual="plain"
+entry_rule="walkable"
+
 [[skills]]
 id="test_attack"
 ranged=false
@@ -8,6 +13,7 @@ max_range=1
 effect="attack"
 
 [terrain_types.rough]
+layer="ground"
 visual="rough"
 entry_rule="walkable"
 extra_movement_cost=1

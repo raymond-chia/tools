@@ -3,7 +3,8 @@ extends Control
 const DEFINITIONS_PATH := "res://data/definitions.toml"
 const MAP_DIR := "res://data/maps/"
 const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
-const MODES := ["地形增刪", "放置單位", "移動單位", "刪除"]
+const MODES := ["繪製地面", "繪製上層", "放置單位", "移動單位", "刪除單位"]
+const CLEAR_OVERLAY := "清除上層"
 const CATEGORIES := ["unit_types", "skills", "terrain_types"]
 
 @onready var map_list: OptionButton = $Layout/Toolbar/Maps
@@ -15,6 +16,7 @@ const CATEGORIES := ["unit_types", "skills", "terrain_types"]
 @onready var unit_list: OptionButton = $Layout/Body/MapPanel/Tools/Unit
 @onready var team_list: OptionButton = $Layout/Body/MapPanel/Tools/Team
 @onready var faction_field: LineEdit = $Layout/Body/MapPanel/Tools/Faction
+@onready var side_panel: VBoxContainer = $Layout/Body/SidePanel
 @onready var map_view = $Layout/Body/MapPanel/MapViewportContainer/MapViewport/Map
 @onready var category_list: OptionButton = $Layout/Body/SidePanel/Category
 @onready var definition_list: OptionButton = $Layout/Body/SidePanel/Definition
@@ -26,11 +28,12 @@ var definitions: Dictionary = {}
 var map_data: Dictionary = {}
 var map_file := ""
 var dirty := false
-var selected_unit := 0
+var pending_edit: Dictionary = {}
 var history: Array = []
 var future: Array = []
 var refreshing := false
 var selected_cell := Vector2i(-1, -1)
+var stroke_checkpointed := false
 
 func _process(delta: float) -> void:
 	var focused := get_viewport().gui_get_focus_owner()
@@ -50,7 +53,12 @@ func _ready() -> void:
 	team_list.select(0)
 	category_list.select(0)
 	map_view.cell_pressed.connect(edit_cell)
-	mode_list.item_selected.connect(func(_index: int): refresh_grid())
+	map_view.stroke_started.connect(func(): stroke_checkpointed = false)
+	map_view.unit_dropped.connect(move_unit)
+	mode_list.item_selected.connect(func(_index: int):
+		refresh_terrain_list()
+		refresh_tools_visibility())
+	$Layout/Toolbar/Database.pressed.connect(func(): side_panel.visible = not side_panel.visible)
 	$Layout/Toolbar/New.pressed.connect(new_map)
 	$Layout/Toolbar/Open.pressed.connect(open_selected_map)
 	$Layout/Toolbar/Save.pressed.connect(save_map)
@@ -64,7 +72,7 @@ func _ready() -> void:
 	definition_list.item_selected.connect(func(_index: int): refresh_fields())
 	map_name.text_submitted.connect(func(_value: String): commit_map_name())
 	map_name.focus_exited.connect(commit_map_name)
-	team_list.item_selected.connect(func(index: int): faction_field.visible = index != 0)
+	team_list.item_selected.connect(func(_index: int): refresh_tools_visibility())
 	faction_field.visible = false
 	width_box.value_changed.connect(func(_value: float): resize_map())
 	height_box.value_changed.connect(func(_value: float): resize_map())
@@ -86,9 +94,7 @@ func _ready() -> void:
 		dirty = session.dirty
 		history = session.history
 		future = session.future
-		for i in map_list.item_count:
-			if map_list.get_item_text(i) == map_file.get_file().trim_suffix(".toml"):
-				map_list.select(i)
+		select_text(map_list, map_file.get_file().trim_suffix(".toml"))
 		refresh_ui()
 		validate_current()
 		return
@@ -105,11 +111,23 @@ func read_file(path: String) -> String:
 	return file.get_as_text()
 
 func refresh_map_list() -> void:
+	var previous := selected_text(map_list)
 	map_list.clear()
 	for filename in DirAccess.get_files_at(MAP_DIR):
 		if filename.ends_with(".toml"):
 			map_list.add_item(filename.trim_suffix(".toml"))
-	if map_list.item_count > 0: map_list.select(0)
+	select_text(map_list, previous)
+
+func selected_text(list: OptionButton) -> String:
+	return list.get_item_text(list.selected) if list.selected >= 0 else ""
+
+# 重建選單後選回同名項目；找不到時選第一項。
+func select_text(list: OptionButton, text: String) -> void:
+	for i in list.item_count:
+		if list.get_item_text(i) == text:
+			list.select(i)
+			return
+	if list.item_count > 0: list.select(0)
 
 func open_selected_map() -> void:
 	if dirty:
@@ -129,7 +147,6 @@ func open_selected_map() -> void:
 	map_file = path
 	history.clear()
 	future.clear()
-	selected_unit = 0
 	selected_cell = Vector2i(-1, -1)
 	dirty = false
 	refresh_ui()
@@ -143,7 +160,6 @@ func new_map() -> void:
 	map_file = unique_map_path("new_map")
 	history.clear()
 	future.clear()
-	selected_unit = 0
 	selected_cell = Vector2i(-1, -1)
 	dirty = true
 	refresh_ui()
@@ -178,22 +194,12 @@ func save_map() -> void:
 		file.store_string(result.definitions if path == DEFINITIONS_PATH else result.map)
 	dirty = false
 	refresh_map_list()
-	for i in map_list.item_count:
-		if map_list.get_item_text(i) == map_file.get_file().trim_suffix(".toml"):
-			map_list.select(i)
+	select_text(map_list, map_file.get_file().trim_suffix(".toml"))
 	status_label.text = "已儲存 %s" % map_file
 
 func play_map() -> void:
 	var result := serialize_documents()
 	if result.is_empty():
-		return
-	var players := 0
-	var enemies := 0
-	for unit in map_data.units:
-		if unit.team is String: players += 1
-		else: enemies += 1
-	if players == 0 or enemies == 0:
-		show_error("試玩需要至少一名玩家與一名敵方單位。")
 		return
 	get_tree().root.set_meta("editor_session", {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "dirty": dirty, "history": history.duplicate(true), "future": future.duplicate(true)})
 	var battle := BATTLE_SCENE.instantiate()
@@ -225,14 +231,34 @@ func restore_integers(value: Dictionary, keys: Array[String]) -> void:
 			value[key] = int(value[key])
 
 func validate_current() -> void:
-	if serialize_documents().is_empty():
+	var snapshot := CoreResponse.read(core.preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
+	if snapshot.is_empty():
+		if not pending_edit.is_empty():
+			var error_message := status_label.text
+			definitions = pending_edit.definitions
+			map_data = pending_edit.map
+			map_file = pending_edit.file
+			dirty = pending_edit.dirty
+			future = pending_edit.future
+			history.resize(pending_edit.history_size)
+			stroke_checkpointed = pending_edit.stroke_checkpointed
+			pending_edit = {}
+			refresh_ui()
+			status_label.text = error_message
 		return
+	pending_edit = {}
+	map_view.present(map_data, snapshot, selected_cell)
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
 func show_error(message: String) -> void:
 	status_label.text = tr("ERROR_PREFIX") + tr(message)
 
+# 保存每次輸入前的狀態；無效輸入不消耗復原紀錄，也不清除重做紀錄。
+func begin_edit() -> void:
+	pending_edit = {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "dirty": dirty, "future": future.duplicate(true), "history_size": history.size(), "stroke_checkpointed": stroke_checkpointed}
+
 func checkpoint() -> void:
+	begin_edit()
 	history.append({"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file})
 	future.clear()
 	dirty = true
@@ -269,9 +295,8 @@ func resize_map() -> void:
 	checkpoint()
 	map_data.width = new_width
 	map_data.height = new_height
+	# 只刪除超出範圍的地形；不處理單位，避免縮小地圖時不小心改到單位，超界單位交由核心驗證回報。
 	map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x < new_width and t.y < new_height)
-	map_data.units = map_data.units.filter(func(u: Dictionary): return u.x < new_width and u.y < new_height)
-	refresh_grid()
 	validate_current()
 
 func refresh_ui() -> void:
@@ -281,61 +306,82 @@ func refresh_ui() -> void:
 	height_box.value = map_data.height
 	refreshing = false
 	refresh_tools()
-	refresh_grid()
+	refresh_tools_visibility()
 	refresh_definitions()
 
 func refresh_tools() -> void:
-	var previous := terrain_list.get_item_text(terrain_list.selected) if terrain_list.item_count else "rough"
-	terrain_list.clear()
-	terrain_list.add_item("rough")
-	var keys: Array = definitions.terrain_types.keys()
-	keys.sort()
-	for kind in keys:
-		if kind != "rough" and kind != "plain": terrain_list.add_item(kind)
-	for i in terrain_list.item_count:
-		if terrain_list.get_item_text(i) == previous: terrain_list.select(i)
-	if terrain_list.selected < 0: terrain_list.select(0)
+	refresh_terrain_list()
+	var previous := selected_text(unit_list)
 	unit_list.clear()
 	for kind in definitions.unit_types:
 		unit_list.add_item(kind.id)
-	if unit_list.item_count > 0: unit_list.select(0)
+	select_text(unit_list, previous)
+
+# 依目前模式列出 toml 中對應 layer 的地形；上層模式第一項為清除上層。
+func refresh_terrain_list() -> void:
+	var previous := selected_text(terrain_list)
+	terrain_list.clear()
+	var layer := "overlay" if mode_list.selected == 1 else "ground"
+	if layer == "overlay": terrain_list.add_item(CLEAR_OVERLAY)
+	for kind in terrain_kinds(layer):
+		terrain_list.add_item(kind)
+	select_text(terrain_list, previous)
+
+func terrain_kinds(layer: String) -> Array:
+	var kinds: Array = definitions.terrain_types.keys().filter(func(kind: String): return definitions.terrain_types[kind].get("layer") == layer)
+	kinds.sort()
+	return kinds
 
 func refresh_grid() -> void:
-	map_view.drag_paint = mode_list.selected == 0
+	map_view.drag_paint = mode_list.selected <= 1
 	var snapshot := CoreResponse.read(core.preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
+	if snapshot.is_empty(): return
 	map_view.present(map_data, snapshot, selected_cell)
 
-func terrains_at(cell: Vector2i) -> Array[String]:
+func refresh_tools_visibility() -> void:
+	var mode := mode_list.selected
+	terrain_list.visible = mode <= 1
+	unit_list.visible = mode == 2
+	team_list.visible = mode == 2
+	faction_field.visible = mode == 2 and team_list.selected != 0
+	refresh_grid()
+
+func terrains_at(cell: Vector2i, layer: String) -> Array[String]:
 	var terrains: Array[String] = []
 	for terrain in map_data.terrains:
-		if terrain.x == cell.x and terrain.y == cell.y:
+		if terrain.x == cell.x and terrain.y == cell.y and definitions.terrain_types.get(terrain.kind, {}).get("layer") == layer:
 			terrains.append(terrain.kind)
 	terrains.sort()
 	return terrains
 
-func unit_at(cell: Vector2i) -> Dictionary:
-	for unit in map_data.units:
-		var kind := unit_type(unit.unit_type)
-		if cell.x >= unit.x and cell.x < unit.x + kind.get("width", 1) and cell.y >= unit.y and cell.y < unit.y + kind.get("height", 1): return unit
-	return {}
+# 以新地形取代此格同 layer 的地形；kind 為空字串時只移除。
+func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
+	var current := terrains_at(cell, layer)
+	if (kind.is_empty() and current.is_empty()) or current == [kind]: return
+	checkpoint_stroke()
+	map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y or not current.has(t.kind))
+	if not kind.is_empty():
+		map_data.terrains.append({"x":cell.x,"y":cell.y,"kind":kind})
+	validate_current()
 
-func unit_type(id: String) -> Dictionary:
-	for kind in definitions.unit_types:
-		if kind.id == id: return kind
+func unit_at(cell: Vector2i) -> Dictionary:
+	# 佔用格由核心決定；編輯器只選取 snapshot 中被點擊的單位。
+	for unit in map_view.snapshot.get("units", []):
+		for occupied in unit.occupied_cells:
+			if Vector2i(occupied.x, occupied.y) == cell: return unit
 	return {}
 
 func edit_cell(cell: Vector2i) -> void:
 	selected_cell = cell
 	var mode := mode_list.selected
 	var current := unit_at(cell)
-	if mode == 0:
+	if mode <= 1:
+		if terrain_list.selected < 0: return
 		var kind := terrain_list.get_item_text(terrain_list.selected)
-		checkpoint()
-		if kind in terrains_at(cell):
-			map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y or t.kind != kind)
-		else:
-			map_data.terrains.append({"x":cell.x,"y":cell.y,"kind":kind})
-	elif mode == 1:
+		# 編輯器暫時限制每格一個 overlay，後畫的取代先畫的。
+		replace_layer(cell, "ground" if mode == 0 else "overlay", "" if kind == CLEAR_OVERLAY else kind)
+		return
+	elif mode == 2:
 		if unit_list.item_count == 0: return
 		checkpoint()
 		var kind := unit_list.get_item_text(unit_list.selected)
@@ -344,33 +390,39 @@ func edit_cell(cell: Vector2i) -> void:
 			id += 1
 		var team: Variant = "player" if team_list.selected == 0 else {"enemy": faction_field.text.strip_edges()}
 		map_data.units.append({"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y})
-	elif mode == 2:
-		if selected_unit == 0:
-			if current.is_empty(): return
-			selected_unit = current.id
-			status_label.text = "選取 %s；點擊目標格移動。" % selected_unit
-			refresh_grid()
-			return
-		checkpoint()
-		for unit in map_data.units:
-			if unit.id == selected_unit:
-				unit.x = cell.x
-				unit.y = cell.y
-		selected_unit = 0
+	elif mode == 3:
+		if current.is_empty(): return
+		map_view.begin_unit_drag(current, cell)
+		return
 	else:
-		if current.is_empty() and terrains_at(cell).is_empty(): return
+		if current.is_empty(): return
 		checkpoint()
-		if not current.is_empty():
-			map_data.units = map_data.units.filter(func(u: Dictionary): return u.id != current.id)
-		else:
-			map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x != cell.x or t.y != cell.y)
-	refresh_grid()
+		map_data.units = map_data.units.filter(func(u: Dictionary): return u.id != current.id)
 	validate_current()
+
+func move_unit(id: int, cell: Vector2i) -> void:
+	selected_cell = cell
+	for unit in map_data.units:
+		if unit.id != id: continue
+		if Vector2i(unit.x, unit.y) == cell: return
+		checkpoint()
+		unit.x = cell.x
+		unit.y = cell.y
+		validate_current()
+		return
+
+func checkpoint_stroke() -> void:
+	if stroke_checkpointed:
+		begin_edit()
+		return
+	checkpoint()
+	stroke_checkpointed = true
 
 func category_key() -> String:
 	return CATEGORIES[category_list.selected]
 
 func refresh_definitions() -> void:
+	var previous := selected_text(definition_list)
 	definition_list.clear()
 	var key := category_key()
 	if key == "terrain_types":
@@ -379,7 +431,7 @@ func refresh_definitions() -> void:
 		for name in names: definition_list.add_item(name)
 	else:
 		for entry in definitions[key]: definition_list.add_item(entry.id)
-	if definition_list.item_count > 0: definition_list.select(0)
+	select_text(definition_list, previous)
 	refresh_fields()
 
 func selected_definition() -> Dictionary:
@@ -420,14 +472,17 @@ func refresh_fields() -> void:
 			edit.custom_minimum_size.x = 180
 			edit.text = ",".join(PackedStringArray(value)) if value is Array else str(value)
 			edit.editable = key != "id"
-			edit.text_submitted.connect(func(_v: String): commit_field(key, edit.text, value))
-			edit.focus_exited.connect(func(): commit_field(key, edit.text, value))
+			edit.text_submitted.connect(func(_v: String): commit_field(key, edit, value))
+			edit.focus_exited.connect(func(): commit_field(key, edit, value))
 			fields.add_child(edit)
 
-func commit_field(key: String, text: String, previous) -> void:
+func commit_field(key: String, edit: LineEdit, previous) -> void:
+	var text := edit.text
 	var value = text
 	if previous is int:
 		if not text.is_valid_int():
+			# previous 是建立欄位時的值，成功修改後會過時；改回資料中的目前值。
+			edit.text = str(selected_definition().get(key, previous))
 			show_error("%s 必須是整數" % key)
 			return
 		value = int(text)
@@ -453,7 +508,6 @@ func update_definition(key: String, value) -> void:
 			"heal": entry.power_bonus = 0
 		refresh_fields()
 	refresh_tools()
-	refresh_grid()
 	validate_current()
 
 func add_definition() -> void:
@@ -470,7 +524,7 @@ func add_definition() -> void:
 	elif category == "skills":
 		definitions.skills.append({"id":id,"ranged":false,"attack_bonus":0,"power_bonus":0,"min_range":1,"max_range":1,"effect":"attack"})
 	else:
-		definitions.terrain_types[id] = {"visual":"plain","entry_rule":"walkable","damage":0,"extra_movement_cost":0,"dodge_penalty":0,"block_penalty":0}
+		definitions.terrain_types[id] = {"visual":"plain","layer":"overlay","entry_rule":"walkable","damage":0,"extra_movement_cost":0,"dodge_penalty":0,"block_penalty":0}
 	refresh_tools()
 	refresh_definitions()
 	definition_list.select(definition_list.item_count - 1)
@@ -492,5 +546,4 @@ func remove_definition() -> void:
 		definitions[category_key()] = definitions[category_key()].filter(func(entry: Dictionary): return entry.id != id)
 	refresh_tools()
 	refresh_definitions()
-	refresh_grid()
 	validate_current()

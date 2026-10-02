@@ -202,6 +202,31 @@ pub(crate) fn duplicate_terrain(x: i32, y: i32) -> GameError {
     )
 }
 
+pub(crate) fn multiple_ground_terrains(x: i32, y: i32) -> GameError {
+    GameError::new(
+        "multiple_ground_terrains",
+        format!("{} ({x}, {y})", "同一格只能有一個 ground 地形"),
+    )
+}
+
+pub(crate) fn missing_default_ground_terrain() -> GameError {
+    GameError::new(
+        "missing_default_ground_terrain",
+        format!(
+            "{} {}",
+            crate::gameplay_config::DEFAULT_GROUND_TERRAIN,
+            "必須定義為 ground 地形"
+        ),
+    )
+}
+
+pub(crate) fn skill_terrain_not_overlay(id: &str) -> GameError {
+    GameError::new(
+        "skill_terrain_not_overlay",
+        format!("{id} {}", "產生的地形必須是 overlay"),
+    )
+}
+
 pub(crate) fn invalid_terrain_values(kind: &str) -> GameError {
     GameError::new(
         "invalid_terrain_values",
