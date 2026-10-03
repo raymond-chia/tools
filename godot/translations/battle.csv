@@ -18,14 +18,8 @@ SKILL_RANGE,射程：%d 格,Range: %d tiles
 SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
 SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
-SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too
+SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,"Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too"
 SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
-TERRAIN_DESCRIPTION_MIRE,閃避與格擋 −{defense_penalty}，移動消耗 +{extra_movement_cost}，剩餘 {remaining_rounds} 回合,"Dodge and block −{defense_penalty}, movement cost +{extra_movement_cost}, {remaining_rounds} rounds remaining"
-TERRAIN_DESCRIPTION_SPIKES,造成 {damage} 點傷害,Deals {damage} damage
-TERRAIN_DESCRIPTION_CLIFF,無法通行,Impassable
-TERRAIN_DESCRIPTION_CHASM,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
-TERRAIN_DESCRIPTION_PLAIN,無特殊效果,No special effect
-TERRAIN_DESCRIPTION_ROUGH,移動消耗增加,Increases movement cost
 TERRAIN_DESCRIPTION_NONE,無特殊效果,No special effect
 TERRAIN_NAME_PLAIN,平地,Plain
 TERRAIN_NAME_ROUGH,崎嶇地面,Rough ground
@@ -183,3 +177,11 @@ ERROR_UNKNOWN_UNIT_SKILL,單位使用了未知技能,A unit uses an unknown skil
 ERROR_UNKNOWN_UNIT_TYPE,找不到單位定義,Unit type not found
 ERROR_UNREACHABLE_DESTINATION,目的地不可達,Destination is unreachable
 ERROR_WRONG_TURN,現在不是該單位的回合,It is not this unit's turn
+ERROR_NUMERIC_RANGE,數值超出核心可安全運算的範圍,Values exceed the safe arithmetic range
+TERRAIN_EFFECT_BLOCKED,無法通行,Impassable
+TERRAIN_EFFECT_INSTANT_DOWN,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
+TERRAIN_EFFECT_DODGE,閃避 −{value},Dodge −{value}
+TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
+TERRAIN_EFFECT_MOVEMENT,移動消耗 +{value},Movement cost +{value}
+TERRAIN_EFFECT_DAMAGE,造成 {value} 點傷害,Deals {value} damage
+TERRAIN_EFFECT_DURATION,剩餘 {value} 回合,{value} rounds remaining

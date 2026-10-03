@@ -3,17 +3,17 @@ use crate::error::GameError;
 use crate::model::{
     BattleMode, Board, CombatLogEvent, Command, DeliveredLogCount, Encounter, Exploration,
     Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos,
-    Random, ResultState, SkillEffect, SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains,
-    TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView,
-    TerrainLayer, Turn, TurnView, Unit, UnitView,
+    Random, ResultState, SkillDef, SkillEffect, SkillTargetKind, Skills, Snapshot, Team,
+    TemporaryTerrains, TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView,
+    TerrainEffectView, TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
 use crate::movement::{
-    can_move, distance, entity_distance, fits, footprint_cells, footprint_distance,
+    can_move, distance, entity_distance, fits, footprint_cell_distance, footprint_cells,
     movement_ranges, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
-    can_use_skill, closest_occupied_cell, effective_block, effective_dodge, skill_ranges,
-    target_kind,
+    can_use_skill, check_skill_range, closest_occupied_cell, effective_block, effective_dodge,
+    skill_ranges, target_kind,
 };
 use crate::terrain::{
     footprint_on_impassable, ground_at, movement_cost, terrain_damage, terrain_type, terrains_at,
@@ -132,9 +132,14 @@ impl Game {
                 return Err(error::missing_ai_skill(placement.id));
             }
         }
-        if width <= 0 || height <= 0 || width.checked_mul(height).is_none() {
+        if width <= 0
+            || height <= 0
+            || width.checked_mul(height).is_none()
+            || width.checked_add(height).is_none()
+        {
             return Err(error::invalid_map_dimensions());
         }
+        validate_numeric_ranges(&terrain_types, &skills, &types, width, height)?;
         if terrain_placements.iter().any(|terrain| {
             terrain.x < 0 || terrain.y < 0 || terrain.x >= width || terrain.y >= height
         }) {
@@ -166,9 +171,9 @@ impl Game {
                 if *duration == 0 {
                     return Err(error::invalid_duration(&skill.id));
                 }
-                let Some(definition) = terrain_types.get(terrain) else {
-                    return Err(error::invalid_skill_terrain(&skill.id));
-                };
+                let definition = terrain_types
+                    .get(terrain)
+                    .ok_or_else(|| error::invalid_skill_terrain(&skill.id))?;
                 // 暫時地形疊在既有地形上，不能是 ground，否則同格會有兩個 ground。
                 if definition.layer != TerrainLayer::Overlay {
                     return Err(error::skill_terrain_not_overlay(&skill.id));
@@ -244,6 +249,9 @@ impl Game {
                 .get(&unit_type)
                 .expect("單位配置的類型已在上方驗證")
                 .clone();
+            if x.checked_add(width).is_none() || y.checked_add(height).is_none() {
+                return Err(error::unit_out_of_bounds(id));
+            }
             let f = Footprint { width, height };
             let p = GridPos { x, y };
             if !fits(w.resource::<Board>(), p, f) {
@@ -385,19 +393,21 @@ impl Game {
         Ok(())
     }
     fn has_active_enemy(&self) -> bool {
-        self.world
-            .resource::<Encounter>()
-            .participants
-            .iter()
-            .any(|id| {
-                self.entity(*id).is_some_and(|entity| {
-                    self.world
-                        .get::<Unit>(entity)
-                        .expect("單位應具有 Unit")
-                        .team
-                        != Team::Player
-                })
+        let Encounter {
+            participants,
+            order: _,
+            cursor: _,
+            round: _,
+        } = self.world.resource::<Encounter>();
+        participants.iter().any(|id| {
+            self.entity(*id).is_some_and(|entity| {
+                self.world
+                    .get::<Unit>(entity)
+                    .expect("單位應具有 Unit")
+                    .team
+                    != Team::Player
             })
+        })
     }
     fn activate_enemies_near_players(&mut self) -> bool {
         let players: Vec<_> = self
@@ -410,6 +420,10 @@ impl Game {
             })
             .map(|entity| entity.id())
             .collect();
+        self.activate_enemies_near(&players)
+    }
+    /// 集中處理遭遇距離與敵方參與者；呼叫端決定要檢查哪些單位。
+    pub(crate) fn activate_enemies_near(&mut self, units: &[Entity]) -> bool {
         let enemies: Vec<_> = self
             .world
             .iter_entities()
@@ -419,18 +433,21 @@ impl Game {
                     .is_some_and(|unit| unit.team != Team::Player)
             })
             .filter(|entity| {
-                players.iter().any(|player| {
-                    entity_distance(&self.world, *player, entity.id())
+                units.iter().any(|unit| {
+                    entity_distance(&self.world, *unit, entity.id())
                         <= gameplay_config::ENCOUNTER_RANGE
                 })
             })
             .filter_map(|entity| entity.get::<Id>().map(|id| id.0))
             .collect();
         let found = !enemies.is_empty();
-        self.world
-            .resource_mut::<Encounter>()
-            .participants
-            .extend(enemies);
+        let Encounter {
+            participants,
+            order: _,
+            cursor: _,
+            round: _,
+        } = &mut *self.world.resource_mut::<Encounter>();
+        participants.extend(enemies);
         found
     }
     fn reset_exploration_turns(&mut self, players: &[i64]) {
@@ -473,8 +490,13 @@ impl Game {
             .get(&actor)
             .cloned()
             .ok_or(error::wrong_turn())?;
-        let current = self.world.resource::<Turn>().clone();
-        if let Some(id) = current.actor {
+        let current @ Turn {
+            actor,
+            phase: _,
+            movement_remaining: _,
+            movement_segments_used: _,
+        } = self.world.resource::<Turn>().clone();
+        if let Some(id) = actor {
             self.world
                 .resource_mut::<Exploration>()
                 .turns
@@ -484,7 +506,13 @@ impl Game {
         Ok(())
     }
     fn advance_exploration(&mut self) {
-        let actor = self.world.resource::<Turn>().actor;
+        let Turn {
+            actor,
+            phase: _,
+            movement_remaining: _,
+            movement_segments_used: _,
+        } = self.world.resource::<Turn>();
+        let actor = *actor;
         if let Some(id) = actor {
             self.world.resource_mut::<Exploration>().turns.remove(&id);
         }
@@ -524,7 +552,14 @@ impl Game {
         }
     }
     fn roll_round(&mut self) {
-        let next_round = self.world.resource::<Encounter>().round + 1;
+        let Encounter {
+            participants,
+            order: _,
+            cursor: _,
+            round,
+        } = self.world.resource::<Encounter>();
+        let next_round = *round + 1;
+        let active = participants.clone();
         self.world
             .resource_mut::<TemporaryTerrains>()
             .0
@@ -532,7 +567,6 @@ impl Game {
                 terrains.retain(|_, terrain| terrain.expires_after_round >= next_round);
                 !terrains.is_empty()
             });
-        let active = self.world.resource::<Encounter>().participants.clone();
         let entries: Vec<_> = self
             .world
             .query::<(&Id, &Unit)>()
@@ -563,12 +597,23 @@ impl Game {
             )
             .collect();
         {
-            let mut e = self.world.resource_mut::<Encounter>();
-            e.round += 1;
-            e.order = rolled.into_iter().map(|(_, id, _, _, _, _)| id).collect();
-            e.cursor = 0;
+            let Encounter {
+                participants: _,
+                order,
+                cursor,
+                round,
+            } = &mut *self.world.resource_mut::<Encounter>();
+            *round += 1;
+            *order = rolled.into_iter().map(|(_, id, _, _, _, _)| id).collect();
+            *cursor = 0;
         }
-        let round = self.world.resource::<Encounter>().round;
+        let Encounter {
+            participants: _,
+            order: _,
+            cursor: _,
+            round,
+        } = self.world.resource::<Encounter>();
+        let round = *round;
         self.world
             .resource_mut::<Log>()
             .0
@@ -579,12 +624,13 @@ impl Game {
         self.begin()
     }
     fn begin(&mut self) {
-        let actor = self
-            .world
-            .resource::<Encounter>()
-            .order
-            .get(self.world.resource::<Encounter>().cursor)
-            .cloned();
+        let Encounter {
+            participants: _,
+            order,
+            cursor,
+            round: _,
+        } = self.world.resource::<Encounter>();
+        let actor = order.get(*cursor).copied();
         let remaining = actor
             .and_then(|a| self.entity(a))
             .map(|e| {
@@ -611,12 +657,16 @@ impl Game {
             .get_mut::<Hp>(entity)
             .expect("已建立的戰鬥單位應具有 Hp 元件");
         hp.current = (hp.current - amount).max(0);
-        let result = DamageResult {
+        let result @ DamageResult {
+            remaining_hp: _,
+            max_hp: _,
+            downed,
+        } = DamageResult {
             remaining_hp: hp.current,
             max_hp: hp.maximum,
             downed: hp.current == 0,
         };
-        if result.downed {
+        if downed {
             self.remove_unit(entity, id);
         }
         result
@@ -624,29 +674,44 @@ impl Game {
     pub(crate) fn remove_unit(&mut self, entity: Entity, id: i64) {
         self.world.resource_mut::<Exploration>().turns.remove(&id);
         let is_actor = self.world.resource::<Turn>().actor == Some(id);
-        let mut encounter = self.world.resource_mut::<Encounter>();
-        encounter.participants.remove(&id);
-        if let Some(index) = encounter.order.iter().position(|unit_id| *unit_id == id) {
-            encounter.order.remove(index);
-            if index < encounter.cursor {
-                encounter.cursor -= 1;
+        let Encounter {
+            participants,
+            order,
+            cursor,
+            round: _,
+        } = &mut *self.world.resource_mut::<Encounter>();
+        participants.remove(&id);
+        if let Some(index) = order.iter().position(|unit_id| *unit_id == id) {
+            order.remove(index);
+            if index < *cursor {
+                *cursor -= 1;
             }
         }
         if is_actor {
-            let mut turn = self.world.resource_mut::<Turn>();
-            turn.actor = None;
-            turn.phase = Phase::Ended;
+            let Turn {
+                actor,
+                phase,
+                movement_remaining: _,
+                movement_segments_used: _,
+            } = &mut *self.world.resource_mut::<Turn>();
+            *actor = None;
+            *phase = Phase::Ended;
         }
         self.world.entity_mut(entity).despawn();
     }
     fn advance_turn(&mut self) {
         let actor_removed = self.world.resource::<Turn>().actor.is_none();
         let end = {
-            let mut e = self.world.resource_mut::<Encounter>();
+            let Encounter {
+                participants: _,
+                order,
+                cursor,
+                round: _,
+            } = &mut *self.world.resource_mut::<Encounter>();
             if !actor_removed {
-                e.cursor += 1;
+                *cursor += 1;
             }
-            e.cursor >= e.order.len()
+            *cursor >= order.len()
         };
         if end { self.roll_round() } else { self.begin() }
     }
@@ -656,11 +721,16 @@ impl Game {
         {
             return false;
         }
-        let turn = self.world.resource::<Turn>();
-        if turn.phase == Phase::Ended {
+        let Turn {
+            actor,
+            phase,
+            movement_remaining: _,
+            movement_segments_used: _,
+        } = self.world.resource::<Turn>();
+        if *phase == Phase::Ended {
             return true;
         }
-        turn.actor
+        actor
             .and_then(|actor| self.entity(actor))
             .is_some_and(|entity| {
                 self.world
@@ -686,20 +756,29 @@ impl Game {
         if !can_delay(turn) {
             return Err(error::delay_after_action());
         }
-        let encounter = self.world.resource::<Encounter>();
-        let target_index = encounter
-            .order
+        let Encounter {
+            participants: _,
+            order,
+            cursor,
+            round: _,
+        } = self.world.resource::<Encounter>();
+        let target_index = order
             .iter()
             .position(|unit_id| *unit_id == after)
             .ok_or(error::missing_delay_target())?;
-        if target_index <= encounter.cursor {
+        if target_index <= *cursor {
             return Err(error::invalid_delay_target());
         }
-        let mut encounter = self.world.resource_mut::<Encounter>();
-        let current_index = encounter.cursor;
-        let delayed_actor = encounter.order.remove(current_index);
-        encounter.order.insert(target_index, delayed_actor);
-        drop(encounter);
+        {
+            let Encounter {
+                participants: _,
+                order,
+                cursor,
+                round: _,
+            } = &mut *self.world.resource_mut::<Encounter>();
+            let delayed_actor = order.remove(*cursor);
+            order.insert(target_index, delayed_actor);
+        }
         self.begin();
         Ok(())
     }
@@ -711,12 +790,13 @@ impl Game {
         }
     }
     fn enemy_turn_once(&mut self) -> Result<(), GameError> {
-        let a = self
-            .world
-            .resource::<Turn>()
-            .actor
-            .clone()
-            .ok_or(error::missing_initiative_unit())?;
+        let Turn {
+            actor,
+            phase: _,
+            movement_remaining: _,
+            movement_segments_used: _,
+        } = self.world.resource::<Turn>();
+        let a = actor.ok_or(error::missing_initiative_unit())?;
         let e = self.entity(a).ok_or(error::missing_initiative_unit())?;
         let first_skill = self
             .world
@@ -725,15 +805,19 @@ impl Game {
             .skills
             .first()
             .expect("載入時已驗證敵方單位至少有一個技能");
-        let skill = self
-            .world
-            .resource::<Skills>()
-            .definitions
+        let Skills { definitions } = self.world.resource::<Skills>();
+        let skill @ SkillDef {
+            id: _,
+            ranged: _,
+            min_range,
+            max_range,
+            effect: _,
+        } = definitions
             .get(first_skill)
             .expect("載入時已驗證單位技能 ID")
             .clone();
         let target = if target_kind(&skill.effect) == SkillTargetKind::Ally {
-            self.closest_wounded_ally(e, skill.min_range)
+            self.closest_wounded_ally(e, min_range)
         } else {
             self.closest(e)
         };
@@ -746,7 +830,7 @@ impl Game {
         };
         let target_footprint = *self.world.get::<Footprint>(t).expect("目標應具有佔用尺寸");
         let current_distance = entity_distance(&self.world, e, t);
-        if current_distance < skill.min_range || current_distance > skill.max_range {
+        if check_skill_range(current_distance, min_range, max_range).is_err() {
             let goal = self
                 .world
                 .get::<Pos>(t)
@@ -774,35 +858,27 @@ impl Game {
                 target_footprint,
                 fp,
                 b,
-                skill.min_range,
-                skill.max_range,
+                min_range,
+                max_range,
             ) {
-                if let [_, .., last] = path.as_slice() {
+                if path.len() > 1 {
                     self.movements.push(MovementTransition {
                         unit_id: a,
                         path: path.clone(),
                         before_log_index: self.world.resource::<Log>().0.len(),
                     });
-                    self.world
-                        .get_mut::<Pos>(e)
-                        .expect("已建立的戰鬥單位應具有 Pos 元件")
-                        .0 = *last
+                    self.execute_move_path(e, a, &path);
+                    if self.world.get_entity(e).is_err() {
+                        return Ok(());
+                    }
                 }
             }
         }
         let target_cell = closest_occupied_cell(&self.world, e, t);
         let position = self.world.get::<Pos>(e).expect("單位應具有位置").0;
         let footprint = *self.world.get::<Footprint>(e).expect("單位應具有佔用尺寸");
-        let target_distance = footprint_distance(
-            position,
-            footprint,
-            target_cell,
-            Footprint {
-                width: 1,
-                height: 1,
-            },
-        );
-        if target_distance >= skill.min_range && target_distance <= skill.max_range {
+        let target_distance = footprint_cell_distance(position, footprint, target_cell);
+        if check_skill_range(target_distance, min_range, max_range).is_ok() {
             self.use_skill_at_cell(a, target_cell, skill)?
         } else {
             self.finish()
@@ -875,10 +951,25 @@ impl Game {
     }
     /// 唯讀顯示查詢；事件只由 command 回傳，查看單位不儲存在核心。
     pub fn snapshot(&self, inspected_actor: Option<i64>) -> Snapshot {
-        let b = self.world.resource::<Board>().clone();
-        let temporary_terrains = self.world.resource::<TemporaryTerrains>().clone();
-        let enc = self.world.resource::<Encounter>().clone();
-        let turn = self.world.resource::<Turn>().clone();
+        let b @ Board {
+            width,
+            height,
+            terrains: fixed_terrains,
+            terrain_types: _,
+        } = self.world.resource::<Board>();
+        let TemporaryTerrains(temporary_terrains) = self.world.resource::<TemporaryTerrains>();
+        let Encounter {
+            participants: _,
+            order,
+            cursor,
+            round,
+        } = self.world.resource::<Encounter>();
+        let turn @ Turn {
+            actor: turn_actor,
+            phase,
+            movement_remaining,
+            movement_segments_used: _,
+        } = self.world.resource::<Turn>();
         let mut units: Vec<_> = self
             .world
             .iter_entities()
@@ -912,8 +1003,7 @@ impl Game {
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
-        let player_turn = turn
-            .actor
+        let player_turn = turn_actor
             .and_then(|actor| self.entity(actor))
             .is_some_and(|entity| {
                 self.world
@@ -922,11 +1012,11 @@ impl Game {
                     .team
                     == Team::Player
             });
-        let can_move = player_turn && can_move(&turn);
+        let can_move = player_turn && can_move(turn);
         let movement_ranges = if can_move {
-            turn.actor
+            turn_actor
                 .and_then(|actor| self.entity(actor))
-                .map(|entity| movement_ranges(&self.world, entity, &turn))
+                .map(|entity| movement_ranges(&self.world, entity, turn))
         } else {
             None
         };
@@ -939,8 +1029,8 @@ impl Game {
                     .get::<Id>(entity)
                     .expect("戰鬥單位應具有 Id 元件")
                     .0;
-                let inspected_turn = if turn.actor == Some(actor) {
-                    turn.clone()
+                let inspected_turn = if *turn_actor == Some(actor) {
+                    (*turn).clone()
                 } else {
                     let movement = self
                         .world
@@ -961,46 +1051,44 @@ impl Game {
                 }
             })
             .unwrap_or_default();
-        let skill_ranges = if player_turn && turn.phase != Phase::Ended {
-            turn.actor
+        let skill_ranges = if player_turn && *phase != Phase::Ended {
+            turn_actor
                 .and_then(|actor| self.entity(actor))
                 .map(|entity| skill_ranges(&self.world, entity))
                 .unwrap_or_default()
         } else {
             Vec::new()
         };
-        let can_skill = player_turn && can_use_skill(&turn);
-        let exploring = self.world.resource::<Exploration>().mode != BattleMode::Combat;
+        let can_skill = player_turn && can_use_skill(turn);
+        let Exploration { mode, turns } = self.world.resource::<Exploration>();
+        let exploring = *mode != BattleMode::Combat;
         let turn_order: Vec<_> = if exploring {
-            let mut available: Vec<_> = self
-                .world
-                .resource::<Exploration>()
-                .turns
+            let mut available: Vec<_> = turns
                 .keys()
                 .copied()
-                .filter(|id| Some(*id) != turn.actor)
+                .filter(|id| Some(*id) != *turn_actor)
                 .collect();
             available.sort();
             available
         } else {
-            enc.order
+            order
                 .iter()
-                .skip(enc.cursor + usize::from(turn.actor.is_some()))
+                .skip(*cursor + usize::from(turn_actor.is_some()))
                 .cloned()
                 .collect()
         };
         let can_delay = !exploring
             && player_turn
-            && can_delay(&turn)
-            && turn.actor.is_some()
+            && can_delay(turn)
+            && turn_actor.is_some()
             && !turn_order.is_empty();
-        let terrain_cells = (0..b.height)
+        let terrain_cells = (0..*height)
             .flat_map(|y| {
-                let board = &b;
-                let temporary = &temporary_terrains;
+                let board = b;
+                let temporary = temporary_terrains;
                 let world = &self.world;
                 let units = &units;
-                (0..b.width).map(move |x| {
+                (0..*width).map(move |x| {
                     let position = GridPos { x, y };
                     let terrains = terrains_at(world, position);
                     let cost = movement_cost(world, position);
@@ -1011,26 +1099,37 @@ impl Game {
                     let effect_descriptions = terrains
                         .iter()
                         .map(|kind| {
-                            let definition = terrain_type(board, kind);
+                            let crate::model::TerrainTypeDef {
+                                id: _,
+                                layer: _,
+                                entry_rule,
+                                damage,
+                                extra_movement_cost,
+                                dodge_penalty,
+                                block_penalty,
+                            } = terrain_type(board, kind);
                             let remaining = temporary
-                                .0
                                 .get(&position)
                                 .and_then(|items| items.get(kind))
+                                .filter(|_| {
+                                    !fixed_terrains
+                                        .get(&position)
+                                        .is_some_and(|items| items.contains(kind))
+                                })
                                 .map(|terrain| {
-                                    terrain.expires_after_round.saturating_sub(enc.round) + 1
+                                    terrain.expires_after_round.saturating_sub(*round) + 1
                                 });
                             let values = TerrainDescriptionValues {
-                                defense_penalty: remaining.map(|_| {
-                                    definition.dodge_penalty.max(definition.block_penalty)
-                                }),
-                                extra_movement_cost: remaining
-                                    .map(|_| definition.extra_movement_cost as i32),
-                                remaining_rounds: remaining.map(|rounds| rounds as i32),
-                                damage: (remaining.is_none() && definition.damage > 0)
-                                    .then_some(definition.damage),
+                                dodge_penalty: (*dodge_penalty > 0).then_some(*dodge_penalty),
+                                block_penalty: (*block_penalty > 0).then_some(*block_penalty),
+                                extra_movement_cost: (*extra_movement_cost > 0)
+                                    .then_some(*extra_movement_cost),
+                                remaining_rounds: remaining,
+                                damage: (*damage > 0).then_some(*damage),
                             };
                             TerrainDescriptionView {
                                 terrain: kind.clone(),
+                                entry_rule: *entry_rule,
                                 values,
                             }
                         })
@@ -1061,29 +1160,29 @@ impl Game {
             })
             .collect();
         Snapshot {
-            width: b.width,
-            height: b.height,
+            width: *width,
+            height: *height,
             terrain_effects: {
                 let mut effects = Vec::new();
-                for (position, kinds) in &b.terrains {
+                for (position, kinds) in fixed_terrains {
                     // ground 由 terrain_cells 的 ground_visual 呈現，這裡只列 overlay。
                     for kind in kinds
                         .iter()
-                        .filter(|kind| terrain_type(&b, kind).layer == TerrainLayer::Overlay)
+                        .filter(|kind| terrain_type(b, kind).layer == TerrainLayer::Overlay)
                     {
                         effects.push(TerrainEffectView {
                             x: position.x,
                             y: position.y,
-                            damage: terrain_damage(&b, kind),
+                            damage: terrain_damage(b, kind),
                             visual: kind.clone(),
                             effect: kind.clone(),
                             remaining_rounds: None,
                         });
                     }
                 }
-                for (position, kinds) in &temporary_terrains.0 {
+                for (position, kinds) in temporary_terrains {
                     for (kind, terrain) in kinds {
-                        if b.terrains
+                        if fixed_terrains
                             .get(position)
                             .is_some_and(|items| items.contains(kind))
                         {
@@ -1092,11 +1191,11 @@ impl Game {
                         effects.push(TerrainEffectView {
                             x: position.x,
                             y: position.y,
-                            damage: terrain_damage(&b, kind),
+                            damage: terrain_damage(b, kind),
                             visual: kind.clone(),
                             effect: kind.clone(),
                             remaining_rounds: Some(
-                                terrain.expires_after_round.saturating_sub(enc.round) + 1,
+                                terrain.expires_after_round.saturating_sub(*round) + 1,
                             ),
                         });
                     }
@@ -1113,17 +1212,17 @@ impl Game {
             skill_ranges,
             turn_order,
             turn: TurnView {
-                can_end_turn: player_turn && turn.phase != Phase::Ended,
-                actor: turn.actor,
-                phase: turn.phase,
+                can_end_turn: player_turn && *phase != Phase::Ended,
+                actor: *turn_actor,
+                phase: *phase,
                 can_continue: self.can_continue(),
-                move_remaining: turn.movement_remaining,
+                move_remaining: *movement_remaining,
                 can_move,
                 can_skill,
                 can_delay,
             },
-            round: enc.round,
-            battle_mode: self.world.resource::<Exploration>().mode,
+            round: *round,
+            battle_mode: *mode,
             outcome: self.world.resource::<ResultState>().0,
             // 查詢不重送事件；command 負責附上尚未送出的紀錄與移動。
             log: Vec::new(),
@@ -1134,11 +1233,104 @@ impl Game {
 
 /// 尚未開始行動（未移動、未使用技能）才能延後。
 fn can_delay(turn: &Turn) -> bool {
-    turn.phase == Phase::Ready && turn.movement_segments_used == 0
+    let Turn {
+        actor: _,
+        phase,
+        movement_remaining: _,
+        movement_segments_used,
+    } = turn;
+    *phase == Phase::Ready && *movement_segments_used == 0
 }
 
 pub(crate) fn die(w: &mut World, s: u32) -> u32 {
     let mut r = w.resource_mut::<Random>();
     r.0 = r.0.wrapping_mul(6364136223846793005).wrapping_add(1);
     ((r.0 >> 32) as u32 % s) + 1
+}
+
+/// 載入時建立座標、地形疊加與戰鬥數值可安全運算的不變量。
+fn validate_numeric_ranges(
+    terrains: &HashMap<String, crate::model::TerrainTypeDef>,
+    skills: &[SkillDef],
+    units: &HashMap<String, authoring::UnitType>,
+    width: i32,
+    height: i32,
+) -> Result<(), GameError> {
+    // 同格最多一種 ground，overlay 與技能建立的地形都按種類去重。
+    let maximum_cell_value = |value: fn(&crate::model::TerrainTypeDef) -> i128| {
+        let ground = terrains
+            .values()
+            .filter(|terrain| terrain.layer == TerrainLayer::Ground)
+            .map(value)
+            .max()
+            .unwrap_or(0);
+        ground
+            + terrains
+                .values()
+                .filter(|terrain| terrain.layer == TerrainLayer::Overlay)
+                .map(value)
+                .sum::<i128>()
+    };
+    let cost = 1 + maximum_cell_value(|terrain| i128::from(terrain.extra_movement_cost));
+    let cells = i128::from(width) * i128::from(height);
+    if cost * (cells + 1) > i128::from(u32::MAX)
+        || maximum_cell_value(|terrain| i128::from(terrain.damage)) > i128::from(i32::MAX)
+        || maximum_cell_value(|terrain| i128::from(terrain.dodge_penalty)) > i128::from(i32::MAX)
+        || maximum_cell_value(|terrain| i128::from(terrain.block_penalty)) > i128::from(i32::MAX)
+    {
+        return Err(error::numeric_range("terrain_types"));
+    }
+    let maximum_hp = units.values().map(|unit| unit.hp).max().unwrap_or(0);
+    let dodge_penalty = maximum_cell_value(|terrain| i128::from(terrain.dodge_penalty));
+    let block_penalty = maximum_cell_value(|terrain| i128::from(terrain.block_penalty));
+    for unit in units.values() {
+        if i128::from(unit.dodge) - dodge_penalty < i128::from(i32::MIN)
+            || i128::from(unit.block) - block_penalty < i128::from(i32::MIN)
+            || i128::from(unit.movement) * 2 + cost > i128::from(u32::MAX)
+            || width.checked_add(unit.width).is_none()
+            || height.checked_add(unit.height).is_none()
+            || unit
+                .initiative
+                .checked_add(gameplay_config::INITIATIVE_DIE_SIDES as i32)
+                .is_none()
+            || i64::from(gameplay_config::BASE_DEFENSE)
+                + i64::from(unit.dodge.max(0))
+                + i64::from(unit.block.max(0))
+                > i64::from(i32::MAX)
+        {
+            return Err(error::numeric_range(&unit.id));
+        }
+        for skill in skills
+            .iter()
+            .filter(|skill| unit.skills.contains(&skill.id))
+        {
+            let (attack_bonus, power_bonus) = match skill.effect {
+                SkillEffect::Attack {
+                    attack_bonus,
+                    power_bonus,
+                }
+                | SkillEffect::Push {
+                    attack_bonus,
+                    power_bonus,
+                } => (attack_bonus, power_bonus),
+                SkillEffect::Heal { power_bonus } => (0, power_bonus),
+                SkillEffect::Mire { .. } => continue,
+            };
+            let attack = i64::from(unit.attack) + i64::from(attack_bonus);
+            let power = i64::from(unit.power) + i64::from(power_bonus);
+            if attack < i64::from(i32::MIN)
+                || attack
+                    + i64::from(gameplay_config::FLANKING_ATTACK_BONUS)
+                    + i64::from(gameplay_config::ATTACK_DIE_SIDES)
+                    > i64::from(i32::MAX)
+                || power < i64::from(i32::MIN)
+                || power.max(0) * 2 > i64::from(i32::MAX)
+                || matches!(skill.effect, SkillEffect::Heal { .. })
+                    && power.max(0) + i64::from(maximum_hp) > i64::from(i32::MAX)
+            {
+                return Err(error::numeric_range(&unit.id));
+            }
+        }
+    }
+    Ok(())
 }

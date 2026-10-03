@@ -505,8 +505,23 @@ func localized_skill_details(skill: Dictionary) -> String:
 	return "\n".join(lines)
 
 func localized_terrain_description(description: Dictionary) -> String:
-	var text := tr(BattleConfig.terrain_description_key(description.terrain))
-	return text.format(description.values)
+	var parts: Array[String] = []
+	match description.entry_rule:
+		"blocked":
+			parts.append(tr("TERRAIN_EFFECT_BLOCKED"))
+		"instant_down_when_pushed":
+			parts.append(tr("TERRAIN_EFFECT_INSTANT_DOWN"))
+	var value_keys := {
+		"dodge_penalty": "TERRAIN_EFFECT_DODGE",
+		"block_penalty": "TERRAIN_EFFECT_BLOCK",
+		"extra_movement_cost": "TERRAIN_EFFECT_MOVEMENT",
+		"damage": "TERRAIN_EFFECT_DAMAGE",
+		"remaining_rounds": "TERRAIN_EFFECT_DURATION",
+	}
+	for key in value_keys:
+		if description.values.has(key):
+			parts.append(tr(value_keys[key]).format({"value": description.values[key]}))
+	return "，".join(parts) if not parts.is_empty() else tr("TERRAIN_DESCRIPTION_NONE")
 
 func skill_with_id(skills: Array, skill_id: String) -> Dictionary:
 	for skill in skills:

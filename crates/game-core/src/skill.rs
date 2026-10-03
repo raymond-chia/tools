@@ -6,10 +6,14 @@ use crate::model::{
     AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
     GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, Phase, Pos, RollDegree, SkillDef,
     SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView,
-    SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, TerrainEntryRule, Turn, Unit,
+    SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, Turn, Unit,
 };
-use crate::movement::{fits, footprint_cells, footprint_distance, overlap, unit_at_cell};
-use crate::terrain::{footprint_blocks_push, footprint_terrain_penalty, terrain_type, terrains_at};
+use crate::movement::{
+    fits, footprint_cell_distance, footprint_cells, footprint_distance, overlap, unit_at_cell,
+};
+use crate::terrain::{
+    TerrainEntry, footprint_blocks_push, footprint_terrain_penalty, terrain_type,
+};
 use bevy_ecs::prelude::{Entity, World};
 
 impl Game {
@@ -24,20 +28,13 @@ impl Game {
             return Err(error::cannot_use_skill());
         }
         let attacker = self.entity(actor).ok_or(error::missing_attacker())?;
-        let target_entity = unit_at_cell(&self.world, target_cell).ok_or(error::missing_target())?;
-        let skill = self
-            .world
-            .resource::<Skills>()
-            .definitions
+        let Skills { definitions } = self.world.resource::<Skills>();
+        let skill = definitions
             .get(skill_id)
             .ok_or_else(|| error::unknown_skill(skill_id))?;
-        let (attack_bonus, power_bonus) = match validate_unit_skill_target(
-            &self.world,
-            attacker,
-            target_entity,
-            target_cell,
-            skill,
-        )? {
+        let (target_entity, effect) =
+            validate_unit_skill_target(&self.world, attacker, target_cell, skill)?;
+        let (attack_bonus, power_bonus) = match effect {
             UnitSkillEffect::Heal { power_bonus } => {
                 return Ok(SkillPreview::Healing(healing_preview(
                     &self.world,
@@ -53,11 +50,33 @@ impl Game {
             } => (attack_bonus, power_bonus),
         };
 
-        let attacker_unit = self
+        let Unit {
+            unit_type: _,
+            visual: _,
+            team: _,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            block: _,
+            attack: _,
+            power: actor_power,
+            skills: _,
+        } = self
             .world
             .get::<Unit>(attacker)
             .expect("已建立的戰鬥單位應具有 Unit 元件");
-        let target_unit = self
+        let Unit {
+            unit_type: target_type,
+            visual: _,
+            team: _,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            block: _,
+            attack: _,
+            power: _,
+            skills: _,
+        } = self
             .world
             .get::<Unit>(target_entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件");
@@ -66,7 +85,10 @@ impl Game {
             .get::<Id>(target_entity)
             .expect("目標單位應具有 Id")
             .0;
-        let target_hp = self
+        let Hp {
+            current: target_hp,
+            maximum: target_max_hp,
+        } = self
             .world
             .get::<Hp>(target_entity)
             .expect("已建立的戰鬥單位應具有 Hp 元件");
@@ -84,15 +106,15 @@ impl Game {
                 AttackResult::Hit => hit_count += 1,
             }
         }
-        let hit_damage = skill_power(attacker_unit.power, power_bonus);
+        let hit_damage = skill_power(*actor_power, power_bonus);
         let block_damage = attack_damage(
             hit_damage,
             AttackResult::Block,
             gameplay_config::BLOCK_DAMAGE_REDUCTION,
             false,
         );
-        let hit_remaining_hp = (target_hp.current - hit_damage).max(0);
-        let block_remaining_hp = (target_hp.current - block_damage).max(0);
+        let hit_remaining_hp = (*target_hp - hit_damage).max(0);
+        let block_remaining_hp = (*target_hp - block_damage).max(0);
         let block_segment = if block_count > 0 {
             block_remaining_hp - hit_remaining_hp
         } else {
@@ -100,13 +122,13 @@ impl Game {
         };
         Ok(SkillPreview::Attack(AttackPreview {
             target,
-            target_type: target_unit.unit_type.clone(),
-            target_hp: target_hp.current,
-            target_max_hp: target_hp.maximum,
+            target_type: target_type.clone(),
+            target_hp: *target_hp,
+            target_max_hp: *target_max_hp,
             target_mana: gameplay_config::DEFAULT_MANA,
             hit_remaining_hp,
             block_remaining_hp,
-            dodge_remaining_hp: target_hp.current,
+            dodge_remaining_hp: *target_hp,
             dodge_chance: dodge_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
             block_chance: block_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
             hit_chance: hit_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
@@ -129,8 +151,8 @@ impl Game {
             health_segments: HealthSegmentsView {
                 hit: hit_remaining_hp,
                 block: block_segment,
-                damage: target_hp.current - hit_remaining_hp - block_segment,
-                missing: target_hp.maximum - target_hp.current,
+                damage: *target_hp - hit_remaining_hp - block_segment,
+                missing: *target_max_hp - *target_hp,
             },
         }))
     }
@@ -143,32 +165,48 @@ impl Game {
         if target_kind(&skill.effect) == SkillTargetKind::Cell {
             return self.use_cell_skill(actor, position, skill);
         }
-        let target = unit_at_cell(&self.world, position)
-            .and_then(|entity| self.world.get::<Id>(entity).map(|id| id.0))
-            .ok_or(error::missing_target())?;
-        self.use_skill(actor, target, position, skill)
-    }
-    pub(crate) fn use_skill(
-        &mut self,
-        a: i64,
-        target: i64,
-        target_cell: GridPos,
-        skill: SkillDef,
-    ) -> Result<(), GameError> {
+        let a = actor;
+        let target_cell = position;
         self.ensure(a)?;
         let turn = self.world.resource::<Turn>();
         if !can_use_skill(turn) {
             return Err(error::cannot_use_skill());
         }
         let ae = self.entity(a).ok_or(error::missing_attacker())?;
-        let te = self.entity(target).ok_or(error::missing_target())?;
-        let effect = validate_unit_skill_target(&self.world, ae, te, target_cell, &skill)?;
-        let attacker_unit = self
+        let (te, effect) = validate_unit_skill_target(&self.world, ae, target_cell, &skill)?;
+        let target = self
+            .world
+            .get::<Id>(te)
+            .expect("所選格上的戰鬥單位應具有 Id 元件")
+            .0;
+        let Unit {
+            unit_type: actor_type,
+            visual: _,
+            team: actor_team,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            block: _,
+            attack: _,
+            power: actor_power,
+            skills: _,
+        } = self
             .world
             .get::<Unit>(ae)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        let target_unit = self
+        let Unit {
+            unit_type: target_type,
+            visual: _,
+            team: target_team,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            block: _,
+            attack: _,
+            power: _,
+            skills: _,
+        } = self
             .world
             .get::<Unit>(te)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
@@ -200,12 +238,12 @@ impl Game {
                     .0
                     .push(CombatLogEvent::Healing {
                         actor: a,
-                        actor_type: attacker_unit.unit_type,
-                        actor_team: attacker_unit.team.clone(),
+                        actor_type,
+                        actor_team,
                         skill: skill.id,
                         target: target_id,
                         target_type,
-                        target_team: target_unit.team.clone(),
+                        target_team,
                         healing,
                         remaining_hp,
                         max_hp,
@@ -234,7 +272,7 @@ impl Game {
             gameplay_config::BASE_DEFENSE + target_dodge,
             gameplay_config::BASE_DEFENSE + target_dodge + target_block,
         );
-        let base_damage = skill_power(attacker_unit.power, power_bonus);
+        let base_damage = skill_power(actor_power, power_bonus);
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
@@ -308,7 +346,18 @@ impl Game {
                     downed,
                 } = self.apply_damage(te, target, collision_damage);
                 for blocking_entity in blocking_units {
-                    let unit = self
+                    let Unit {
+                        unit_type,
+                        visual: _,
+                        team,
+                        movement: _,
+                        initiative: _,
+                        dodge: _,
+                        block: _,
+                        attack: _,
+                        power: _,
+                        skills: _,
+                    } = self
                         .world
                         .get::<Unit>(blocking_entity)
                         .expect("佔用格子的戰鬥單位應具有 Unit 元件")
@@ -326,8 +375,8 @@ impl Game {
                     } = self.apply_damage(blocking_entity, id, collision_damage);
                     collision_units.push(CollisionUnitLog {
                         unit: id,
-                        unit_type: unit.unit_type,
-                        team: unit.team.clone(),
+                        unit_type,
+                        team,
                         remaining_hp,
                         max_hp,
                         downed,
@@ -340,12 +389,12 @@ impl Game {
             .0
             .push(CombatLogEvent::Skill {
                 actor: a,
-                actor_type: attacker_unit.unit_type,
-                actor_team: attacker_unit.team.clone(),
+                actor_type,
+                actor_team,
                 skill: skill.id,
                 target,
-                target_type: target_unit.unit_type,
-                target_team: target_unit.team.clone(),
+                target_type,
+                target_team,
                 roll: natural,
                 die_sides: gameplay_config::ATTACK_DIE_SIDES,
                 attack_stat_modifier,
@@ -374,61 +423,10 @@ impl Game {
                 collision_units,
             });
         if pushed {
-            self.apply_pushed_terrain(te, target);
+            self.apply_terrain_entry(te, target, TerrainEntry::Push);
         }
         self.finish();
         Ok(())
-    }
-    fn apply_pushed_terrain(&mut self, entity: Entity, id: i64) {
-        let position = self
-            .world
-            .get::<Pos>(entity)
-            .expect("已建立的戰鬥單位應具有 Pos 元件")
-            .0;
-        for terrain in terrains_at(&self.world, position) {
-            let terrain_definition = terrain_type(self.world.resource::<Board>(), &terrain);
-            let instant_down =
-                terrain_definition.entry_rule == TerrainEntryRule::InstantDownWhenPushed;
-            let damage = if instant_down {
-                self.world
-                    .get::<Hp>(entity)
-                    .expect("被推動的單位應具有 Hp")
-                    .current
-            } else {
-                terrain_definition.damage
-            };
-            if damage == 0 {
-                continue;
-            }
-            let unit = self
-                .world
-                .get::<Unit>(entity)
-                .expect("已建立的戰鬥單位應具有 Unit 元件");
-            let target_type = unit.unit_type.clone();
-            let target_team = unit.team.clone();
-            let DamageResult {
-                remaining_hp,
-                max_hp,
-                downed,
-            } = self.apply_damage(entity, id, damage);
-            self.world
-                .resource_mut::<Log>()
-                .0
-                .push(CombatLogEvent::TerrainDamage {
-                    target: id,
-                    target_type,
-                    target_team,
-                    terrain,
-                    instant_down,
-                    damage,
-                    remaining_hp,
-                    max_hp,
-                    downed,
-                });
-            if downed {
-                break;
-            }
-        }
     }
     fn use_cell_skill(
         &mut self,
@@ -441,15 +439,33 @@ impl Game {
             return Err(error::cannot_use_skill());
         }
         let entity = self.entity(actor).ok_or(error::missing_actor())?;
-        let unit = self
+        let Unit {
+            unit_type: actor_type,
+            visual: _,
+            team: actor_team,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            block: _,
+            attack: _,
+            power: _,
+            skills,
+        } = self
             .world
             .get::<Unit>(entity)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        if !unit.skills.contains(&skill.id) {
+        let SkillDef {
+            id,
+            ranged: _,
+            min_range,
+            max_range,
+            effect,
+        } = skill;
+        if !skills.contains(&id) {
             return Err(error::unit_cannot_use_skill());
         }
-        let (terrain, duration) = match &skill.effect {
+        let (terrain, duration) = match &effect {
             SkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
             SkillEffect::Attack { .. } | SkillEffect::Push { .. } | SkillEffect::Heal { .. } => {
                 return Err(error::unit_cannot_use_skill());
@@ -475,22 +491,15 @@ impl Game {
             .world
             .get::<Footprint>(entity)
             .expect("已建立的戰鬥單位應具有 Footprint 元件");
-        let target_distance = footprint_distance(
-            origin,
-            footprint,
-            position,
-            Footprint {
-                width: 1,
-                height: 1,
-            },
-        );
-        if target_distance < skill.min_range {
-            return Err(error::target_too_close());
-        }
-        if target_distance > skill.max_range {
-            return Err(error::target_too_far());
-        }
-        let current_round = self.world.resource::<Encounter>().round;
+        let target_distance = footprint_cell_distance(origin, footprint, position);
+        check_skill_range(target_distance, min_range, max_range)?;
+        let Encounter {
+            participants: _,
+            order: _,
+            cursor: _,
+            round: current_round,
+        } = self.world.resource::<Encounter>();
+        let current_round = *current_round;
         self.world
             .resource_mut::<TemporaryTerrains>()
             .0
@@ -507,9 +516,9 @@ impl Game {
             .0
             .push(CombatLogEvent::TerrainCreated {
                 actor,
-                actor_type: unit.unit_type,
-                actor_team: unit.team.clone(),
-                skill: skill.id,
+                actor_type,
+                actor_team,
+                skill: id,
                 terrain,
             });
         self.finish();
@@ -523,14 +532,14 @@ fn healing_preview(
     target: Entity,
     power_bonus: i32,
 ) -> HealingPreview {
-    let hp = world
+    let Hp { current, maximum } = world
         .get::<Hp>(target)
         .expect("已建立的戰鬥單位應具有 Hp 元件");
     let power = world
         .get::<Unit>(actor)
         .expect("施放者應具有 Unit 元件")
         .power;
-    let remaining_hp = (hp.current + skill_power(power, power_bonus)).min(hp.maximum);
+    let remaining_hp = (*current + skill_power(power, power_bonus)).min(*maximum);
     HealingPreview {
         target: world
             .get::<Id>(target)
@@ -542,17 +551,17 @@ fn healing_preview(
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .unit_type
             .clone(),
-        target_hp: hp.current,
-        target_max_hp: hp.maximum,
+        target_hp: *current,
+        target_max_hp: *maximum,
         target_mana: gameplay_config::DEFAULT_MANA,
-        healing: remaining_hp - hp.current,
+        healing: remaining_hp - *current,
         remaining_hp,
-        missing_hp: hp.maximum - remaining_hp,
+        missing_hp: *maximum - remaining_hp,
         health_segments: HealthSegmentsView {
-            hit: hp.current,
+            hit: *current,
             block: 0,
             damage: 0,
-            missing: hp.maximum - remaining_hp,
+            missing: *maximum - remaining_hp,
         },
     }
 }
@@ -560,6 +569,21 @@ fn healing_preview(
 /// 技能造成的基礎傷害或治療量；加值為負時最低為 0，不會反轉成治療或傷害。
 fn skill_power(power: i32, power_bonus: i32) -> i32 {
     (power + power_bonus).max(0)
+}
+
+/// 集中技能射程的包含邊界與錯誤分類，供施放、預覽、包夾與 AI 共用。
+pub(crate) fn check_skill_range(
+    distance: i32,
+    min_range: i32,
+    max_range: i32,
+) -> Result<(), GameError> {
+    if distance < min_range {
+        Err(error::target_too_close())
+    } else if distance > max_range {
+        Err(error::target_too_far())
+    } else {
+        Ok(())
+    }
 }
 
 /// 技能指定的目標種類；以技能種類決定行為時一律經過此函式。
@@ -583,41 +607,53 @@ enum UnitSkillEffect {
     },
 }
 
+// 從所選格解析目標並驗證技能；呼叫端不再分別傳入目標 ID 與格子。
 fn validate_unit_skill_target(
     world: &World,
     attacker: Entity,
-    target: Entity,
     target_cell: GridPos,
     skill: &SkillDef,
-) -> Result<UnitSkillEffect, GameError> {
-    let target_position = world
-        .get::<Pos>(target)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let target_footprint = *world
-        .get::<Footprint>(target)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    if !overlap(
-        target_cell,
-        Footprint {
-            width: 1,
-            height: 1,
-        },
-        target_position,
-        target_footprint,
-    ) {
-        return Err(error::cell_not_on_target());
-    }
-    let attacker_unit = world
+) -> Result<(Entity, UnitSkillEffect), GameError> {
+    let SkillDef {
+        id,
+        ranged: _,
+        min_range,
+        max_range,
+        effect: skill_effect,
+    } = skill;
+    let target = unit_at_cell(world, target_cell).ok_or(error::missing_target())?;
+    let Unit {
+        unit_type: _,
+        visual: _,
+        team: attacker_team,
+        movement: _,
+        initiative: _,
+        dodge: _,
+        block: _,
+        attack: _,
+        power: _,
+        skills,
+    } = world
         .get::<Unit>(attacker)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    let target_unit = world
+    let Unit {
+        unit_type: _,
+        visual: _,
+        team: target_team,
+        movement: _,
+        initiative: _,
+        dodge: _,
+        block: _,
+        attack: _,
+        power: _,
+        skills: _,
+    } = world
         .get::<Unit>(target)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    if !attacker_unit.skills.contains(&skill.id) {
+    if !skills.contains(id) {
         return Err(error::unit_cannot_use_skill());
     }
-    let effect = match &skill.effect {
+    let effect = match skill_effect {
         SkillEffect::Attack {
             attack_bonus,
             power_bonus,
@@ -640,10 +676,10 @@ fn validate_unit_skill_target(
         SkillEffect::Mire { .. } => return Err(error::unit_cannot_use_skill()),
     };
     match effect {
-        UnitSkillEffect::Heal { .. } if attacker_unit.team != target_unit.team => {
+        UnitSkillEffect::Heal { .. } if attacker_team != target_team => {
             return Err(error::heal_allies_only());
         }
-        UnitSkillEffect::Attack { .. } if attacker_unit.team == target_unit.team => {
+        UnitSkillEffect::Attack { .. } if attacker_team == target_team => {
             return Err(error::cannot_attack_ally());
         }
         UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
@@ -655,22 +691,10 @@ fn validate_unit_skill_target(
     let attacker_footprint = *world
         .get::<Footprint>(attacker)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let target_distance = footprint_distance(
-        attacker_position,
-        attacker_footprint,
-        target_cell,
-        Footprint {
-            width: 1,
-            height: 1,
-        },
-    );
-    if target_distance < skill.min_range {
-        return Err(error::target_too_close());
-    }
-    if target_distance > skill.max_range {
-        return Err(error::target_too_far());
-    }
-    Ok(effect)
+    let target_distance =
+        footprint_cell_distance(attacker_position, attacker_footprint, target_cell);
+    check_skill_range(target_distance, *min_range, *max_range)?;
+    Ok((target, effect))
 }
 
 fn attack_result(
@@ -714,7 +738,13 @@ pub(crate) fn attack_modifier(
     skill: &SkillDef,
     attack_bonus: i32,
 ) -> i32 {
-    attack_modifier_breakdown(world, attacker, target, skill, attack_bonus).total
+    let AttackModifierBreakdown {
+        attack_stat_modifier: _,
+        skill_attack_modifier: _,
+        flanking_modifier: _,
+        total,
+    } = attack_modifier_breakdown(world, attacker, target, skill, attack_bonus);
+    total
 }
 
 fn attack_modifier_breakdown(
@@ -739,11 +769,18 @@ fn attack_modifier_breakdown(
 }
 
 fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &SkillDef) -> i32 {
-    if skill.ranged {
+    let SkillDef {
+        id: _,
+        ranged,
+        min_range,
+        max_range,
+        effect: _,
+    } = skill;
+    if *ranged {
         return 0;
     }
     let attacker_side =
-        match target_side_within_range(world, attacker, target, skill.min_range, skill.max_range) {
+        match target_side_within_range(world, attacker, target, *min_range, *max_range) {
             Some(side) => side,
             None => return 0,
         };
@@ -752,21 +789,32 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
         .expect("可發動攻擊的單位應具有 Unit")
         .team
         .clone();
-    let skills = world.resource::<Skills>();
+    let Skills { definitions } = world.resource::<Skills>();
     let has_supporter = world.iter_entities().any(|entity| {
         if entity.id() == attacker || entity.id() == target {
             return false;
         }
-        let unit = match entity.get::<Unit>() {
+        let Unit {
+            unit_type: _,
+            visual: _,
+            team,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            block: _,
+            attack: _,
+            power: _,
+            skills,
+        } = match entity.get::<Unit>() {
             Some(unit) => unit,
             None => return false,
         };
-        if unit.team != attacker_team {
+        if *team != attacker_team {
             return false;
         }
-        unit.skills
+        skills
             .iter()
-            .filter_map(|skill_id| skills.definitions.get(skill_id))
+            .filter_map(|skill_id| definitions.get(skill_id))
             .filter(|support_skill| {
                 !support_skill.ranged
                     && target_kind(&support_skill.effect) == SkillTargetKind::Enemy
@@ -797,11 +845,17 @@ fn target_side_within_range(
     max_range: i32,
 ) -> Option<TargetSide> {
     let unit_position = world.get::<Pos>(unit).expect("參與包夾的單位應具有 Pos").0;
-    let unit_footprint = *world
+    let unit_footprint @ Footprint {
+        width: unit_width,
+        height: unit_height,
+    } = *world
         .get::<Footprint>(unit)
         .expect("參與包夾的單位應具有 Footprint");
     let target_position = world.get::<Pos>(target).expect("包夾目標應具有 Pos").0;
-    let target_footprint = *world
+    let target_footprint @ Footprint {
+        width: target_width,
+        height: target_height,
+    } = *world
         .get::<Footprint>(target)
         .expect("包夾目標應具有 Footprint");
     let target_distance = footprint_distance(
@@ -810,14 +864,14 @@ fn target_side_within_range(
         target_position,
         target_footprint,
     );
-    if target_distance < min_range || target_distance > max_range {
+    if check_skill_range(target_distance, min_range, max_range).is_err() {
         return None;
     }
 
-    let unit_right = unit_position.x + unit_footprint.width - 1;
-    let unit_bottom = unit_position.y + unit_footprint.height - 1;
-    let target_right = target_position.x + target_footprint.width - 1;
-    let target_bottom = target_position.y + target_footprint.height - 1;
+    let unit_right = unit_position.x + unit_width - 1;
+    let unit_bottom = unit_position.y + unit_height - 1;
+    let target_right = target_position.x + target_width - 1;
+    let target_bottom = target_position.y + target_height - 1;
     let rows_overlap = unit_position.y <= target_bottom && unit_bottom >= target_position.y;
     let columns_overlap = unit_position.x <= target_right && unit_right >= target_position.x;
     if rows_overlap && unit_right < target_position.x {
@@ -858,8 +912,14 @@ pub(crate) fn attack_damage(
 }
 
 pub(crate) fn can_use_skill(turn: &Turn) -> bool {
-    matches!(turn.phase, Phase::Ready | Phase::Moving) && turn.movement_segments_used == 0
-        || matches!(turn.phase, Phase::AfterMove) && turn.movement_segments_used == 1
+    let Turn {
+        actor: _,
+        phase,
+        movement_remaining: _,
+        movement_segments_used,
+    } = turn;
+    matches!(phase, Phase::Ready | Phase::Moving) && *movement_segments_used == 0
+        || matches!(phase, Phase::AfterMove) && *movement_segments_used == 1
 }
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
     if n == 1 {
@@ -941,56 +1001,59 @@ pub(crate) fn closest_occupied_cell(w: &World, attacker: Entity, target: Entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
     footprint_cells(target_position, target_footprint)
         .into_iter()
-        .min_by_key(|cell| {
-            footprint_distance(
-                attacker_position,
-                attacker_footprint,
-                *cell,
-                Footprint {
-                    width: 1,
-                    height: 1,
-                },
-            )
-        })
+        .min_by_key(|cell| footprint_cell_distance(attacker_position, attacker_footprint, *cell))
         .expect("載入時已驗證單位佔用尺寸為正值，應至少佔用一格")
 }
 
 pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
-    let board = w.resource::<Board>();
+    let board @ Board {
+        width,
+        height,
+        terrains: _,
+        terrain_types: _,
+    } = w.resource::<Board>();
     let position = w.get::<Pos>(e).expect("已建立的戰鬥單位應具有 Pos 元件").0;
     let footprint = *w
         .get::<Footprint>(e)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let unit = w.get::<Unit>(e).expect("已建立的戰鬥單位應具有 Unit 元件");
-    let skills = w.resource::<Skills>();
-    let ranges: Vec<_> = unit
-        .skills
+    let Unit {
+        unit_type: _,
+        visual: _,
+        team: _,
+        movement: _,
+        initiative: _,
+        dodge: _,
+        block: _,
+        attack: _,
+        power: _,
+        skills,
+    } = w.get::<Unit>(e).expect("已建立的戰鬥單位應具有 Unit 元件");
+    let Skills { definitions } = w.resource::<Skills>();
+    let ranges: Vec<_> = skills
         .iter()
-        .filter_map(|skill_id| skills.definitions.get(skill_id))
+        .filter_map(|skill_id| definitions.get(skill_id))
         .map(|skill| {
+            let SkillDef {
+                id,
+                ranged: _,
+                min_range,
+                max_range,
+                effect,
+            } = skill;
             let mut cells = Vec::new();
-            for y in 0..board.height {
-                for x in 0..board.width {
+            for y in 0..*height {
+                for x in 0..*width {
                     let cell = GridPos { x, y };
-                    let cell_distance = footprint_distance(
-                        position,
-                        footprint,
-                        cell,
-                        Footprint {
-                            width: 1,
-                            height: 1,
-                        },
-                    );
-                    if (skill.min_range..=skill.max_range).contains(&cell_distance)
-                        && (target_kind(&skill.effect) != SkillTargetKind::Enemy
-                            || cell_distance > 0)
+                    let cell_distance = footprint_cell_distance(position, footprint, cell);
+                    if check_skill_range(cell_distance, *min_range, *max_range).is_ok()
+                        && (target_kind(effect) != SkillTargetKind::Enemy || cell_distance > 0)
                     {
                         cells.push(cell);
                     }
                 }
             }
             SkillRangeView {
-                id: skill.id.clone(),
+                id: id.clone(),
                 details: skill_details(skill, board),
                 usable: can_use_skill(w.resource::<Turn>()),
                 cells,
@@ -1001,8 +1064,15 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
 }
 
 fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
-    let target = target_kind(&skill.effect);
-    let (attack_bonus, power_bonus, effect) = match &skill.effect {
+    let SkillDef {
+        id: _,
+        ranged,
+        min_range,
+        max_range,
+        effect: skill_effect,
+    } = skill;
+    let target = target_kind(skill_effect);
+    let (attack_bonus, power_bonus, effect) = match skill_effect {
         SkillEffect::Attack {
             attack_bonus,
             power_bonus,
@@ -1033,9 +1103,9 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
     };
     SkillDetailsView {
         target,
-        ranged: skill.ranged,
-        min_range: skill.min_range,
-        max_range: skill.max_range,
+        ranged: *ranged,
+        min_range: *min_range,
+        max_range: *max_range,
         attack_bonus,
         power_bonus,
         effect,

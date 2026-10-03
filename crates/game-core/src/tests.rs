@@ -113,21 +113,31 @@ fn attack_modifier_uses_expected_flanking_bonus() {
         },
     ];
 
-    for case in cases {
-        let skill = attack_skill(case.ranged, case.range);
+    for FlankingCase {
+        name,
+        ranged,
+        range,
+        attacker_position,
+        supporter_position,
+        target_position,
+        target_footprint,
+        expected_modifier,
+    } in cases
+    {
+        let skill = attack_skill(ranged, range);
         let (world, attacker, target) = flanking_world(
-            case.attacker_position,
-            case.supporter_position,
-            case.target_position,
-            case.target_footprint,
-            case.range,
+            attacker_position,
+            supporter_position,
+            target_position,
+            target_footprint,
+            range,
         );
 
         assert_eq!(
             attack_modifier(&world, attacker, target, &skill, 0),
-            case.expected_modifier,
+            expected_modifier,
             "{}",
-            case.name
+            name
         );
     }
 }
@@ -140,7 +150,7 @@ struct MovementPreviewCase {
     total_cost: u32,
 }
 
-// 驗證第一階段會在預算內優先安全繞路，無法繞路時則選擇同階段的危險路徑。
+// 驗證完整移動預覽在第一階段預算內優先安全繞路，無法繞路時選擇危險路徑。
 #[test]
 fn move_preview_chooses_safest_path_within_first_phase() {
     let cases = [
@@ -160,34 +170,139 @@ fn move_preview_chooses_safest_path_within_first_phase() {
         },
     ];
 
-    for case in cases {
-        let (game, actor_position, spikes, destination) = movement_preview_game(case.movement);
-        let preview = game
+    for MovementPreviewCase {
+        name,
+        movement,
+        interrupted: expected_interrupted,
+        path_length,
+        total_cost: expected_total_cost,
+    } in cases
+    {
+        let (game, actor_position, spikes, destination) = movement_preview_game(movement);
+        let MovePreview {
+            first,
+            second,
+            interrupted,
+            total_cost,
+        } = game
             .preview_move(ACTOR_ID, destination)
             .expect("目的地應能在第一階段朝目標移動");
-        let expected_last = if case.interrupted {
+        let expected_last = if expected_interrupted {
             spikes
         } else {
             destination
         };
 
-        assert_eq!(preview.interrupted, case.interrupted, "{}", case.name);
-        assert_eq!(
-            preview.first.first(),
-            Some(&actor_position),
-            "{}",
-            case.name
-        );
-        assert_eq!(preview.first.last(), Some(&expected_last), "{}", case.name);
-        assert_eq!(preview.first.len(), case.path_length, "{}", case.name);
-        assert_eq!(
-            preview.first.contains(&spikes),
-            case.interrupted,
-            "{}",
-            case.name
-        );
-        assert_eq!(preview.total_cost, case.total_cost, "{}", case.name);
-        assert!(preview.second.is_empty(), "{}", case.name);
+        assert_eq!(interrupted, expected_interrupted, "{}", name);
+        assert_eq!(first.first(), Some(&actor_position), "{}", name);
+        assert_eq!(first.last(), Some(&expected_last), "{}", name);
+        assert_eq!(first.len(), path_length, "{}", name);
+        assert_eq!(first.contains(&spikes), expected_interrupted, "{}", name);
+        assert_eq!(total_cost, expected_total_cost, "{}", name);
+        assert!(second.is_empty(), "{}", name);
+    }
+}
+
+// 驗證第二段分次移動會扣除剩餘額度，範圍、預覽與執行均不可重新取得完整預算。
+#[test]
+fn second_movement_segment_preserves_remaining_budget() {
+    #[derive(Debug)]
+    enum Check {
+        RemainingBudget,
+        MovementRange,
+        Preview,
+        Execution,
+    }
+    let mut failures = Vec::new();
+    for check in [
+        Check::RemainingBudget,
+        Check::MovementRange,
+        Check::Preview,
+        Check::Execution,
+    ] {
+        let mut game = push_collision_game();
+        game.start().expect("測試戰鬥應可開始");
+        let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
+        game.world
+            .get_mut::<Unit>(entity)
+            .expect("玩家應有 Unit")
+            .movement = 3;
+        // 沿無障礙的上排跨入第二段，再分次移動。
+        game.world.get_mut::<Pos>(entity).expect("玩家應有位置").0 = GridPos { x: 0, y: 0 };
+        *game.world.resource_mut::<Turn>() = Turn {
+            actor: Some(ACTOR_ID),
+            phase: Phase::Ready,
+            movement_remaining: 3,
+            movement_segments_used: 0,
+        };
+        game.move_to(ACTOR_ID, GridPos { x: 4, y: 0 })
+            .expect("移動四格應跨入第二段並剩餘兩格");
+        game.move_to(ACTOR_ID, GridPos { x: 3, y: 0 })
+            .expect("第二段應可移動一格");
+        let beyond_budget = GridPos { x: 1, y: 0 };
+        let correct = match check {
+            Check::RemainingBudget => game.world.resource::<Turn>().movement_remaining == 1,
+            Check::MovementRange => {
+                let (_, second) = super::movement::movement_ranges(
+                    &game.world,
+                    entity,
+                    game.world.resource::<Turn>(),
+                );
+                !second.contains(&beyond_budget)
+            }
+            Check::Preview => game.preview_move(ACTOR_ID, beyond_budget).is_err(),
+            Check::Execution => game.move_to(ACTOR_ID, beyond_budget).is_err(),
+        };
+        if !correct {
+            failures.push(check);
+        }
+    }
+    assert!(failures.is_empty(), "第二段預算未正確保留：{failures:?}");
+}
+
+// 驗證第一段剛好用完後可開始第二段，並依第二段消耗決定剩餘額度及技能狀態。
+#[test]
+fn second_movement_segment_starts_after_first_is_exhausted() {
+    for (destination_x, remaining, expected_phase) in
+        [(4, 2, Phase::Moving), (0, 0, Phase::AfterMove)]
+    {
+        let mut game = push_collision_game();
+        game.start().expect("測試戰鬥應可開始");
+        let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
+        game.world
+            .get_mut::<Unit>(entity)
+            .expect("玩家應有 Unit")
+            .movement = 3;
+        game.world.get_mut::<Pos>(entity).expect("玩家應有位置").0 = GridPos { x: 0, y: 0 };
+        *game.world.resource_mut::<Turn>() = Turn {
+            actor: Some(ACTOR_ID),
+            phase: Phase::Ready,
+            movement_remaining: 3,
+            movement_segments_used: 0,
+        };
+        game.move_to(ACTOR_ID, GridPos { x: 3, y: 0 })
+            .expect("第一段應可剛好用完");
+        assert!(super::skill::can_use_skill(game.world.resource::<Turn>()));
+        let destination = GridPos {
+            x: destination_x,
+            y: 0,
+        };
+        let (_, second) =
+            super::movement::movement_ranges(&game.world, entity, game.world.resource::<Turn>());
+        assert!(second.contains(&destination));
+        game.preview_move(ACTOR_ID, destination)
+            .expect("第二段應可預覽");
+        game.move_to(ACTOR_ID, destination)
+            .expect("第一段用完後仍應可執行第二段移動");
+        let turn @ Turn {
+            actor: _,
+            phase,
+            movement_remaining,
+            movement_segments_used: _,
+        } = game.world.resource::<Turn>();
+        assert_eq!(*movement_remaining, remaining);
+        assert_eq!(*phase, expected_phase);
+        assert!(!super::skill::can_use_skill(turn));
     }
 }
 
@@ -368,7 +483,7 @@ fn push_collision_damages_both_units() {
         .get("push")
         .expect("測試推擊技能應存在")
         .clone();
-    game.use_skill(ACTOR_ID, TARGET_ID, GridPos { x: 2, y: 1 }, skill)
+    game.use_skill_at_cell(ACTOR_ID, GridPos { x: 2, y: 1 }, skill)
         .expect("推擊應成功結算");
 
     let target = game.entity(TARGET_ID).expect("測試目標應存在");
@@ -424,13 +539,13 @@ fn skill_min_range_limits_preview_and_action() {
     game.start().expect("測試戰鬥應可開始");
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
     let error = game
-        .use_skill(ACTOR_ID, TARGET_ID, GridPos { x: 2, y: 1 }, skill)
+        .use_skill_at_cell(ACTOR_ID, GridPos { x: 2, y: 1 }, skill)
         .expect_err("過近的目標應被拒絕");
     assert_eq!(error.id(), "target_too_close");
     assert_eq!(error.message(), "目標距離太近");
 }
 
-// 驗證零射程治療可對自己施放，且治療量為施放者力量加技能加值。
+// 驗證零射程治療可對自己施放，完整治療預覽與實際治療量符合力量加技能加值。
 #[test]
 fn zero_range_heal_targets_self() {
     let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal { power_bonus: 4 });
@@ -447,11 +562,21 @@ fn zero_range_heal_targets_self() {
         .preview_skill(ACTOR_ID, GridPos { x: 1, y: 1 }, "push")
         .expect("零距離治療應可預覽");
     match preview {
-        SkillPreview::Healing(healing) => assert_eq!(healing.healing, 5),
+        SkillPreview::Healing(HealingPreview {
+            target: _,
+            target_type: _,
+            target_hp: _,
+            target_max_hp: _,
+            target_mana: _,
+            healing,
+            remaining_hp: _,
+            missing_hp: _,
+            health_segments: _,
+        }) => assert_eq!(healing, 5),
         _ => panic!("治療技能應產生治療預覽"),
     }
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
-    game.use_skill(ACTOR_ID, ACTOR_ID, GridPos { x: 1, y: 1 }, skill)
+    game.use_skill_at_cell(ACTOR_ID, GridPos { x: 1, y: 1 }, skill)
         .expect("零距離治療應可對自己施放");
     assert_eq!(
         game.world

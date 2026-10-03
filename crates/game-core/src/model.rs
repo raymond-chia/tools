@@ -400,17 +400,20 @@ pub enum SkillDetailEffect {
 #[derive(Serialize)]
 pub struct TerrainDescriptionView {
     pub terrain: String,
+    pub entry_rule: TerrainEntryRule,
     pub values: TerrainDescriptionValues,
 }
 
 #[derive(Serialize)]
 pub struct TerrainDescriptionValues {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub defense_penalty: Option<i32>,
+    pub dodge_penalty: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra_movement_cost: Option<i32>,
+    pub block_penalty: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub remaining_rounds: Option<i32>,
+    pub extra_movement_cost: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remaining_rounds: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub damage: Option<i32>,
 }

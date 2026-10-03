@@ -127,10 +127,6 @@ pub(crate) fn target_too_far() -> GameError {
     GameError::new("target_too_far", "目標距離太遠".to_owned())
 }
 
-pub(crate) fn cell_not_on_target() -> GameError {
-    GameError::new("cell_not_on_target", "所選格不屬於目標".to_owned())
-}
-
 pub(crate) fn heal_allies_only() -> GameError {
     GameError::new("heal_allies_only", "只能治療自己或友軍".to_owned())
 }
@@ -274,4 +270,11 @@ pub(crate) fn unknown_skill(id: &str) -> GameError {
 
 pub(crate) fn duplicate_terrain_type_id() -> GameError {
     GameError::new("duplicate_terrain_type_id", "地形定義 ID 重複".to_owned())
+}
+
+pub(crate) fn numeric_range(id: &str) -> GameError {
+    GameError::new(
+        "numeric_range",
+        format!("{id} 的數值超出核心可安全運算的範圍"),
+    )
 }
