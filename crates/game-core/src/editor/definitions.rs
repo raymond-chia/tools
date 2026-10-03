@@ -93,12 +93,13 @@ pub fn edit_definition_from_json(
             terrains.sort_by_key(|terrain| terrain.layer != TerrainLayer::Ground);
             let terrain_entries: Vec<_> = terrains
                 .iter()
-                .enumerate()
-                .map(|(index, terrain)| {
+                .map(|terrain| {
                     serde_json::json!({
                         "id": terrain.id,
-                        "can_move_up": index > 0 && terrains[index - 1].layer == terrain.layer,
-                        "can_move_down": index + 1 < terrains.len() && terrains[index + 1].layer == terrain.layer,
+                        "move_targets": terrains.iter()
+                            .filter(|target| target.layer == terrain.layer)
+                            .map(|target| &target.id)
+                            .collect::<Vec<_>>(),
                     })
                 })
                 .collect();
@@ -112,11 +113,11 @@ pub fn edit_definition_from_json(
             id,
             offset,
         } => {
-            if offset != -1 && offset != 1 {
+            if offset == 0 {
                 return Err(EditorError::operation("invalid_command", &id, Vec::new()));
             }
             if matches!(category, DefinitionCategory::TerrainTypes) {
-                // 地形固定依圖層分組；上下移動只調整同圖層內的順序。
+                // 地形固定依圖層分組；拖曳只調整同圖層內的順序。
                 definitions
                     .terrain_types
                     .sort_by_key(|terrain| terrain.layer != TerrainLayer::Ground);
@@ -146,16 +147,21 @@ pub fn edit_definition_from_json(
             }
             match category {
                 DefinitionCategory::UnitTypes => {
-                    definitions.unit_types.swap(index, target as usize)
+                    let entry = definitions.unit_types.remove(index);
+                    definitions.unit_types.insert(target as usize, entry);
                 }
-                DefinitionCategory::Skills => definitions.skills.swap(index, target as usize),
+                DefinitionCategory::Skills => {
+                    let entry = definitions.skills.remove(index);
+                    definitions.skills.insert(target as usize, entry);
+                }
                 DefinitionCategory::TerrainTypes => {
                     if definitions.terrain_types[index].layer
                         != definitions.terrain_types[target as usize].layer
                     {
                         return Err(EditorError::operation("invalid_command", &id, Vec::new()));
                     }
-                    definitions.terrain_types.swap(index, target as usize)
+                    let entry = definitions.terrain_types.remove(index);
+                    definitions.terrain_types.insert(target as usize, entry);
                 }
             }
         }
@@ -242,7 +248,6 @@ pub fn edit_definition_from_json(
                 DefinitionCategory::TerrainTypes => {
                     definitions.terrain_types.push(TerrainTypeDef {
                         id,
-                        visual: "plain".to_owned(),
                         layer: TerrainLayer::Overlay,
                         entry_rule: TerrainEntryRule::Walkable,
                         damage: 0,

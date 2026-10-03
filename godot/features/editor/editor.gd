@@ -431,7 +431,7 @@ func refresh_terrain_list() -> void:
 			button.add_child(layout)
 			var preview := Control.new()
 			preview.set_script(TILE_PREVIEW)
-			preview.visual = find_definition("terrain_types", kind).visual if not kind.is_empty() else ""
+			preview.visual = kind if not kind.is_empty() else ""
 			preview.layer = layer
 			preview.custom_minimum_size = Vector2(64, 52)
 			preview.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -1013,7 +1013,7 @@ impl Game {
                             board,
                             ground_at(board, &terrains).expect("terrains_at 必含 ground"),
                         )
-                        .visual
+                        .id
                         .clone(),
                         terrains,
                         unit_id: units
@@ -1042,7 +1042,7 @@ impl Game {
                             x: position.x,
                             y: position.y,
                             damage: terrain_damage(&b, kind),
-                            visual: terrain_type(&b, kind).visual.clone(),
+                            visual: kind.clone(),
                             effect: kind.clone(),
                             remaining_rounds: None,
                         });
@@ -1060,7 +1060,7 @@ impl Game {
                             x: position.x,
                             y: position.y,
                             damage: terrain_damage(&b, kind),
-                            visual: terrain_type(&b, kind).visual.clone(),
+                            visual: kind.clone(),
                             effect: kind.clone(),
                             remaining_rounds: Some(
                                 terrain.expires_after_round.saturating_sub(enc.round) + 1,

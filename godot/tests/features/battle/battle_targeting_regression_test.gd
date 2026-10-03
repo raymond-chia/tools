@@ -22,7 +22,7 @@ func before_test() -> void:
 func test_mire_on_large_unit_uses_only_clicked_cell() -> void:
 	await load_test_documents()
 	var clicked_cell := Vector2i(5, 2)
-	battle.select_action("corrosive_mire")
+	battle.select_action("mire")
 
 	push_left_click(battle.world.cell_center(clicked_cell))
 
@@ -61,7 +61,7 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 func test_mire_movement_cost_and_duration() -> void:
 	await load_test_documents()
 	var mire_cell := Vector2i(1, 1)
-	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": mire_cell.x, "y": mire_cell.y, "skill": "corrosive_mire"})).override_failure_message("泥沼應成功施放").is_true()
+	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": mire_cell.x, "y": mire_cell.y, "skill": "mire"})).override_failure_message("泥沼應成功施放").is_true()
 	await wait_for_combat_events()
 	var terrain := terrain_at(mire_cell)
 	assert_array(terrain.terrains).override_failure_message("泥沼存在時應保留原有普通地面").contains("plain")

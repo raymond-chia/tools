@@ -17,18 +17,9 @@ layout_mode = 2
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Order" type="HBoxContainer" parent="ListPanel"]
+[node name="OrderHint" type="Label" parent="ListPanel"]
 layout_mode = 2
-
-[node name="Up" type="Button" parent="ListPanel/Order"]
-layout_mode = 2
-text = "上移"
-disabled = true
-
-[node name="Down" type="Button" parent="ListPanel/Order"]
-layout_mode = 2
-text = "下移"
-disabled = true
+text = "拖曳項目以調整順序"
 
 [node name="Actions" type="HBoxContainer" parent="ListPanel"]
 layout_mode = 2

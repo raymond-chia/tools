@@ -180,7 +180,6 @@ pub struct TerrainPlacement {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainTypeDef {
     pub id: String,
-    pub(crate) visual: String,
     pub(crate) layer: TerrainLayer,
     pub(crate) entry_rule: TerrainEntryRule,
     #[serde(default)]
@@ -507,7 +506,7 @@ pub struct TerrainCellView {
     pub x: i32,
     pub y: i32,
     pub passable: bool,
-    /// 此格 ground 地形的 visual；overlay 由 terrain_effects 呈現。
+    /// 此格 ground 地形的 ID 作為外觀；overlay 由 terrain_effects 呈現。
     pub ground_visual: String,
     /// 此格的地形種類 ID，包含固定與暫時地形。
     pub terrains: Vec<String>,

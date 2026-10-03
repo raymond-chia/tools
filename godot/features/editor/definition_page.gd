@@ -23,7 +23,7 @@ const FIELD_LABELS := {
 const CHOICES := {
 	"effect": {"attack": "攻擊", "push": "推擊", "mire": "產生地形", "heal": "治療"},
 	"layer": {"ground": "地面", "overlay": "上層"},
-	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時倒下"}
+	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
 }
 
 @export var category := "unit_types"
@@ -39,8 +39,7 @@ var effect_terrain_ids: Array = []
 func _ready() -> void:
 	$ListPanel/Title.text = TITLES[category] + "清單"
 	entries.item_selected.connect(func(_index: int): refresh_fields())
-	$ListPanel/Order/Up.pressed.connect(func(): move_requested.emit(category, selected_id(), -1))
-	$ListPanel/Order/Down.pressed.connect(func(): move_requested.emit(category, selected_id(), 1))
+	entries.set_drag_forwarding(begin_entry_drag, can_drop_entry, drop_entry)
 	$ListPanel/Actions/Add.pressed.connect(func(): open_create_dialog(false))
 	$ListPanel/Actions/Duplicate.pressed.connect(func(): open_create_dialog(true))
 	$EffectDialog.confirmed.connect(func():
@@ -49,6 +48,33 @@ func _ready() -> void:
 	$AddDialog/Form/ID.text_submitted.connect(func(_text: String): submit_add())
 	$ListPanel/Actions/Remove.pressed.connect(func(): remove_requested.emit(category, selected_id()))
 	$RemoveDialog.confirmed.connect(func(): remove_confirmed.emit(category, removing_id))
+
+# 清單拖曳只處理介面位置；地形可移動的目標由核心提供。
+func begin_entry_drag(at_position: Vector2) -> Variant:
+	var index := entries.get_item_at_position(at_position, true)
+	if index < 0: return null
+	entries.select(index)
+	refresh_fields()
+	var preview := Label.new()
+	preview.text = entries.get_item_text(index)
+	entries.set_drag_preview(preview)
+	return {"source": entries, "index": index, "id": entries.get_item_text(index)}
+
+func entry_drop_index(at_position: Vector2) -> int:
+	if entries.item_count == 0: return -1
+	return entries.get_item_at_position(at_position)
+
+func can_drop_entry(at_position: Vector2, data: Variant) -> bool:
+	if not data is Dictionary or data.get("source") != entries: return false
+	var target := entry_drop_index(at_position)
+	if target < 0 or target == data.index: return false
+	if category == "terrain_types":
+		var order: Dictionary = entries.get_item_metadata(data.index)
+		return order.move_targets.has(entries.get_item_text(target))
+	return true
+
+func drop_entry(at_position: Vector2, data: Variant) -> void:
+	move_requested.emit(category, data.id, entry_drop_index(at_position) - data.index)
 
 func confirm_remove(id: String) -> void:
 	removing_id = id
@@ -116,13 +142,6 @@ func selected_definition() -> Dictionary:
 	return {}
 
 func refresh_fields() -> void:
-	var selected := entries.get_selected_items()
-	$ListPanel/Order/Up.disabled = selected.is_empty() or selected[0] == 0
-	$ListPanel/Order/Down.disabled = selected.is_empty() or selected[0] == entries.item_count - 1
-	if category == "terrain_types" and not selected.is_empty():
-		var order: Dictionary = entries.get_item_metadata(selected[0])
-		$ListPanel/Order/Up.disabled = not order.can_move_up
-		$ListPanel/Order/Down.disabled = not order.can_move_down
 	rebuilding = true
 	for child in fields.get_children():
 		fields.remove_child(child)

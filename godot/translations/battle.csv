@@ -4,7 +4,7 @@ SKILL_NAME_RANGED_ATTACK,遠程攻擊,Ranged Attack
 SKILL_NAME_POWER_STRIKE,強力一擊,Power Strike
 SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
 SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
-SKILL_NAME_CORROSIVE_MIRE,腐蝕泥沼,Corrosive Mire
+SKILL_NAME_MIRE,泥沼,Mire
 SKILL_NAME_HEAL,治癒術,Heal
 SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
 SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
@@ -19,7 +19,7 @@ SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
 SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
 SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too
-SKILL_EFFECT_MIRE,效果：建立腐蝕泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates corrosive mire; movement cost +%d for %d rounds
+SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
 TERRAIN_DESCRIPTION_MIRE,閃避與格擋 −{defense_penalty}，移動消耗 +{extra_movement_cost}，剩餘 {remaining_rounds} 回合,"Dodge and block −{defense_penalty}, movement cost +{extra_movement_cost}, {remaining_rounds} rounds remaining"
 TERRAIN_DESCRIPTION_SPIKES,造成 {damage} 點傷害,Deals {damage} damage
 TERRAIN_DESCRIPTION_CLIFF,無法通行,Impassable
@@ -27,12 +27,10 @@ TERRAIN_DESCRIPTION_CHASM,無法通行；被推入時立即死亡,Impassable; un
 TERRAIN_DESCRIPTION_PLAIN,無特殊效果,No special effect
 TERRAIN_DESCRIPTION_ROUGH,移動消耗增加,Increases movement cost
 TERRAIN_DESCRIPTION_NONE,無特殊效果,No special effect
-TERRAIN_DESCRIPTION_GREASE,進入後會中止移動,Entering ends movement
 TERRAIN_NAME_PLAIN,平地,Plain
 TERRAIN_NAME_ROUGH,崎嶇地面,Rough ground
 TERRAIN_NAME_SPIKES,地刺,Spikes
-TERRAIN_NAME_GREASE,油膩地面,Grease
-TERRAIN_NAME_MIRE,腐蝕泥沼,Corrosive mire
+TERRAIN_NAME_MIRE,泥沼,Mire
 TERRAIN_NAME_CLIFF,峭壁,Cliff wall
 TERRAIN_NAME_CHASM,懸崖,Chasm
 COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
@@ -60,7 +58,7 @@ TEAM_NAME_WILD_ANIMALS,野生動物,Wild Animals
 強力一擊,強力一擊,Power Strike
 瞄準射擊,瞄準射擊,Aimed Shot
 盾牌推擊,盾牌推擊,Shield Bash
-腐蝕泥沼,腐蝕泥沼,Corrosive Mire
+泥沼,泥沼,Mire
 治癒術,治癒術,Heal
 移動消耗 0,移動消耗 0,Move cost 0
 傷害 0,傷害 0,Damage 0

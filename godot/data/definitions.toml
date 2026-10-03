@@ -1,156 +1,181 @@
 [[terrain_types]]
-id="plain"
-layer="ground"
-visual="plain"
-entry_rule="walkable"
+id = "plain"
+layer = "ground"
+entry_rule = "walkable"
+damage = 0
+extra_movement_cost = 0
+dodge_penalty = 0
+block_penalty = 0
 
 [[terrain_types]]
-id="rough"
-layer="ground"
-visual="rough"
-entry_rule="walkable"
-extra_movement_cost=1
+id = "rough"
+layer = "ground"
+entry_rule = "walkable"
+damage = 0
+extra_movement_cost = 1
+dodge_penalty = 0
+block_penalty = 0
 
 [[terrain_types]]
-id="spikes"
-layer="overlay"
-visual="spikes"
-entry_rule="walkable"
-damage=3
+id = "spikes"
+layer = "overlay"
+entry_rule = "walkable"
+damage = 3
+extra_movement_cost = 0
+dodge_penalty = 0
+block_penalty = 0
 
 [[terrain_types]]
-id="grease"
-layer="overlay"
-visual="grease"
-entry_rule="walkable"
+id = "mire"
+layer = "overlay"
+entry_rule = "walkable"
+damage = 0
+extra_movement_cost = 1
+dodge_penalty = 3
+block_penalty = 3
 
 [[terrain_types]]
-id="mire"
-layer="overlay"
-visual="mire"
-entry_rule="walkable"
-extra_movement_cost=1
-dodge_penalty=3
-block_penalty=3
+id = "cliff"
+layer = "ground"
+entry_rule = "blocked"
+damage = 0
+extra_movement_cost = 0
+dodge_penalty = 0
+block_penalty = 0
 
 [[terrain_types]]
-id="cliff"
-layer="ground"
-visual="cliff"
-entry_rule="blocked"
-
-[[terrain_types]]
-id="chasm"
-layer="ground"
-visual="chasm"
-entry_rule="instant_down_when_pushed"
+id = "chasm"
+layer = "ground"
+entry_rule = "instant_down_when_pushed"
+damage = 0
+extra_movement_cost = 0
+dodge_penalty = 0
+block_penalty = 0
 
 [[skills]]
-id="melee_attack"
-ranged=false
-attack_bonus=0
-power_bonus=0
-min_range=1
-max_range=1
-effect="attack"
+id = "melee_attack"
+ranged = false
+min_range = 1
+max_range = 1
+effect = "attack"
+attack_bonus = 0
+power_bonus = 0
 
 [[skills]]
-id="ranged_attack"
-ranged=true
-attack_bonus=0
-power_bonus=0
-min_range=1
-max_range=5
-effect="attack"
+id = "ranged_attack"
+ranged = true
+min_range = 1
+max_range = 5
+effect = "attack"
+attack_bonus = 0
+power_bonus = 0
 
 [[skills]]
-id="power_strike"
-ranged=false
-attack_bonus=2
-power_bonus=2
-min_range=1
-max_range=1
-effect="attack"
+id = "power_strike"
+ranged = false
+min_range = 1
+max_range = 1
+effect = "attack"
+attack_bonus = 2
+power_bonus = 2
 
 [[skills]]
-id="shield_bash"
-ranged=false
-attack_bonus=1
-power_bonus=-3
-min_range=1
-max_range=1
-effect="push"
+id = "shield_bash"
+ranged = false
+min_range = 1
+max_range = 1
+effect = "push"
+attack_bonus = 1
+power_bonus = -3
 
 [[skills]]
-id="aimed_shot"
-ranged=true
-attack_bonus=3
-power_bonus=0
-min_range=1
-max_range=6
-effect="attack"
+id = "aimed_shot"
+ranged = true
+min_range = 1
+max_range = 6
+effect = "attack"
+attack_bonus = 3
+power_bonus = 0
 
 [[skills]]
-id="corrosive_mire"
-ranged=true
-min_range=0
-max_range=4
-effect="mire"
-terrain="mire"
-duration=2
+id = "mire"
+ranged = true
+min_range = 0
+max_range = 4
+effect = "mire"
+terrain = "mire"
+duration = 2
 
 [[skills]]
-id="heal"
-ranged=true
-power_bonus=2
-min_range=0
-max_range=4
-effect="heal"
+id = "heal"
+ranged = true
+min_range = 0
+max_range = 4
+effect = "heal"
+power_bonus = 2
 
 [[unit_types]]
-id="aria"
-visual="fighter.svg"
-hp=18
-movement=5
-initiative=3
-dodge=3
-block=4
-attack=5
-power=5
-skills=["melee_attack","power_strike","shield_bash"]
+id = "aria"
+visual = "fighter.svg"
+width = 1
+height = 1
+hp = 18
+movement = 5
+initiative = 3
+dodge = 3
+block = 4
+attack = 5
+power = 5
+skills = [
+    "melee_attack",
+    "power_strike",
+    "shield_bash",
+]
 
 [[unit_types]]
-id="lyra"
-visual="archer.svg"
-hp=13
-movement=6
-initiative=5
-dodge=5
-block=1
-attack=6
-power=4
-skills=["ranged_attack","aimed_shot"]
+id = "lyra"
+visual = "archer.svg"
+width = 1
+height = 1
+hp = 13
+movement = 6
+initiative = 5
+dodge = 5
+block = 1
+attack = 6
+power = 4
+skills = [
+    "ranged_attack",
+    "aimed_shot",
+]
 
 [[unit_types]]
-id="mira"
-visual="archer.svg"
-hp=12
-movement=5
-initiative=2
-dodge=3
-block=2
-attack=4
-power=3
-skills=["corrosive_mire","heal"]
+id = "mira"
+visual = "archer.svg"
+width = 1
+height = 1
+hp = 12
+movement = 5
+initiative = 2
+dodge = 3
+block = 2
+attack = 4
+power = 3
+skills = [
+    "heal",
+    "mire",
+]
 
 [[unit_types]]
-id="wolf"
-visual="wolf.svg"
-hp=9
-movement=5
-initiative=3
-dodge=3
-block=0
-attack=4
-power=3
-skills=["melee_attack"]
+id = "wolf"
+visual = "wolf.svg"
+width = 1
+height = 1
+hp = 9
+movement = 5
+initiative = 3
+dodge = 3
+block = 0
+attack = 4
+power = 3
+skills = ["melee_attack"]

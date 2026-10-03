@@ -1,219 +1,269 @@
-name="灰燼谷伏擊"
-width=10
-height=8
+name = "灰燼谷伏擊"
+width = 10
+height = 8
+
 [[terrains]]
-x=0
-y=0
-kind="cliff"
+x = 0
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=1
-y=0
-kind="cliff"
+x = 1
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=2
-y=0
-kind="cliff"
+x = 2
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=3
-y=0
-kind="cliff"
+x = 3
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=4
-y=0
-kind="cliff"
+x = 4
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=5
-y=0
-kind="cliff"
+x = 5
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=6
-y=0
-kind="cliff"
+x = 6
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=7
-y=0
-kind="cliff"
+x = 7
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=8
-y=0
-kind="cliff"
+x = 8
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=9
-y=0
-kind="cliff"
+x = 9
+y = 0
+kind = "cliff"
+
 [[terrains]]
-x=0
-y=1
-kind="cliff"
+x = 0
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=1
-y=1
-kind="cliff"
+x = 1
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=2
-y=1
-kind="cliff"
+x = 2
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=3
-y=1
-kind="cliff"
+x = 3
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=4
-y=1
-kind="cliff"
+x = 4
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=5
-y=1
-kind="cliff"
+x = 5
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=6
-y=1
-kind="cliff"
+x = 6
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=7
-y=1
-kind="cliff"
+x = 7
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=8
-y=1
-kind="cliff"
+x = 8
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=9
-y=1
-kind="cliff"
+x = 9
+y = 1
+kind = "cliff"
+
 [[terrains]]
-x=0
-y=6
-kind="chasm"
+x = 0
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=1
-y=6
-kind="chasm"
+x = 1
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=2
-y=6
-kind="chasm"
+x = 2
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=3
-y=6
-kind="chasm"
+x = 3
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=4
-y=6
-kind="chasm"
+x = 4
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=5
-y=6
-kind="chasm"
+x = 5
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=6
-y=6
-kind="chasm"
+x = 6
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=7
-y=6
-kind="chasm"
+x = 7
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=8
-y=6
-kind="chasm"
+x = 8
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=9
-y=6
-kind="chasm"
+x = 9
+y = 6
+kind = "chasm"
+
 [[terrains]]
-x=0
-y=7
-kind="chasm"
+x = 0
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=1
-y=7
-kind="chasm"
+x = 1
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=2
-y=7
-kind="chasm"
+x = 2
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=3
-y=7
-kind="chasm"
+x = 3
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=4
-y=7
-kind="chasm"
+x = 4
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=5
-y=7
-kind="chasm"
+x = 5
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=6
-y=7
-kind="chasm"
+x = 6
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=7
-y=7
-kind="chasm"
+x = 7
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=8
-y=7
-kind="chasm"
+x = 8
+y = 7
+kind = "chasm"
+
 [[terrains]]
-x=9
-y=7
-kind="chasm"
+x = 9
+y = 7
+kind = "chasm"
 
 [[units]]
-id=1
-unit_type="aria"
-team="player"
-x=1
-y=3
+id = 1
+unit_type = "aria"
+team = "player"
+x = 1
+y = 3
 
 [[units]]
-id=2
-unit_type="lyra"
-team="player"
-x=2
-y=4
+id = 2
+unit_type = "lyra"
+team = "player"
+x = 2
+y = 4
 
 [[units]]
-id=3
-unit_type="mira"
-team="player"
-x=1
-y=5
+id = 3
+unit_type = "mira"
+team = "player"
+x = 1
+y = 5
 
 [[units]]
-id=4
-unit_type="wolf"
-team={ enemy="wild_animals" }
-x=6
-y=3
+id = 4
+unit_type = "wolf"
+x = 6
+y = 3
+
+[units.team]
+enemy = "wild_animals"
 
 [[units]]
-id=5
-unit_type="wolf"
-team={ enemy="wild_animals" }
-x=7
-y=4
+id = 5
+unit_type = "wolf"
+x = 7
+y = 4
+
+[units.team]
+enemy = "wild_animals"
 
 [[units]]
-id=6
-unit_type="wolf"
-team={ enemy="wild_animals" }
-x=8
-y=2
+id = 6
+unit_type = "wolf"
+x = 8
+y = 2
+
+[units.team]
+enemy = "wild_animals"
 
 [[units]]
-id=7
-unit_type="wolf"
-team={ enemy="wild_animals" }
-x=8
-y=4
+id = 7
+unit_type = "wolf"
+x = 8
+y = 4
+
+[units.team]
+enemy = "wild_animals"
 
 [[units]]
-id=8
-unit_type="wolf"
-team={ enemy="wild_animals" }
-x=7
-y=5
+id = 8
+unit_type = "wolf"
+x = 7
+y = 5
+
+[units.team]
+enemy = "wild_animals"

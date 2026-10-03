@@ -1,7 +1,6 @@
 [[terrain_types]]
 id="plain"
 layer="ground"
-visual="plain"
 entry_rule="walkable"
 
 [[skills]]
@@ -25,7 +24,6 @@ effect="attack"
 [[terrain_types]]
 id="rough"
 layer="ground"
-visual="rough"
 entry_rule="walkable"
 extra_movement_cost=1
 [[unit_types]]

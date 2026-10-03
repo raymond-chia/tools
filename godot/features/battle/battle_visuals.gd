@@ -4,7 +4,7 @@ extends RefCounted
 const TILE_SIZE := Vector2i(64, 32)
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
-# ground 地形的 visual 對應到 GROUND_ART 內的地磚座標。
+# ground 地形 ID 對應到 GROUND_ART 內的地磚座標。
 const GROUND_TILES := {"plain": Vector2i(0, 0), "rough": Vector2i(1, 0), "cliff": Vector2i(2, 0), "chasm": Vector2i(3, 0)}
 
 static func setup_ground(ground: TileMapLayer, terrain_cells: Array) -> void:
@@ -97,10 +97,6 @@ static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vect
 			for offset_x in [-18.0, -6.0, 6.0, 18.0]:
 				var base := center + Vector2(offset_x, 5.0)
 				canvas.draw_colored_polygon(PackedVector2Array([base + Vector2(-5.0, 0.0), base + Vector2(5.0, 0.0), base + Vector2(0.0, -18.0)]), Color("d9d5ca"))
-		"grease":
-			canvas.draw_set_transform(center, 0, Vector2(1, 0.5))
-			canvas.draw_circle(Vector2.ZERO, 20, Color(0.6, 0.3, 0.85, 0.72))
-			canvas.draw_set_transform(Vector2.ZERO)
 		"mire":
 			canvas.draw_set_transform(center, 0, Vector2(1, 0.5))
 			canvas.draw_circle(Vector2.ZERO, 23, Color(0.2, 0.55, 0.28, 0.76))

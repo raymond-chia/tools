@@ -1,27 +1,24 @@
 [[terrain_types]]
 id="plain"
 layer="ground"
-visual="plain"
 entry_rule="walkable"
 
 [[terrain_types]]
 id="rough"
 layer="ground"
-visual="rough"
 entry_rule="walkable"
 extra_movement_cost=1
 
 [[terrain_types]]
 id="mire"
 layer="overlay"
-visual="mire"
 entry_rule="walkable"
 extra_movement_cost=1
 dodge_penalty=3
 block_penalty=3
 
 [[skills]]
-id="corrosive_mire"
+id="mire"
 ranged=true
 min_range=0
 max_range=10
@@ -57,7 +54,7 @@ dodge=2
 block=3
 attack=5
 power=5
-skills=["corrosive_mire", "shield_bash", "finishing_strike"]
+skills=["mire", "shield_bash", "finishing_strike"]
 
 [[unit_types]]
 id="wolf_a"
@@ -69,7 +66,7 @@ dodge=0
 block=0
 attack=0
 power=0
-skills=["corrosive_mire"]
+skills=["mire"]
 
 [[unit_types]]
 id="ogre"
@@ -83,4 +80,4 @@ dodge=5
 block=6
 attack=0
 power=0
-skills=["corrosive_mire"]
+skills=["mire"]

@@ -205,7 +205,6 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
                 "spikes".into(),
                 TerrainTypeDef {
                     id: "spikes".into(),
-                    visual: "spikes".into(),
                     layer: TerrainLayer::Overlay,
                     entry_rule: TerrainEntryRule::Walkable,
                     damage: 3,
@@ -218,7 +217,6 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
                 "plain".into(),
                 TerrainTypeDef {
                     id: "plain".into(),
-                    visual: "plain".into(),
                     layer: TerrainLayer::Ground,
                     entry_rule: TerrainEntryRule::Walkable,
                     damage: 0,
@@ -470,7 +468,6 @@ fn enemy_without_skill_rejected_on_load() {
     let definitions = authoring::Definitions {
         terrain_types: vec![TerrainTypeDef {
             id: "plain".into(),
-            visual: "plain".into(),
             layer: TerrainLayer::Ground,
             entry_rule: TerrainEntryRule::Walkable,
             damage: 0,
@@ -528,7 +525,6 @@ fn push_collision_game() -> Game {
 fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: SkillEffect) -> Game {
     let terrain = TerrainTypeDef {
         id: "plain".into(),
-        visual: "plain".into(),
         layer: TerrainLayer::Ground,
         entry_rule: TerrainEntryRule::Walkable,
         damage: 0,
