@@ -488,33 +488,6 @@ func diamond(center: Vector2) -> PackedVector2Array:
 func draw_marker(cell: Vector2i, fill: Color, edge: Color, edge_width := 2.0) -> void:
 	var points := diamond(cell_center(cell)); draw_colored_polygon(points,fill); points.append(points[0]); draw_polyline(points,edge,edge_width,true)
 
-func draw_movement_range(reachable: Array, second_reachable: Array, selected: bool) -> void:
-	var first_color: Color = BattleConfig.SELECTED_MOVE_FIRST_COLOR if selected else BattleConfig.FIRST_MOVE_COLOR
-	var second_color: Color = BattleConfig.SELECTED_MOVE_SECOND_COLOR if selected else BattleConfig.SECOND_MOVE_COLOR
-	for cell in second_reachable:
-		draw_movement_marker(Vector2i(cell.x, cell.y), second_color, selected)
-	for cell in reachable:
-		draw_movement_marker(Vector2i(cell.x, cell.y), first_color, selected)
-
-func draw_movement_marker(cell: Vector2i, color: Color, selected: bool) -> void:
-	if not selected:
-		draw_marker(cell, Color(color, BattleConfig.MOVE_FILL_ALPHA), Color(color, BattleConfig.MOVE_EDGE_ALPHA), BattleConfig.MOVE_RANGE_EDGE_WIDTH)
-		return
-	var center := cell_center(cell)
-	var points := diamond(center)
-	var direction := Vector2.RIGHT.rotated(deg_to_rad(BattleConfig.SELECTED_MOVE_LINE_ANGLE_DEGREES))
-	var normal := direction.orthogonal()
-	var line_color := Color(color, BattleConfig.SELECTED_MOVE_LINE_ALPHA)
-	# 先依角度建立平行線，再裁切至格子內，避免端點插值左右線條角度。
-	for index in range(BattleConfig.SELECTED_MOVE_LINE_COUNT):
-		var offset := (float(index) - float(BattleConfig.SELECTED_MOVE_LINE_COUNT - 1) / 2.0) * BattleConfig.SELECTED_MOVE_LINE_SPACING
-		var midpoint := center + normal * offset
-		var line := PackedVector2Array([midpoint - direction * 64.0, midpoint + direction * 64.0])
-		for segment in Geometry2D.intersect_polyline_with_polygon(line, points):
-			draw_polyline(segment, line_color, BattleConfig.SELECTED_MOVE_LINE_WIDTH, true)
-	points.append(points[0])
-	draw_polyline(points, Color(color, BattleConfig.SELECTED_MOVE_EDGE_ALPHA), BattleConfig.SELECTED_MOVE_EDGE_WIDTH, true)
-
 func draw_move_path(path: Array, color: Color) -> void:
 	for index in range(1, path.size()):
 		var from := cell_center(Vector2i(path[index - 1].x, path[index - 1].y))
@@ -525,8 +498,8 @@ func _draw() -> void:
 	if state.is_empty():
 		return
 	if pending_action == "" and not is_presenting_combat_events():
-		draw_movement_range(state.reachable, state.second_reachable, false)
-		draw_movement_range(state.inspected_reachable, state.inspected_second_reachable, true)
+		BattleVisuals.draw_movement_range(self, ground, state.reachable, state.second_reachable, false)
+		BattleVisuals.draw_movement_range(self, ground, state.inspected_reachable, state.inspected_second_reachable, true)
 	for cell in selected_skill_range(): draw_marker(Vector2i(cell.x,cell.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)
 	if not attack_preview_unit.is_empty():
 		for cell in attack_preview_unit.occupied_cells:

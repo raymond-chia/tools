@@ -102,3 +102,33 @@ static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vect
 			canvas.draw_circle(Vector2.ZERO, 23, Color(0.2, 0.55, 0.28, 0.76))
 			canvas.draw_circle(Vector2(-9, 1), 5, Color(0.58, 0.86, 0.38, 0.72))
 			canvas.draw_set_transform(Vector2.ZERO)
+
+static func draw_movement_range(canvas: CanvasItem, ground: TileMapLayer, reachable: Array, second_reachable: Array, selected: bool) -> void:
+	var first_color: Color = BattleConfig.SELECTED_MOVE_FIRST_COLOR if selected else BattleConfig.FIRST_MOVE_COLOR
+	var second_color: Color = BattleConfig.SELECTED_MOVE_SECOND_COLOR if selected else BattleConfig.SECOND_MOVE_COLOR
+	for cell in second_reachable:
+		draw_movement_marker(canvas, ground, Vector2i(cell.x, cell.y), second_color, selected)
+	for cell in reachable:
+		draw_movement_marker(canvas, ground, Vector2i(cell.x, cell.y), first_color, selected)
+
+static func draw_movement_marker(canvas: CanvasItem, ground: TileMapLayer, cell: Vector2i, color: Color, selected: bool) -> void:
+	if not selected:
+		var points := diamond(ground.position + ground.map_to_local(cell))
+		canvas.draw_colored_polygon(points, Color(color, BattleConfig.MOVE_FILL_ALPHA))
+		points.append(points[0])
+		canvas.draw_polyline(points, Color(color, BattleConfig.MOVE_EDGE_ALPHA), BattleConfig.MOVE_RANGE_EDGE_WIDTH, true)
+		return
+	var center := ground.position + ground.map_to_local(cell)
+	var points := diamond(center)
+	var direction := Vector2.RIGHT.rotated(deg_to_rad(BattleConfig.SELECTED_MOVE_LINE_ANGLE_DEGREES))
+	var normal := direction.orthogonal()
+	var line_color := Color(color, BattleConfig.SELECTED_MOVE_LINE_ALPHA)
+	# 先依角度建立平行線，再裁切至格子內，避免端點插值左右線條角度。
+	for index in range(BattleConfig.SELECTED_MOVE_LINE_COUNT):
+		var offset := (float(index) - float(BattleConfig.SELECTED_MOVE_LINE_COUNT - 1) / 2.0) * BattleConfig.SELECTED_MOVE_LINE_SPACING
+		var midpoint := center + normal * offset
+		var line := PackedVector2Array([midpoint - direction * 64.0, midpoint + direction * 64.0])
+		for segment in Geometry2D.intersect_polyline_with_polygon(line, points):
+			canvas.draw_polyline(segment, line_color, BattleConfig.SELECTED_MOVE_LINE_WIDTH, true)
+	points.append(points[0])
+	canvas.draw_polyline(points, Color(color, BattleConfig.SELECTED_MOVE_EDGE_ALPHA), BattleConfig.SELECTED_MOVE_EDGE_WIDTH, true)

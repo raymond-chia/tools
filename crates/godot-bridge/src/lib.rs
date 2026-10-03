@@ -94,6 +94,21 @@ impl TacticalGame {
             &map.to_string(),
         ))
     }
+    #[cfg(feature = "editor")]
+    #[func]
+    fn inspected_preview_from_json(
+        &self,
+        definitions: GString,
+        map: GString,
+        inspected_actor: Variant,
+    ) -> GString {
+        let actor = inspected_actor.try_to::<i64>().ok();
+        editor_response(game_core::editor::inspected_preview_from_json(
+            &definitions.to_string(),
+            &map.to_string(),
+            actor,
+        ))
+    }
     #[func]
     fn snapshot(&self, inspected_actor: Variant) -> GString {
         let actor = match inspected_actor.try_to::<i64>() {

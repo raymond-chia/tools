@@ -28,11 +28,20 @@ pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, Stri
 
 /// 編輯器預覽使用真實遊戲核心的 presentation snapshot，不另行推導規則。
 pub fn preview_from_json(definitions: &str, map: &str) -> Result<String, EditorError> {
+    inspected_preview_from_json(definitions, map, None)
+}
+
+/// 依編輯器選取的單位產生範圍；移動規則沿用遊戲 snapshot。
+pub fn inspected_preview_from_json(
+    definitions: &str,
+    map: &str,
+    inspected_actor: Option<i64>,
+) -> Result<String, EditorError> {
     let definitions: Definitions = serde_json::from_str(definitions)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
     let map: Map = serde_json::from_str(map)
         .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
     let game = Game::from_authoring(definitions, map)?;
-    serde_json::to_string(&game.snapshot(None))
+    serde_json::to_string(&game.snapshot(inspected_actor))
         .map_err(|e| EditorError::input("json_serialize", e.to_string()))
 }

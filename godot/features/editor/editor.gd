@@ -66,6 +66,7 @@ func _ready() -> void:
 		page.remove_confirmed.connect(remove_definition)
 		page.input_error.connect(show_error)
 	map_view.cell_pressed.connect(edit_cell)
+	map_view.inspection_clicked.connect(inspect_unit)
 	map_view.stroke_started.connect(func(): stroke_checkpointed = false)
 	map_view.unit_dropped.connect(move_unit)
 	mode_list.item_selected.connect(func(_index: int): update_editing_mode())
@@ -184,6 +185,7 @@ func open_selected_map() -> void:
 	history.clear()
 	future.clear()
 	selected_cell = Vector2i(-1, -1)
+	map_view.inspected_unit = 0
 	dirty = false
 	refresh_ui()
 	validate_current()
@@ -228,6 +230,7 @@ func submit_map() -> void:
 	history.clear()
 	future.clear()
 	selected_cell = Vector2i(-1, -1)
+	map_view.inspected_unit = 0
 	dirty = true
 	$AddMapDialog.hide()
 	refresh_ui()
@@ -307,7 +310,7 @@ func restore_integers(value: Dictionary, keys: Array[String]) -> void:
 			value[key] = int(value[key])
 
 func validate_current() -> void:
-	var snapshot := CoreResponse.read(core.preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
+	var snapshot := CoreResponse.read(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null), show_error)
 	if snapshot.is_empty():
 		if not pending_edit.is_empty():
 			var error_message := status_label.text
@@ -465,7 +468,7 @@ func terrain_kinds(layer: String) -> Array:
 	return kinds
 
 func refresh_grid() -> void:
-	var snapshot := CoreResponse.read(core.preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
+	var snapshot := CoreResponse.read(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null), show_error)
 	if snapshot.is_empty(): return
 	map_view.present(map_data, snapshot, selected_cell)
 
@@ -487,7 +490,10 @@ func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
 	map_data = result.map
 	pending_edit = {}
 	CoreResponse.convert_unit_ids(result.snapshot)
-	map_view.present(map_data, result.snapshot, selected_cell)
+	if map_view.inspected_unit != 0:
+		refresh_grid()
+	else:
+		map_view.present(map_data, result.snapshot, selected_cell)
 	status_label.text = "資料有效；尚未儲存"
 
 func unit_at(cell: Vector2i) -> Dictionary:
@@ -496,6 +502,12 @@ func unit_at(cell: Vector2i) -> Dictionary:
 		for occupied in unit.occupied_cells:
 			if Vector2i(occupied.x, occupied.y) == cell: return unit
 	return {}
+
+func inspect_unit(cell: Vector2i) -> void:
+	var unit := unit_at(cell)
+	var unit_id: int = 0 if unit.is_empty() else unit.id
+	map_view.inspected_unit = 0 if unit_id == map_view.inspected_unit else unit_id
+	refresh_grid()
 
 func edit_cell(cell: Vector2i) -> void:
 	selected_cell = cell

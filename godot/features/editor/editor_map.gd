@@ -1,6 +1,7 @@
 extends Control
 
 signal cell_pressed(cell: Vector2i)
+signal inspection_clicked(cell: Vector2i)
 signal cell_hovered(cell: Vector2i)
 signal stroke_started()
 signal unit_dropped(id: int, cell: Vector2i)
@@ -12,6 +13,7 @@ signal unit_dropped(id: int, cell: Vector2i)
 var map_data: Dictionary = {}
 var snapshot: Dictionary = {}
 var hovered := Vector2i(-1, -1)
+var inspected_unit := 0
 var selected := Vector2i(-1, -1)
 var dragging := false
 var drag_paint := false
@@ -58,8 +60,11 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 			var node := BattleVisuals.create_unit_node(unit.id, unit.visual, units_layer)
 			unit_nodes[unit.id] = node
 			node.position = point
-			BattleVisuals.style_unit_node(node, unit.large, unit.team, false)
 		presented_units = units.duplicate(true)
+	if not units.any(func(unit: Dictionary): return unit.id == inspected_unit):
+		inspected_unit = 0
+	for unit in units:
+		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == inspected_unit)
 	queue_redraw()
 
 func move_camera(delta: float) -> void:
@@ -87,6 +92,10 @@ func _gui_input(event: InputEvent) -> void:
 		if dragging and drag_paint and cell.x >= 0 and cell != last_painted:
 			last_painted = cell
 			cell_pressed.emit(cell)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed:
+			inspection_clicked.emit(cell_at(event.position))
+		accept_event()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		dragging = event.pressed
 		if dragging:
@@ -139,6 +148,7 @@ func marker(cell: Vector2i, fill: Color, edge: Color) -> void:
 
 func _draw() -> void:
 	if map_data.is_empty(): return
+	BattleVisuals.draw_movement_range(self, ground, snapshot.get("inspected_reachable", []), snapshot.get("inspected_second_reachable", []), true)
 	BattleVisuals.draw_terrain_effects(self, ground, snapshot.get("terrain_effects", []))
 	for unit in snapshot.get("units", []):
 		if unit.id == dragged_unit: draw_set_transform(drag_visual_offset)
