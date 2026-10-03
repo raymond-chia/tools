@@ -288,7 +288,12 @@ impl Game {
     // 每次只執行一個命令或一段自動回合，讓畫面先完成呈現再推進。
     pub fn command(&mut self, c: Command) -> Result<Snapshot, GameError> {
         self.apply_command(c)?;
-        Ok(self.snapshot())
+        let mut snapshot = self.snapshot(None);
+        let delivered_count = self.world.resource::<DeliveredLogCount>().0;
+        snapshot.log = self.world.resource::<Log>().0[delivered_count..].to_vec();
+        self.world.resource_mut::<DeliveredLogCount>().0 += snapshot.log.len();
+        snapshot.movements = self.movements.clone();
+        Ok(snapshot)
     }
     fn apply_command(&mut self, c: Command) -> Result<(), GameError> {
         self.movements.clear();
@@ -868,10 +873,8 @@ impl Game {
             Outcome::Ongoing
         }
     }
-    pub fn snapshot(&mut self) -> Snapshot {
-        let delivered_count = self.world.resource::<DeliveredLogCount>().0;
-        let log = self.world.resource::<Log>().0[delivered_count..].to_vec();
-        self.world.resource_mut::<DeliveredLogCount>().0 += log.len();
+    /// 唯讀顯示查詢；事件只由 command 回傳，查看單位不儲存在核心。
+    pub fn snapshot(&self, inspected_actor: Option<i64>) -> Snapshot {
         let b = self.world.resource::<Board>().clone();
         let temporary_terrains = self.world.resource::<TemporaryTerrains>().clone();
         let enc = self.world.resource::<Encounter>().clone();
@@ -928,6 +931,36 @@ impl Game {
             None
         };
         let (reachable, second_reachable) = movement_ranges.unwrap_or_default();
+        let (inspected_reachable, inspected_second_reachable) = inspected_actor
+            .and_then(|actor| self.entity(actor))
+            .map(|entity| {
+                let actor = self
+                    .world
+                    .get::<Id>(entity)
+                    .expect("戰鬥單位應具有 Id 元件")
+                    .0;
+                let inspected_turn = if turn.actor == Some(actor) {
+                    turn.clone()
+                } else {
+                    let movement = self
+                        .world
+                        .get::<Unit>(entity)
+                        .expect("戰鬥單位應具有 Unit 元件")
+                        .movement;
+                    Turn {
+                        actor: Some(actor),
+                        phase: Phase::Ready,
+                        movement_remaining: movement,
+                        movement_segments_used: 0,
+                    }
+                };
+                if crate::movement::can_move(&inspected_turn) {
+                    crate::movement::movement_ranges(&self.world, entity, &inspected_turn)
+                } else {
+                    (Vec::new(), Vec::new())
+                }
+            })
+            .unwrap_or_default();
         let skill_ranges = if player_turn && turn.phase != Phase::Ended {
             turn.actor
                 .and_then(|actor| self.entity(actor))
@@ -1075,6 +1108,8 @@ impl Game {
             units,
             reachable,
             second_reachable,
+            inspected_reachable,
+            inspected_second_reachable,
             skill_ranges,
             turn_order,
             turn: TurnView {
@@ -1090,9 +1125,9 @@ impl Game {
             round: enc.round,
             battle_mode: self.world.resource::<Exploration>().mode,
             outcome: self.world.resource::<ResultState>().0,
-            // 完整紀錄每次複製並傳給 Godot，會隨回合數增加造成嚴重效能問題。
-            log,
-            movements: self.movements.clone(),
+            // 查詢不重送事件；command 負責附上尚未送出的紀錄與移動。
+            log: Vec::new(),
+            movements: Vec::new(),
         }
     }
 }

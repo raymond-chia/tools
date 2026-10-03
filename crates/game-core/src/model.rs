@@ -245,6 +245,8 @@ pub struct Snapshot {
     pub units: Vec<UnitView>,
     pub reachable: Vec<GridPos>,
     pub second_reachable: Vec<GridPos>,
+    pub inspected_reachable: Vec<GridPos>,
+    pub inspected_second_reachable: Vec<GridPos>,
     pub skill_ranges: Vec<SkillRangeView>,
     /// 本回合尚未行動、依行動順序排列的單位 ID。
     pub turn_order: Vec<i64>,

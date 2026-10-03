@@ -32,7 +32,7 @@ pub fn preview_from_json(definitions: &str, map: &str) -> Result<String, EditorE
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
     let map: Map = serde_json::from_str(map)
         .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
-    let mut game = Game::from_authoring(definitions, map)?;
-    serde_json::to_string(&game.snapshot())
+    let game = Game::from_authoring(definitions, map)?;
+    serde_json::to_string(&game.snapshot(None))
         .map_err(|e| EditorError::input("json_serialize", e.to_string()))
 }

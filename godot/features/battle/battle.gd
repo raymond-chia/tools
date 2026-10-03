@@ -104,6 +104,18 @@ func show_error(message: String) -> void:
 	ui.present_status(message)
 
 func present(new_snapshot := false) -> void:
+	if not state.is_empty():
+		var inspected_actor: Variant = null
+		for terrain in state.terrain_cells:
+			if terrain.x == inspected_cell.x and terrain.y == inspected_cell.y:
+				inspected_actor = terrain.unit_id
+				break
+		var value := read_core_response(core.snapshot(inspected_actor))
+		if not value.is_empty():
+			# 查詢只更新顯示資料；保留本次命令待呈現的事件。
+			value.log = state.log
+			value.movements = state.movements
+			state = value
 	world.present(state, pending_action, inspected_cell, core, new_snapshot)
 	if not world.is_presenting_combat_events():
 		show_current_state()

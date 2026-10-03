@@ -37,6 +37,24 @@ const UI_Z_INSPECTION := 10
 const UI_Z_TOOLTIP := 20
 const MENU_Z_INDEX := 30
 
+# 目前行動單位的移動範圍填色與外框。
+const FIRST_MOVE_COLOR := Color(0.5, 0.7, 1.0)
+const SECOND_MOVE_COLOR := Color(0.35, 0.5, 1.0)
+const MOVE_FILL_ALPHA := 0.3
+const MOVE_EDGE_ALPHA := 1.0
+const MOVE_RANGE_EDGE_WIDTH := 2.0
+# 選取查看單位的兩段顏色、外框與線條透明度，可獨立於行動單位調整。
+const SELECTED_MOVE_FIRST_COLOR := Color(0.5, 0.7, 1.0)
+const SELECTED_MOVE_SECOND_COLOR := Color(0.35, 0.5, 1.0)
+const SELECTED_MOVE_EDGE_ALPHA := 0.7
+const SELECTED_MOVE_EDGE_WIDTH := 2.0
+const SELECTED_MOVE_LINE_ALPHA := 1.0
+# 角度以畫面右方為 0 度，負值朝右上；數量為每格斜線數，間距與粗細為繪圖像素。
+const SELECTED_MOVE_LINE_ANGLE_DEGREES := -90.0
+const SELECTED_MOVE_LINE_COUNT := 3
+const SELECTED_MOVE_LINE_SPACING := 10.0
+const SELECTED_MOVE_LINE_WIDTH := 1.0
+
 const MAP_DISPLAY_SCALE := 1.5
 const ATTACK_PREVIEW_RING_SCALE := 1.20
 const DELAY_SLOT_COLOR := Color(0.35, 0.45, 0.58, 0.65)

@@ -26,8 +26,8 @@ impl TacticalGame {
     #[func]
     fn load_documents(&self, definitions: GString, map: GString) -> GString {
         match Game::from_documents(&definitions.to_string(), &map.to_string()) {
-            Ok(mut game) => {
-                let out = json_response(serde_json::to_string(&game.snapshot()));
+            Ok(game) => {
+                let out = json_response(serde_json::to_string(&game.snapshot(None)));
                 *self.game.lock().expect("核心鎖不應中毒") = Some(game);
                 out
             }
@@ -93,6 +93,18 @@ impl TacticalGame {
             &definitions.to_string(),
             &map.to_string(),
         ))
+    }
+    #[func]
+    fn snapshot(&self, inspected_actor: Variant) -> GString {
+        let actor = match inspected_actor.try_to::<i64>() {
+            Ok(actor) => Some(actor),
+            Err(_) => None,
+        };
+        let lock = self.game.lock().expect("核心鎖不應因先前的 panic 而中毒");
+        match lock.as_ref() {
+            Some(game) => json_response(serde_json::to_string(&game.snapshot(actor))),
+            None => bridge_error(GAME_NOT_LOADED, "尚未載入定義".into()),
+        }
     }
     #[func]
     fn dispatch(&self, json: GString) -> GString {

@@ -1,6 +1,6 @@
 name = "灰燼谷伏擊"
-width = 10
-height = 8
+width = 19
+height = 10
 
 [[terrains]]
 x = 0
@@ -103,111 +103,231 @@ y = 1
 kind = "cliff"
 
 [[terrains]]
-x = 0
-y = 6
-kind = "chasm"
+x = 10
+y = 1
+kind = "cliff"
 
 [[terrains]]
-x = 1
-y = 6
-kind = "chasm"
+x = 11
+y = 1
+kind = "cliff"
 
 [[terrains]]
-x = 2
-y = 6
-kind = "chasm"
+x = 12
+y = 1
+kind = "cliff"
 
 [[terrains]]
-x = 3
-y = 6
-kind = "chasm"
+x = 12
+y = 0
+kind = "cliff"
 
 [[terrains]]
-x = 4
-y = 6
-kind = "chasm"
+x = 11
+y = 0
+kind = "cliff"
 
 [[terrains]]
-x = 5
-y = 6
-kind = "chasm"
+x = 10
+y = 0
+kind = "cliff"
 
 [[terrains]]
-x = 6
+x = 12
 y = 6
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
-x = 7
+x = 11
 y = 6
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
-x = 8
+x = 10
 y = 6
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
 x = 9
 y = 6
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
-x = 0
-y = 7
-kind = "chasm"
+x = 8
+y = 6
+kind = "plain"
 
 [[terrains]]
-x = 1
-y = 7
-kind = "chasm"
+x = 7
+y = 6
+kind = "plain"
 
 [[terrains]]
-x = 2
-y = 7
-kind = "chasm"
+x = 6
+y = 6
+kind = "plain"
 
 [[terrains]]
-x = 3
-y = 7
-kind = "chasm"
-
-[[terrains]]
-x = 4
-y = 7
-kind = "chasm"
+x = 5
+y = 6
+kind = "plain"
 
 [[terrains]]
 x = 5
 y = 7
-kind = "chasm"
+kind = "plain"
+
+[[terrains]]
+x = 4
+y = 6
+kind = "plain"
+
+[[terrains]]
+x = 3
+y = 6
+kind = "plain"
+
+[[terrains]]
+x = 2
+y = 6
+kind = "plain"
+
+[[terrains]]
+x = 2
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 1
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 1
+y = 6
+kind = "plain"
+
+[[terrains]]
+x = 0
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 0
+y = 6
+kind = "plain"
+
+[[terrains]]
+x = 3
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 4
+y = 7
+kind = "plain"
 
 [[terrains]]
 x = 6
 y = 7
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
 x = 7
 y = 7
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
 x = 8
 y = 7
-kind = "chasm"
+kind = "plain"
 
 [[terrains]]
 x = 9
 y = 7
-kind = "chasm"
+kind = "plain"
+
+[[terrains]]
+x = 12
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 11
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 10
+y = 7
+kind = "plain"
+
+[[terrains]]
+x = 13
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 14
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 14
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 13
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 15
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 16
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 17
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 18
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 15
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 17
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 18
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 16
+y = 1
+kind = "cliff"
 
 [[units]]
 id = 1
 unit_type = "aria"
 team = "player"
-x = 1
-y = 3
+x = 3
+y = 4
 
 [[units]]
 id = 2
@@ -226,7 +346,7 @@ y = 5
 [[units]]
 id = 4
 unit_type = "wolf"
-x = 6
+x = 15
 y = 3
 
 [units.team]
@@ -235,8 +355,8 @@ enemy = "wild_animals"
 [[units]]
 id = 5
 unit_type = "wolf"
-x = 7
-y = 4
+x = 17
+y = 6
 
 [units.team]
 enemy = "wild_animals"
@@ -244,8 +364,8 @@ enemy = "wild_animals"
 [[units]]
 id = 6
 unit_type = "wolf"
-x = 8
-y = 2
+x = 15
+y = 5
 
 [units.team]
 enemy = "wild_animals"
@@ -253,7 +373,7 @@ enemy = "wild_animals"
 [[units]]
 id = 7
 unit_type = "wolf"
-x = 8
+x = 13
 y = 4
 
 [units.team]
@@ -262,8 +382,8 @@ enemy = "wild_animals"
 [[units]]
 id = 8
 unit_type = "wolf"
-x = 7
-y = 5
+x = 17
+y = 3
 
 [units.team]
 enemy = "wild_animals"

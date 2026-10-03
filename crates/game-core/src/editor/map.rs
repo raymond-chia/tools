@@ -70,9 +70,9 @@ pub fn paint_terrain_from_json(
         }
     }
     // 同時產生預覽，Godot 不再重做已通過的驗證。
-    let mut game = Game::from_authoring(definitions, map.clone())?;
+    let game = Game::from_authoring(definitions, map.clone())?;
     Ok(
-        serde_json::json!({"changed": changed, "map": map, "snapshot": game.snapshot()})
+        serde_json::json!({"changed": changed, "map": map, "snapshot": game.snapshot(None)})
             .to_string(),
     )
 }

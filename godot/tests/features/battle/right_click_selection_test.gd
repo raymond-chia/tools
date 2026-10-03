@@ -18,7 +18,7 @@ func before_test() -> void:
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
-# 驗證右鍵可查看一般單位、大型單位與空地，並可取消或切換目前查看目標。
+# 驗證右鍵可切換或取消查看目標、更新查看範圍，且不改變戰鬥資料。
 func test_inspection_changes_from_right_click() -> void:
 	var test_data := [
 		{"name": "查看一般單位", "initial": "none", "click": "unit:%d" % ARIA_ID, "expected": "unit:%d" % ARIA_ID},
@@ -29,15 +29,15 @@ func test_inspection_changes_from_right_click() -> void:
 	]
 	for test_case in test_data:
 		await prepare_case(battle, test_case.initial)
-		var state_before_input: Dictionary = battle.state.duplicate(true)
+		var state_before_input := combat_state(battle.state)
 
 		push_mouse_button(battle.world, target_point(battle, test_case.click), true)
 
 		assert_inspection(battle, test_case.expected, test_case.name)
 		assert_str(battle.pending_action).override_failure_message("%s：不應建立待選技能" % test_case.name).is_empty()
-		assert_dict(battle.state).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
+		assert_dict(combat_state(battle.state)).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
 
-# 驗證技能待選時會先查看尚未顯示的單位，只有重複查看或點空地才取消技能。
+# 驗證技能待選時右鍵先查看單位並更新範圍，重複查看或點空地才取消技能，且不改變戰鬥資料。
 func test_pending_action_right_click_priority() -> void:
 	var test_data := [
 		{"name": "未查看時先顯示單位", "initial": "none", "click": "unit:%d" % ARIA_ID, "result": "inspect"},
@@ -49,7 +49,7 @@ func test_pending_action_right_click_priority() -> void:
 	for test_case in test_data:
 		await prepare_case(battle, test_case.initial)
 		battle.select_action("melee")
-		var state_before_input: Dictionary = battle.state.duplicate(true)
+		var state_before_input := combat_state(battle.state)
 
 		push_mouse_button(battle.world, target_point(battle, test_case.click), true)
 
@@ -59,7 +59,7 @@ func test_pending_action_right_click_priority() -> void:
 		assert_inspection(battle, expected_target, test_case.name)
 		assert_str(battle.pending_action).override_failure_message("%s：技能狀態應符合右鍵優先規則" % test_case.name).is_equal(expected_action)
 		assert_str(battle.status).override_failure_message("%s：提示文字應符合技能狀態" % test_case.name).is_equal(expected_status)
-		assert_dict(battle.state).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
+		assert_dict(combat_state(battle.state)).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
 
 # 驗證戰鬥區域外的右鍵與右鍵放開事件不會改變目前查看狀態。
 func test_ignored_right_click_inputs() -> void:
@@ -169,9 +169,18 @@ func find_unit(units: Array, id: int) -> Dictionary:
 func assert_inspection(battle, expected_target: String, case_name: String) -> void:
 	assert_vector(battle.inspected_cell).override_failure_message("%s：查看格應正確" % case_name).is_equal(target_cell(battle, expected_target))
 	var selected_unit_id := int(expected_target.get_slice(":", 1)) if expected_target.begins_with("unit:") else 0
+	var expected_snapshot: Dictionary = CoreResponse.read(battle.core.snapshot(selected_unit_id if selected_unit_id != 0 else null), battle.show_error)
+	assert_array(battle.state.inspected_reachable).override_failure_message("%s：第一段查看範圍應符合目標單位" % case_name).is_equal(expected_snapshot.inspected_reachable)
+	assert_array(battle.state.inspected_second_reachable).override_failure_message("%s：第二段查看範圍應符合目標單位" % case_name).is_equal(expected_snapshot.inspected_second_reachable)
 	for unit_id in battle.world.unit_nodes:
 		var selection = battle.world.unit_nodes[unit_id].get_node("Visual/Selection")
 		assert_bool(selection.visible).override_failure_message("%s：%s 的選取圈可見性應正確" % [case_name, unit_id]).is_equal(unit_id == selected_unit_id)
+
+func combat_state(snapshot: Dictionary) -> Dictionary:
+	var result := snapshot.duplicate(true)
+	result.erase("inspected_reachable")
+	result.erase("inspected_second_reachable")
+	return result
 
 func push_mouse_button(battle, local_position: Vector2, pressed: bool) -> void:
 	var screen_position: Vector2 = battle.get_viewport().get_screen_transform() * battle.get_global_transform_with_canvas() * local_position

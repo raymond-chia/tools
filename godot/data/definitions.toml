@@ -151,7 +151,7 @@ skills = [
 
 [[unit_types]]
 id = "mira"
-visual = "archer.svg"
+visual = "mage.svg"
 width = 1
 height = 1
 hp = 12
