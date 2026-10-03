@@ -17,11 +17,13 @@ var editor_preview := false
 var back_button: Button
 var definitions_document := ""
 var map_document := ""
+var random_seed: Variant = null
 
-func configure(definitions_text: String, map_text: String, from_editor := false) -> void:
+func configure(definitions_text: String, map_text: String, from_editor := false, seed: Variant = null) -> void:
 	definitions_document = definitions_text
 	map_document = map_text
 	editor_preview = from_editor
+	random_seed = seed
 
 func _ready() -> void:
 	world.primary_clicked.connect(_on_primary_clicked)
@@ -55,7 +57,7 @@ func _ready() -> void:
 		return
 	battle_name = map_info.name
 	update_battle_title()
-	core.set_random_seed(randi())
+	core.set_random_seed(randi() if random_seed == null else int(random_seed))
 	world.setup_map(state)
 	send({"type": "start"})
 

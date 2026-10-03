@@ -352,6 +352,7 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 	assert_bool(loaded.has("error")).override_failure_message("預覽變化專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return {}
+	BattleTestSetup.reset_random_seed(preview_core)
 	var started: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "start"})))
 	assert_bool(started.has("error")).override_failure_message("預覽變化測試戰鬥應成功開始").is_false()
 	var target: Dictionary = {}
@@ -364,7 +365,7 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 		return {}
 	if not preparation_skill.is_empty():
 		# 固定亂數種子，讓建立缺血情境的攻擊穩定普通命中。
-		preview_core.set_random_seed(1)
+		BattleTestSetup.reset_random_seed(preview_core)
 		var damaged: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "skill", "actor": ARIA_ID, "x": int(target.x), "y": int(target.y), "skill": preparation_skill})))
 		assert_bool(damaged.has("error")).override_failure_message("建立缺血情境的真實攻擊應成功").is_false()
 		if damaged.has("error"):
