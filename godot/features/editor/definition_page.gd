@@ -124,7 +124,6 @@ func refresh_fields() -> void:
 		var values := entry
 		entry = {"id": id}
 		entry.merge(values)
-	$FormPanel/Title.text = TITLES[category] + "設定：" + id if not entry.is_empty() else "請新增或選擇左側資料"
 	for key in entry:
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)

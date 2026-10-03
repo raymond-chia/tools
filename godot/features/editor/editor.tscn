@@ -66,36 +66,32 @@ layout_mode = 2
 size_flags_vertical = 3
 allow_reselect = true
 
+[node name="MapActions" type="HBoxContainer" parent="Layout/Pages/MapPage/MapListPanel"]
+layout_mode = 2
+
+[node name="New" type="Button" parent="Layout/Pages/MapPage/MapListPanel/MapActions"]
+layout_mode = 2
+text = "新增"
+
+[node name="Duplicate" type="Button" parent="Layout/Pages/MapPage/MapListPanel/MapActions"]
+layout_mode = 2
+text = "複製"
+
+[node name="Delete" type="Button" parent="Layout/Pages/MapPage/MapListPanel/MapActions"]
+layout_mode = 2
+text = "刪除"
+
 [node name="MapPanel" type="VBoxContainer" parent="Layout/Pages/MapPage"]
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-
-[node name="MapActions" type="HBoxContainer" parent="Layout/Pages/MapPage/MapPanel"]
-layout_mode = 2
-
-[node name="New" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
-layout_mode = 2
-text = "新地圖"
-
-[node name="Duplicate" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
-layout_mode = 2
-text = "複製地圖"
-
-[node name="Rename" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
-layout_mode = 2
-text = "改名"
-
-[node name="Delete" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
-layout_mode = 2
-text = "刪除地圖"
 
 [node name="MapFields" type="HBoxContainer" parent="Layout/Pages/MapPage/MapPanel"]
 layout_mode = 2
 
 [node name="NameLabel" type="Label" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 layout_mode = 2
-text = "地圖"
+text = "地圖標題"
 
 [node name="MapName" type="LineEdit" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 custom_minimum_size = Vector2(180, 0)
@@ -231,3 +227,25 @@ title = "刪除地圖"
 initial_position = 2
 ok_button_text = "刪除"
 cancel_button_text = "取消"
+
+[node name="AddMapDialog" type="ConfirmationDialog" parent="."]
+title = "新增地圖"
+initial_position = 2
+ok_button_text = "新增"
+cancel_button_text = "取消"
+dialog_hide_on_ok = false
+
+[node name="Form" type="VBoxContainer" parent="AddMapDialog"]
+
+[node name="Label" type="Label" parent="AddMapDialog/Form"]
+layout_mode = 2
+text = "檔案名稱（自動加上 .toml）"
+
+[node name="Filename" type="LineEdit" parent="AddMapDialog/Form"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+placeholder_text = "輸入新的檔案名稱"
+
+[node name="Error" type="Label" parent="AddMapDialog/Form"]
+layout_mode = 2
+autowrap_mode = 2

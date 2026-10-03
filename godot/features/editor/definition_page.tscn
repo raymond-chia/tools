@@ -36,10 +36,6 @@ text = "刪除"
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Title" type="Label" parent="FormPanel"]
-layout_mode = 2
-text = "選擇左側資料進行編輯"
-
 [node name="Scroll" type="ScrollContainer" parent="FormPanel"]
 layout_mode = 2
 size_flags_vertical = 3

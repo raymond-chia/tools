@@ -33,6 +33,7 @@ var dirty := false
 var pending_edit: Dictionary = {}
 var history: Array = []
 var future: Array = []
+var duplicating_map := false
 var refreshing := false
 var selected_cell := Vector2i(-1, -1)
 var stroke_checkpointed := false
@@ -69,13 +70,12 @@ func _ready() -> void:
 	mode_list.item_selected.connect(func(_index: int): update_editing_mode())
 	palette_tabs.tab_changed.connect(func(_index: int): update_editing_mode())
 	map_list.item_selected.connect(func(_index: int): open_selected_map())
-	$Layout/Pages/MapPage/MapPanel/MapActions/New.pressed.connect(new_map)
+	$Layout/Pages/MapPage/MapListPanel/MapActions/New.pressed.connect(new_map)
 	$Layout/Toolbar/Save.pressed.connect(save_map)
-	$Layout/Pages/MapPage/MapPanel/MapActions/Duplicate.pressed.connect(duplicate_map)
-	$Layout/Pages/MapPage/MapPanel/MapActions/Rename.pressed.connect(func():
-		map_name.grab_focus()
-		map_name.select_all())
-	$Layout/Pages/MapPage/MapPanel/MapActions/Delete.pressed.connect(request_delete_map)
+	$Layout/Pages/MapPage/MapListPanel/MapActions/Duplicate.pressed.connect(duplicate_map)
+	$AddMapDialog.confirmed.connect(submit_map)
+	$AddMapDialog/Form/Filename.text_submitted.connect(func(_text: String): submit_map())
+	$Layout/Pages/MapPage/MapListPanel/MapActions/Delete.pressed.connect(request_delete_map)
 	$DeleteMapDialog.confirmed.connect(delete_map)
 	$Layout/Toolbar/Undo.pressed.connect(undo)
 	$Layout/Toolbar/Redo.pressed.connect(redo)
@@ -114,6 +114,7 @@ func _ready() -> void:
 	if map_list.item_count > 0:
 		open_selected_map()
 	else:
+		refresh_ui()
 		new_map()
 
 func read_file(path: String) -> String:
@@ -129,17 +130,10 @@ func refresh_map_list() -> void:
 	for filename in DirAccess.get_files_at(MAP_DIR):
 		if not filename.ends_with(".toml"): continue
 		var path := MAP_DIR + filename
-		var value: Dictionary
-		if path == map_file:
-			value = map_data
-		else:
-			value = CoreResponse.read(core.map_to_json(read_file(path)), show_error)
-		if value.is_empty(): continue
-		var index := map_list.add_item(value.name)
+		var index := map_list.add_item(filename)
 		map_list.set_item_metadata(index, path)
-		map_list.set_item_tooltip(index, filename)
 	if not map_file.is_empty() and not FileAccess.file_exists(map_file):
-		var index := map_list.add_item(map_data.name)
+		var index := map_list.add_item(map_file.get_file())
 		map_list.set_item_metadata(index, map_file)
 	select_map(previous)
 	if selected_map().is_empty() and map_list.item_count > 0: map_list.select(0)
@@ -194,37 +188,52 @@ func open_selected_map() -> void:
 	validate_current()
 
 func new_map() -> void:
-	if dirty:
-		show_error("請先儲存目前修改，再建立地圖。")
+	open_map_dialog(false)
+
+func duplicate_map() -> void:
+	if map_data.is_empty(): return
+	open_map_dialog(true)
+
+func open_map_dialog(duplicate: bool) -> void:
+	if dirty and not duplicate:
+		show_error("請先儲存目前修改，再新增地圖。")
 		return
-	map_data = {"name": "新地圖", "width": 10, "height": 8, "terrains": [], "units": []}
-	map_file = unique_map_path("new_map")
+	duplicating_map = duplicate
+	$AddMapDialog.title = "複製地圖" if duplicate else "新增地圖"
+	$AddMapDialog.ok_button_text = "複製" if duplicate else "新增"
+	$AddMapDialog/Form/Filename.text = map_file.get_file().get_basename() + "_copy" if duplicate else ""
+	$AddMapDialog/Form/Error.text = ""
+	$AddMapDialog.popup_centered()
+	$AddMapDialog/Form/Filename.grab_focus()
+	$AddMapDialog/Form/Filename.select_all()
+
+func submit_map() -> void:
+	var filename: String = $AddMapDialog/Form/Filename.text.strip_edges()
+	if filename.ends_with(".toml"): filename = filename.trim_suffix(".toml")
+	if not filename.is_valid_filename() or filename in [".", ".."]:
+		$AddMapDialog/Form/Error.text = "請輸入有效的檔案名稱，不可包含路徑或檔名禁用字元。"
+		return
+	var path := MAP_DIR + filename + ".toml"
+	if FileAccess.file_exists(path):
+		$AddMapDialog/Form/Error.text = "檔案「%s.toml」已存在。" % filename
+		return
+	if duplicating_map:
+		map_data = map_data.duplicate(true)
+		map_data.name += " 副本"
+	else:
+		map_data = {"name": filename, "width": 10, "height": 8, "terrains": [], "units": []}
+	map_file = path
 	map_view.camera_initialized = false
 	history.clear()
 	future.clear()
 	selected_cell = Vector2i(-1, -1)
 	dirty = true
+	$AddMapDialog.hide()
 	refresh_ui()
 	validate_current()
-
-func duplicate_map() -> void:
-	if map_data.is_empty():
-		return
-	checkpoint()
-	map_data = map_data.duplicate(true)
-	map_data.name += " 副本"
-	map_file = unique_map_path("map_copy")
-	dirty = true
-	refresh_ui()
-	validate_current()
-
-func unique_map_path(base: String) -> String:
-	var index := 1
-	while FileAccess.file_exists(MAP_DIR + base + "_%d.toml" % index):
-		index += 1
-	return MAP_DIR + base + "_%d.toml" % index
 
 func save_map() -> void:
+	if map_data.is_empty(): return
 	var result := serialize_documents()
 	if result.is_empty(): return
 	var documents := {DEFINITIONS_PATH: result.definitions, map_file: result.map}
@@ -240,10 +249,11 @@ func save_map() -> void:
 	status_label.text = "已儲存 %s" % map_file
 
 func request_delete_map() -> void:
+	if map_data.is_empty(): return
 	if dirty:
 		show_error("請先儲存目前修改，再刪除地圖。")
 		return
-	$DeleteMapDialog.dialog_text = "確定刪除地圖「%s」？此操作會刪除地圖檔案。" % map_data.name
+	$DeleteMapDialog.dialog_text = "確定刪除地圖「%s」？此操作會刪除地圖檔案。" % map_file.get_file()
 	$DeleteMapDialog.popup_centered()
 
 func delete_map() -> void:
@@ -257,9 +267,12 @@ func delete_map() -> void:
 	future.clear()
 	refresh_map_list()
 	if map_list.item_count > 0: open_selected_map()
-	else: new_map()
+	else:
+		refresh_ui()
+		new_map()
 
 func play_map() -> void:
+	if map_data.is_empty(): return
 	var result := serialize_documents()
 	if result.is_empty():
 		return
@@ -366,10 +379,15 @@ func resize_map() -> void:
 	validate_current()
 
 func refresh_ui() -> void:
+	var has_map := not map_data.is_empty()
+	$Layout/Pages/MapPage/MapPanel.visible = has_map
+	$Layout/Pages/MapPage/Materials.visible = has_map
+	$Layout/Pages/MapPage/MapListPanel/MapActions/Duplicate.disabled = not has_map
+	$Layout/Pages/MapPage/MapListPanel/MapActions/Delete.disabled = not has_map
 	refreshing = true
-	map_name.text = map_data.name
-	width_box.value = map_data.width
-	height_box.value = map_data.height
+	map_name.text = map_data.get("name", "")
+	width_box.value = map_data.get("width", 10)
+	height_box.value = map_data.get("height", 8)
 	refreshing = false
 	refresh_map_list()
 	select_map(map_file)
@@ -564,7 +582,7 @@ func edit_definition(command: Dictionary) -> bool:
 		if parsed.is_empty(): return false
 		restore_map_integers(parsed)
 		maps[path] = parsed
-	maps[map_file] = map_data
+	if not map_file.is_empty(): maps[map_file] = map_data
 	var response: String = core.edit_definition_from_json(JSON.stringify(definitions), JSON.stringify(maps), JSON.stringify(command))
 	var parsed = JSON.parse_string(response)
 	if parsed is Dictionary and parsed.has("map_path"):
