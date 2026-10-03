@@ -59,6 +59,7 @@ func _ready() -> void:
 		pages.set_tab_title(index, ["地圖與單位配置", "單位", "技能", "地形"][index])
 	for page in definition_pages:
 		page.field_changed.connect(update_definition)
+		page.move_requested.connect(move_definition)
 		page.terrain_effect_confirmed.connect(change_terrain_effect)
 		page.create_requested.connect(create_definition)
 		page.remove_requested.connect(request_remove_definition)
@@ -286,7 +287,7 @@ func serialize_documents() -> Dictionary:
 
 # Godot 解析 JSON 時將數字轉成 float；送回核心前還原文件格式中的整數欄位。
 func restore_definition_integers(value: Dictionary) -> void:
-	for terrain in value.terrain_types.values():
+	for terrain in value.terrain_types:
 		restore_integers(terrain, ["damage", "extra_movement_cost", "dodge_penalty", "block_penalty"])
 	for skill in value.skills:
 		restore_integers(skill, ["min_range", "max_range", "attack_bonus", "power_bonus", "duration"])
@@ -430,7 +431,7 @@ func refresh_terrain_list() -> void:
 			button.add_child(layout)
 			var preview := Control.new()
 			preview.set_script(TILE_PREVIEW)
-			preview.visual = definitions.terrain_types[kind].visual if not kind.is_empty() else ""
+			preview.visual = find_definition("terrain_types", kind).visual if not kind.is_empty() else ""
 			preview.layer = layer
 			preview.custom_minimum_size = Vector2(64, 52)
 			preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -460,8 +461,7 @@ func update_brush_label() -> void:
 	brush_label.text = "目前筆刷：" + (kind if not kind.is_empty() else "橡皮擦" if editing_mode == 1 else "無素材")
 
 func terrain_kinds(layer: String) -> Array:
-	var kinds: Array = definitions.terrain_types.keys().filter(func(kind: String): return definitions.terrain_types[kind].get("layer") == layer)
-	kinds.sort()
+	var kinds: Array = definitions.terrain_types.filter(func(terrain: Dictionary): return terrain.layer == layer).map(func(terrain: Dictionary): return terrain.id)
 	return kinds
 
 func refresh_grid() -> void:
@@ -547,13 +547,15 @@ func checkpoint_stroke() -> void:
 func refresh_definitions() -> void:
 	var options := CoreResponse.read(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})), show_error)
 	if options.is_empty(): return
-	for page in definition_pages: page.present(definitions, options.terrain_ids)
+	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries)
 
 func find_definition(category: String, id: String) -> Dictionary:
-	if category == "terrain_types": return definitions.terrain_types.get(id, {})
 	for entry in definitions[category]:
 		if entry.id == id: return entry
 	return {}
+
+func move_definition(category: String, id: String, offset: int) -> void:
+	edit_definition({"action": "move", "category": category, "id": id, "offset": offset})
 
 func update_definition(category: String, id: String, key: String, value: Variant) -> void:
 	# ID 建立後不可更動，因此不需要更新既有引用。

@@ -1,26 +1,31 @@
-[terrain_types.plain]
+[[terrain_types]]
+id="plain"
 layer="ground"
 visual="plain"
 entry_rule="walkable"
 
-[terrain_types.rough]
+[[terrain_types]]
+id="rough"
 layer="ground"
 visual="rough"
 entry_rule="walkable"
 extra_movement_cost=1
 
-[terrain_types.spikes]
+[[terrain_types]]
+id="spikes"
 layer="overlay"
 visual="spikes"
 entry_rule="walkable"
 damage=3
 
-[terrain_types.grease]
+[[terrain_types]]
+id="grease"
 layer="overlay"
 visual="grease"
 entry_rule="walkable"
 
-[terrain_types.mire]
+[[terrain_types]]
+id="mire"
 layer="overlay"
 visual="mire"
 entry_rule="walkable"
@@ -28,12 +33,14 @@ extra_movement_cost=1
 dodge_penalty=3
 block_penalty=3
 
-[terrain_types.cliff]
+[[terrain_types]]
+id="cliff"
 layer="ground"
 visual="cliff"
 entry_rule="blocked"
 
-[terrain_types.chasm]
+[[terrain_types]]
+id="chasm"
 layer="ground"
 visual="chasm"
 entry_rule="instant_down_when_pushed"

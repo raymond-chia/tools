@@ -6,6 +6,7 @@ signal create_requested(category: String, id: String, source_id: String)
 signal remove_requested(category: String, id: String)
 signal remove_confirmed(category: String, id: String)
 signal terrain_effect_confirmed(id: String, terrain: String)
+signal move_requested(category: String, id: String, offset: int)
 signal input_error(message: String)
 
 const TITLES := {"unit_types": "單位", "skills": "技能", "terrain_types": "地形"}
@@ -38,6 +39,8 @@ var effect_terrain_ids: Array = []
 func _ready() -> void:
 	$ListPanel/Title.text = TITLES[category] + "清單"
 	entries.item_selected.connect(func(_index: int): refresh_fields())
+	$ListPanel/Order/Up.pressed.connect(func(): move_requested.emit(category, selected_id(), -1))
+	$ListPanel/Order/Down.pressed.connect(func(): move_requested.emit(category, selected_id(), 1))
 	$ListPanel/Actions/Add.pressed.connect(func(): open_create_dialog(false))
 	$ListPanel/Actions/Duplicate.pressed.connect(func(): open_create_dialog(true))
 	$EffectDialog.confirmed.connect(func():
@@ -91,15 +94,15 @@ func select_id(id: String) -> void:
 		entries.select(0)
 	refresh_fields()
 
-func present(value: Dictionary, terrain_ids: Array) -> void:
+func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array) -> void:
 	effect_terrain_ids = terrain_ids
 	var previous := selected_id()
 	definitions = value
 	entries.clear()
 	if category == "terrain_types":
-		var names: Array = definitions.terrain_types.keys()
-		names.sort()
-		for id in names: entries.add_item(id)
+		for entry in terrain_entries:
+			var index := entries.add_item(entry.id)
+			entries.set_item_metadata(index, entry)
 	else:
 		for entry in definitions[category]: entries.add_item(entry.id)
 	select_id(previous)
@@ -108,22 +111,24 @@ func present(value: Dictionary, terrain_ids: Array) -> void:
 
 func selected_definition() -> Dictionary:
 	var id := selected_id()
-	if category == "terrain_types": return definitions.terrain_types.get(id, {})
 	for entry in definitions.get(category, []):
 		if entry.id == id: return entry
 	return {}
 
 func refresh_fields() -> void:
+	var selected := entries.get_selected_items()
+	$ListPanel/Order/Up.disabled = selected.is_empty() or selected[0] == 0
+	$ListPanel/Order/Down.disabled = selected.is_empty() or selected[0] == entries.item_count - 1
+	if category == "terrain_types" and not selected.is_empty():
+		var order: Dictionary = entries.get_item_metadata(selected[0])
+		$ListPanel/Order/Up.disabled = not order.can_move_up
+		$ListPanel/Order/Down.disabled = not order.can_move_down
 	rebuilding = true
 	for child in fields.get_children():
 		fields.remove_child(child)
 		child.queue_free()
 	var entry := selected_definition().duplicate()
 	var id := selected_id()
-	if category == "terrain_types" and not entry.is_empty():
-		var values := entry
-		entry = {"id": id}
-		entry.merge(values)
 	for key in entry:
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)

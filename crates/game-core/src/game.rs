@@ -67,6 +67,13 @@ impl Game {
         {
             return Err(error::empty_enemy_faction());
         }
+        let mut terrains = HashMap::new();
+        for terrain in terrain_types {
+            if terrains.insert(terrain.id.clone(), terrain).is_some() {
+                return Err(error::duplicate_terrain_type_id());
+            }
+        }
+        let terrain_types = terrains;
         // 地形數值不以負值反轉成治療或加成。
         if let Some(kind) = terrain_types
             .iter()

@@ -271,3 +271,7 @@ pub(crate) fn overlapping_unit(id: i64) -> GameError {
 pub(crate) fn unknown_skill(id: &str) -> GameError {
     GameError::new("unknown_skill", format!("{} {id}", "unknown skill:"))
 }
+
+pub(crate) fn duplicate_terrain_type_id() -> GameError {
+    GameError::new("duplicate_terrain_type_id", "地形定義 ID 重複".to_owned())
+}

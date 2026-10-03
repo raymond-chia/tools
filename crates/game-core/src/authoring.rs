@@ -3,11 +3,10 @@
 use super::{SkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Definitions {
-    pub terrain_types: HashMap<String, TerrainTypeDef>,
+    pub terrain_types: Vec<TerrainTypeDef>,
     pub skills: Vec<SkillDef>,
     pub unit_types: Vec<UnitType>,
 }

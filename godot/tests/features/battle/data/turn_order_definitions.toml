@@ -1,4 +1,5 @@
-[terrain_types.plain]
+[[terrain_types]]
+id="plain"
 layer="ground"
 visual="plain"
 entry_rule="walkable"
@@ -12,7 +13,8 @@ min_range=1
 max_range=1
 effect="attack"
 
-[terrain_types.rough]
+[[terrain_types]]
+id="rough"
 layer="ground"
 visual="rough"
 entry_rule="walkable"

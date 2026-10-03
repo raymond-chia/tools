@@ -1,9 +1,11 @@
-[terrain_types.plain]
+[[terrain_types]]
+id="plain"
 layer="ground"
 visual="plain"
 entry_rule="walkable"
 
-[terrain_types.rough]
+[[terrain_types]]
+id="rough"
 layer="ground"
 visual="rough"
 entry_rule="walkable"

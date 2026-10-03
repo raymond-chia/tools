@@ -12,6 +12,11 @@ use std::collections::BTreeMap;
 #[serde(tag = "action", rename_all = "snake_case")]
 enum DefinitionEdit {
     SkillEffectOptions,
+    Move {
+        category: DefinitionCategory,
+        id: String,
+        offset: i32,
+    },
     UpdateField {
         category: DefinitionCategory,
         id: String,
@@ -78,14 +83,81 @@ pub fn edit_definition_from_json(
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
     match command {
         DefinitionEdit::SkillEffectOptions => {
-            let mut terrain_ids: Vec<_> = definitions
+            let terrain_ids: Vec<_> = definitions
                 .terrain_types
                 .iter()
-                .filter(|(_, terrain)| terrain.layer == TerrainLayer::Overlay)
-                .map(|(id, _)| id.clone())
+                .filter(|terrain| terrain.layer == TerrainLayer::Overlay)
+                .map(|terrain| terrain.id.clone())
                 .collect();
-            terrain_ids.sort();
-            return Ok(serde_json::json!({"terrain_ids": terrain_ids}).to_string());
+            let mut terrains: Vec<_> = definitions.terrain_types.iter().collect();
+            terrains.sort_by_key(|terrain| terrain.layer != TerrainLayer::Ground);
+            let terrain_entries: Vec<_> = terrains
+                .iter()
+                .enumerate()
+                .map(|(index, terrain)| {
+                    serde_json::json!({
+                        "id": terrain.id,
+                        "can_move_up": index > 0 && terrains[index - 1].layer == terrain.layer,
+                        "can_move_down": index + 1 < terrains.len() && terrains[index + 1].layer == terrain.layer,
+                    })
+                })
+                .collect();
+            return Ok(
+                serde_json::json!({"terrain_ids": terrain_ids, "terrain_entries": terrain_entries})
+                    .to_string(),
+            );
+        }
+        DefinitionEdit::Move {
+            category,
+            id,
+            offset,
+        } => {
+            if offset != -1 && offset != 1 {
+                return Err(EditorError::operation("invalid_command", &id, Vec::new()));
+            }
+            if matches!(category, DefinitionCategory::TerrainTypes) {
+                // 地形固定依圖層分組；上下移動只調整同圖層內的順序。
+                definitions
+                    .terrain_types
+                    .sort_by_key(|terrain| terrain.layer != TerrainLayer::Ground);
+            }
+            let ids: Vec<_> = match category {
+                DefinitionCategory::UnitTypes => definitions
+                    .unit_types
+                    .iter()
+                    .map(|entry| &entry.id)
+                    .collect(),
+                DefinitionCategory::Skills => {
+                    definitions.skills.iter().map(|entry| &entry.id).collect()
+                }
+                DefinitionCategory::TerrainTypes => definitions
+                    .terrain_types
+                    .iter()
+                    .map(|entry| &entry.id)
+                    .collect(),
+            };
+            let index = ids
+                .iter()
+                .position(|entry| **entry == id)
+                .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
+            let target = index as i64 + i64::from(offset);
+            if target < 0 || target >= ids.len() as i64 {
+                return Err(EditorError::operation("invalid_command", &id, Vec::new()));
+            }
+            match category {
+                DefinitionCategory::UnitTypes => {
+                    definitions.unit_types.swap(index, target as usize)
+                }
+                DefinitionCategory::Skills => definitions.skills.swap(index, target as usize),
+                DefinitionCategory::TerrainTypes => {
+                    if definitions.terrain_types[index].layer
+                        != definitions.terrain_types[target as usize].layer
+                    {
+                        return Err(EditorError::operation("invalid_command", &id, Vec::new()));
+                    }
+                    definitions.terrain_types.swap(index, target as usize)
+                }
+            }
         }
         DefinitionEdit::UpdateField {
             category,
@@ -112,7 +184,8 @@ pub fn edit_definition_from_json(
             DefinitionCategory::TerrainTypes => {
                 let entry = definitions
                     .terrain_types
-                    .get_mut(&id)
+                    .iter_mut()
+                    .find(|entry| entry.id == id)
                     .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
                 update_field(entry, &key, value)?;
             }
@@ -167,18 +240,16 @@ pub fn edit_definition_from_json(
                     },
                 }),
                 DefinitionCategory::TerrainTypes => {
-                    definitions.terrain_types.insert(
+                    definitions.terrain_types.push(TerrainTypeDef {
                         id,
-                        TerrainTypeDef {
-                            visual: "plain".to_owned(),
-                            layer: TerrainLayer::Overlay,
-                            entry_rule: TerrainEntryRule::Walkable,
-                            damage: 0,
-                            extra_movement_cost: 0,
-                            dodge_penalty: 0,
-                            block_penalty: 0,
-                        },
-                    );
+                        visual: "plain".to_owned(),
+                        layer: TerrainLayer::Overlay,
+                        entry_rule: TerrainEntryRule::Walkable,
+                        damage: 0,
+                        extra_movement_cost: 0,
+                        dodge_penalty: 0,
+                        block_penalty: 0,
+                    });
                 }
             }
         }
@@ -214,12 +285,14 @@ pub fn edit_definition_from_json(
                     definitions.skills.push(skill);
                 }
                 DefinitionCategory::TerrainTypes => {
-                    let terrain = definitions
+                    let mut terrain = definitions
                         .terrain_types
-                        .get(&source_id)
+                        .iter()
+                        .find(|entry| entry.id == source_id)
                         .expect("已確認複製來源的地形 ID 存在")
                         .clone();
-                    definitions.terrain_types.insert(id, terrain);
+                    terrain.id = id;
+                    definitions.terrain_types.push(terrain);
                 }
             }
         }
@@ -235,7 +308,7 @@ pub fn edit_definition_from_json(
                 }
                 DefinitionCategory::Skills => definitions.skills.retain(|skill| skill.id != id),
                 DefinitionCategory::TerrainTypes => {
-                    definitions.terrain_types.remove(&id);
+                    definitions.terrain_types.retain(|entry| entry.id != id);
                 }
             }
         }
@@ -301,7 +374,9 @@ fn contains_id(definitions: &Definitions, category: DefinitionCategory, id: &str
     match category {
         DefinitionCategory::UnitTypes => definitions.unit_types.iter().any(|unit| unit.id == id),
         DefinitionCategory::Skills => definitions.skills.iter().any(|skill| skill.id == id),
-        DefinitionCategory::TerrainTypes => definitions.terrain_types.contains_key(id),
+        DefinitionCategory::TerrainTypes => {
+            definitions.terrain_types.iter().any(|entry| entry.id == id)
+        }
     }
 }
 

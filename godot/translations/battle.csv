@@ -141,6 +141,7 @@ ERROR_DEFINITIONS_JSON_PARSE,定義資料格式錯誤,Definitions data format is
 ERROR_DEFINITIONS_TOML_PARSE,定義檔格式錯誤,Definitions file format is invalid
 ERROR_DELAY_AFTER_ACTION,開始行動後不能延後,Cannot delay after acting
 ERROR_DUPLICATE_SKILL_ID,技能 ID 重複,Duplicate skill ID
+ERROR_DUPLICATE_TERRAIN_TYPE_ID,地形 ID 重複,Duplicate terrain type ID
 ERROR_MULTIPLE_GROUND_TERRAINS,同一格只能有一個地面地形,Only one ground terrain is allowed per cell
 ERROR_MISSING_DEFAULT_GROUND_TERRAIN,必須定義地面地形 plain,The ground terrain plain must be defined
 ERROR_SKILL_TERRAIN_NOT_OVERLAY,技能產生的地形必須是上層地形,Terrain created by a skill must be an overlay

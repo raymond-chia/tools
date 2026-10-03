@@ -37,7 +37,8 @@ pub fn paint_terrain_from_json(
     } else {
         let terrain = definitions
             .terrain_types
-            .get(&kind)
+            .iter()
+            .find(|entry| entry.id == kind)
             .ok_or_else(|| EditorError::operation("not_found", &kind, Vec::new()))?;
         if terrain.layer != layer {
             return Err(EditorError::operation("wrong_layer", &kind, Vec::new()));
@@ -48,7 +49,8 @@ pub fn paint_terrain_from_json(
             && terrain.y == y
             && definitions
                 .terrain_types
-                .get(&terrain.kind)
+                .iter()
+                .find(|entry| entry.id == terrain.kind)
                 .is_some_and(|definition| definition.layer == layer)
     };
     let current: Vec<_> = map

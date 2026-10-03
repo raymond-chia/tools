@@ -179,6 +179,7 @@ pub struct TerrainPlacement {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainTypeDef {
+    pub id: String,
     pub(crate) visual: String,
     pub(crate) layer: TerrainLayer,
     pub(crate) entry_rule: TerrainEntryRule,
