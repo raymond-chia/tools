@@ -4,6 +4,7 @@
 [ext_resource type="Theme" path="res://features/battle/battle_theme.tres" id="2"]
 [ext_resource type="Script" path="res://features/editor/editor_map.gd" id="3"]
 [ext_resource type="Script" path="res://features/map_camera.gd" id="4"]
+[ext_resource type="PackedScene" path="res://features/editor/definition_page.tscn" id="5"]
 
 [node name="Editor" type="Control"]
 anchors_preset = 15
@@ -27,25 +28,9 @@ offset_bottom = -12.0
 [node name="Toolbar" type="HBoxContainer" parent="Layout"]
 layout_mode = 2
 
-[node name="New" type="Button" parent="Layout/Toolbar"]
-layout_mode = 2
-text = "新地圖"
-
-[node name="Maps" type="OptionButton" parent="Layout/Toolbar"]
-custom_minimum_size = Vector2(170, 0)
-layout_mode = 2
-
-[node name="Open" type="Button" parent="Layout/Toolbar"]
-layout_mode = 2
-text = "開啟"
-
 [node name="Save" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
 text = "儲存"
-
-[node name="Duplicate" type="Button" parent="Layout/Toolbar"]
-layout_mode = 2
-text = "複製"
 
 [node name="Undo" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
@@ -59,31 +44,64 @@ text = "重做"
 layout_mode = 2
 text = "▶ 試玩"
 
-[node name="Database" type="Button" parent="Layout/Toolbar"]
-layout_mode = 2
-text = "資料庫"
-
-[node name="Body" type="HSplitContainer" parent="Layout"]
+[node name="Pages" type="TabContainer" parent="Layout"]
 layout_mode = 2
 size_flags_vertical = 3
-split_offset = 850
 
-[node name="MapPanel" type="VBoxContainer" parent="Layout/Body"]
+[node name="MapPage" type="HBoxContainer" parent="Layout/Pages"]
+layout_mode = 2
+metadata/_tab_index = 0
+theme_override_constants/separation = 16
+
+[node name="MapListPanel" type="VBoxContainer" parent="Layout/Pages/MapPage"]
+custom_minimum_size = Vector2(220, 0)
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Layout/Pages/MapPage/MapListPanel"]
+layout_mode = 2
+text = "地圖清單"
+
+[node name="Maps" type="ItemList" parent="Layout/Pages/MapPage/MapListPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+allow_reselect = true
+
+[node name="MapPanel" type="VBoxContainer" parent="Layout/Pages/MapPage"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 3
 
-[node name="MapFields" type="HBoxContainer" parent="Layout/Body/MapPanel"]
+[node name="MapActions" type="HBoxContainer" parent="Layout/Pages/MapPage/MapPanel"]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="Layout/Body/MapPanel/MapFields"]
+[node name="New" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
+layout_mode = 2
+text = "新地圖"
+
+[node name="Duplicate" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
+layout_mode = 2
+text = "複製地圖"
+
+[node name="Rename" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
+layout_mode = 2
+text = "改名"
+
+[node name="Delete" type="Button" parent="Layout/Pages/MapPage/MapPanel/MapActions"]
+layout_mode = 2
+text = "刪除地圖"
+
+[node name="MapFields" type="HBoxContainer" parent="Layout/Pages/MapPage/MapPanel"]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 layout_mode = 2
 text = "地圖"
 
-[node name="MapName" type="LineEdit" parent="Layout/Body/MapPanel/MapFields"]
+[node name="MapName" type="LineEdit" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 custom_minimum_size = Vector2(180, 0)
 layout_mode = 2
 
-[node name="Width" type="SpinBox" parent="Layout/Body/MapPanel/MapFields"]
+[node name="Width" type="SpinBox" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 custom_minimum_size = Vector2(95, 0)
 layout_mode = 2
 min_value = 2.0
@@ -91,7 +109,7 @@ max_value = 40.0
 value = 10.0
 prefix = "寬 "
 
-[node name="Height" type="SpinBox" parent="Layout/Body/MapPanel/MapFields"]
+[node name="Height" type="SpinBox" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 custom_minimum_size = Vector2(95, 0)
 layout_mode = 2
 min_value = 2.0
@@ -99,85 +117,117 @@ max_value = 40.0
 value = 8.0
 prefix = "高 "
 
-[node name="Tools" type="HBoxContainer" parent="Layout/Body/MapPanel"]
+[node name="MapViewportContainer" type="SubViewportContainer" parent="Layout/Pages/MapPage/MapPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+stretch = true
+
+[node name="MapViewport" type="SubViewport" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer"]
+handle_input_locally = false
+size = Vector2i(640, 480)
+render_target_update_mode = 4
+
+[node name="Map" type="Control" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport"]
+mouse_filter = 0
+script = ExtResource("3")
+
+[node name="Ground" type="TileMapLayer" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map"]
+z_index = -10
+
+[node name="Units" type="Node2D" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map"]
+z_index = 1
+y_sort_enabled = true
+
+[node name="Camera2D" type="Camera2D" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport"]
+script = ExtResource("4")
+
+[node name="Materials" type="VBoxContainer" parent="Layout/Pages/MapPage"]
+custom_minimum_size = Vector2(280, 0)
 layout_mode = 2
 
-[node name="Mode" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+[node name="Title" type="Label" parent="Layout/Pages/MapPage/Materials"]
+layout_mode = 2
+text = "素材面板"
+
+[node name="Brush" type="Label" parent="Layout/Pages/MapPage/Materials"]
+layout_mode = 2
+text = ""
+
+[node name="PaletteTabs" type="TabContainer" parent="Layout/Pages/MapPage/Materials"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Ground" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Tiles" type="GridContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Ground"]
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 2
+
+[node name="Overlay" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Tiles" type="GridContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 2
+
+[node name="Units" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
+layout_mode = 2
+
+[node name="Tools" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
+layout_mode = 2
+
+[node name="Mode" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 
-[node name="Terrain" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
-custom_minimum_size = Vector2(125, 0)
-layout_mode = 2
-
-[node name="Unit" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+[node name="Unit" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 custom_minimum_size = Vector2(145, 0)
 layout_mode = 2
 
-[node name="Team" type="OptionButton" parent="Layout/Body/MapPanel/Tools"]
+[node name="Team" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 layout_mode = 2
 
-[node name="Faction" type="LineEdit" parent="Layout/Body/MapPanel/Tools"]
+[node name="Faction" type="LineEdit" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 text = "enemies"
 placeholder_text = "敵方派系"
 
-[node name="MapViewportContainer" type="SubViewportContainer" parent="Layout/Body/MapPanel"]
+[node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials"]
 layout_mode = 2
-size_flags_vertical = 3
-stretch = true
+text = "選取素材後，在地圖點擊或拖曳繪製"
+autowrap_mode = 2
 
-[node name="MapViewport" type="SubViewport" parent="Layout/Body/MapPanel/MapViewportContainer"]
-handle_input_locally = false
-size = Vector2i(640, 480)
-render_target_update_mode = 4
-
-[node name="Map" type="Control" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport"]
-mouse_filter = 0
-script = ExtResource("3")
-
-[node name="Ground" type="TileMapLayer" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport/Map"]
-z_index = -10
-
-[node name="Units" type="Node2D" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport/Map"]
-z_index = 1
-y_sort_enabled = true
-
-[node name="Camera2D" type="Camera2D" parent="Layout/Body/MapPanel/MapViewportContainer/MapViewport"]
-script = ExtResource("4")
-
-[node name="SidePanel" type="VBoxContainer" parent="Layout/Body"]
-custom_minimum_size = Vector2(330, 0)
+[node name="UnitPage" parent="Layout/Pages" instance=ExtResource("5")]
 layout_mode = 2
 visible = false
+category = "unit_types"
+metadata/_tab_index = 1
 
-[node name="Category" type="OptionButton" parent="Layout/Body/SidePanel"]
+[node name="SkillPage" parent="Layout/Pages" instance=ExtResource("5")]
 layout_mode = 2
+visible = false
+category = "skills"
+metadata/_tab_index = 2
 
-[node name="Definition" type="OptionButton" parent="Layout/Body/SidePanel"]
+[node name="TerrainPage" parent="Layout/Pages" instance=ExtResource("5")]
 layout_mode = 2
-
-[node name="DefinitionActions" type="HBoxContainer" parent="Layout/Body/SidePanel"]
-layout_mode = 2
-
-[node name="AddDefinition" type="Button" parent="Layout/Body/SidePanel/DefinitionActions"]
-layout_mode = 2
-text = "新增定義"
-
-[node name="RemoveDefinition" type="Button" parent="Layout/Body/SidePanel/DefinitionActions"]
-layout_mode = 2
-text = "刪除定義"
-
-[node name="InspectorScroll" type="ScrollContainer" parent="Layout/Body/SidePanel"]
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="Fields" type="GridContainer" parent="Layout/Body/SidePanel/InspectorScroll"]
-layout_mode = 2
-columns = 2
+visible = false
+category = "terrain_types"
+metadata/_tab_index = 3
 
 [node name="Status" type="Label" parent="Layout"]
 layout_mode = 2
 text = ""
 autowrap_mode = 2
+
+[node name="DeleteMapDialog" type="ConfirmationDialog" parent="."]
+title = "刪除地圖"
+initial_position = 2
+ok_button_text = "刪除"
+cancel_button_text = "取消"

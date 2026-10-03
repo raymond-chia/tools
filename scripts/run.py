@@ -20,9 +20,13 @@ GDUNIT_REPORT_PATH = "res://../ignore-tmp/gdunit4-reports"
 GDUNIT_ORPHAN_WARNING = 101
 
 
-def build_bridge() -> int:
+def build_bridge(*, editor: bool) -> int:
+    command = ["cargo", "build", "--release", "-p", "godot-bridge"]
+    if not editor:
+        command.append("--no-default-features")
+
     build_result = subprocess.run(
-        ["cargo", "build", "--release", "-p", "godot-bridge"],
+        command,
         cwd=ROOT_DIRECTORY,
     )
     if build_result.returncode != 0:
@@ -113,7 +117,7 @@ def main() -> int:
         case (None, None):
             run = run_game
 
-    build_result = build_bridge()
+    build_result = build_bridge(editor=arguments.command is not None)
     if build_result != 0:
         return build_result
     return run()

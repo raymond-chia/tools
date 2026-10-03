@@ -2,6 +2,9 @@
 name="game-core"
 version.workspace=true
 edition.workspace=true
+[features]
+default=[]
+editor=[]
 [dependencies]
 bevy_ecs.workspace=true
 serde.workspace=true

@@ -1,0 +1,101 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://features/editor/definition_page.gd" id="1"]
+
+[node name="DefinitionPage" type="HSplitContainer"]
+script = ExtResource("1")
+split_offset = 340
+
+[node name="ListPanel" type="VBoxContainer" parent="."]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+
+[node name="Title" type="Label" parent="ListPanel"]
+layout_mode = 2
+
+[node name="Entries" type="ItemList" parent="ListPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Actions" type="HBoxContainer" parent="ListPanel"]
+layout_mode = 2
+
+[node name="Add" type="Button" parent="ListPanel/Actions"]
+layout_mode = 2
+text = "新增"
+
+[node name="Duplicate" type="Button" parent="ListPanel/Actions"]
+layout_mode = 2
+text = "複製"
+
+[node name="Remove" type="Button" parent="ListPanel/Actions"]
+layout_mode = 2
+text = "刪除"
+
+[node name="FormPanel" type="VBoxContainer" parent="."]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Title" type="Label" parent="FormPanel"]
+layout_mode = 2
+text = "選擇左側資料進行編輯"
+
+[node name="Scroll" type="ScrollContainer" parent="FormPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Fields" type="GridContainer" parent="FormPanel/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+columns = 2
+
+[node name="AddDialog" type="ConfirmationDialog" parent="."]
+title = "新增資料"
+initial_position = 2
+ok_button_text = "新增"
+cancel_button_text = "取消"
+dialog_hide_on_ok = false
+
+[node name="Form" type="VBoxContainer" parent="AddDialog"]
+
+[node name="Label" type="Label" parent="AddDialog/Form"]
+layout_mode = 2
+text = "ID"
+
+[node name="ID" type="LineEdit" parent="AddDialog/Form"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+placeholder_text = "輸入新的 ID"
+
+[node name="Error" type="Label" parent="AddDialog/Form"]
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="RemoveDialog" type="ConfirmationDialog" parent="."]
+title = "刪除資料"
+initial_position = 2
+ok_button_text = "刪除"
+cancel_button_text = "取消"
+
+[node name="RemoveErrorDialog" type="AcceptDialog" parent="."]
+title = "無法刪除"
+initial_position = 2
+ok_button_text = "確定"
+dialog_autowrap = true
+
+[node name="EffectDialog" type="ConfirmationDialog" parent="."]
+title = "選擇產生的地形"
+initial_position = 2
+ok_button_text = "套用"
+cancel_button_text = "取消"
+dialog_hide_on_ok = false
+
+[node name="Form" type="VBoxContainer" parent="EffectDialog"]
+
+[node name="Terrain" type="OptionButton" parent="EffectDialog/Form"]
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+
+[node name="Error" type="Label" parent="EffectDialog/Form"]
+layout_mode = 2
+autowrap_mode = 2

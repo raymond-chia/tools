@@ -55,6 +55,7 @@ fn one() -> i32 {
     1
 }
 
+// 共用文件讀取與格式轉換不依賴 editor feature；遊戲仍可直接讀取 TOML。
 pub fn definitions_to_json(text: &str) -> Result<String, GameError> {
     let value: Definitions =
         toml::from_str(text).map_err(|e| error::definitions_toml_parse(e.to_string()))?;
@@ -64,17 +65,4 @@ pub fn definitions_to_json(text: &str) -> Result<String, GameError> {
 pub fn map_to_json(text: &str) -> Result<String, GameError> {
     let value: Map = toml::from_str(text).map_err(|e| error::map_toml_parse(e.to_string()))?;
     serde_json::to_string(&value).map_err(|e| error::json_serialize(e.to_string()))
-}
-
-/// 將 Godot 編輯器傳來的 JSON 定義與地圖資料驗證後，轉成儲存或試玩用的 TOML 文件。
-/// JSON 僅用於編輯器與 Rust 之間傳遞資料；實際保存的檔案仍是 TOML。
-pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, String), GameError> {
-    let definitions: Definitions = serde_json::from_str(definitions)
-        .map_err(|e| error::definitions_json_parse(e.to_string()))?;
-    let map: Map = serde_json::from_str(map).map_err(|e| error::map_json_parse(e.to_string()))?;
-    super::Game::from_authoring(definitions.clone(), map.clone())?;
-    Ok((
-        toml::to_string_pretty(&definitions).map_err(|e| error::toml_serialize(e.to_string()))?,
-        toml::to_string_pretty(&map).map_err(|e| error::toml_serialize(e.to_string()))?,
-    ))
 }

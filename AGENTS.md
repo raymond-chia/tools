@@ -73,7 +73,8 @@
 ## 專案架構邊界
 
 - `crates/game-core`：核心規則，只依賴 `bevy_ecs`、Serde 與 TOML；Godot 不參與規則運算。
-- `crates/godot-bridge`：薄 GDExtension，將 JSON command 交給核心，並回傳 presentation snapshot。
+- `crates/game-core/src/editor`：編輯器專用子模組，以 Cargo 的 `editor` feature 決定是否編譯；共用資料格式與 TOML 載入留在原有模組。
+- `crates/godot-bridge`：薄 GDExtension，將 JSON command 交給核心，並回傳 presentation snapshot；`editor` feature 轉送至 `game-core/editor`。
 - Godot 的 `features/battle`：僅負責輸入、繪圖和 UI。
 
 ### 翻譯邊界

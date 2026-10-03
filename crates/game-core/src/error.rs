@@ -147,20 +147,8 @@ pub(crate) fn map_toml_parse(message: String) -> GameError {
     GameError::new("map_toml_parse", message)
 }
 
-pub(crate) fn definitions_json_parse(message: String) -> GameError {
-    GameError::new("definitions_json_parse", message)
-}
-
-pub(crate) fn map_json_parse(message: String) -> GameError {
-    GameError::new("map_json_parse", message)
-}
-
 pub(crate) fn json_serialize(message: String) -> GameError {
     GameError::new("json_serialize", message)
-}
-
-pub(crate) fn toml_serialize(message: String) -> GameError {
-    GameError::new("toml_serialize", message)
 }
 
 pub(crate) fn invalid_unit_type(id: &str) -> GameError {

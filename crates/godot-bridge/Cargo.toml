@@ -4,6 +4,9 @@ version.workspace=true
 edition.workspace=true
 [lib]
 crate-type=["cdylib"]
+[features]
+default=["editor"]
+editor=["game-core/editor"]
 [dependencies]
 game-core={path="../game-core"}
 godot={version="0.5.4",features=["api-4-7"]}

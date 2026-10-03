@@ -48,30 +48,51 @@ impl TacticalGame {
             Err(e) => error(e),
         }
     }
+    #[cfg(feature = "editor")]
     #[func]
     fn documents_from_json(&self, definitions: GString, map: GString) -> GString {
-        match authoring::documents_from_json(&definitions.to_string(), &map.to_string()) {
-            Ok((definitions, map)) => {
-                GString::from(&serde_json::json!({"definitions":definitions,"map":map}).to_string())
-            }
-            Err(e) => error(e),
+        match game_core::editor::documents_from_json(&definitions.to_string(), &map.to_string()) {
+            Ok((definitions, map)) => GString::from(
+                &serde_json::json!({"definitions": definitions, "map": map}).to_string(),
+            ),
+            Err(error) => GString::from(&error.response_json()),
         }
     }
+    #[cfg(feature = "editor")]
+    #[func]
+    fn edit_definition_from_json(
+        &self,
+        definitions: GString,
+        maps: GString,
+        command: GString,
+    ) -> GString {
+        editor_response(game_core::editor::edit_definition_from_json(
+            &definitions.to_string(),
+            &maps.to_string(),
+            &command.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
+    #[func]
+    fn paint_terrain_from_json(
+        &self,
+        definitions: GString,
+        map: GString,
+        command: GString,
+    ) -> GString {
+        editor_response(game_core::editor::paint_terrain_from_json(
+            &definitions.to_string(),
+            &map.to_string(),
+            &command.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
     #[func]
     fn preview_from_json(&self, definitions: GString, map: GString) -> GString {
-        let definitions: authoring::Definitions =
-            match serde_json::from_str(&definitions.to_string()) {
-                Ok(value) => value,
-                Err(e) => return bridge_error("definitions_json_parse", e.to_string()),
-            };
-        let map: authoring::Map = match serde_json::from_str(&map.to_string()) {
-            Ok(value) => value,
-            Err(e) => return bridge_error("map_json_parse", e.to_string()),
-        };
-        match Game::from_authoring(definitions, map) {
-            Ok(mut game) => json_response(serde_json::to_string(&game.snapshot())),
-            Err(e) => error(e),
-        }
+        editor_response(game_core::editor::preview_from_json(
+            &definitions.to_string(),
+            &map.to_string(),
+        ))
     }
     #[func]
     fn dispatch(&self, json: GString) -> GString {
@@ -122,6 +143,14 @@ impl TacticalGame {
         }
     }
 }
+#[cfg(feature = "editor")]
+fn editor_response(result: Result<String, game_core::editor::EditorError>) -> GString {
+    match result {
+        Ok(json) => GString::from(&json),
+        Err(error) => GString::from(&error.response_json()),
+    }
+}
+
 fn json_response(result: Result<String, serde_json::Error>) -> GString {
     match result {
         Ok(json) => GString::from(&json),
@@ -131,6 +160,7 @@ fn json_response(result: Result<String, serde_json::Error>) -> GString {
 fn error(error: GameError) -> GString {
     bridge_error(error.id(), error.message().to_owned())
 }
+
 fn bridge_error(id: &str, message: String) -> GString {
     GString::from(&serde_json::json!({"error_id":id,"error":message}).to_string())
 }
