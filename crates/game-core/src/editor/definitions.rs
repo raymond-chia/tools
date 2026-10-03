@@ -223,7 +223,7 @@ pub fn edit_definition_from_json(
             match category {
                 DefinitionCategory::UnitTypes => definitions.unit_types.push(UnitType {
                     id,
-                    visual: "fighter.svg".to_owned(),
+                    visual: String::new(),
                     width: 1,
                     height: 1,
                     hp: 10,

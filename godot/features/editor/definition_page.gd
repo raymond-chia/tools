@@ -58,7 +58,7 @@ func begin_entry_drag(at_position: Vector2) -> Variant:
 	var preview := Label.new()
 	preview.text = entries.get_item_text(index)
 	entries.set_drag_preview(preview)
-	return {"source": entries, "index": index, "id": entries.get_item_text(index)}
+	return {"source": entries, "index": index, "id": entries.get_item_metadata(index).id}
 
 func entry_drop_index(at_position: Vector2) -> int:
 	if entries.item_count == 0: return -1
@@ -70,7 +70,7 @@ func can_drop_entry(at_position: Vector2, data: Variant) -> bool:
 	if target < 0 or target == data.index: return false
 	if category == "terrain_types":
 		var order: Dictionary = entries.get_item_metadata(data.index)
-		return order.move_targets.has(entries.get_item_text(target))
+		return order.move_targets.has(entries.get_item_metadata(target).id)
 	return true
 
 func drop_entry(at_position: Vector2, data: Variant) -> void:
@@ -107,11 +107,11 @@ func show_add_error(message: String) -> void:
 
 func selected_id() -> String:
 	var selected := entries.get_selected_items()
-	return entries.get_item_text(selected[0]) if not selected.is_empty() else ""
+	return entries.get_item_metadata(selected[0]).id if not selected.is_empty() else ""
 
 func select_id(id: String) -> void:
 	for index in entries.item_count:
-		if entries.get_item_text(index) == id:
+		if entries.get_item_metadata(index).id == id:
 			entries.select(index)
 			entries.ensure_current_is_visible()
 			refresh_fields()
@@ -130,7 +130,12 @@ func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array) -> v
 			var index := entries.add_item(entry.id)
 			entries.set_item_metadata(index, entry)
 	else:
-		for entry in definitions[category]: entries.add_item(entry.id)
+		for entry in definitions[category]:
+			var label: String = entry.id
+			if category == "unit_types" and entry.visual.is_empty():
+				label += "（外觀待選擇）"
+			var index := entries.add_item(label)
+			entries.set_item_metadata(index, {"id": entry.id})
 	select_id(previous)
 	$ListPanel/Actions/Remove.disabled = entries.item_count == 0
 	$ListPanel/Actions/Duplicate.disabled = entries.item_count == 0
@@ -159,6 +164,8 @@ func refresh_fields() -> void:
 			check.button_pressed = value
 			check.toggled.connect(func(v: bool): field_changed.emit(category, id, key, v))
 			input = check
+		elif key == "visual" and category == "unit_types":
+			input = create_visual_selector(id, value)
 		elif key == "skills":
 			var skills := VBoxContainer.new()
 			for skill in definitions.skills:
@@ -227,3 +234,22 @@ func choose_effect_terrain(id: String) -> void:
 
 func finish_effect_change() -> void:
 	$EffectDialog.hide()
+
+# 外觀是顯示素材，選單讀取既有圖片；空值明確表示作者尚未選擇。
+func create_visual_selector(id: String, visual: String) -> OptionButton:
+	var option := OptionButton.new()
+	option.add_theme_constant_override("icon_max_width", 48)
+	option.add_icon_item(load(BattleConfig.unit_art_path("")), "待選擇")
+	option.set_item_metadata(0, "")
+	option.get_popup().set_item_icon_max_width(0, 48)
+	var files := DirAccess.get_files_at(BattleConfig.UNIT_ART_DIR)
+	for filename in files:
+		if filename in ["faction_base.svg", BattleConfig.PENDING_UNIT_ART]: continue
+		if filename.get_extension().to_lower() not in ["svg", "png", "jpg", "jpeg", "webp"]: continue
+		option.add_icon_item(load(BattleConfig.unit_art_path(filename)), filename)
+		var index := option.item_count - 1
+		option.set_item_metadata(index, filename)
+		option.get_popup().set_item_icon_max_width(index, 48)
+		if filename == visual: option.select(index)
+	option.item_selected.connect(func(index: int): field_changed.emit(category, id, "visual", option.get_item_metadata(index)))
+	return option

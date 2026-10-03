@@ -2,9 +2,10 @@ class_name BattleConfig
 extends RefCounted
 
 const UNIT_ART_DIR := "res://assets/units/"
+const PENDING_UNIT_ART := "pending.svg"
 
 static func unit_art_path(visual: String) -> String:
-	return UNIT_ART_DIR + visual
+	return UNIT_ART_DIR + (PENDING_UNIT_ART if visual.is_empty() else visual)
 
 static func unit_name_key(unit_type: String) -> String:
 	return "UNIT_NAME_%s" % unit_type.to_upper()
