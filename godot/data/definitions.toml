@@ -97,8 +97,8 @@ ranged = false
 min_range = 1
 max_range = 1
 effect = "attack"
-attack_bonus = 2
-power_bonus = 2
+attack_bonus = 0
+power_bonus = 3
 
 [[skills]]
 id = "shield_bash"
@@ -106,8 +106,8 @@ ranged = false
 min_range = 1
 max_range = 1
 effect = "push"
-attack_bonus = 1
-power_bonus = -3
+attack_bonus = 2
+power_bonus = 0
 
 [[skills]]
 id = "aimed_shot"
@@ -133,7 +133,7 @@ ranged = true
 min_range = 0
 max_range = 4
 effect = "heal"
-power_bonus = 2
+power_bonus = 0
 
 [[unit_types]]
 id = "aria"
@@ -141,11 +141,11 @@ ai_profile = "tank"
 visual = "fighter.svg"
 width = 1
 height = 1
-hp = 18
+hp = 17
 movement = 5
 initiative = 3
-dodge = 3
-block = 4
+dodge = 5
+block = 5
 attack = 5
 power = 5
 skills = [
@@ -164,9 +164,9 @@ hp = 13
 movement = 5
 initiative = 5
 dodge = 5
-block = 1
-attack = 6
-power = 4
+block = 0
+attack = 5
+power = 5
 skills = [
     "ranged_attack",
     "aimed_shot",
@@ -178,13 +178,13 @@ ai_profile = "healer"
 visual = "mage.svg"
 width = 1
 height = 1
-hp = 12
+hp = 11
 movement = 5
 initiative = 2
 dodge = 3
-block = 2
-attack = 4
-power = 3
+block = 0
+attack = 5
+power = 5
 skills = [
     "melee_attack",
     "mire",

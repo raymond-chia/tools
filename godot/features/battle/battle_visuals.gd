@@ -50,6 +50,15 @@ static func create_unit_node(unit_id: int, visual_name: String, units_layer: Nod
 	body.name = "Body"
 	body.texture = load(BattleConfig.unit_art_path(visual_name))
 	visual.add_child(body)
+	var health := Node2D.new()
+	health.name = "Health"
+	health.position.y = 20
+	for bar_name in ["Background", "Fill"]:
+		var bar := Polygon2D.new()
+		bar.name = bar_name
+		bar.color = Color("281e25") if bar_name == "Background" else Color("62d27c")
+		health.add_child(bar)
+	node.add_child(health)
 	units_layer.add_child(node)
 	return node
 
@@ -69,6 +78,19 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	body.position.y = -55 if large else -43
 	body.scale = Vector2(0.88, 0.88) if large else Vector2(0.72, 0.72)
 	body.modulate = Color.WHITE
+
+static func update_unit_health(node: Node2D, unit: Dictionary) -> void:
+	var width: float = 96 if unit.large else 60
+	var health: Node2D = node.get_node("Health")
+	var background: Polygon2D = health.get_node("Background")
+	var fill: Polygon2D = health.get_node("Fill")
+	background.polygon = health_bar_polygon(width, width)
+	fill.visible = unit.hp > 0
+	fill.polygon = health_bar_polygon(width, width * float(unit.hp) / float(unit.max_hp))
+
+static func health_bar_polygon(width: float, filled_width: float) -> PackedVector2Array:
+	var left := -width * 0.5
+	return PackedVector2Array([Vector2(left, 0), Vector2(left + filled_width, 0), Vector2(left + filled_width, 7), Vector2(left, 7)])
 
 static func diamond(center: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([center + Vector2(0, -16), center + Vector2(32, 0), center + Vector2(0, 16), center + Vector2(-32, 0)])

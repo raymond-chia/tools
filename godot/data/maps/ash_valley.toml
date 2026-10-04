@@ -1,5 +1,5 @@
 name = "灰燼谷伏擊"
-width = 19
+width = 33
 height = 10
 
 [[terrains]]
@@ -53,11 +53,6 @@ y = 0
 kind = "cliff"
 
 [[terrains]]
-x = 0
-y = 1
-kind = "cliff"
-
-[[terrains]]
 x = 1
 y = 1
 kind = "cliff"
@@ -148,21 +143,6 @@ y = 6
 kind = "plain"
 
 [[terrains]]
-x = 9
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 8
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 7
-y = 6
-kind = "plain"
-
-[[terrains]]
 x = 6
 y = 6
 kind = "plain"
@@ -170,95 +150,10 @@ kind = "plain"
 [[terrains]]
 x = 5
 y = 6
-kind = "plain"
-
-[[terrains]]
-x = 5
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 4
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 3
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 2
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 2
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 1
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 1
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 0
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 0
-y = 6
-kind = "plain"
-
-[[terrains]]
-x = 3
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 4
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 6
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 7
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 8
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 9
-y = 7
 kind = "plain"
 
 [[terrains]]
 x = 12
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 11
-y = 7
-kind = "plain"
-
-[[terrains]]
-x = 10
 y = 7
 kind = "plain"
 
@@ -321,32 +216,952 @@ kind = "cliff"
 x = 16
 y = 1
 kind = "cliff"
+
+[[terrains]]
+x = 18
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 17
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 16
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 15
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 14
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 13
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 13
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 12
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 12
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 11
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 10
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 9
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 8
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 7
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 5
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 6
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 4
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 3
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 2
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 1
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 11
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 11
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 10
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 9
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 8
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 7
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 7
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 6
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 5
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 5
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 4
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 8
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 9
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 8
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 7
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 6
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 3
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 2
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 14
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 14
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 15
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 16
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 17
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 18
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 18
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 18
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 17
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 16
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 15
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 14
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 14
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 13
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 12
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 11
+y = 4
+kind = "cliff"
+
+[[terrains]]
+x = 11
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 10
+y = 4
+kind = "cliff"
+
+[[terrains]]
+x = 10
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 9
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 8
+y = 3
+kind = "cliff"
+
+[[terrains]]
+x = 8
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 7
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 6
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 9
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 10
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 11
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 12
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 13
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 19
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 19
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 20
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 21
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 22
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 23
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 24
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 25
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 26
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 26
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 27
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 28
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 28
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 29
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 29
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 30
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 30
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 27
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 20
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 20
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 21
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 21
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 22
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 23
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 24
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 25
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 26
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 27
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 28
+y = 2
+kind = "cliff"
+
+[[terrains]]
+x = 25
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 22
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 23
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 24
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 19
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 20
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 21
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 22
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 23
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 24
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 25
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 26
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 27
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 28
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 29
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 30
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 30
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 30
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 29
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 28
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 27
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 26
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 25
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 19
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 20
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 21
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 24
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 23
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 22
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 21
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 22
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 23
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 24
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 25
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 26
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 27
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 28
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 29
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 29
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 30
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 30
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 29
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 28
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 27
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 26
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 22
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 23
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 24
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 25
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 4
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 4
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 3
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 2
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 1
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 1
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 2
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 3
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 1
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 4
+kind = "chasm"
+
+[[terrains]]
+x = 1
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 2
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 3
+kind = "chasm"
+
+[[terrains]]
+x = 1
+y = 4
+kind = "chasm"
+
+[[terrains]]
+x = 2
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 3
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 0
+y = 1
+kind = "chasm"
+
+[[terrains]]
+x = 31
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 32
+y = 0
+kind = "cliff"
+
+[[terrains]]
+x = 31
+y = 1
+kind = "cliff"
+
+[[terrains]]
+x = 31
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 5
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 31
+y = 9
+kind = "chasm"
+
+[[terrains]]
+x = 31
+y = 8
+kind = "chasm"
+
+[[terrains]]
+x = 31
+y = 7
+kind = "chasm"
+
+[[terrains]]
+x = 31
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 4
+kind = "chasm"
+
+[[terrains]]
+x = 32
+y = 1
+kind = "plain"
+
+[[terrains]]
+x = 9
+y = 6
+kind = "chasm"
+
+[[terrains]]
+x = 10
+y = 7
+kind = "chasm"
 
 [[units]]
 id = 1
 unit_type = "aria"
 team = "player"
-x = 3
-y = 4
+x = 16
+y = 5
 
 [[units]]
 id = 2
 unit_type = "lyra"
 team = "player"
-x = 2
-y = 3
+x = 14
+y = 5
 
 [[units]]
 id = 3
 unit_type = "mira"
 team = "player"
-x = 1
+x = 12
 y = 5
 
 [[units]]
 id = 4
 unit_type = "wolf"
-x = 15
+x = 25
 y = 3
 
 [units.team]
@@ -355,8 +1170,8 @@ enemy = "wild_animals"
 [[units]]
 id = 5
 unit_type = "wolf"
-x = 17
-y = 6
+x = 27
+y = 4
 
 [units.team]
 enemy = "wild_animals"
@@ -364,8 +1179,8 @@ enemy = "wild_animals"
 [[units]]
 id = 6
 unit_type = "wolf"
-x = 15
-y = 5
+x = 24
+y = 4
 
 [units.team]
 enemy = "wild_animals"
@@ -373,8 +1188,8 @@ enemy = "wild_animals"
 [[units]]
 id = 7
 unit_type = "wolf"
-x = 13
-y = 4
+x = 22
+y = 3
 
 [units.team]
 enemy = "wild_animals"
@@ -382,7 +1197,7 @@ enemy = "wild_animals"
 [[units]]
 id = 8
 unit_type = "wolf"
-x = 17
+x = 29
 y = 3
 
 [units.team]

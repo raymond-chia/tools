@@ -4,9 +4,9 @@ use crate::game::{DamageResult, Game, die};
 use crate::gameplay_config;
 use crate::model::{
     AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
-    GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, Phase, Pos, RollDegree, SkillDef,
-    SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView,
-    SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, Turn, Unit,
+    GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, MovementTransition, Phase, Pos,
+    RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview,
+    SkillRangeView, SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, Turn, Unit,
 };
 use crate::movement::{
     fits, footprint_cell_distance, footprint_cells, footprint_distance, overlap, unit_at_cell,
@@ -215,6 +215,12 @@ impl Game {
                     .get_mut::<Pos>(te)
                     .expect("已建立的戰鬥單位應具有 Pos 元件")
                     .0 = destination;
+                // 推移在技能結果之後、進入地形之前呈現，包含推入後陣亡的單位。
+                self.movements.push(MovementTransition {
+                    unit_id: target,
+                    path: vec![current, destination],
+                    before_log_index: self.world.resource::<Log>().0.len() + 1,
+                });
                 pushed = true;
             } else {
                 push_blocked = true;

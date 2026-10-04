@@ -126,6 +126,8 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 			unit_nodes[unit.id] = node
 		else:
 			node = unit_nodes[unit.id]
+		node.set_meta("presentation_unit", unit)
+		BattleVisuals.update_unit_health(node, unit)
 		var center := footprint_center(unit)
 		var previous_unit := unit_with_id(previous_state.get("units", []), unit.id)
 		var moved: bool = not previous_unit.is_empty() and (previous_unit.x != unit.x or previous_unit.y != unit.y)
@@ -215,12 +217,18 @@ func play_combat_event_queue() -> void:
 			"movement":
 				await animate_movement_event(event)
 			"skill":
-				await present_skill_result(event)
+				var movement: Dictionary = {}
+				if not combat_event_queue.is_empty() and combat_event_queue[0].type == "movement" and combat_event_queue[0].unit_id == event.target:
+					movement = combat_event_queue.pop_front()
+				await present_skill_result(event, movement)
 			"healing":
 				present_unit_text(event.target, "+%d" % int(event.healing), BattleConfig.HEALING_TEXT_COLOR)
 				await get_tree().create_timer(BattleConfig.COMBAT_RESULT_HOLD).timeout
 			"terrain_damage":
 				await wait_for_unit_movement(event.target)
+				if event.instant_down:
+					await animate_unit_death(event.target, true)
+					continue
 				present_unit_text(event.target, "-%d" % int(event.damage), BattleConfig.DAMAGE_TEXT_COLOR)
 				var hit_tween := animate_unit_hit(event.target)
 				if hit_tween != null:
@@ -236,7 +244,7 @@ func play_combat_event_queue() -> void:
 func is_presenting_combat_events() -> bool:
 	return playing_combat_events or not combat_event_queue.is_empty()
 
-func present_skill_result(event: Dictionary) -> void:
+func present_skill_result(event: Dictionary, movement: Dictionary) -> void:
 	var attack_tween := animate_unit_attack(event.actor, event.target)
 	if attack_tween != null:
 		await attack_tween.finished
@@ -256,8 +264,12 @@ func present_skill_result(event: Dictionary) -> void:
 		for collision_unit in event.collision_units:
 			present_unit_text(collision_unit.unit, "-%d" % int(event.collision_damage), BattleConfig.DAMAGE_TEXT_COLOR)
 			animate_unit_hit(collision_unit.unit)
+	# 技能接續的位移與受擊效果一起播放，停留時間放在完整演出之後。
+	if not movement.is_empty():
+		await animate_movement_event(movement)
 	if hit_tween != null:
-		await hit_tween.finished
+		if hit_tween.is_running():
+			await hit_tween.finished
 	else:
 		await get_tree().create_timer(BattleConfig.HIT_FLASH_DURATION * 2.0).timeout
 	await get_tree().create_timer(BattleConfig.COMBAT_RESULT_HOLD).timeout
@@ -319,13 +331,19 @@ func animate_unit_attack(actor_id: int, target_id: int) -> Tween:
 	attack_tweens[actor_id] = tween
 	return tween
 
-func animate_unit_death(unit_id: int) -> void:
+func animate_unit_death(unit_id: int, falling := false) -> void:
 	if unit_id == 0 or not unit_nodes.has(unit_id):
 		return
-	var body: Sprite2D = unit_nodes[unit_id].get_node("Visual/Body")
-	var tween := create_tween().bind_node(body).set_parallel(true)
-	tween.tween_property(body, "modulate", Color(0.45, 0.45, 0.48, 0.75), BattleConfig.DEATH_FADE_DURATION)
-	tween.tween_property(body, "position:y", body.position.y + 8.0, BattleConfig.DEATH_FADE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	var node: Node2D = unit_nodes[unit_id]
+	var tween := create_tween().bind_node(node).set_parallel(true)
+	if falling:
+		node.get_node("Health").hide()
+		tween.tween_property(node, "position:y", node.position.y + BattleConfig.FALL_DISTANCE, BattleConfig.FALL_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tween.tween_property(node, "modulate:a", 0.0, BattleConfig.FALL_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	else:
+		var body: Sprite2D = node.get_node("Visual/Body")
+		tween.tween_property(body, "modulate", Color(0.45, 0.45, 0.48, 0.75), BattleConfig.DEATH_FADE_DURATION)
+		tween.tween_property(body, "position:y", body.position.y + 8.0, BattleConfig.DEATH_FADE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await tween.finished
 	pending_death_ids.erase(unit_id)
 	stop_unit_tweens(unit_id)
@@ -349,10 +367,9 @@ func animate_movement_event(event: Dictionary) -> void:
 	var unit_id: int = event.unit_id
 	if not unit_nodes.has(unit_id):
 		return
-	var unit := unit_with_id(state.units, unit_id)
-	if unit.is_empty():
-		return
 	var node: Node2D = unit_nodes[unit_id]
+	# 陣亡單位已不在最新 snapshot，仍使用節點保留的呈現資料播放最後路徑。
+	var unit: Dictionary = node.get_meta("presentation_unit")
 	stop_tween(movement_tweens, unit_id)
 	var tween := create_tween().bind_node(node)
 	for cell_value in event.path.slice(1):
@@ -514,4 +531,3 @@ func _draw() -> void:
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
 	BattleVisuals.draw_terrain_effects(self, ground, state.terrain_effects)
-	BattleVisuals.draw_unit_health(self, ground, state.units)
