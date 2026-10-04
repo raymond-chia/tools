@@ -12,7 +12,8 @@ use crate::movement::{
     fits, footprint_cell_distance, footprint_cells, footprint_distance, overlap, unit_at_cell,
 };
 use crate::terrain::{
-    TerrainEntry, footprint_blocks_push, footprint_terrain_penalty, terrain_type,
+    TerrainEntry, footprint_blocks_push, footprint_on_impassable, footprint_terrain_penalty,
+    terrain_type,
 };
 use bevy_ecs::prelude::{Entity, World};
 
@@ -395,6 +396,16 @@ pub(crate) fn validate_cell_skill_from_position(
         },
     ) {
         return Err(error::target_cell_out_of_bounds());
+    }
+    if footprint_on_impassable(
+        world,
+        cell,
+        Footprint {
+            width: 1,
+            height: 1,
+        },
+    ) {
+        return Err(error::target_cell_impassable());
     }
     let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用尺寸");
     check_skill_range(

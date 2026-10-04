@@ -1141,8 +1141,8 @@ kind = "chasm"
 id = 1
 unit_type = "aria"
 team = "player"
-x = 16
-y = 5
+x = 15
+y = 6
 
 [[units]]
 id = 2

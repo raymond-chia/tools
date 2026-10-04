@@ -137,6 +137,13 @@ pub(crate) fn target_cell_out_of_bounds() -> GameError {
     GameError::new("target_cell_out_of_bounds", "目標格超出地圖".to_owned())
 }
 
+pub(crate) fn target_cell_impassable() -> GameError {
+    GameError::new(
+        "target_cell_impassable",
+        "不能在不可進入的地形施放地形法術".to_owned(),
+    )
+}
+
 pub(crate) fn target_too_close() -> GameError {
     GameError::new("target_too_close", "目標距離太近".to_owned())
 }

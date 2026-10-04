@@ -159,6 +159,7 @@ ERROR_MISSING_MOVE_UNIT,找不到移動單位,Moving unit not found
 ERROR_MISSING_TARGET,找不到目標,Target not found
 ERROR_OVERLAPPING_UNIT,單位與其他單位重疊,Unit overlaps another unit
 ERROR_TARGET_CELL_OUT_OF_BOUNDS,目標格超出地圖,Target cell is out of bounds
+ERROR_TARGET_CELL_IMPASSABLE,不能在不可進入的地形施放地形法術,Cannot cast terrain spells on impassable terrain
 ERROR_TARGET_TOO_CLOSE,目標距離太近,Target is too close
 ERROR_TARGET_TOO_FAR,目標距離太遠,Target is too far
 ERROR_TERRAIN_OUT_OF_BOUNDS,地形超出地圖範圍,Terrain is out of bounds
