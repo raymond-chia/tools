@@ -164,6 +164,26 @@ func wait_for_combat_events() -> void:
 	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 
+# 驗證隱藏／顯示日誌不丟失紀錄與展開狀態，隱藏期間新增的事件仍能在重新顯示時讀取。
+func test_log_visibility_preserves_entries_and_expansion() -> void:
+	battle.ui.battle_log.meta_clicked.emit("log_entry:0")
+	assert_bool(battle.ui.log_entry_expanded_states[0]).is_true()
+	var count: int = battle.ui.presented_log_events.size()
+	battle.ui.log_visibility_button.button_pressed = true
+	assert_bool(battle.ui.log_panel.visible).is_false()
+	assert_str(battle.ui.log_visibility_button.text).is_equal(tr("顯示紀錄"))
+	assert_bool(battle.send(skill_command(WOLF_A_ID, "precise_strike"))).is_true()
+	await wait_for_combat_events()
+	assert_int(battle.ui.presented_log_events.size()).is_greater(count)
+	var hidden_text: String = battle.ui.battle_log.text
+	battle.ui.log_visibility_button.button_pressed = false
+	assert_bool(battle.ui.log_panel.visible).is_true()
+	assert_str(battle.ui.log_visibility_button.text).is_equal(tr("隱藏紀錄"))
+	assert_str(battle.ui.battle_log.text).is_equal(hidden_text)
+	assert_bool(battle.ui.log_entry_expanded_states[0]).is_true()
+	battle.ui.battle_log.meta_clicked.emit("log_entry:0")
+	assert_bool(battle.ui.log_entry_expanded_states[0]).is_false()
+
 func formatted_log() -> String:
 	return battle.ui.format_log(battle.ui.presented_log_events)
 

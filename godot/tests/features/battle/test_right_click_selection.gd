@@ -28,7 +28,7 @@ func test_inspection_changes_from_right_click() -> void:
 		{"name": "切換查看單位", "initial": "unit:%d" % ARIA_ID, "click": "unit:%d" % LYRA_ID, "expected": "unit:%d" % LYRA_ID},
 	]
 	for test_case in test_data:
-		await prepare_case(battle, test_case.initial)
+		await prepare_case(test_case.initial)
 		var state_before_input := combat_state(battle.state)
 
 		push_mouse_button(battle.world, target_point(battle, test_case.click), true)
@@ -47,7 +47,7 @@ func test_pending_action_right_click_priority() -> void:
 		{"name": "右鍵空地時取消技能", "initial": "unit:%d" % ARIA_ID, "click": "empty", "result": "cancel"},
 	]
 	for test_case in test_data:
-		await prepare_case(battle, test_case.initial)
+		await prepare_case(test_case.initial)
 		battle.select_action("melee")
 		var state_before_input := combat_state(battle.state)
 
@@ -68,7 +68,7 @@ func test_ignored_right_click_inputs() -> void:
 		{"name": "右鍵放開", "input": "released"},
 	]
 	for test_case in test_data:
-		await prepare_case(battle, "unit:%d" % ARIA_ID)
+		await prepare_case("unit:%d" % ARIA_ID)
 		var state_before_input: Dictionary = battle.state.duplicate(true)
 
 		if test_case.input == "outside":
@@ -82,7 +82,7 @@ func test_ignored_right_click_inputs() -> void:
 
 # 驗證單位詳情可從標題列以左鍵拖曳，且放開左鍵後即停止移動。
 func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
-	await prepare_case(battle, "unit:%d" % ARIA_ID)
+	await prepare_case("unit:%d" % ARIA_ID)
 	var info_panel: Panel = battle.ui.info_panel
 	var header: Control = info_panel.get_node("Margin/Content/Header")
 	var initial_position := info_panel.position
@@ -98,7 +98,7 @@ func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
 
 # 驗證詳情面板遇到無斷點長文字時，所有可見內容仍留在左右邊界內。
 func test_inspection_content_stays_inside_panel_width() -> void:
-	await prepare_case(battle, "unit:%d" % ARIA_ID)
+	await prepare_case("unit:%d" % ARIA_ID)
 	var info_panel: Panel = battle.ui.info_panel
 	var unit_name: Label = info_panel.get_node("Margin/Content/UnitDetails/UnitName")
 	var terrain_effect: Label = info_panel.get_node("Margin/Content/TerrainRows/EffectValue")
@@ -113,16 +113,41 @@ func test_inspection_content_stays_inside_panel_width() -> void:
 		assert_float(control_rect.position.x).override_failure_message("%s 不應超出詳情面板左側" % control.get_path()).is_greater_equal(panel_rect.position.x)
 		assert_float(control_rect.end.x).override_failure_message("%s 不應超出詳情面板右側" % control.get_path()).is_less_equal(panel_rect.end.x)
 
-func prepare_case(battle, initial_target: String) -> void:
-	await load_test_documents(battle)
+# 驗證標題列關閉鈕清除查看格、範圍及選取圈，且不取消目前待選技能。
+func test_close_inspection_clears_selection_but_keeps_pending_skill() -> void:
+	await prepare_case("unit:%d" % ARIA_ID)
+	battle.select_action("melee")
+	var before := combat_state(battle.state)
+	battle.ui.info_panel.get_node("Margin/Content/Header/Close").pressed.emit()
+	assert_inspection(battle, "none", "關閉查看面板")
+	assert_bool(battle.ui.info_panel.visible).is_false()
+	assert_str(battle.inspected_skill).is_empty()
+	assert_str(battle.pending_action).is_equal("melee")
+	assert_dict(combat_state(battle.state)).is_equal(before)
+
+# 驗證詳情面板往四個角落拖曳時完整限制在視窗內，放開後停止拖曳。
+func test_inspection_drag_clamps_to_viewport_edges() -> void:
+	await prepare_case("unit:%d" % ARIA_ID)
+	var panel: Panel = battle.ui.info_panel
+	var header: Control = panel.get_node("Margin/Content/Header")
+	var maximum: Vector2 = battle.ui.root.size - panel.size
+	for expected in [Vector2.ZERO, Vector2(maximum.x, 0), maximum, Vector2(0, maximum.y)]:
+		var center := header.global_position + header.size / 2.0
+		var beyond := Vector2(-10000 if expected.x == 0 else 10000, -10000 if expected.y == 0 else 10000)
+		push_left_drag(header, center, beyond)
+		assert_vector(panel.position).is_equal(expected)
+		assert_bool(battle.ui.dragging_info_panel).is_false()
+
+func prepare_case(initial_target: String) -> void:
+	await load_test_documents()
 	battle.inspected_cell = target_cell(battle, initial_target)
 	battle.pending_action = ""
 	battle.status = ""
 	battle.present()
 
-func load_test_documents(battle) -> void:
-	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
-	assert_str(setup_error).override_failure_message(setup_error).is_empty()
+func load_test_documents() -> void:
+	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, TEST_MAP)
+	battle = runner.scene()
 
 func wait_for_combat_events(target_battle) -> void:
 	while target_battle.state.turn.can_continue or target_battle.world.is_presenting_combat_events():

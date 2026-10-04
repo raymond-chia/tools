@@ -77,6 +77,25 @@ func test_right_click_skill_uses_ordered_inspect_panel() -> void:
 		assert_str(battle.ui.inspected_skill_name.text).override_failure_message("%s：inspect 技能名稱應使用目前語系" % test_case.locale).is_equal(test_case.name)
 		assert_str(battle.ui.inspected_skill_description.text).override_failure_message("%s：inspect 技能內容應使用目前語系" % test_case.locale).contains(test_case.range)
 
+# 驗證再次右鍵相同技能或按關閉鈕會取消技能查看，切換技能時更新內容並清除地格查看。
+func test_skill_inspection_toggle_switch_and_close() -> void:
+	battle.world.inspection_clicked.emit(1, Vector2i(1, 3))
+	for test_case in [
+		{"skill": "power_strike", "expected": "power_strike"},
+		{"skill": "power_strike", "expected": ""},
+		{"skill": "power_strike", "expected": "power_strike"},
+		{"skill": "aimed_shot", "expected": "aimed_shot"},
+	]:
+		emit_right_press(battle.ui.action_buttons[test_case.skill])
+		assert_str(battle.inspected_skill).is_equal(test_case.expected)
+		assert_vector(battle.inspected_cell).is_equal(Vector2i(-1, -1))
+		assert_bool(battle.ui.info_panel.visible).is_equal(not test_case.expected.is_empty())
+		if not test_case.expected.is_empty():
+			assert_str(battle.ui.inspected_skill_name.text).is_equal(tr(BattleConfig.skill_name_key(test_case.expected)))
+	battle.ui.info_panel.get_node("Margin/Content/Header/Close").pressed.emit()
+	assert_str(battle.inspected_skill).is_empty()
+	assert_bool(battle.ui.info_panel.visible).is_false()
+
 func add_test_translation(locale: String, messages: Dictionary) -> void:
 	var translation := Translation.new()
 	translation.locale = locale

@@ -111,9 +111,8 @@ func test_downed_unit_does_not_block_cell() -> void:
 	assert_int(int(actor.y)).is_equal(1)
 
 func load_test_documents() -> void:
-	battle.pending_action = ""
-	var setup_error: String = await BattleTestSetup.load_and_start(battle, runner, TEST_DEFINITIONS, TEST_MAP)
-	assert_str(setup_error).override_failure_message(setup_error).is_empty()
+	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, TEST_MAP)
+	battle = runner.scene()
 
 func wait_for_combat_events() -> void:
 	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
