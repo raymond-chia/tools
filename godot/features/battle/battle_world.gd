@@ -38,6 +38,10 @@ func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
 	BattleVisuals.setup_ground(ground, state.terrain_cells)
 	camera.configure_board(self, ground, state.width, state.height)
+	for unit in state.units:
+		if unit.team == "player":
+			camera.position = camera.clamp_to_bounds(to_global(footprint_center(unit)))
+			break
 
 func _process(delta: float) -> void:
 	camera.move_with_input(delta)
@@ -127,7 +131,9 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 		else:
 			node = unit_nodes[unit.id]
 		node.set_meta("presentation_unit", unit)
-		BattleVisuals.update_unit_health(node, unit)
+		# 演出期間保留目前血條，各次結果由事件更新，避免提前顯示最終 HP。
+		if is_new or not is_presenting_combat_events():
+			BattleVisuals.update_unit_health(node, unit)
 		var center := footprint_center(unit)
 		var previous_unit := unit_with_id(previous_state.get("units", []), unit.id)
 		var moved: bool = not previous_unit.is_empty() and (previous_unit.x != unit.x or previous_unit.y != unit.y)
@@ -222,10 +228,12 @@ func play_combat_event_queue() -> void:
 					movement = combat_event_queue.pop_front()
 				await present_skill_result(event, movement)
 			"healing":
+				present_event_health(event.target, event.remaining_hp, event.max_hp)
 				present_unit_text(event.target, "+%d" % int(event.healing), BattleConfig.HEALING_TEXT_COLOR)
 				await get_tree().create_timer(BattleConfig.COMBAT_RESULT_HOLD).timeout
 			"terrain_damage":
 				await wait_for_unit_movement(event.target)
+				present_event_health(event.target, event.remaining_hp, event.max_hp)
 				if event.instant_down:
 					await animate_unit_death(event.target, true)
 					continue
@@ -238,6 +246,7 @@ func play_combat_event_queue() -> void:
 					await animate_unit_death(event.target)
 		await get_tree().create_timer(BattleConfig.COMBAT_EVENT_PAUSE).timeout
 	playing_combat_events = false
+	sync_unit_sprites()
 	queue_redraw()
 	combat_events_finished.emit()
 
@@ -247,7 +256,9 @@ func is_presenting_combat_events() -> bool:
 func present_skill_result(event: Dictionary, movement: Dictionary) -> void:
 	var attack_tween := animate_unit_attack(event.actor, event.target)
 	if attack_tween != null:
-		await attack_tween.finished
+		# 前衝到達目標時呈現命中，攻擊者同時播放回位。
+		await attack_tween.step_finished
+	present_event_health(event.target, event.remaining_hp, event.max_hp)
 	var hit_tween: Tween
 	match event.result:
 		"dodge":
@@ -262,6 +273,7 @@ func present_skill_result(event: Dictionary, movement: Dictionary) -> void:
 	if int(event.collision_damage) > 0:
 		present_unit_text(event.target, "-%d" % int(event.collision_damage), BattleConfig.DAMAGE_TEXT_COLOR, 18.0)
 		for collision_unit in event.collision_units:
+			present_event_health(collision_unit.unit, collision_unit.remaining_hp, collision_unit.max_hp)
 			present_unit_text(collision_unit.unit, "-%d" % int(event.collision_damage), BattleConfig.DAMAGE_TEXT_COLOR)
 			animate_unit_hit(collision_unit.unit)
 	# 技能接續的位移與受擊效果一起播放，停留時間放在完整演出之後。
@@ -278,6 +290,15 @@ func present_skill_result(event: Dictionary, movement: Dictionary) -> void:
 	for collision_unit in event.collision_units:
 		if collision_unit.downed:
 			await animate_unit_death(collision_unit.unit)
+
+func present_event_health(unit_id: int, remaining_hp: int, max_hp: int) -> void:
+	if not unit_nodes.has(unit_id):
+		return
+	var node: Node2D = unit_nodes[unit_id]
+	var unit: Dictionary = node.get_meta("presentation_unit").duplicate()
+	unit.hp = remaining_hp
+	unit.max_hp = max_hp
+	BattleVisuals.update_unit_health(node, unit)
 
 func present_unit_text(unit_id: int, text: String, color: Color, horizontal_offset := 0.0) -> void:
 	if unit_id == 0 or not unit_nodes.has(unit_id):
