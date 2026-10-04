@@ -43,7 +43,7 @@ func _ready() -> void:
 	core = TacticalGame.new()
 	if editor_preview:
 		back_button = Button.new()
-		back_button.text = tr("返回編輯器")
+		back_button.text = "返回編輯器"
 		back_button.position = Vector2(900, 20)
 		back_button.pressed.connect(return_to_editor)
 		ui.get_node("Root").add_child(back_button)
@@ -64,12 +64,10 @@ func _ready() -> void:
 func _on_language_changed() -> void:
 	update_battle_title()
 	ui.refresh_log_language()
-	if back_button != null:
-		back_button.text = tr("返回編輯器")
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
 
 func update_battle_title() -> void:
-	$UI/Root/BattleTitle.text = (tr("測試：") if editor_preview else "") + tr(battle_name)
+	$UI/Root/BattleTitle.text = ("測試：" if editor_preview else "") + tr(battle_name)
 
 func return_to_editor() -> void:
 	get_tree().change_scene_to_file("res://features/editor/editor.tscn")

@@ -75,11 +75,11 @@ pub fn edit_definition_from_json(
     maps: &str,
     command: &str,
 ) -> Result<String, EditorError> {
-    let mut definitions: Definitions = serde_json::from_str(definitions)
+    let mut definitions: Definitions = super::json::from_str(definitions)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
-    let maps: BTreeMap<String, Map> = serde_json::from_str(maps)
+    let maps: BTreeMap<String, Map> = super::json::from_str(maps)
         .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
-    let command: DefinitionEdit = serde_json::from_str(command)
+    let command: DefinitionEdit = super::json::from_str(command)
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
     match command {
         DefinitionEdit::SkillEffectOptions => {
@@ -437,7 +437,7 @@ fn update_field<T: Serialize + serde::de::DeserializeOwned>(
         return Err(EditorError::operation("invalid_field", key, Vec::new()));
     }
     document[key] = value;
-    *entry = serde_json::from_value(document)
+    *entry = super::json::from_value(document)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
     Ok(())
 }

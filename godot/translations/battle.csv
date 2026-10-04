@@ -40,8 +40,6 @@ ATTACK_PREVIEW_BLOCK,格擋 %d%%,Block %d%%
 ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
 選單,選單,Menu
 灰燼谷伏擊,灰燼谷伏擊,Ash Valley Ambush
-測試：,測試：,"Test: "
-返回編輯器,返回編輯器,Back to Editor
 UNIT_NAME_ARIA,亞莉亞・劍士,Aria · Fighter
 UNIT_NAME_LYRA,萊拉・遊俠,Lyra · Ranger
 UNIT_NAME_MIRA,米菈・術士,Mira · Mage
@@ -121,7 +119,6 @@ D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %
 %s 使用「%s」,%s 使用「%s」,%s uses %s
 產生「%s」,產生「%s」,Creates %s
 包抄,包抄,Flanking
-ERROR_PREFIX,錯誤：,"Error: "
 ERROR_CANNOT_ATTACK_ALLY,不能攻擊友軍,Cannot attack an ally
 ERROR_CANNOT_CONTINUE,目前沒有可推進的自動回合,No automatic turn can be advanced
 ERROR_CANNOT_MOVE,目前不能移動,Cannot move now
@@ -129,7 +126,6 @@ ERROR_CANNOT_USE_SKILL,目前不能使用技能,Cannot use a skill now
 ERROR_CELL_NOT_ON_TARGET,所選格不屬於目標,Selected cell is not on the target
 ERROR_COMMAND_JSON_PARSE,指令格式錯誤,Command format is invalid
 ERROR_CORE_RESPONSE_JSON_PARSE,核心回應解析失敗,Failed to parse core response
-ERROR_DEFINITIONS_JSON_PARSE,定義資料格式錯誤,Definitions data format is invalid
 ERROR_DEFINITIONS_TOML_PARSE,定義檔格式錯誤,Definitions file format is invalid
 ERROR_DELAY_AFTER_ACTION,開始行動後不能延後,Cannot delay after acting
 ERROR_DUPLICATE_SKILL_ID,技能 ID 重複,Duplicate skill ID
@@ -153,7 +149,6 @@ ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must spec
 ERROR_INVALID_TERRAIN_VALUES,地形傷害、閃避懲罰與格擋懲罰不可為負數,"Terrain damage, dodge penalty, and block penalty cannot be negative"
 ERROR_INVALID_UNIT_TYPE,單位定義的 ID、HP 或佔用尺寸無效,"Unit type ID, HP, or size is invalid"
 ERROR_JSON_SERIALIZE,無法轉換資料,Could not convert data
-ERROR_MAP_JSON_PARSE,地圖資料格式錯誤,Map data format is invalid
 ERROR_MAP_TOML_PARSE,地圖檔格式錯誤,Map file format is invalid
 ERROR_MISSING_ACTOR,找不到行動角色,Acting unit not found
 ERROR_MISSING_AI_SKILL,敵方單位沒有技能,Enemy unit has no skills
@@ -166,7 +161,6 @@ ERROR_OVERLAPPING_UNIT,單位與其他單位重疊,Unit overlaps another unit
 ERROR_TARGET_CELL_OUT_OF_BOUNDS,目標格超出地圖,Target cell is out of bounds
 ERROR_TARGET_TOO_CLOSE,目標距離太近,Target is too close
 ERROR_TARGET_TOO_FAR,目標距離太遠,Target is too far
-ERROR_TOML_SERIALIZE,無法儲存資料格式,Could not serialize data
 ERROR_TERRAIN_OUT_OF_BOUNDS,地形超出地圖範圍,Terrain is out of bounds
 ERROR_UNIT_CANNOT_USE_SKILL,此角色不能使用這個技能,This unit cannot use the skill
 ERROR_UNIT_ON_IMPASSABLE,單位不能放在峭壁或懸崖,Unit cannot be placed on a cliff or chasm

@@ -91,10 +91,9 @@ func _ready() -> void:
 	var source := read_file(DEFINITIONS_PATH)
 	if source.is_empty():
 		return
-	var parsed := CoreResponse.read(core.definitions_to_json(source), show_error)
+	var parsed := read_core_response(core.definitions_to_json(source))
 	if parsed.is_empty():
 		return
-	restore_definition_integers(parsed)
 	definitions = parsed
 	refresh_map_list()
 	if get_tree().root.has_meta("editor_session"):
@@ -175,10 +174,9 @@ func open_selected_map() -> void:
 	var source := read_file(path)
 	if source.is_empty():
 		return
-	var parsed := CoreResponse.read(core.map_to_json(source), show_error)
+	var parsed := read_core_response(core.map_to_json(source))
 	if parsed.is_empty():
 		return
-	restore_map_integers(parsed)
 	map_data = parsed
 	map_view.camera_initialized = false
 	map_file = path
@@ -286,31 +284,10 @@ func play_map() -> void:
 	get_tree().change_scene_to_node(battle)
 
 func serialize_documents() -> Dictionary:
-	return CoreResponse.read(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)), show_error)
-
-# Godot 解析 JSON 時將數字轉成 float；送回核心前還原文件格式中的整數欄位。
-func restore_definition_integers(value: Dictionary) -> void:
-	for terrain in value.terrain_types:
-		restore_integers(terrain, ["damage", "extra_movement_cost", "dodge_penalty", "block_penalty"])
-	for skill in value.skills:
-		restore_integers(skill, ["min_range", "max_range", "attack_bonus", "power_bonus", "duration"])
-	for unit in value.unit_types:
-		restore_integers(unit, ["width", "height", "hp", "movement", "initiative", "dodge", "block", "attack", "power"])
-
-func restore_map_integers(value: Dictionary) -> void:
-	restore_integers(value, ["width", "height"])
-	for terrain in value.terrains:
-		restore_integers(terrain, ["x", "y"])
-	for unit in value.units:
-		restore_integers(unit, ["id", "x", "y"])
-
-func restore_integers(value: Dictionary, keys: Array[String]) -> void:
-	for key in keys:
-		if value.has(key):
-			value[key] = int(value[key])
+	return read_core_response(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)))
 
 func validate_current() -> void:
-	var snapshot := CoreResponse.read(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null), show_error)
+	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
 	if snapshot.is_empty():
 		if not pending_edit.is_empty():
 			var error_message := status_label.text
@@ -330,8 +307,12 @@ func validate_current() -> void:
 	map_view.present(map_data, snapshot, selected_cell)
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
+# 自製編輯器顯示核心原始診斷；正式遊戲維持共用讀取函式的翻譯訊息。
+func read_core_response(response: String) -> Dictionary:
+	return CoreResponse.read(response, show_error, [], true)
+
 func show_error(message: String) -> void:
-	status_label.text = tr("ERROR_PREFIX") + tr(message)
+	status_label.text = "錯誤：" + message
 	for page in definition_pages: page.show_add_error(message)
 
 # 保存每次輸入前的狀態；無效輸入不消耗復原紀錄，也不清除重做紀錄。
@@ -468,7 +449,7 @@ func terrain_kinds(layer: String) -> Array:
 	return kinds
 
 func refresh_grid() -> void:
-	var snapshot := CoreResponse.read(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null), show_error)
+	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
 	if snapshot.is_empty(): return
 	map_view.present(map_data, snapshot, selected_cell)
 
@@ -483,10 +464,9 @@ func refresh_tools_visibility() -> void:
 # 筆刷只傳遞作者選擇；圖層替換、清除與合法性由 Rust 決定。
 func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
 	var command := {"x": cell.x, "y": cell.y, "layer": layer, "kind": kind}
-	var result := CoreResponse.read(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), show_error)
+	var result := read_core_response(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)))
 	if result.is_empty() or not result.changed: return
 	checkpoint_stroke()
-	restore_map_integers(result.map)
 	map_data = result.map
 	pending_edit = {}
 	CoreResponse.convert_unit_ids(result.snapshot)
@@ -557,7 +537,7 @@ func checkpoint_stroke() -> void:
 	stroke_checkpointed = true
 
 func refresh_definitions() -> void:
-	var options := CoreResponse.read(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})), show_error)
+	var options := read_core_response(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})))
 	if options.is_empty(): return
 	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries)
 
@@ -592,15 +572,14 @@ func edit_definition(command: Dictionary) -> bool:
 		if not filename.ends_with(".toml"): continue
 		var path := MAP_DIR + filename
 		if path == map_file: continue
-		var parsed := CoreResponse.read(core.map_to_json(read_file(path)), show_error)
+		var parsed := read_core_response(core.map_to_json(read_file(path)))
 		if parsed.is_empty(): return false
-		restore_map_integers(parsed)
 		maps[path] = parsed
 	if not map_file.is_empty(): maps[map_file] = map_data
 	var response: String = core.edit_definition_from_json(JSON.stringify(definitions), JSON.stringify(maps), JSON.stringify(command))
 	var parsed = JSON.parse_string(response)
 	if parsed is Dictionary and parsed.has("map_path"):
-		show_error("地圖「%s」：%s" % [str(parsed.map_path).get_file(), tr("ERROR_" + str(parsed.error_id).to_upper())])
+		show_error("地圖「%s」：%s: %s" % [str(parsed.map_path).get_file(), parsed.error_id, parsed.error])
 		return false
 	if parsed is Dictionary and parsed.get("error_id") == "authoring_edit":
 		show_definition_error(parsed.error_details)
@@ -608,11 +587,10 @@ func edit_definition(command: Dictionary) -> bool:
 			for page in definition_pages:
 				if page.category == command.category: page.show_remove_error(status_label.text)
 		return false
-	var result := CoreResponse.read(response, show_error)
+	var result := read_core_response(response)
 	if result.is_empty(): return false
 	if command.action == "check_remove": return true
 	checkpoint()
-	restore_definition_integers(result.definitions)
 	definitions = result.definitions
 	refresh_ui()
 	validate_current()

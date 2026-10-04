@@ -1,16 +1,24 @@
 class_name CoreResponse
 extends RefCounted
 
-static func read(response: String, show_error: Callable, ignored_error_ids: Array = []) -> Dictionary:
+static func read(response: String, show_error: Callable, ignored_error_ids: Array = [], detailed_errors: bool = false) -> Dictionary:
 	var parsed = JSON.parse_string(response)
 	if parsed == null:
-		show_error.call("ERROR_CORE_RESPONSE_JSON_PARSE")
+		if detailed_errors:
+			var parser := JSON.new()
+			parser.parse(response)
+			show_error.call("核心回應 JSON 解析失敗（第 %s 行）：%s" % [parser.get_error_line(), parser.get_error_message()])
+		else:
+			show_error.call("ERROR_CORE_RESPONSE_JSON_PARSE")
 		return {}
 	var value: Dictionary = parsed
 	if value.has("error_id"):
 		var error_id: String = value.error_id
 		if not ignored_error_ids.has(error_id):
-			show_error.call("ERROR_" + error_id.to_upper())
+			if detailed_errors:
+				show_error.call("%s: %s" % [error_id, value.error])
+			else:
+				show_error.call("ERROR_" + error_id.to_upper())
 		return {}
 	convert_unit_ids(value)
 	return value

@@ -2,6 +2,7 @@
 //! ID 建立後不可更動，因此不需要更新既有引用；刪除前仍須檢查引用。
 mod definitions;
 mod error;
+mod json;
 mod map;
 
 use crate::Game;
@@ -13,10 +14,10 @@ pub use map::paint_terrain_from_json;
 /// 將 Godot 編輯器傳來的 JSON 定義與地圖資料驗證後，轉成儲存或試玩用的 TOML 文件。
 /// JSON 僅用於編輯器與 Rust 之間傳遞資料；實際保存的檔案仍是 TOML。
 pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, String), EditorError> {
-    let definitions: Definitions = serde_json::from_str(definitions)
+    let definitions: Definitions = json::from_str(definitions)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
-    let map: Map = serde_json::from_str(map)
-        .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+    let map: Map =
+        json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
     Game::from_authoring(definitions.clone(), map.clone())?;
     Ok((
         toml::to_string_pretty(&definitions)
@@ -37,10 +38,10 @@ pub fn inspected_preview_from_json(
     map: &str,
     inspected_actor: Option<i64>,
 ) -> Result<String, EditorError> {
-    let definitions: Definitions = serde_json::from_str(definitions)
+    let definitions: Definitions = json::from_str(definitions)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
-    let map: Map = serde_json::from_str(map)
-        .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+    let map: Map =
+        json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
     let game = Game::from_authoring(definitions, map)?;
     serde_json::to_string(&game.snapshot(inspected_actor))
         .map_err(|e| EditorError::input("json_serialize", e.to_string()))
