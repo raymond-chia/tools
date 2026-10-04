@@ -1,4 +1,3 @@
-# 共用 AI 傾向：單位種類透過 ai_profile 引用，玩家操作不受此設定影響。
 [[ai_profiles]]
 id = "tank"
 distance_preference = "near"
@@ -162,7 +161,7 @@ visual = "archer.svg"
 width = 1
 height = 1
 hp = 13
-movement = 6
+movement = 5
 initiative = 5
 dodge = 5
 block = 1
@@ -187,8 +186,9 @@ block = 2
 attack = 4
 power = 3
 skills = [
-    "heal",
+    "melee_attack",
     "mire",
+    "heal",
 ]
 
 [[unit_types]]
@@ -198,7 +198,7 @@ visual = "wolf.svg"
 width = 1
 height = 1
 hp = 9
-movement = 5
+movement = 6
 initiative = 3
 dodge = 3
 block = 0

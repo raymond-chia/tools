@@ -334,7 +334,7 @@ id = 2
 unit_type = "lyra"
 team = "player"
 x = 2
-y = 4
+y = 3
 
 [[units]]
 id = 3

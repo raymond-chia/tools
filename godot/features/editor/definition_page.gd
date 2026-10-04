@@ -192,6 +192,8 @@ func refresh_fields() -> void:
 			edit.text = str(value)
 			# ID 建立後不可更動，因此不需要更新既有引用；刪除前仍須檢查引用。
 			edit.editable = key != "id"
+			edit.set_meta("field_key", key)
+			edit.set_meta("commit_field", commit_field.bind(id, key, edit, value))
 			edit.text_submitted.connect(func(_text: String): commit_field(id, key, edit, value))
 			edit.focus_exited.connect(func(): commit_field(id, key, edit, value))
 			input = edit
@@ -200,15 +202,28 @@ func refresh_fields() -> void:
 		fields.add_child(input)
 	rebuilding = false
 
+func commit_pending_fields(has_error: Callable) -> void:
+	# 提交會重建欄位，先保存本次輸入，避免後續欄位的文字被刷新覆蓋。
+	var pending: Array[Dictionary] = []
+	for child in fields.get_children():
+		if child is LineEdit and child.editable:
+			pending.append({"key": child.get_meta("field_key"), "text": child.text})
+	for field in pending:
+		for child in fields.get_children():
+			if child is LineEdit and child.get_meta("field_key") == field.key:
+				child.text = field.text
+				child.get_meta("commit_field").call()
+				if has_error.call(): return
+				break
+
 func commit_field(id: String, key: String, edit: LineEdit, previous: Variant) -> void:
 	if rebuilding or edit.text == str(previous): return
 	# 型別轉換屬於作者輸入邊界；遊戲規則合法性由 game-core 驗證。
-	if previous is int:
-		if not edit.text.is_valid_int():
-			edit.text = str(selected_definition().get(key, previous))
-			input_error.emit("%s 必須是整數" % FIELD_LABELS.get(key, key))
+	if previous is int or previous is float:
+		if not edit.text.is_valid_float():
+			input_error.emit("%s 必須是數字" % FIELD_LABELS.get(key, key))
 			return
-		field_changed.emit(category, id, key, int(edit.text))
+		field_changed.emit(category, id, key, edit.text.to_float())
 	else:
 		field_changed.emit(category, id, key, edit.text)
 

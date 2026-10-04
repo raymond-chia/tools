@@ -37,6 +37,7 @@ var duplicating_map := false
 var refreshing := false
 var selected_cell := Vector2i(-1, -1)
 var stroke_checkpointed := false
+var input_error_count := 0
 
 func _process(delta: float) -> void:
 	if pages.current_tab != 0: return
@@ -236,6 +237,10 @@ func submit_map() -> void:
 
 func save_map() -> void:
 	if map_data.is_empty(): return
+	var errors_before_commit := input_error_count
+	for page in definition_pages:
+		page.commit_pending_fields(func(): return input_error_count != errors_before_commit)
+		if input_error_count != errors_before_commit: return
 	var result := serialize_documents()
 	if result.is_empty(): return
 	var documents := {DEFINITIONS_PATH: result.definitions, map_file: result.map}
@@ -312,6 +317,7 @@ func read_core_response(response: String) -> Dictionary:
 	return CoreResponse.read(response, show_error, [], true)
 
 func show_error(message: String) -> void:
+	input_error_count += 1
 	status_label.text = "錯誤：" + message
 	for page in definition_pages: page.show_add_error(message)
 
@@ -562,8 +568,8 @@ func update_definition(category: String, id: String, key: String, value: Variant
 			if not edit_definition({"action": "change_skill_effect", "id": id, "effect": value}):
 				refresh_definitions()
 		return
-	if not edit_definition({"action": "update_field", "category": category, "id": id, "key": key, "value": value}):
-		refresh_definitions()
+	# 失敗時保留作者輸入，讓儲存前重新提交並阻止寫入舊值。
+	edit_definition({"action": "update_field", "category": category, "id": id, "key": key, "value": value})
 
 # ID 建立後不可更動，因此不需要更新既有引用；刪除檢查仍涵蓋所有地圖。
 func edit_definition(command: Dictionary) -> bool:

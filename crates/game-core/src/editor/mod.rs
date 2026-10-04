@@ -14,11 +14,21 @@ pub use map::paint_terrain_from_json;
 /// 將 Godot 編輯器傳來的 JSON 定義與地圖資料驗證後，轉成儲存或試玩用的 TOML 文件。
 /// JSON 僅用於編輯器與 Rust 之間傳遞資料；實際保存的檔案仍是 TOML。
 pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, String), EditorError> {
-    let definitions: Definitions = json::from_str(definitions)
+    let mut definitions: Definitions = json::from_str(definitions)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
     let map: Map =
         json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
     Game::from_authoring(definitions.clone(), map.clone())?;
+    // 單位的技能依技能頁籤排列存檔，不沿用勾選的先後順序。
+    for unit in &mut definitions.unit_types {
+        unit.skills.sort_by_key(|id| {
+            definitions
+                .skills
+                .iter()
+                .position(|skill| skill.id == *id)
+                .expect("遊戲資料驗證已確認單位引用的技能存在")
+        });
+    }
     Ok((
         toml::to_string_pretty(&definitions)
             .map_err(|e| EditorError::input("toml_serialize", e.to_string()))?,
