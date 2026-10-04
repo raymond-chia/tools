@@ -1,5 +1,6 @@
 //! 先定義共用傾向設定與可見行為；不實作測試專用評分器或 AI 替身。
-use super::*;
+use super::support::{ACTOR_ID, TARGET_ID};
+use crate::*;
 
 const DEFINITIONS: &str = include_str!("data/utility_ai_definitions.toml");
 const ALLY_ID: i64 = 3;

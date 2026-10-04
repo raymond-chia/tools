@@ -331,19 +331,27 @@ impl Game {
                     .cloned()
                     .ok_or_else(|| error::unknown_skill(&skill))?;
                 let attack = target_kind(&definition.effect) == SkillTargetKind::Enemy;
-                let target_id = unit_at_cell(&self.world, GridPos { x, y })
-                    .and_then(|entity| self.world.get::<Id>(entity).map(|id| id.0));
+                let triggered_enemies = if attack
+                    && self.world.resource::<Exploration>().mode == BattleMode::Exploring
+                {
+                    unit_at_cell(&self.world, GridPos { x, y })
+                        .map(|target| self.connected_enemies(&[target]))
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                };
                 self.use_skill_at_cell(actor, GridPos { x, y }, definition)?;
                 if attack && self.world.resource::<Exploration>().mode == BattleMode::Exploring {
                     self.world.resource_mut::<Exploration>().mode = BattleMode::AttackPending;
-                    if let Some(id) = target_id {
-                        if self.entity(id).is_some() {
-                            self.world
-                                .resource_mut::<Encounter>()
-                                .participants
-                                .insert(id);
-                        }
-                    }
+                    // 攻擊前先找出整批，讓第一擊倒地的敵人仍能觸發附近同伴。
+                    let surviving_enemies: Vec<_> = triggered_enemies
+                        .into_iter()
+                        .filter(|id| self.entity(*id).is_some())
+                        .collect();
+                    self.world
+                        .resource_mut::<Encounter>()
+                        .participants
+                        .extend(surviving_enemies);
                     self.activate_enemies_near_players();
                 }
                 Ok(())
@@ -422,7 +430,7 @@ impl Game {
             .collect();
         self.activate_enemies_near(&players)
     }
-    /// 集中處理遭遇距離與敵方參與者；呼叫端決定要檢查哪些單位。
+    /// 先找出遭遇範圍內的敵人，再連鎖觸發附近一批。
     pub(crate) fn activate_enemies_near(&mut self, units: &[Entity]) -> bool {
         let enemies: Vec<_> = self
             .world
@@ -438,8 +446,9 @@ impl Game {
                         <= gameplay_config::ENCOUNTER_RANGE
                 })
             })
-            .filter_map(|entity| entity.get::<Id>().map(|id| id.0))
+            .map(|entity| entity.id())
             .collect();
+        let enemies = self.connected_enemies(&enemies);
         let found = !enemies.is_empty();
         let Encounter {
             participants,
@@ -449,6 +458,43 @@ impl Game {
         } = &mut *self.world.resource_mut::<Encounter>();
         participants.extend(enemies);
         found
+    }
+    /// 依敵人彼此距離擴展整個連通群，不以陣營識別碼決定參戰範圍。
+    fn connected_enemies(&self, seeds: &[Entity]) -> Vec<i64> {
+        let enemies: Vec<_> = self
+            .world
+            .iter_entities()
+            .filter(|entity| {
+                entity
+                    .get::<Unit>()
+                    .is_some_and(|unit| unit.team != Team::Player)
+            })
+            .map(|entity| entity.id())
+            .collect();
+        let mut connected: Vec<_> = seeds
+            .iter()
+            .copied()
+            .filter(|entity| enemies.contains(entity))
+            .collect();
+        let mut visited: HashSet<_> = connected.iter().copied().collect();
+        let mut cursor = 0;
+        while cursor < connected.len() {
+            let source = connected[cursor];
+            for enemy in &enemies {
+                if !visited.contains(enemy)
+                    && entity_distance(&self.world, source, *enemy)
+                        <= gameplay_config::ENEMY_CHAIN_RANGE
+                {
+                    visited.insert(*enemy);
+                    connected.push(*enemy);
+                }
+            }
+            cursor += 1;
+        }
+        connected
+            .into_iter()
+            .map(|entity| self.world.get::<Id>(entity).expect("敵人應具有 Id").0)
+            .collect()
     }
     fn reset_exploration_turns(&mut self, players: &[i64]) {
         let mut turns = HashMap::new();

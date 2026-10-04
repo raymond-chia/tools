@@ -10,6 +10,7 @@ pub const DEFAULT_MANA: i32 = 1;
 
 pub const FLANKING_ATTACK_BONUS: i32 = 2;
 pub const ENCOUNTER_RANGE: i32 = 10;
+pub const ENEMY_CHAIN_RANGE: i32 = 5;
 
 /// 未放置 ground 地形的格子視為此地形。
 pub const DEFAULT_GROUND_TERRAIN: &str = "plain";
