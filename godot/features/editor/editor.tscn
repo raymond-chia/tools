@@ -34,10 +34,12 @@ text = "儲存"
 
 [node name="Undo" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
+focus_mode = 0
 text = "復原"
 
 [node name="Redo" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
+focus_mode = 0
 text = "重做"
 
 [node name="Play" type="Button" parent="Layout/Toolbar"]

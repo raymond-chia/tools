@@ -31,12 +31,11 @@ var map_data: Dictionary = {}
 var map_file := ""
 var dirty := false
 var pending_edit: Dictionary = {}
-var history: Array = []
-var future: Array = []
+var history = preload("res://features/editor/edit_history.gd").new()
 var duplicating_map := false
 var refreshing := false
 var selected_cell := Vector2i(-1, -1)
-var stroke_checkpointed := false
+var stroke_id := 0
 var input_error_count := 0
 
 func _process(delta: float) -> void:
@@ -68,7 +67,7 @@ func _ready() -> void:
 		page.input_error.connect(show_error)
 	map_view.cell_pressed.connect(edit_cell)
 	map_view.inspection_clicked.connect(inspect_unit)
-	map_view.stroke_started.connect(func(): stroke_checkpointed = false)
+	map_view.stroke_started.connect(func(): stroke_id += 1)
 	map_view.unit_dropped.connect(move_unit)
 	mode_list.item_selected.connect(func(_index: int): update_editing_mode())
 	palette_tabs.tab_changed.connect(func(_index: int): update_editing_mode())
@@ -96,6 +95,7 @@ func _ready() -> void:
 	if parsed.is_empty():
 		return
 	definitions = parsed
+	history.reset(document_state())
 	refresh_map_list()
 	if get_tree().root.has_meta("editor_session"):
 		var session: Dictionary = get_tree().root.get_meta("editor_session")
@@ -103,9 +103,8 @@ func _ready() -> void:
 		definitions = session.definitions
 		map_data = session.map
 		map_file = session.file
-		dirty = session.dirty
 		history = session.history
-		future = session.future
+		stroke_id = session.stroke_id
 		select_map(map_file)
 		refresh_ui()
 		pages.current_tab = session.get("page", 0)
@@ -181,8 +180,7 @@ func open_selected_map() -> void:
 	map_data = parsed
 	map_view.camera_initialized = false
 	map_file = path
-	history.clear()
-	future.clear()
+	history.reset(document_state())
 	selected_cell = Vector2i(-1, -1)
 	map_view.inspected_unit = 0
 	dirty = false
@@ -226,8 +224,8 @@ func submit_map() -> void:
 		map_data = {"name": filename, "width": 10, "height": 8, "terrains": [], "units": []}
 	map_file = path
 	map_view.camera_initialized = false
-	history.clear()
-	future.clear()
+	history.reset(document_state())
+	history.saved_state = {}
 	selected_cell = Vector2i(-1, -1)
 	map_view.inspected_unit = 0
 	dirty = true
@@ -237,10 +235,7 @@ func submit_map() -> void:
 
 func save_map() -> void:
 	if map_data.is_empty(): return
-	var errors_before_commit := input_error_count
-	for page in definition_pages:
-		page.commit_pending_fields(func(): return input_error_count != errors_before_commit)
-		if input_error_count != errors_before_commit: return
+	if not commit_pending_fields(): return
 	var result := serialize_documents()
 	if result.is_empty(): return
 	var documents := {DEFINITIONS_PATH: result.definitions, map_file: result.map}
@@ -250,7 +245,8 @@ func save_map() -> void:
 			show_error("無法寫入 %s：%s" % [path, error_string(FileAccess.get_open_error())])
 			return
 		file.store_string(documents[path])
-	dirty = false
+	history.saved_state = document_state()
+	update_history_controls()
 	refresh_map_list()
 	select_map(map_file)
 	status_label.text = "已儲存 %s" % map_file
@@ -270,8 +266,7 @@ func delete_map() -> void:
 		return
 	map_file = ""
 	map_data = {}
-	history.clear()
-	future.clear()
+	history.reset(document_state())
 	refresh_map_list()
 	if map_list.item_count > 0: open_selected_map()
 	else:
@@ -280,10 +275,11 @@ func delete_map() -> void:
 
 func play_map() -> void:
 	if map_data.is_empty(): return
+	if not commit_pending_fields(): return
 	var result := serialize_documents()
 	if result.is_empty():
 		return
-	get_tree().root.set_meta("editor_session", {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "dirty": dirty, "history": history.duplicate(true), "future": future.duplicate(true), "page": pages.current_tab, "selections": definition_pages.map(func(page): return page.selected_id())})
+	get_tree().root.set_meta("editor_session", {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "history": history, "stroke_id": stroke_id, "page": pages.current_tab, "selections": definition_pages.map(func(page): return page.selected_id())})
 	var battle := BATTLE_SCENE.instantiate()
 	battle.configure(result.definitions, result.map, true)
 	get_tree().change_scene_to_node(battle)
@@ -296,19 +292,16 @@ func validate_current() -> void:
 	if snapshot.is_empty():
 		if not pending_edit.is_empty():
 			var error_message := status_label.text
-			definitions = pending_edit.definitions
-			map_data = pending_edit.map
-			map_file = pending_edit.file
-			dirty = pending_edit.dirty
-			future = pending_edit.future
-			history.resize(pending_edit.history_size)
-			stroke_checkpointed = pending_edit.stroke_checkpointed
+			apply_document(pending_edit)
 			pending_edit = {}
 			refresh_ui()
 			refresh_grid()
 			status_label.text = error_message
 		return
-	pending_edit = {}
+	if not pending_edit.is_empty():
+		history.record(pending_edit, document_state())
+		pending_edit = {}
+	update_history_controls()
 	map_view.present(map_data, snapshot, selected_cell)
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
@@ -321,33 +314,46 @@ func show_error(message: String) -> void:
 	status_label.text = "錯誤：" + message
 	for page in definition_pages: page.show_add_error(message)
 
-# 保存每次輸入前的狀態；無效輸入不消耗復原紀錄，也不清除重做紀錄。
-func begin_edit() -> void:
-	pending_edit = {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "dirty": dirty, "future": future.duplicate(true), "history_size": history.size(), "stroke_checkpointed": stroke_checkpointed}
+# 歷史只接收已通過核心驗證的新舊文件，不記錄未提交的文字。
+func document_state() -> Dictionary:
+	return {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file}
 
 func checkpoint() -> void:
-	begin_edit()
-	history.append({"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file})
-	future.clear()
-	dirty = true
+	pending_edit = document_state()
 
-func restore(snapshot: Dictionary) -> void:
-	definitions = snapshot.definitions
-	map_data = snapshot.map
-	map_file = snapshot.file
-	dirty = true
+func apply_document(state: Dictionary) -> void:
+	definitions = state.definitions.duplicate(true)
+	map_data = state.map.duplicate(true)
+	map_file = state.file
+	update_history_controls()
+
+func update_history_controls() -> void:
+	dirty = document_state() != history.saved_state
+	$Layout/Toolbar/Undo.disabled = not history.undo_redo.has_undo()
+	$Layout/Toolbar/Redo.disabled = not history.undo_redo.has_redo()
+
+func restore_history() -> void:
+	for page in definition_pages: page.discard_pending_fields()
+	pending_edit = {}
+	apply_document(history.state)
 	refresh_ui()
 	validate_current()
 
 func undo() -> void:
-	if history.is_empty(): return
-	future.append({"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file})
-	restore(history.pop_back())
+	if history.undo_redo.undo(): restore_history()
 
 func redo() -> void:
-	if future.is_empty(): return
-	history.append({"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file})
-	restore(future.pop_back())
+	if history.undo_redo.redo(): restore_history()
+
+func commit_pending_fields() -> bool:
+	var errors_before_commit := input_error_count
+	var pending_name := map_name.text
+	for page in definition_pages:
+		page.commit_pending_fields(func(): return input_error_count != errors_before_commit)
+		if input_error_count != errors_before_commit: return false
+	map_name.text = pending_name
+	commit_map_name()
+	return input_error_count == errors_before_commit
 
 func commit_map_name() -> void:
 	if refreshing or map_data.is_empty() or map_data.name == map_name.text: return
@@ -370,6 +376,7 @@ func resize_map() -> void:
 	validate_current()
 
 func refresh_ui() -> void:
+	update_history_controls()
 	var has_map := not map_data.is_empty()
 	$Layout/Pages/MapPage/MapPanel.visible = has_map
 	$Layout/Pages/MapPage/Materials.visible = has_map
@@ -472,9 +479,10 @@ func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
 	var command := {"x": cell.x, "y": cell.y, "layer": layer, "kind": kind}
 	var result := read_core_response(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)))
 	if result.is_empty() or not result.changed: return
-	checkpoint_stroke()
+	var previous := document_state()
 	map_data = result.map
-	pending_edit = {}
+	history.record(previous, document_state(), "地形筆刷 %s" % stroke_id, UndoRedo.MERGE_ENDS)
+	update_history_controls()
 	CoreResponse.convert_unit_ids(result.snapshot)
 	if map_view.inspected_unit != 0:
 		refresh_grid()
@@ -535,13 +543,6 @@ func move_unit(id: int, cell: Vector2i) -> void:
 		validate_current()
 		return
 
-func checkpoint_stroke() -> void:
-	if stroke_checkpointed:
-		begin_edit()
-		return
-	checkpoint()
-	stroke_checkpointed = true
-
 func refresh_definitions() -> void:
 	var options := read_core_response(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})))
 	if options.is_empty(): return
@@ -559,7 +560,11 @@ func update_definition(category: String, id: String, key: String, value: Variant
 	# ID 建立後不可更動，因此不需要更新既有引用。
 	if key == "id": return
 	var entry := find_definition(category, id)
-	if entry.is_empty() or (entry.has(key) and entry[key] == value): return
+	if entry.is_empty(): return
+	if entry.has(key) and entry[key] == value:
+		for page in definition_pages:
+			if page.category == category: page.accept_field(id, key)
+		return
 	if category == "skills" and key == "effect":
 		if value == "mire":
 			for page in definition_pages:
@@ -569,7 +574,8 @@ func update_definition(category: String, id: String, key: String, value: Variant
 				refresh_definitions()
 		return
 	# 失敗時保留作者輸入，讓儲存前重新提交並阻止寫入舊值。
-	edit_definition({"action": "update_field", "category": category, "id": id, "key": key, "value": value})
+	if not edit_definition({"action": "update_field", "category": category, "id": id, "key": key, "value": value}):
+		refresh_definitions()
 
 # ID 建立後不可更動，因此不需要更新既有引用；刪除檢查仍涵蓋所有地圖。
 func edit_definition(command: Dictionary) -> bool:
@@ -596,8 +602,13 @@ func edit_definition(command: Dictionary) -> bool:
 	var result := read_core_response(response)
 	if result.is_empty(): return false
 	if command.action == "check_remove": return true
-	checkpoint()
+	var previous := document_state()
 	definitions = result.definitions
+	history.record(previous, document_state())
+	update_history_controls()
+	if command.action == "update_field":
+		for page in definition_pages:
+			if page.category == command.category: page.accept_field(command.id, command.key)
 	refresh_ui()
 	validate_current()
 	return true

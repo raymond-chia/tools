@@ -35,6 +35,8 @@ var removing_id := ""
 var source_id := ""
 var effect_skill_id := ""
 var effect_terrain_ids: Array = []
+var field_texts: Dictionary = {}
+var field_id := ""
 
 func _ready() -> void:
 	$ListPanel/Title.text = TITLES[category] + "清單"
@@ -148,11 +150,15 @@ func selected_definition() -> Dictionary:
 
 func refresh_fields() -> void:
 	rebuilding = true
+	var id := selected_id()
+	# 切換清單項目沿用原本的取消輸入行為；同一項目的刷新保留待提交文字。
+	if field_id != id:
+		field_texts.clear()
+		field_id = id
 	for child in fields.get_children():
 		fields.remove_child(child)
 		child.queue_free()
 	var entry := selected_definition().duplicate()
-	var id := selected_id()
 	for key in entry:
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)
@@ -189,11 +195,12 @@ func refresh_fields() -> void:
 			input = option
 		else:
 			var edit := LineEdit.new()
-			edit.text = str(value)
+			edit.text = field_texts.get(key, str(value))
 			# ID 建立後不可更動，因此不需要更新既有引用；刪除前仍須檢查引用。
 			edit.editable = key != "id"
 			edit.set_meta("field_key", key)
 			edit.set_meta("commit_field", commit_field.bind(id, key, edit, value))
+			edit.text_changed.connect(func(text: String): field_texts[key] = text)
 			edit.text_submitted.connect(func(_text: String): commit_field(id, key, edit, value))
 			edit.focus_exited.connect(func(): commit_field(id, key, edit, value))
 			input = edit
@@ -201,6 +208,12 @@ func refresh_fields() -> void:
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fields.add_child(input)
 	rebuilding = false
+
+func discard_pending_fields() -> void:
+	field_texts.clear()
+
+func accept_field(id: String, key: String) -> void:
+	if field_id == id: field_texts.erase(key)
 
 func commit_pending_fields(has_error: Callable) -> void:
 	# 提交會重建欄位，先保存本次輸入，避免後續欄位的文字被刷新覆蓋。
@@ -217,7 +230,11 @@ func commit_pending_fields(has_error: Callable) -> void:
 				break
 
 func commit_field(id: String, key: String, edit: LineEdit, previous: Variant) -> void:
-	if rebuilding or edit.text == str(previous): return
+	if rebuilding: return
+	if edit.text == str(previous):
+		accept_field(id, key)
+		return
+	field_texts[key] = edit.text
 	# 型別轉換屬於作者輸入邊界；遊戲規則合法性由 game-core 驗證。
 	if previous is int or previous is float:
 		if not edit.text.is_valid_float():
