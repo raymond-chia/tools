@@ -1,3 +1,11 @@
+# 測試專用 AI 傾向：維持近距離接敵，玩家操作不受此設定影響。
+[[ai_profiles]]
+id="near"
+distance_preference="near"
+damage_weight=10
+healing_weight=0
+positioning_weight=10
+
 [[terrain_types]]
 id="plain"
 layer="ground"
@@ -36,6 +44,7 @@ terrain="mire"
 duration=3
 
 [[unit_types]]
+ai_profile="near"
 id="ogre"
 visual="ogre.svg"
 width=2
@@ -50,6 +59,7 @@ power=0
 skills=["shield_bash","mire"]
 
 [[unit_types]]
+ai_profile="near"
 id="aria"
 visual="fighter.svg"
 width=1
@@ -64,6 +74,7 @@ power=0
 skills=["shield_bash","mire"]
 
 [[unit_types]]
+ai_profile="near"
 id="wolf_a"
 visual="fighter.svg"
 width=1

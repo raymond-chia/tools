@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 
-const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 
 const ARIA_ID := 1
 const OGRE_ID := 2

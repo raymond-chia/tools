@@ -32,129 +32,8 @@ impl Game {
         let skill = definitions
             .get(skill_id)
             .ok_or_else(|| error::unknown_skill(skill_id))?;
-        let (target_entity, effect) =
-            validate_unit_skill_target(&self.world, attacker, target_cell, skill)?;
-        let (attack_bonus, power_bonus) = match effect {
-            UnitSkillEffect::Heal { power_bonus } => {
-                return Ok(SkillPreview::Healing(healing_preview(
-                    &self.world,
-                    attacker,
-                    target_entity,
-                    power_bonus,
-                )));
-            }
-            UnitSkillEffect::Attack {
-                attack_bonus,
-                power_bonus,
-                push: _,
-            } => (attack_bonus, power_bonus),
-        };
-
-        let Unit {
-            unit_type: _,
-            visual: _,
-            team: _,
-            movement: _,
-            initiative: _,
-            dodge: _,
-            block: _,
-            attack: _,
-            power: actor_power,
-            skills: _,
-        } = self
-            .world
-            .get::<Unit>(attacker)
-            .expect("已建立的戰鬥單位應具有 Unit 元件");
-        let Unit {
-            unit_type: target_type,
-            visual: _,
-            team: _,
-            movement: _,
-            initiative: _,
-            dodge: _,
-            block: _,
-            attack: _,
-            power: _,
-            skills: _,
-        } = self
-            .world
-            .get::<Unit>(target_entity)
-            .expect("已建立的戰鬥單位應具有 Unit 元件");
-        let target = self
-            .world
-            .get::<Id>(target_entity)
-            .expect("目標單位應具有 Id")
-            .0;
-        let Hp {
-            current: target_hp,
-            maximum: target_max_hp,
-        } = self
-            .world
-            .get::<Hp>(target_entity)
-            .expect("已建立的戰鬥單位應具有 Hp 元件");
-        let modifier = attack_modifier(&self.world, attacker, target_entity, skill, attack_bonus);
-        let dodge_target =
-            gameplay_config::BASE_DEFENSE + effective_dodge(&self.world, target_entity);
-        let block_target = dodge_target + effective_block(&self.world, target_entity);
-        let mut dodge_count = 0;
-        let mut block_count = 0;
-        let mut hit_count = 0;
-        for natural in 1..=gameplay_config::ATTACK_DIE_SIDES as i32 {
-            match attack_result(natural, modifier, dodge_target, block_target) {
-                AttackResult::Dodge => dodge_count += 1,
-                AttackResult::Block => block_count += 1,
-                AttackResult::Hit => hit_count += 1,
-            }
-        }
-        let hit_damage = skill_power(*actor_power, power_bonus);
-        let block_damage = attack_damage(
-            hit_damage,
-            AttackResult::Block,
-            gameplay_config::BLOCK_DAMAGE_REDUCTION,
-            false,
-        );
-        let hit_remaining_hp = (*target_hp - hit_damage).max(0);
-        let block_remaining_hp = (*target_hp - block_damage).max(0);
-        let block_segment = if block_count > 0 {
-            block_remaining_hp - hit_remaining_hp
-        } else {
-            0
-        };
-        Ok(SkillPreview::Attack(AttackPreview {
-            target,
-            target_type: target_type.clone(),
-            target_hp: *target_hp,
-            target_max_hp: *target_max_hp,
-            target_mana: gameplay_config::DEFAULT_MANA,
-            hit_remaining_hp,
-            block_remaining_hp,
-            dodge_remaining_hp: *target_hp,
-            dodge_chance: dodge_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
-            block_chance: block_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
-            hit_chance: hit_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
-            critical_chance: 100 / gameplay_config::ATTACK_DIE_SIDES,
-            dodge_damage: 0,
-            block_damage,
-            critical_block_damage: attack_damage(
-                hit_damage,
-                AttackResult::Block,
-                gameplay_config::BLOCK_DAMAGE_REDUCTION,
-                true,
-            ),
-            hit_damage,
-            critical_hit_damage: attack_damage(
-                hit_damage,
-                AttackResult::Hit,
-                gameplay_config::BLOCK_DAMAGE_REDUCTION,
-                true,
-            ),
-            health_segments: HealthSegmentsView {
-                hit: hit_remaining_hp,
-                block: block_segment,
-                damage: *target_hp - hit_remaining_hp - block_segment,
-                missing: *target_max_hp - *target_hp,
-            },
-        }))
+        let position = self.world.get::<Pos>(attacker).expect("施放者應具有位置").0;
+        preview_unit_skill_from_position(&self.world, attacker, position, target_cell, skill)
     }
     pub(crate) fn use_skill_at_cell(
         &mut self,
@@ -439,60 +318,19 @@ impl Game {
             return Err(error::cannot_use_skill());
         }
         let entity = self.entity(actor).ok_or(error::missing_actor())?;
-        let Unit {
-            unit_type: actor_type,
-            visual: _,
-            team: actor_team,
-            movement: _,
-            initiative: _,
-            dodge: _,
-            block: _,
-            attack: _,
-            power: _,
-            skills,
-        } = self
-            .world
-            .get::<Unit>(entity)
-            .expect("已建立的戰鬥單位應具有 Unit 元件")
-            .clone();
+        let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
+        let (terrain, duration) =
+            validate_cell_skill_from_position(&self.world, entity, origin, position, &skill)?;
+        let unit = self.world.get::<Unit>(entity).expect("施放者應具有 Unit");
+        let actor_type = unit.unit_type.clone();
+        let actor_team = unit.team.clone();
         let SkillDef {
             id,
             ranged: _,
-            min_range,
-            max_range,
-            effect,
+            min_range: _,
+            max_range: _,
+            effect: _,
         } = skill;
-        if !skills.contains(&id) {
-            return Err(error::unit_cannot_use_skill());
-        }
-        let (terrain, duration) = match &effect {
-            SkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
-            SkillEffect::Attack { .. } | SkillEffect::Push { .. } | SkillEffect::Heal { .. } => {
-                return Err(error::unit_cannot_use_skill());
-            }
-        };
-        let board = self.world.resource::<Board>();
-        if !fits(
-            board,
-            position,
-            Footprint {
-                width: 1,
-                height: 1,
-            },
-        ) {
-            return Err(error::target_cell_out_of_bounds());
-        }
-        let origin = self
-            .world
-            .get::<Pos>(entity)
-            .expect("已建立的戰鬥單位應具有 Pos 元件")
-            .0;
-        let footprint = *self
-            .world
-            .get::<Footprint>(entity)
-            .expect("已建立的戰鬥單位應具有 Footprint 元件");
-        let target_distance = footprint_cell_distance(origin, footprint, position);
-        check_skill_range(target_distance, min_range, max_range)?;
         let Encounter {
             participants: _,
             order: _,
@@ -524,6 +362,178 @@ impl Game {
         self.finish();
         Ok(())
     }
+}
+
+/// 施放與 AI 預覽共用地形技能合法性；作者引用與數值已於載入時驗證。
+pub(crate) fn validate_cell_skill_from_position(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    cell: GridPos,
+    skill: &SkillDef,
+) -> Result<(String, u32), GameError> {
+    let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
+    if !unit.skills.contains(&skill.id) {
+        return Err(error::unit_cannot_use_skill());
+    }
+    let (terrain, duration) = match &skill.effect {
+        SkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
+        _ => return Err(error::unit_cannot_use_skill()),
+    };
+    if !fits(
+        world.resource::<Board>(),
+        cell,
+        Footprint {
+            width: 1,
+            height: 1,
+        },
+    ) {
+        return Err(error::target_cell_out_of_bounds());
+    }
+    let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用尺寸");
+    check_skill_range(
+        footprint_cell_distance(origin, footprint, cell),
+        skill.min_range,
+        skill.max_range,
+    )?;
+    Ok((terrain, duration))
+}
+
+/// AI 與一般預覽共用同一計算；假想位置只用於查詢，不改動 ECS。
+pub(crate) fn preview_unit_skill_from_position(
+    world: &World,
+    attacker: Entity,
+    position: GridPos,
+    target_cell: GridPos,
+    skill: &SkillDef,
+) -> Result<SkillPreview, GameError> {
+    let (target_entity, effect) =
+        validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)?;
+    let (attack_bonus, power_bonus) = match effect {
+        UnitSkillEffect::Heal { power_bonus } => {
+            return Ok(SkillPreview::Healing(healing_preview(
+                world,
+                attacker,
+                target_entity,
+                power_bonus,
+            )));
+        }
+        UnitSkillEffect::Attack {
+            attack_bonus,
+            power_bonus,
+            push: _,
+        } => (attack_bonus, power_bonus),
+    };
+
+    let Unit {
+        unit_type: _,
+        visual: _,
+        team: _,
+        movement: _,
+        initiative: _,
+        dodge: _,
+        block: _,
+        attack: _,
+        power: actor_power,
+        skills: _,
+    } = world
+        .get::<Unit>(attacker)
+        .expect("已建立的戰鬥單位應具有 Unit 元件");
+    let Unit {
+        unit_type: target_type,
+        visual: _,
+        team: _,
+        movement: _,
+        initiative: _,
+        dodge: _,
+        block: _,
+        attack: _,
+        power: _,
+        skills: _,
+    } = world
+        .get::<Unit>(target_entity)
+        .expect("已建立的戰鬥單位應具有 Unit 元件");
+    let target = world.get::<Id>(target_entity).expect("目標單位應具有 Id").0;
+    let Hp {
+        current: target_hp,
+        maximum: target_max_hp,
+    } = world
+        .get::<Hp>(target_entity)
+        .expect("已建立的戰鬥單位應具有 Hp 元件");
+    let AttackModifierBreakdown {
+        attack_stat_modifier: _,
+        skill_attack_modifier: _,
+        flanking_modifier: _,
+        total: modifier,
+    } = attack_modifier_breakdown_from_position(
+        world,
+        attacker,
+        position,
+        target_entity,
+        skill,
+        attack_bonus,
+    );
+    let dodge_target = gameplay_config::BASE_DEFENSE + effective_dodge(world, target_entity);
+    let block_target = dodge_target + effective_block(world, target_entity);
+    let mut dodge_count = 0;
+    let mut block_count = 0;
+    let mut hit_count = 0;
+    for natural in 1..=gameplay_config::ATTACK_DIE_SIDES as i32 {
+        match attack_result(natural, modifier, dodge_target, block_target) {
+            AttackResult::Dodge => dodge_count += 1,
+            AttackResult::Block => block_count += 1,
+            AttackResult::Hit => hit_count += 1,
+        }
+    }
+    let hit_damage = skill_power(*actor_power, power_bonus);
+    let block_damage = attack_damage(
+        hit_damage,
+        AttackResult::Block,
+        gameplay_config::BLOCK_DAMAGE_REDUCTION,
+        false,
+    );
+    let hit_remaining_hp = (*target_hp - hit_damage).max(0);
+    let block_remaining_hp = (*target_hp - block_damage).max(0);
+    let block_segment = if block_count > 0 {
+        block_remaining_hp - hit_remaining_hp
+    } else {
+        0
+    };
+    Ok(SkillPreview::Attack(AttackPreview {
+        target,
+        target_type: target_type.clone(),
+        target_hp: *target_hp,
+        target_max_hp: *target_max_hp,
+        target_mana: gameplay_config::DEFAULT_MANA,
+        hit_remaining_hp,
+        block_remaining_hp,
+        dodge_remaining_hp: *target_hp,
+        dodge_chance: dodge_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
+        block_chance: block_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
+        hit_chance: hit_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
+        critical_chance: 100 / gameplay_config::ATTACK_DIE_SIDES,
+        dodge_damage: 0,
+        block_damage,
+        critical_block_damage: attack_damage(
+            hit_damage,
+            AttackResult::Block,
+            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            true,
+        ),
+        hit_damage,
+        critical_hit_damage: attack_damage(
+            hit_damage,
+            AttackResult::Hit,
+            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            true,
+        ),
+        health_segments: HealthSegmentsView {
+            hit: hit_remaining_hp,
+            block: block_segment,
+            damage: *target_hp - hit_remaining_hp - block_segment,
+            missing: *target_max_hp - *target_hp,
+        },
+    }))
 }
 
 fn healing_preview(
@@ -614,6 +624,17 @@ fn validate_unit_skill_target(
     target_cell: GridPos,
     skill: &SkillDef,
 ) -> Result<(Entity, UnitSkillEffect), GameError> {
+    let position = world.get::<Pos>(attacker).expect("施放者應具有位置").0;
+    validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)
+}
+
+fn validate_unit_skill_target_from_position(
+    world: &World,
+    attacker: Entity,
+    attacker_position: GridPos,
+    target_cell: GridPos,
+    skill: &SkillDef,
+) -> Result<(Entity, UnitSkillEffect), GameError> {
     let SkillDef {
         id,
         ranged: _,
@@ -621,7 +642,14 @@ fn validate_unit_skill_target(
         max_range,
         effect: skill_effect,
     } = skill;
-    let target = unit_at_cell(world, target_cell).ok_or(error::missing_target())?;
+    let attacker_footprint = *world
+        .get::<Footprint>(attacker)
+        .expect("施放者應具有佔用尺寸");
+    let target = if footprint_cells(attacker_position, attacker_footprint).contains(&target_cell) {
+        attacker
+    } else {
+        unit_at_cell(world, target_cell).ok_or(error::missing_target())?
+    };
     let Unit {
         unit_type: _,
         visual: _,
@@ -684,13 +712,6 @@ fn validate_unit_skill_target(
         }
         UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
     }
-    let attacker_position = world
-        .get::<Pos>(attacker)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let attacker_footprint = *world
-        .get::<Footprint>(attacker)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
     let target_distance =
         footprint_cell_distance(attacker_position, attacker_footprint, target_cell);
     check_skill_range(target_distance, *min_range, *max_range)?;
@@ -731,6 +752,7 @@ struct AttackModifierBreakdown {
     total: i32,
 }
 
+#[cfg(test)]
 pub(crate) fn attack_modifier(
     world: &World,
     attacker: Entity,
@@ -754,12 +776,24 @@ fn attack_modifier_breakdown(
     skill: &SkillDef,
     attack_bonus: i32,
 ) -> AttackModifierBreakdown {
+    let position = world.get::<Pos>(attacker).expect("攻擊者應具有位置").0;
+    attack_modifier_breakdown_from_position(world, attacker, position, target, skill, attack_bonus)
+}
+
+fn attack_modifier_breakdown_from_position(
+    world: &World,
+    attacker: Entity,
+    position: GridPos,
+    target: Entity,
+    skill: &SkillDef,
+    attack_bonus: i32,
+) -> AttackModifierBreakdown {
     let unit = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit");
     let attack_stat_modifier = unit.attack;
     let skill_attack_modifier = attack_bonus;
-    let flanking_modifier = flanking_bonus(world, attacker, target, skill);
+    let flanking_modifier = flanking_bonus(world, attacker, position, target, skill);
     AttackModifierBreakdown {
         attack_stat_modifier,
         skill_attack_modifier,
@@ -768,7 +802,13 @@ fn attack_modifier_breakdown(
     }
 }
 
-fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &SkillDef) -> i32 {
+fn flanking_bonus(
+    world: &World,
+    attacker: Entity,
+    position: GridPos,
+    target: Entity,
+    skill: &SkillDef,
+) -> i32 {
     let SkillDef {
         id: _,
         ranged,
@@ -779,11 +819,12 @@ fn flanking_bonus(world: &World, attacker: Entity, target: Entity, skill: &Skill
     if *ranged {
         return 0;
     }
-    let attacker_side =
-        match target_side_within_range(world, attacker, target, *min_range, *max_range) {
-            Some(side) => side,
-            None => return 0,
-        };
+    let attacker_side = match target_side_from_position(
+        world, attacker, position, target, *min_range, *max_range,
+    ) {
+        Some(side) => side,
+        None => return 0,
+    };
     let attacker_team = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit")
@@ -845,6 +886,17 @@ fn target_side_within_range(
     max_range: i32,
 ) -> Option<TargetSide> {
     let unit_position = world.get::<Pos>(unit).expect("參與包夾的單位應具有 Pos").0;
+    target_side_from_position(world, unit, unit_position, target, min_range, max_range)
+}
+
+fn target_side_from_position(
+    world: &World,
+    unit: Entity,
+    unit_position: GridPos,
+    target: Entity,
+    min_range: i32,
+    max_range: i32,
+) -> Option<TargetSide> {
     let unit_footprint @ Footprint {
         width: unit_width,
         height: unit_height,
@@ -982,27 +1034,6 @@ fn push_direction(w: &World, attacker: Entity, target_cell: GridPos) -> GridPos 
     } else {
         GridPos { x: 0, y: -1 }
     }
-}
-
-pub(crate) fn closest_occupied_cell(w: &World, attacker: Entity, target: Entity) -> GridPos {
-    let attacker_position = w
-        .get::<Pos>(attacker)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let attacker_footprint = *w
-        .get::<Footprint>(attacker)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let target_position = w
-        .get::<Pos>(target)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let target_footprint = *w
-        .get::<Footprint>(target)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    footprint_cells(target_position, target_footprint)
-        .into_iter()
-        .min_by_key(|cell| footprint_cell_distance(attacker_position, attacker_footprint, *cell))
-        .expect("載入時已驗證單位佔用尺寸為正值，應至少佔用一格")
 }
 
 pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {

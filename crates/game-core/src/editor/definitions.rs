@@ -222,6 +222,18 @@ pub fn edit_definition_from_json(
             validate_new_id(&definitions, category, &id)?;
             match category {
                 DefinitionCategory::UnitTypes => definitions.unit_types.push(UnitType {
+                    ai_profile: definitions
+                        .ai_profiles
+                        .first()
+                        .ok_or_else(|| {
+                            EditorError::operation(
+                                "invalid_command",
+                                "新增單位前必須先定義 AI 傾向",
+                                Vec::new(),
+                            )
+                        })?
+                        .id
+                        .clone(),
                     id,
                     visual: String::new(),
                     width: 1,

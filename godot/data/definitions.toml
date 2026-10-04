@@ -1,3 +1,25 @@
+# 共用 AI 傾向：單位種類透過 ai_profile 引用，玩家操作不受此設定影響。
+[[ai_profiles]]
+id = "tank"
+distance_preference = "near"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+
+[[ai_profiles]]
+id = "archer"
+distance_preference = "far"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+
+[[ai_profiles]]
+id = "healer"
+distance_preference = "far"
+damage_weight = 1
+healing_weight = 100
+positioning_weight = 1
+
 [[terrain_types]]
 id = "plain"
 layer = "ground"
@@ -116,6 +138,7 @@ power_bonus = 2
 
 [[unit_types]]
 id = "aria"
+ai_profile = "tank"
 visual = "fighter.svg"
 width = 1
 height = 1
@@ -134,6 +157,7 @@ skills = [
 
 [[unit_types]]
 id = "lyra"
+ai_profile = "archer"
 visual = "archer.svg"
 width = 1
 height = 1
@@ -151,6 +175,7 @@ skills = [
 
 [[unit_types]]
 id = "mira"
+ai_profile = "healer"
 visual = "mage.svg"
 width = 1
 height = 1
@@ -168,6 +193,7 @@ skills = [
 
 [[unit_types]]
 id = "wolf"
+ai_profile = "tank"
 visual = "wolf.svg"
 width = 1
 height = 1

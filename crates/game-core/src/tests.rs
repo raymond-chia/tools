@@ -1,6 +1,8 @@
 use super::*;
 use crate::model::{BattleMode, Exploration};
 
+mod test_utility_ai;
+
 const ACTOR_ID: i64 = 1;
 const TARGET_ID: i64 = 2;
 const BLOCKER_ID: i64 = 3;
@@ -591,6 +593,7 @@ fn zero_range_heal_targets_self() {
 #[test]
 fn enemy_without_skill_rejected_on_load() {
     let definitions = authoring::Definitions {
+        ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![TerrainTypeDef {
             id: "plain".into(),
             layer: TerrainLayer::Ground,
@@ -602,6 +605,7 @@ fn enemy_without_skill_rejected_on_load() {
         }],
         skills: Vec::new(),
         unit_types: vec![authoring::UnitType {
+            ai_profile: "tank".into(),
             id: "test_unit".into(),
             visual: "test_unit".into(),
             width: 1,
@@ -636,6 +640,16 @@ fn enemy_without_skill_rejected_on_load() {
     assert_eq!(error.id(), "missing_ai_skill");
 }
 
+fn tank_ai_profile() -> authoring::AiProfile {
+    authoring::AiProfile {
+        id: "tank".into(),
+        distance_preference: authoring::DistancePreference::Near,
+        damage_weight: 10,
+        healing_weight: 0,
+        positioning_weight: 10,
+    }
+}
+
 fn push_collision_game() -> Game {
     game_with_skill_range_and_effect(
         1,
@@ -660,6 +674,7 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
     let mut rough = terrain.clone();
     rough.id = "rough".into();
     let definitions = authoring::Definitions {
+        ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![terrain, rough],
         skills: vec![SkillDef {
             id: "push".into(),
@@ -692,6 +707,7 @@ fn game_with_skill_range_and_effect(min_range: i32, max_range: i32, effect: Skil
 
 fn push_collision_unit_type(id: &str, initiative: i32) -> authoring::UnitType {
     authoring::UnitType {
+        ai_profile: "tank".into(),
         id: id.into(),
         visual: id.into(),
         width: 1,

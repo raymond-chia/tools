@@ -1,3 +1,11 @@
+# 測試專用 AI 傾向：維持近距離接敵，玩家操作不受此設定影響。
+[[ai_profiles]]
+id="near"
+distance_preference="near"
+damage_weight=10
+healing_weight=0
+positioning_weight=10
+
 [[terrain_types]]
 id="plain"
 layer="ground"
@@ -19,6 +27,7 @@ max_range=12
 effect="attack"
 
 [[unit_types]]
+ai_profile="near"
 id="aria"
 visual="fighter.svg"
 hp=100
@@ -31,6 +40,7 @@ power=0
 skills=["long_shot"]
 
 [[unit_types]]
+ai_profile="near"
 id="wolf"
 visual="wolf.svg"
 hp=100

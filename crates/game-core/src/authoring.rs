@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Definitions {
+    pub ai_profiles: Vec<AiProfile>,
     pub terrain_types: Vec<TerrainTypeDef>,
     pub skills: Vec<SkillDef>,
     pub unit_types: Vec<UnitType>,
@@ -14,6 +15,7 @@ pub struct Definitions {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitType {
     pub id: String,
+    pub ai_profile: String,
     pub visual: String,
     #[serde(default = "one")]
     pub width: i32,
@@ -28,6 +30,24 @@ pub struct UnitType {
     pub power: i32,
     #[serde(default)]
     pub skills: Vec<String>,
+}
+
+/// 共用戰術偏好；權重為非負整數，0 代表不評估該項收益。
+#[derive(Clone, Deserialize, Serialize)]
+pub struct AiProfile {
+    pub id: String,
+    pub distance_preference: DistancePreference,
+    pub damage_weight: u32,
+    pub healing_weight: u32,
+    pub positioning_weight: u32,
+}
+
+/// 跨可用技能比較合法射程決定近遠站位，不另存固定格數。
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DistancePreference {
+    Near,
+    Far,
 }
 
 #[derive(Clone, Deserialize, Serialize)]

@@ -8,13 +8,9 @@ use crate::model::{
     TerrainEffectView, TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
 use crate::movement::{
-    can_move, distance, entity_distance, fits, footprint_cell_distance, footprint_cells,
-    movement_ranges, toward_skill_range, unit_at_cell,
+    can_move, entity_distance, fits, footprint_cells, movement_ranges, unit_at_cell,
 };
-use crate::skill::{
-    can_use_skill, check_skill_range, closest_occupied_cell, effective_block, effective_dodge,
-    skill_ranges, target_kind,
-};
+use crate::skill::{can_use_skill, effective_block, effective_dodge, skill_ranges, target_kind};
 use crate::terrain::{
     footprint_on_impassable, ground_at, movement_cost, terrain_damage, terrain_type, terrains_at,
 };
@@ -47,6 +43,7 @@ impl Game {
         map: authoring::Map,
     ) -> Result<Self, GameError> {
         let authoring::Definitions {
+            ai_profiles,
             terrain_types,
             skills,
             unit_types,
@@ -92,6 +89,7 @@ impl Game {
             return Err(error::missing_default_ground_terrain());
         }
         let skill_ids: HashSet<_> = skills.iter().map(|skill| skill.id.as_str()).collect();
+        let ai_profiles = crate::ai::resolve_profiles(ai_profiles, &unit_types)?;
         let mut types = HashMap::new();
         for kind in unit_types {
             if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
@@ -203,6 +201,7 @@ impl Game {
             terrains,
             terrain_types,
         });
+        w.insert_resource(ai_profiles);
         w.insert_resource(Encounter::default());
         w.insert_resource(Exploration {
             mode: BattleMode::Exploring,
@@ -234,6 +233,7 @@ impl Game {
             } = placement;
             let authoring::UnitType {
                 id: _,
+                ai_profile: _,
                 visual,
                 width,
                 height,
@@ -748,7 +748,7 @@ impl Game {
             self.advance_turn();
             return Ok(());
         }
-        self.enemy_turn_once()
+        self.run_ai_turn()
     }
     fn delay(&mut self, actor: i64, after: i64) -> Result<(), GameError> {
         self.ensure(actor)?;
@@ -789,146 +789,11 @@ impl Game {
             Ok(())
         }
     }
-    fn enemy_turn_once(&mut self) -> Result<(), GameError> {
-        let Turn {
-            actor,
-            phase: _,
-            movement_remaining: _,
-            movement_segments_used: _,
-        } = self.world.resource::<Turn>();
-        let a = actor.ok_or(error::missing_initiative_unit())?;
-        let e = self.entity(a).ok_or(error::missing_initiative_unit())?;
-        let first_skill = self
-            .world
-            .get::<Unit>(e)
-            .expect("已建立的戰鬥單位應具有 Unit 元件")
-            .skills
-            .first()
-            .expect("載入時已驗證敵方單位至少有一個技能");
-        let Skills { definitions } = self.world.resource::<Skills>();
-        let skill @ SkillDef {
-            id: _,
-            ranged: _,
-            min_range,
-            max_range,
-            effect: _,
-        } = definitions
-            .get(first_skill)
-            .expect("載入時已驗證單位技能 ID")
-            .clone();
-        let target = if target_kind(&skill.effect) == SkillTargetKind::Ally {
-            self.closest_wounded_ally(e, min_range)
-        } else {
-            self.closest(e)
-        };
-        let t = match target {
-            Some(v) => v,
-            None => {
-                self.finish();
-                return Ok(());
-            }
-        };
-        let target_footprint = *self.world.get::<Footprint>(t).expect("目標應具有佔用尺寸");
-        let current_distance = entity_distance(&self.world, e, t);
-        if check_skill_range(current_distance, min_range, max_range).is_err() {
-            let goal = self
-                .world
-                .get::<Pos>(t)
-                .expect("已建立的戰鬥單位應具有 Pos 元件")
-                .0;
-            let start = self
-                .world
-                .get::<Pos>(e)
-                .expect("已建立的戰鬥單位應具有 Pos 元件")
-                .0;
-            let fp = *self
-                .world
-                .get::<Footprint>(e)
-                .expect("已建立的戰鬥單位應具有 Footprint 元件");
-            let b = self
-                .world
-                .get::<Unit>(e)
-                .expect("已建立的戰鬥單位應具有 Unit 元件")
-                .movement;
-            if let Some(path) = toward_skill_range(
-                &self.world,
-                e,
-                start,
-                goal,
-                target_footprint,
-                fp,
-                b,
-                min_range,
-                max_range,
-            ) {
-                if path.len() > 1 {
-                    self.movements.push(MovementTransition {
-                        unit_id: a,
-                        path: path.clone(),
-                        before_log_index: self.world.resource::<Log>().0.len(),
-                    });
-                    self.execute_move_path(e, a, &path);
-                    if self.world.get_entity(e).is_err() {
-                        return Ok(());
-                    }
-                }
-            }
-        }
-        let target_cell = closest_occupied_cell(&self.world, e, t);
-        let position = self.world.get::<Pos>(e).expect("單位應具有位置").0;
-        let footprint = *self.world.get::<Footprint>(e).expect("單位應具有佔用尺寸");
-        let target_distance = footprint_cell_distance(position, footprint, target_cell);
-        if check_skill_range(target_distance, min_range, max_range).is_ok() {
-            self.use_skill_at_cell(a, target_cell, skill)?
-        } else {
-            self.finish()
-        }
-        Ok(())
-    }
     pub(crate) fn entity(&self, id: i64) -> Option<Entity> {
         self.world
             .iter_entities()
             .find(|e| e.get::<Id>().is_some_and(|i| i.0 == id))
             .map(|e| e.id())
-    }
-    fn closest(&self, e: Entity) -> Option<Entity> {
-        let p = self.world.get::<Pos>(e)?.0;
-        let attacker = &self.world.get::<Unit>(e)?.team;
-        self.world
-            .iter_entities()
-            .filter(|q| q.get::<Unit>().is_some_and(|f| &f.team != attacker))
-            .min_by_key(|q| {
-                distance(
-                    p,
-                    q.get::<Pos>().expect("已建立的戰鬥單位應具有 Pos 元件").0,
-                )
-            })
-            .map(|q| q.id())
-    }
-    fn closest_wounded_ally(&self, e: Entity, min_range: i32) -> Option<Entity> {
-        let position = self.world.get::<Pos>(e)?.0;
-        let team = &self.world.get::<Unit>(e)?.team;
-        self.world
-            .iter_entities()
-            .filter(|candidate| {
-                (min_range == 0 || candidate.id() != e)
-                    && candidate
-                        .get::<Unit>()
-                        .is_some_and(|unit| &unit.team == team)
-                    && candidate
-                        .get::<Hp>()
-                        .is_some_and(|hp| hp.current < hp.maximum)
-            })
-            .min_by_key(|candidate| {
-                distance(
-                    position,
-                    candidate
-                        .get::<Pos>()
-                        .expect("已建立的戰鬥單位應具有 Pos 元件")
-                        .0,
-                )
-            })
-            .map(|candidate| candidate.id())
     }
     fn outcome(&mut self) {
         let mut p = false;

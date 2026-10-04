@@ -1,0 +1,117 @@
+# Utility AI 專用測試資料：共用傾向與各單位種類的引用。
+[[ai_profiles]]
+id = "tank"
+distance_preference = "near"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+
+[[ai_profiles]]
+id = "archer"
+distance_preference = "far"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+
+[[ai_profiles]]
+id = "healer"
+distance_preference = "far"
+damage_weight = 1
+healing_weight = 100
+positioning_weight = 1
+
+[[terrain_types]]
+id = "plain"
+layer = "ground"
+entry_rule = "walkable"
+
+[[skills]]
+id = "melee"
+ranged = false
+min_range = 1
+max_range = 1
+effect = "attack"
+attack_bonus = 100
+power_bonus = 10
+
+[[skills]]
+id = "shot"
+ranged = true
+min_range = 2
+max_range = 4
+effect = "attack"
+attack_bonus = 100
+power_bonus = 10
+
+[[skills]]
+id = "heal"
+ranged = false
+min_range = 0
+max_range = 3
+effect = "heal"
+power_bonus = 30
+
+[[unit_types]]
+id = "tank"
+ai_profile = "tank"
+visual = "test.svg"
+hp = 100
+movement = 2
+initiative = 100
+dodge = 0
+block = 0
+attack = 0
+power = 0
+skills = ["melee"]
+
+[[unit_types]]
+id = "other_tank"
+ai_profile = "tank"
+visual = "test.svg"
+hp = 100
+movement = 2
+initiative = 100
+dodge = 0
+block = 0
+attack = 0
+power = 0
+skills = ["melee"]
+
+[[unit_types]]
+id = "archer"
+ai_profile = "archer"
+visual = "test.svg"
+hp = 100
+movement = 2
+initiative = 100
+dodge = 0
+block = 0
+attack = 0
+power = 0
+skills = ["shot"]
+
+[[unit_types]]
+id = "healer"
+ai_profile = "healer"
+visual = "test.svg"
+hp = 100
+movement = 2
+initiative = 100
+dodge = 0
+block = 0
+attack = 0
+power = 0
+skills = ["heal", "shot"]
+
+[[unit_types]]
+id = "target"
+ai_profile = "tank"
+visual = "test.svg"
+hp = 100
+movement = 0
+initiative = 0
+dodge = 0
+block = 0
+attack = 0
+power = 0
+skills = ["melee"]

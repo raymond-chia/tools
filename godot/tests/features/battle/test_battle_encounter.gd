@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 
-const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_encounter_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_encounter_map.toml"
 

@@ -1,3 +1,11 @@
+# 測試專用 AI 傾向：維持近距離接敵，玩家操作不受此設定影響。
+[[ai_profiles]]
+id="near"
+distance_preference="near"
+damage_weight=10
+healing_weight=0
+positioning_weight=10
+
 [[terrain_types]]
 id="plain"
 layer="ground"
@@ -27,6 +35,7 @@ layer="ground"
 entry_rule="walkable"
 extra_movement_cost=1
 [[unit_types]]
+ai_profile="near"
 id="aria"
 visual="fighter.svg"
 hp=10
@@ -38,6 +47,7 @@ attack=4
 power=5
 skills=["test_attack","melee"]
 [[unit_types]]
+ai_profile="near"
 id="lyra"
 visual="archer.svg"
 hp=8
@@ -49,6 +59,7 @@ attack=5
 power=3
 skills=["test_attack","melee"]
 [[unit_types]]
+ai_profile="near"
 id="ogre"
 visual="ogre.svg"
 width=2

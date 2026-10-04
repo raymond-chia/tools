@@ -470,7 +470,7 @@ pub(crate) fn can_move(turn: &Turn) -> bool {
 }
 
 /// 第一段尚未用完時保留第二段完整額度；進入第二段後只使用剩餘額度。
-fn movement_budgets(turn: &Turn, allowance: u32) -> (u32, u32) {
+pub(crate) fn movement_budgets(turn: &Turn, allowance: u32) -> (u32, u32) {
     let Turn {
         actor: _,
         phase,

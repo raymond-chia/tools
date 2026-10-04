@@ -33,6 +33,24 @@ pub(crate) fn duplicate_unit_type_id() -> GameError {
     GameError::new("duplicate_unit_type_id", "單位定義 id 重複".to_owned())
 }
 
+pub(crate) fn invalid_ai_profile(id: &str) -> GameError {
+    GameError::new(
+        "invalid_ai_profile",
+        format!("AI 傾向 {id} 的 id 不可空白、偏好距離不可為負值"),
+    )
+}
+
+pub(crate) fn duplicate_ai_profile(id: &str) -> GameError {
+    GameError::new("duplicate_ai_profile", format!("AI 傾向 id 重複：{id}"))
+}
+
+pub(crate) fn unknown_ai_profile(unit: &str, profile: &str) -> GameError {
+    GameError::new(
+        "unknown_ai_profile",
+        format!("單位種類 {unit} 引用了不存在的 AI 傾向 {profile}"),
+    )
+}
+
 pub(crate) fn invalid_unit_placement_id() -> GameError {
     GameError::new(
         "invalid_unit_placement_id",

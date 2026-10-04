@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 
-const BattleTestSetup := preload("res://tests/features/battle/battle_test_setup.gd")
+const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const DATA := "res://tests/features/battle/data/terrain_review_"
 const DEFINITIONS := DATA + "definitions.toml"
 const ACTOR_ID := 1

@@ -1,3 +1,11 @@
+# 測試專用 AI 傾向：維持近距離接敵，玩家操作不受此設定影響。
+[[ai_profiles]]
+id="near"
+distance_preference="near"
+damage_weight=10
+healing_weight=0
+positioning_weight=10
+
 [[terrain_types]]
 id="plain"
 layer="ground"
@@ -52,6 +60,7 @@ max_range=4
 effect="attack"
 
 [[unit_types]]
+ai_profile="near"
 id="aria"
 visual="fighter.svg"
 hp=10
@@ -63,6 +72,7 @@ attack=5
 power=5
 skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]
 [[unit_types]]
+ai_profile="near"
 id="ogre"
 visual="ogre.svg"
 hp=20

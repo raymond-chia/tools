@@ -1,3 +1,11 @@
+# 測試專用 AI 傾向：維持近距離接敵，玩家操作不受此設定影響。
+[[ai_profiles]]
+id="near"
+distance_preference="near"
+damage_weight=10
+healing_weight=0
+positioning_weight=10
+
 [[terrain_types]]
 id="plain"
 layer="ground"
@@ -72,6 +80,7 @@ max_range=10
 effect="attack"
 
 [[unit_types]]
+ai_profile="near"
 id="aria"
 visual="fighter.svg"
 hp=100
@@ -83,6 +92,7 @@ attack=5
 power=5
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
+ai_profile="near"
 id="ogre"
 visual="ogre.svg"
 hp=100
@@ -94,6 +104,7 @@ attack=0
 power=0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
+ai_profile="near"
 id="wolf_a"
 visual="wolf.svg"
 hp=20
@@ -105,6 +116,7 @@ attack=0
 power=0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
+ai_profile="near"
 id="wolf_b"
 visual="wolf.svg"
 hp=20
@@ -116,6 +128,7 @@ attack=0
 power=0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
 [[unit_types]]
+ai_profile="near"
 id="lyra"
 visual="archer.svg"
 hp=20
