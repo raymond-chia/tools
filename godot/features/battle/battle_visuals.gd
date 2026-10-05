@@ -52,7 +52,6 @@ static func create_unit_node(unit_id: int, visual_name: String, units_layer: Nod
 	visual.add_child(body)
 	var health := Node2D.new()
 	health.name = "Health"
-	health.position.y = 20
 	for bar_name in ["Background", "Fill"]:
 		var bar := Polygon2D.new()
 		bar.name = bar_name
@@ -78,6 +77,8 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	body.position.y = -55 if large else -43
 	body.scale = Vector2(0.88, 0.88) if large else Vector2(0.72, 0.72)
 	body.modulate = Color.WHITE
+	var health: Node2D = node.get_node("Health")
+	health.position = Vector2(0, body.position.y + body.get_rect().position.y * body.scale.y - BattleConfig.HEALTH_BAR_HEAD_GAP - BattleConfig.HEALTH_BAR_HEIGHT)
 
 static func update_unit_health(node: Node2D, unit: Dictionary) -> void:
 	var width: float = 96 if unit.large else 60
@@ -90,7 +91,7 @@ static func update_unit_health(node: Node2D, unit: Dictionary) -> void:
 
 static func health_bar_polygon(width: float, filled_width: float) -> PackedVector2Array:
 	var left := -width * 0.5
-	return PackedVector2Array([Vector2(left, 0), Vector2(left + filled_width, 0), Vector2(left + filled_width, 7), Vector2(left, 7)])
+	return PackedVector2Array([Vector2(left, 0), Vector2(left + filled_width, 0), Vector2(left + filled_width, BattleConfig.HEALTH_BAR_HEIGHT), Vector2(left, BattleConfig.HEALTH_BAR_HEIGHT)])
 
 static func diamond(center: Vector2) -> PackedVector2Array:
 	return PackedVector2Array([center + Vector2(0, -16), center + Vector2(32, 0), center + Vector2(0, 16), center + Vector2(-32, 0)])
@@ -105,13 +106,6 @@ static func draw_terrain_effects(canvas: CanvasItem, ground: TileMapLayer, effec
 	for effect in effects:
 		var center := ground.position + ground.map_to_local(Vector2i(effect.x, effect.y))
 		draw_terrain_effect(canvas, effect.visual, center)
-
-static func draw_unit_health(canvas: CanvasItem, ground: TileMapLayer, units: Array) -> void:
-	for unit in units:
-		var center := footprint_center(ground, unit)
-		var width: float = 96 if unit.large else 60
-		canvas.draw_rect(Rect2(center + Vector2(-width * 0.5, 20), Vector2(width, 7)), Color("281e25"))
-		canvas.draw_rect(Rect2(center + Vector2(-width * 0.5, 20), Vector2(width * float(unit.hp) / float(unit.max_hp), 7)), Color("62d27c"))
 
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
 	match visual:

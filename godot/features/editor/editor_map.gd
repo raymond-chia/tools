@@ -65,6 +65,7 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 		inspected_unit = 0
 	for unit in units:
 		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == inspected_unit)
+		BattleVisuals.update_unit_health(unit_nodes[unit.id], unit)
 	queue_redraw()
 
 func move_camera(delta: float) -> void:
@@ -150,10 +151,6 @@ func _draw() -> void:
 	if map_data.is_empty(): return
 	BattleVisuals.draw_movement_range(self, ground, snapshot.get("inspected_reachable", []), snapshot.get("inspected_second_reachable", []), true)
 	BattleVisuals.draw_terrain_effects(self, ground, snapshot.get("terrain_effects", []))
-	for unit in snapshot.get("units", []):
-		if unit.id == dragged_unit: draw_set_transform(drag_visual_offset)
-		BattleVisuals.draw_unit_health(self, ground, [unit])
-		if unit.id == dragged_unit: draw_set_transform(Vector2.ZERO)
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))
