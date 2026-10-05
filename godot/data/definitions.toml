@@ -6,6 +6,15 @@ healing_weight = 0
 positioning_weight = 10
 
 [[ai_profiles]]
+id = "wolf_pack"
+distance_preference = "near"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+hit_weight = 30
+pursuit_weight = 20
+
+[[ai_profiles]]
 id = "archer"
 distance_preference = "far"
 damage_weight = 10
@@ -193,7 +202,7 @@ skills = [
 
 [[unit_types]]
 id = "wolf"
-ai_profile = "tank"
+ai_profile = "wolf_pack"
 visual = "wolf.svg"
 width = 1
 height = 1

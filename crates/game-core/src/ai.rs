@@ -14,7 +14,7 @@ use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, validate_cell_skill_from_position,
 };
 use crate::terrain::{terrain_type, terrains_at};
-use bevy_ecs::prelude::{Entity, Resource, World};
+use bevy_ecs::prelude::{Component, Entity, Resource, World};
 use std::collections::HashMap;
 
 #[derive(Resource)]
@@ -62,6 +62,10 @@ struct SkillPlan {
     utility: f64,
 }
 
+/// 僅記錄上一個 AI 回合實際攻擊的目標，站位仍逐回合重新評估。
+#[derive(Component)]
+struct PreviousAttackTarget(i64);
+
 impl Game {
     pub(crate) fn run_ai_turn(&mut self) -> Result<(), GameError> {
         let Turn {
@@ -92,9 +96,9 @@ impl Game {
                 position_index,
                 skill,
                 target_cell,
-                target_id: _,
+                target_id,
                 utility: _,
-            }) => (position_index, Some((skill, target_cell))),
+            }) => (position_index, Some((skill, target_cell, target_id))),
             None => {
                 positions = self.ai_positions(actor, entity, true);
                 (
@@ -110,6 +114,9 @@ impl Game {
                 )
             }
         };
+        self.world
+            .entity_mut(entity)
+            .remove::<PreviousAttackTarget>();
         let PositionPlan {
             position,
             path,
@@ -128,8 +135,18 @@ impl Game {
             }
         }
         match action {
-            Some((skill, cell)) if can_use_skill(self.world.resource::<Turn>()) => {
-                self.use_skill_at_cell(actor, cell, skill)
+            Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
+                let attack = matches!(
+                    skill.effect,
+                    SkillEffect::Attack { .. } | SkillEffect::Push { .. }
+                );
+                self.use_skill_at_cell(actor, cell, skill)?;
+                if attack && self.world.get_entity(entity).is_ok() {
+                    self.world
+                        .entity_mut(entity)
+                        .insert(PreviousAttackTarget(target_id));
+                }
+                Ok(())
             }
             _ => {
                 self.finish();
@@ -318,7 +335,15 @@ fn skill_utility(
                 return None;
             }
             Some(
-                attack_utility(preview) * f64::from(profile.damage_weight)
+                if world
+                    .get::<PreviousAttackTarget>(actor)
+                    .is_some_and(|previous| previous.0 == preview.target)
+                {
+                    f64::from(profile.pursuit_weight)
+                } else {
+                    0.0
+                } + f64::from(preview.hit_chance) / 100.0 * f64::from(profile.hit_weight)
+                    + attack_utility(preview) * f64::from(profile.damage_weight)
                     + positioning * f64::from(profile.positioning_weight),
             )
         }

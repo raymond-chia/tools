@@ -40,6 +40,12 @@ pub struct AiProfile {
     pub damage_weight: u32,
     pub healing_weight: u32,
     pub positioning_weight: u32,
+    /// 額外偏好命中機率；0 維持只依傷害收益評估。
+    #[serde(default)]
+    pub hit_weight: u32,
+    /// 攻擊上回合攻擊過的對象時，增加固定收益。
+    #[serde(default)]
+    pub pursuit_weight: u32,
 }
 
 /// 跨可用技能比較合法射程決定近遠站位，不另存固定格數。
