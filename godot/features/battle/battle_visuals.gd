@@ -62,26 +62,26 @@ static func create_unit_node(unit_id: int, visual_name: String, units_layer: Nod
 	return node
 
 static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: bool) -> void:
-	var base_scale := Vector2(1.7, 1.7) if large else Vector2.ONE
+	var base_scale := Vector2.ONE * (BattleConfig.LARGE_UNIT_BASE_SCALE if large else BattleConfig.UNIT_BASE_SCALE)
 	var attack_preview_ring: Sprite2D = node.get_node("Visual/AttackPreviewRing")
 	attack_preview_ring.scale = base_scale * BattleConfig.ATTACK_PREVIEW_RING_SCALE
 	attack_preview_ring.modulate = Color("ffe17a")
 	var selection: Sprite2D = node.get_node("Visual/Selection")
-	selection.scale = base_scale * 1.18
+	selection.scale = base_scale * BattleConfig.UNIT_SELECTION_RING_SCALE
 	selection.modulate = Color("ffe17a")
 	selection.visible = selected
 	var base: Sprite2D = node.get_node("Visual/Base")
 	base.scale = base_scale
 	base.modulate = Color("63a9ff") if team is String else Color("ff6868")
 	var body: Sprite2D = node.get_node("Visual/Body")
-	body.position.y = -55 if large else -43
-	body.scale = Vector2(0.88, 0.88) if large else Vector2(0.72, 0.72)
+	body.scale = Vector2.ONE * (BattleConfig.LARGE_UNIT_BODY_SCALE if large else BattleConfig.UNIT_BODY_SCALE)
+	body.position.y = -body.get_rect().end.y * body.scale.y
 	body.modulate = Color.WHITE
 	var health: Node2D = node.get_node("Health")
 	health.position = Vector2(0, body.position.y + body.get_rect().position.y * body.scale.y - BattleConfig.HEALTH_BAR_HEAD_GAP - BattleConfig.HEALTH_BAR_HEIGHT)
 
 static func update_unit_health(node: Node2D, unit: Dictionary) -> void:
-	var width: float = 96 if unit.large else 60
+	var width: float = BattleConfig.LARGE_UNIT_HEALTH_BAR_WIDTH if unit.large else BattleConfig.UNIT_HEALTH_BAR_WIDTH
 	var health: Node2D = node.get_node("Health")
 	var background: Polygon2D = health.get_node("Background")
 	var fill: Polygon2D = health.get_node("Fill")
