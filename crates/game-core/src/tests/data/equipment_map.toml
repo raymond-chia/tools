@@ -1,0 +1,25 @@
+# 裝備測試：施放者、敵人與可受治療的隊友。
+name = "equipment_test"
+width = 5
+height = 3
+
+[[units]]
+id = 1
+unit_type = "fighter"
+team = "player"
+x = 1
+y = 1
+
+[[units]]
+id = 2
+unit_type = "target"
+team = { enemy = "targets" }
+x = 2
+y = 1
+
+[[units]]
+id = 3
+unit_type = "target"
+team = "player"
+x = 1
+y = 2

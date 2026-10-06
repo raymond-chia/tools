@@ -42,10 +42,12 @@ hp=10
 movement=4
 initiative=1
 dodge=2
-block=3
 attack=4
-power=5
+physical_power = 5
+magical_power = 5
 skills=["test_attack","melee"]
+off_hand = "test_guard_3"
+
 [[unit_types]]
 ai_profile="near"
 id="lyra"
@@ -54,10 +56,12 @@ hp=8
 movement=5
 initiative=2
 dodge=4
-block=1
 attack=5
-power=3
+physical_power = 3
+magical_power = 3
 skills=["test_attack","melee"]
+off_hand = "test_guard_1"
+
 [[unit_types]]
 ai_profile="near"
 id="ogre"
@@ -68,7 +72,39 @@ hp=20
 movement=3
 initiative=0
 dodge=1
-block=4
 attack=5
-power=6
+physical_power = 6
+magical_power = 6
 skills=["test_attack","melee"]
+off_hand = "test_guard_4"
+
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_1"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 1
+block_reduction = 2
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_3"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 3
+block_reduction = 2
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_4"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 4
+block_reduction = 2

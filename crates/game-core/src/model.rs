@@ -66,7 +66,10 @@ pub(crate) struct Unit {
     pub(crate) dodge: i32,
     pub(crate) block: i32,
     pub(crate) attack: i32,
-    pub(crate) power: i32,
+    pub(crate) physical_power: i32,
+    pub(crate) magical_power: i32,
+    pub(crate) block_reduction: i32,
+    pub(crate) equipment: EquipmentView,
     /// 單位可使用的技能 ID。
     pub(crate) skills: Vec<String>,
 }
@@ -153,6 +156,8 @@ pub(crate) struct Skills {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct SkillDef {
+    #[serde(default)]
+    pub(crate) power_source: PowerSource,
     pub(crate) id: String,
     pub(crate) ranged: bool,
     pub(crate) min_range: i32,
@@ -366,6 +371,7 @@ pub struct SkillRangeView {
 
 #[derive(Serialize)]
 pub struct SkillDetailsView {
+    pub power_source: PowerSource,
     pub target: SkillTargetKind,
     pub ranged: bool,
     pub min_range: i32,
@@ -493,7 +499,10 @@ pub struct UnitView {
     pub dodge: i32,
     pub block: i32,
     pub attack: i32,
-    pub power: i32,
+    pub physical_power: i32,
+    pub magical_power: i32,
+    pub block_reduction: i32,
+    pub equipment: EquipmentView,
 }
 
 #[derive(Serialize)]
@@ -531,4 +540,22 @@ pub struct TurnView {
     pub can_skill: bool,
     pub can_end_turn: bool,
     pub can_delay: bool,
+}
+
+/// 技能使用的威力由資料明確指定，與近遠距離無關。
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PowerSource {
+    #[default]
+    Physical,
+    Magical,
+}
+
+/// 顯示層使用核心保留的配裝欄位，不自行推導裝備的占用規則。
+#[derive(Clone, Serialize)]
+pub struct EquipmentView {
+    pub main_hand: String,
+    pub off_hand: String,
+    pub armor: String,
+    pub accessory: String,
 }

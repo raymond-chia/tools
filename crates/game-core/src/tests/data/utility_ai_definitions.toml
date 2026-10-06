@@ -55,6 +55,7 @@ ranged = false
 min_range = 0
 max_range = 3
 effect = "heal"
+power_source = "magical"
 power_bonus = 30
 
 [[unit_types]]
@@ -65,9 +66,9 @@ hp = 100
 movement = 2
 initiative = 100
 dodge = 0
-block = 0
 attack = 0
-power = 0
+physical_power = 0
+magical_power = 0
 skills = ["melee"]
 
 [[unit_types]]
@@ -78,9 +79,9 @@ hp = 100
 movement = 2
 initiative = 100
 dodge = 0
-block = 0
 attack = 0
-power = 0
+physical_power = 0
+magical_power = 0
 skills = ["melee"]
 
 [[unit_types]]
@@ -91,9 +92,9 @@ hp = 100
 movement = 2
 initiative = 100
 dodge = 0
-block = 0
 attack = 0
-power = 0
+physical_power = 0
+magical_power = 0
 skills = ["shot"]
 
 [[unit_types]]
@@ -104,9 +105,9 @@ hp = 100
 movement = 2
 initiative = 100
 dodge = 0
-block = 0
 attack = 0
-power = 0
+physical_power = 0
+magical_power = 0
 skills = ["heal", "shot"]
 
 [[unit_types]]
@@ -117,7 +118,7 @@ hp = 100
 movement = 0
 initiative = 0
 dodge = 0
-block = 0
 attack = 0
-power = 0
+physical_power = 0
+magical_power = 0
 skills = ["melee"]

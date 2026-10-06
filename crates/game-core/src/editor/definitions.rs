@@ -1,6 +1,6 @@
 //! 編輯器的欄位修改、新增、複製、刪除與引用檢查；不參與遊戲執行期規則運算。
 use super::EditorError;
-use crate::authoring::{Definitions, Map, UnitType};
+use crate::authoring::{Definitions, EquipmentDef, EquipmentSlot, Map, UnitType};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::{Game, SkillDef, SkillEffect, TerrainEntryRule, TerrainLayer, TerrainTypeDef};
 use serde::{Deserialize, Serialize};
@@ -60,6 +60,7 @@ enum EffectSelection {
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum DefinitionCategory {
+    Equipment,
     UnitTypes,
     Skills,
     TerrainTypes,
@@ -103,8 +104,14 @@ pub fn edit_definition_from_json(
                     })
                 })
                 .collect();
+            let equipment = crate::equipment::definitions(definitions.equipment.clone())?;
+            let equipment_choices: BTreeMap<_, _> = definitions
+                .unit_types
+                .iter()
+                .map(|unit| (unit.id.clone(), equipment_choices(unit, &equipment)))
+                .collect();
             return Ok(
-                serde_json::json!({"terrain_ids": terrain_ids, "terrain_entries": terrain_entries})
+                serde_json::json!({"terrain_ids": terrain_ids, "terrain_entries": terrain_entries, "equipment_choices": equipment_choices})
                     .to_string(),
             );
         }
@@ -123,6 +130,11 @@ pub fn edit_definition_from_json(
                     .sort_by_key(|terrain| terrain.layer != TerrainLayer::Ground);
             }
             let ids: Vec<_> = match category {
+                DefinitionCategory::Equipment => definitions
+                    .equipment
+                    .iter()
+                    .map(|entry| &entry.id)
+                    .collect(),
                 DefinitionCategory::UnitTypes => definitions
                     .unit_types
                     .iter()
@@ -146,6 +158,10 @@ pub fn edit_definition_from_json(
                 return Err(EditorError::operation("invalid_command", &id, Vec::new()));
             }
             match category {
+                DefinitionCategory::Equipment => {
+                    let entry = definitions.equipment.remove(index);
+                    definitions.equipment.insert(target as usize, entry);
+                }
                 DefinitionCategory::UnitTypes => {
                     let entry = definitions.unit_types.remove(index);
                     definitions.unit_types.insert(target as usize, entry);
@@ -171,6 +187,14 @@ pub fn edit_definition_from_json(
             key,
             value,
         } => match category {
+            DefinitionCategory::Equipment => {
+                let entry = definitions
+                    .equipment
+                    .iter_mut()
+                    .find(|entry| entry.id == id)
+                    .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
+                update_field(entry, &key, value)?;
+            }
             DefinitionCategory::UnitTypes => {
                 let entry = definitions
                     .unit_types
@@ -217,10 +241,24 @@ pub fn edit_definition_from_json(
                 },
                 EffectSelection::Heal => SkillEffect::Heal { power_bonus: 0 },
             };
+            skill.power_source = if matches!(skill.effect, SkillEffect::Heal { .. }) {
+                crate::PowerSource::Magical
+            } else {
+                crate::PowerSource::Physical
+            };
         }
         DefinitionEdit::Add { category, id } => {
             validate_new_id(&definitions, category, &id)?;
             match category {
+                DefinitionCategory::Equipment => definitions.equipment.push(EquipmentDef {
+                    id,
+                    slot: EquipmentSlot::OneHand,
+                    hp: 0,
+                    physical_power: 0,
+                    magical_power: 0,
+                    block: 0,
+                    block_reduction: 0,
+                }),
                 DefinitionCategory::UnitTypes => definitions.unit_types.push(UnitType {
                     ai_profile: definitions
                         .ai_profiles
@@ -242,12 +280,17 @@ pub fn edit_definition_from_json(
                     movement: 5,
                     initiative: 0,
                     dodge: 2,
-                    block: 2,
                     attack: 3,
-                    power: 3,
+                    physical_power: 3,
+                    magical_power: 0,
+                    main_hand: String::new(),
+                    off_hand: String::new(),
+                    armor: String::new(),
+                    accessory: String::new(),
                     skills: Vec::new(),
                 }),
                 DefinitionCategory::Skills => definitions.skills.push(SkillDef {
+                    power_source: crate::PowerSource::Physical,
                     id,
                     ranged: false,
                     min_range: 1,
@@ -281,6 +324,16 @@ pub fn edit_definition_from_json(
             }
             // ID 建立後不可更動；複製只設定新資料的 ID，因此不需要更新既有引用。
             match category {
+                DefinitionCategory::Equipment => {
+                    let mut entry = definitions
+                        .equipment
+                        .iter()
+                        .find(|entry| entry.id == source_id)
+                        .expect("已確認裝備來源存在")
+                        .clone();
+                    entry.id = id;
+                    definitions.equipment.push(entry);
+                }
                 DefinitionCategory::UnitTypes => {
                     let mut unit = definitions
                         .unit_types
@@ -320,6 +373,9 @@ pub fn edit_definition_from_json(
         DefinitionEdit::Remove { category, id } => {
             check_removal(&definitions, &maps, category, &id)?;
             match category {
+                DefinitionCategory::Equipment => {
+                    definitions.equipment.retain(|entry| entry.id != id)
+                }
                 DefinitionCategory::UnitTypes => {
                     definitions.unit_types.retain(|unit| unit.id != id)
                 }
@@ -331,6 +387,10 @@ pub fn edit_definition_from_json(
         }
     }
 
+    let equipment = crate::equipment::definitions(definitions.equipment.clone())?;
+    for unit in &definitions.unit_types {
+        crate::equipment::resolve(unit, &equipment)?;
+    }
     for (path, map) in &maps {
         Game::from_authoring(definitions.clone(), map.clone()).map_err(|error| {
             EditorError::Map {
@@ -353,6 +413,21 @@ fn check_removal(
     validate_existing_id(definitions, category, id)?;
     let mut references = Vec::new();
     match category {
+        DefinitionCategory::Equipment => {
+            for unit in &definitions.unit_types {
+                if [
+                    &unit.main_hand,
+                    &unit.off_hand,
+                    &unit.armor,
+                    &unit.accessory,
+                ]
+                .iter()
+                .any(|entry| entry.as_str() == id)
+                {
+                    references.push(("unit_types", unit.id.clone()));
+                }
+            }
+        }
         DefinitionCategory::UnitTypes => {
             for (path, map) in maps {
                 if map.units.iter().any(|unit| unit.unit_type == id) {
@@ -389,6 +464,7 @@ fn check_removal(
 
 fn contains_id(definitions: &Definitions, category: DefinitionCategory, id: &str) -> bool {
     match category {
+        DefinitionCategory::Equipment => definitions.equipment.iter().any(|entry| entry.id == id),
         DefinitionCategory::UnitTypes => definitions.unit_types.iter().any(|unit| unit.id == id),
         DefinitionCategory::Skills => definitions.skills.iter().any(|skill| skill.id == id),
         DefinitionCategory::TerrainTypes => {
@@ -440,4 +516,34 @@ fn update_field<T: Serialize + serde::de::DeserializeOwned>(
     *entry = super::json::from_value(document)
         .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
     Ok(())
+}
+
+/// 編輯器只呈現核心決定的合法配裝選項，不在 Godot 重建手數與欄位規則。
+fn equipment_choices(
+    unit: &UnitType,
+    entries: &std::collections::HashMap<String, EquipmentDef>,
+) -> std::collections::BTreeMap<&'static str, Vec<String>> {
+    let mut candidates: Vec<_> = entries.keys().cloned().collect();
+    candidates.sort();
+    candidates.insert(0, String::new());
+    let mut result = std::collections::BTreeMap::new();
+    for slot in ["main_hand", "off_hand", "armor", "accessory"] {
+        let choices = candidates
+            .iter()
+            .filter(|id| {
+                let mut candidate = unit.clone();
+                match slot {
+                    "main_hand" => candidate.main_hand = (*id).clone(),
+                    "off_hand" => candidate.off_hand = (*id).clone(),
+                    "armor" => candidate.armor = (*id).clone(),
+                    "accessory" => candidate.accessory = (*id).clone(),
+                    _ => unreachable!("配裝欄位來自上方固定清單"),
+                }
+                crate::equipment::resolve(&candidate, entries).is_ok()
+            })
+            .cloned()
+            .collect();
+        result.insert(slot, choices);
+    }
+    result
 }

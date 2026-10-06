@@ -1,6 +1,6 @@
 use crate::*;
 
-// 驗證命中結果、不同固定格擋減傷與暴擊順序均符合傷害公式。
+// 驗證命中結果、不同裝備格擋減傷與暴擊順序均符合傷害公式。
 #[test]
 fn attack_damage_uses_expected_formula() {
     let cases = [
@@ -139,6 +139,7 @@ fn attack_modifier_uses_expected_flanking_bonus() {
 
 fn attack_skill(ranged: bool, range: i32) -> SkillDef {
     SkillDef {
+        power_source: PowerSource::Physical,
         id: if ranged {
             "ranged_attack".into()
         } else {
@@ -174,7 +175,15 @@ fn spawn_unit(
                 dodge: 0,
                 block: 0,
                 attack: 5,
-                power: 1,
+                physical_power: 1,
+                magical_power: 1,
+                block_reduction: 0,
+                equipment: EquipmentView {
+                    main_hand: String::new(),
+                    off_hand: String::new(),
+                    armor: String::new(),
+                    accessory: String::new(),
+                },
                 skills,
             },
         ))

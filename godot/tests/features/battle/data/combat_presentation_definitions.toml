@@ -46,6 +46,7 @@ ranged=true
 min_range=0
 max_range=6
 effect="heal"
+power_source = "magical"
 power_bonus=3
 
 [[skills]]
@@ -65,9 +66,9 @@ hp=100
 movement=3
 initiative=1000
 dodge=0
-block=0
 attack=5
-power=5
+physical_power = 5
+magical_power = 5
 skills=["presentation_push","presentation_finish"]
 
 [[unit_types]]
@@ -78,9 +79,9 @@ hp=100
 movement=3
 initiative=900
 dodge=0
-block=0
 attack=0
-power=5
+physical_power = 5
+magical_power = 5
 skills=["presentation_heal"]
 
 [[unit_types]]
@@ -91,7 +92,7 @@ hp=30
 movement=0
 initiative=-1000
 dodge=0
-block=0
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["idle_attack"]

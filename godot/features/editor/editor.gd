@@ -19,7 +19,7 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var faction_field: LineEdit = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Faction
 @onready var map_view = $Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map
 @onready var pages: TabContainer = $Layout/Pages
-@onready var definition_pages: Array = [$Layout/Pages/UnitPage, $Layout/Pages/SkillPage, $Layout/Pages/TerrainPage]
+@onready var definition_pages: Array = [$Layout/Pages/UnitPage, $Layout/Pages/SkillPage, $Layout/Pages/TerrainPage, $Layout/Pages/EquipmentPage]
 @onready var status_label: Label = $Layout/Status
 
 var editing_mode := 0
@@ -55,8 +55,8 @@ func _ready() -> void:
 		team_list.add_item(value)
 	mode_list.select(0)
 	team_list.select(0)
-	for index in [0, 1, 2, 3]:
-		pages.set_tab_title(index, ["地圖與單位配置", "單位", "技能", "地形"][index])
+	for index in [0, 1, 2, 3, 4]:
+		pages.set_tab_title(index, ["地圖與單位配置", "單位", "技能", "地形", "裝備"][index])
 	for page in definition_pages:
 		page.field_changed.connect(update_definition)
 		page.move_requested.connect(move_definition)
@@ -546,7 +546,7 @@ func move_unit(id: int, cell: Vector2i) -> void:
 func refresh_definitions() -> void:
 	var options := read_core_response(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})))
 	if options.is_empty(): return
-	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries)
+	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries, options.equipment_choices)
 
 func find_definition(category: String, id: String) -> Dictionary:
 	for entry in definitions[category]:

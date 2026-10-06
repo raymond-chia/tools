@@ -180,3 +180,21 @@ TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
 TERRAIN_EFFECT_MOVEMENT,移動消耗 +{value},Movement cost +{value}
 TERRAIN_EFFECT_DAMAGE,造成 {value} 點傷害,Deals {value} damage
 TERRAIN_EFFECT_DURATION,剩餘 {value} 回合,{value} rounds remaining
+DEFENSE_STATS,閃避／格擋／減傷,Dodge / Block / Reduction
+POWER_STATS,物理／魔法威力,Physical / Magical power
+EQUIPMENT,裝備,Equipment
+EQUIPMENT_NONE,無,None
+EQUIPMENT_MAIN_HAND,主手,Main hand
+EQUIPMENT_OFF_HAND,副手,Off hand
+EQUIPMENT_ARMOR,護具,Armor
+EQUIPMENT_ACCESSORY,飾品,Accessory
+EQUIPMENT_NAME_SWORD,單手劍,Sword
+EQUIPMENT_NAME_SHIELD,盾牌,Shield
+EQUIPMENT_NAME_BOW,弓,Bow
+EQUIPMENT_NAME_STAFF,法杖,Staff
+EQUIPMENT_NAME_LIGHT_ARMOR,輕甲,Light armor
+EQUIPMENT_NAME_HEAVY_ARMOR,重甲,Heavy armor
+EQUIPMENT_NAME_POWER_RING,魔力戒指,Magic ring
+SKILL_POWER_SOURCE_PHYSICAL,威力來源：物理,Power source: Physical
+SKILL_POWER_SOURCE_MAGICAL,威力來源：魔法,Power source: Magical
+ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy

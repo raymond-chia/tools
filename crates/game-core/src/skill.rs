@@ -68,7 +68,10 @@ impl Game {
             dodge: _,
             block: _,
             attack: _,
-            power: actor_power,
+            physical_power: _,
+            magical_power: _,
+            block_reduction: _,
+            equipment: _,
             skills: _,
         } = self
             .world
@@ -84,7 +87,10 @@ impl Game {
             dodge: _,
             block: _,
             attack: _,
-            power: _,
+            physical_power: _,
+            magical_power: _,
+            block_reduction: _,
+            equipment: _,
             skills: _,
         } = self
             .world
@@ -108,7 +114,7 @@ impl Game {
                     remaining_hp,
                     missing_hp: _,
                     health_segments: _,
-                } = healing_preview(&self.world, ae, te, power_bonus);
+                } = healing_preview(&self.world, ae, te, power_bonus, skill.power_source);
                 self.world
                     .get_mut::<Hp>(te)
                     .expect("已建立的戰鬥單位應具有 Hp 元件")
@@ -152,18 +158,18 @@ impl Game {
             gameplay_config::BASE_DEFENSE + target_dodge,
             gameplay_config::BASE_DEFENSE + target_dodge + target_block,
         );
-        let base_damage = skill_power(actor_power, power_bonus);
+        let base_damage = skill_power(unit_power(&self.world, ae, skill.power_source), power_bonus);
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
             AttackResult::Hit,
-            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            block_reduction(&self.world, te),
             critical,
         );
         let damage = attack_damage(
             base_damage,
             result,
-            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            block_reduction(&self.world, te),
             critical,
         );
         let damage_reduction = raw_damage - damage;
@@ -241,7 +247,10 @@ impl Game {
                         dodge: _,
                         block: _,
                         attack: _,
-                        power: _,
+                        physical_power: _,
+                        magical_power: _,
+                        block_reduction: _,
+                        equipment: _,
                         skills: _,
                     } = self
                         .world
@@ -332,6 +341,7 @@ impl Game {
         let actor_type = unit.unit_type.clone();
         let actor_team = unit.team.clone();
         let SkillDef {
+            power_source: _,
             id,
             ranged: _,
             min_range: _,
@@ -433,6 +443,7 @@ pub(crate) fn preview_unit_skill_from_position(
                 attacker,
                 target_entity,
                 power_bonus,
+                skill.power_source,
             )));
         }
         UnitSkillEffect::Attack {
@@ -451,7 +462,10 @@ pub(crate) fn preview_unit_skill_from_position(
         dodge: _,
         block: _,
         attack: _,
-        power: actor_power,
+        physical_power: _,
+        magical_power: _,
+        block_reduction: _,
+        equipment: _,
         skills: _,
     } = world
         .get::<Unit>(attacker)
@@ -465,7 +479,10 @@ pub(crate) fn preview_unit_skill_from_position(
         dodge: _,
         block: _,
         attack: _,
-        power: _,
+        physical_power: _,
+        magical_power: _,
+        block_reduction: _,
+        equipment: _,
         skills: _,
     } = world
         .get::<Unit>(target_entity)
@@ -502,11 +519,11 @@ pub(crate) fn preview_unit_skill_from_position(
             AttackResult::Hit => hit_count += 1,
         }
     }
-    let hit_damage = skill_power(*actor_power, power_bonus);
+    let hit_damage = skill_power(unit_power(world, attacker, skill.power_source), power_bonus);
     let block_damage = attack_damage(
         hit_damage,
         AttackResult::Block,
-        gameplay_config::BLOCK_DAMAGE_REDUCTION,
+        block_reduction(world, target_entity),
         false,
     );
     let hit_remaining_hp = (*target_hp - hit_damage).max(0);
@@ -534,14 +551,14 @@ pub(crate) fn preview_unit_skill_from_position(
         critical_block_damage: attack_damage(
             hit_damage,
             AttackResult::Block,
-            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            block_reduction(world, target_entity),
             true,
         ),
         hit_damage,
         critical_hit_damage: attack_damage(
             hit_damage,
             AttackResult::Hit,
-            gameplay_config::BLOCK_DAMAGE_REDUCTION,
+            block_reduction(world, target_entity),
             true,
         ),
         health_segments: HealthSegmentsView {
@@ -558,14 +575,12 @@ fn healing_preview(
     actor: Entity,
     target: Entity,
     power_bonus: i32,
+    source: crate::PowerSource,
 ) -> HealingPreview {
     let Hp { current, maximum } = world
         .get::<Hp>(target)
         .expect("已建立的戰鬥單位應具有 Hp 元件");
-    let power = world
-        .get::<Unit>(actor)
-        .expect("施放者應具有 Unit 元件")
-        .power;
+    let power = unit_power(world, actor, source);
     let remaining_hp = (*current + skill_power(power, power_bonus)).min(*maximum);
     HealingPreview {
         target: world
@@ -653,6 +668,7 @@ fn validate_unit_skill_target_from_position(
     skill: &SkillDef,
 ) -> Result<(Entity, UnitSkillEffect), GameError> {
     let SkillDef {
+        power_source: _,
         id,
         ranged: _,
         min_range,
@@ -676,7 +692,10 @@ fn validate_unit_skill_target_from_position(
         dodge: _,
         block: _,
         attack: _,
-        power: _,
+        physical_power: _,
+        magical_power: _,
+        block_reduction: _,
+        equipment: _,
         skills,
     } = world
         .get::<Unit>(attacker)
@@ -690,7 +709,10 @@ fn validate_unit_skill_target_from_position(
         dodge: _,
         block: _,
         attack: _,
-        power: _,
+        physical_power: _,
+        magical_power: _,
+        block_reduction: _,
+        equipment: _,
         skills: _,
     } = world
         .get::<Unit>(target)
@@ -827,6 +849,7 @@ fn flanking_bonus(
     skill: &SkillDef,
 ) -> i32 {
     let SkillDef {
+        power_source: _,
         id: _,
         ranged,
         min_range,
@@ -861,7 +884,10 @@ fn flanking_bonus(
             dodge: _,
             block: _,
             attack: _,
-            power: _,
+            physical_power: _,
+            magical_power: _,
+            block_reduction: _,
+            equipment: _,
             skills,
         } = match entity.get::<Unit>() {
             Some(unit) => unit,
@@ -1073,7 +1099,10 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         dodge: _,
         block: _,
         attack: _,
-        power: _,
+        physical_power: _,
+        magical_power: _,
+        block_reduction: _,
+        equipment: _,
         skills,
     } = w.get::<Unit>(e).expect("已建立的戰鬥單位應具有 Unit 元件");
     let Skills { definitions } = w.resource::<Skills>();
@@ -1082,6 +1111,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         .filter_map(|skill_id| definitions.get(skill_id))
         .map(|skill| {
             let SkillDef {
+                power_source: _,
                 id,
                 ranged: _,
                 min_range,
@@ -1113,6 +1143,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
 
 fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
     let SkillDef {
+        power_source,
         id: _,
         ranged,
         min_range,
@@ -1150,6 +1181,7 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
         SkillEffect::Heal { power_bonus } => (None, Some(*power_bonus), SkillDetailEffect::Heal),
     };
     SkillDetailsView {
+        power_source: *power_source,
         target,
         ranged: *ranged,
         min_range: *min_range,
@@ -1158,4 +1190,19 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
         power_bonus,
         effect,
     }
+}
+
+fn unit_power(world: &World, entity: Entity, source: crate::PowerSource) -> i32 {
+    let unit = world.get::<Unit>(entity).expect("施放者應具有 Unit 元件");
+    match source {
+        crate::PowerSource::Physical => unit.physical_power,
+        crate::PowerSource::Magical => unit.magical_power,
+    }
+}
+
+fn block_reduction(world: &World, entity: Entity) -> i32 {
+    world
+        .get::<Unit>(entity)
+        .expect("目標應具有 Unit 元件")
+        .block_reduction
 }

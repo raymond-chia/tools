@@ -242,7 +242,10 @@ impl Game {
                 dodge: _,
                 block: _,
                 attack: _,
-                power: _,
+                physical_power: _,
+                magical_power: _,
+                block_reduction: _,
+                equipment: _,
                 skills: _,
             } = self
                 .world

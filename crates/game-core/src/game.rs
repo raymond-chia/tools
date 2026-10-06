@@ -43,6 +43,7 @@ impl Game {
         map: authoring::Map,
     ) -> Result<Self, GameError> {
         let authoring::Definitions {
+            equipment,
             ai_profiles,
             terrain_types,
             skills,
@@ -90,6 +91,8 @@ impl Game {
         }
         let skill_ids: HashSet<_> = skills.iter().map(|skill| skill.id.as_str()).collect();
         let ai_profiles = crate::ai::resolve_profiles(ai_profiles, &unit_types)?;
+        let equipment = crate::equipment::definitions(equipment)?;
+        let mut equipment_stats = HashMap::new();
         let mut types = HashMap::new();
         for kind in unit_types {
             if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
@@ -110,6 +113,10 @@ impl Game {
             {
                 return Err(error::duplicate_unit_skill(&kind.id, duplicate));
             }
+            equipment_stats.insert(
+                kind.id.clone(),
+                crate::equipment::resolve(&kind, &equipment)?,
+            );
             if types.insert(kind.id.clone(), kind).is_some() {
                 return Err(error::duplicate_unit_type_id());
             }
@@ -137,7 +144,14 @@ impl Game {
         {
             return Err(error::invalid_map_dimensions());
         }
-        validate_numeric_ranges(&terrain_types, &skills, &types, width, height)?;
+        validate_numeric_ranges(
+            &terrain_types,
+            &skills,
+            &types,
+            &equipment_stats,
+            width,
+            height,
+        )?;
         if terrain_placements.iter().any(|terrain| {
             terrain.x < 0 || terrain.y < 0 || terrain.x >= width || terrain.y >= height
         }) {
@@ -237,18 +251,30 @@ impl Game {
                 visual,
                 width,
                 height,
-                hp,
+                hp: _,
                 movement,
                 initiative,
                 dodge,
-                block,
                 attack,
-                power,
+                physical_power: _,
+                magical_power: _,
+                main_hand: _,
+                off_hand: _,
+                armor: _,
+                accessory: _,
                 skills,
             } = types
                 .get(&unit_type)
                 .expect("單位配置的類型已在上方驗證")
                 .clone();
+            let crate::equipment::EquipmentStats {
+                hp,
+                physical_power,
+                magical_power,
+                block,
+                block_reduction,
+                equipment,
+            } = equipment_stats.get(&unit_type).expect("配裝已驗證").clone();
             if x.checked_add(width).is_none() || y.checked_add(height).is_none() {
                 return Err(error::unit_out_of_bounds(id));
             }
@@ -283,7 +309,10 @@ impl Game {
                     dodge,
                     block,
                     attack,
-                    power,
+                    physical_power,
+                    magical_power,
+                    block_reduction,
+                    equipment,
                     skills,
                 },
             ));
@@ -910,7 +939,10 @@ impl Game {
                 dodge: effective_dodge(&self.world, entity),
                 block: effective_block(&self.world, entity),
                 attack: f.attack,
-                power: f.power,
+                physical_power: f.physical_power,
+                magical_power: f.magical_power,
+                block_reduction: f.block_reduction,
+                equipment: f.equipment.clone(),
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
@@ -1164,6 +1196,7 @@ fn validate_numeric_ranges(
     terrains: &HashMap<String, crate::model::TerrainTypeDef>,
     skills: &[SkillDef],
     units: &HashMap<String, authoring::UnitType>,
+    equipment_stats: &HashMap<String, crate::equipment::EquipmentStats>,
     width: i32,
     height: i32,
 ) -> Result<(), GameError> {
@@ -1191,12 +1224,17 @@ fn validate_numeric_ranges(
     {
         return Err(error::numeric_range("terrain_types"));
     }
-    let maximum_hp = units.values().map(|unit| unit.hp).max().unwrap_or(0);
+    let maximum_hp = equipment_stats
+        .values()
+        .map(|unit| unit.hp)
+        .max()
+        .unwrap_or(0);
     let dodge_penalty = maximum_cell_value(|terrain| i128::from(terrain.dodge_penalty));
     let block_penalty = maximum_cell_value(|terrain| i128::from(terrain.block_penalty));
     for unit in units.values() {
+        let stats = equipment_stats.get(&unit.id).expect("配裝已驗證");
         if i128::from(unit.dodge) - dodge_penalty < i128::from(i32::MIN)
-            || i128::from(unit.block) - block_penalty < i128::from(i32::MIN)
+            || i128::from(stats.block) - block_penalty < i128::from(i32::MIN)
             || i128::from(unit.movement) * 2 + cost > i128::from(u32::MAX)
             || width.checked_add(unit.width).is_none()
             || height.checked_add(unit.height).is_none()
@@ -1206,7 +1244,7 @@ fn validate_numeric_ranges(
                 .is_none()
             || i64::from(gameplay_config::BASE_DEFENSE)
                 + i64::from(unit.dodge.max(0))
-                + i64::from(unit.block.max(0))
+                + i64::from(stats.block.max(0))
                 > i64::from(i32::MAX)
         {
             return Err(error::numeric_range(&unit.id));
@@ -1228,7 +1266,10 @@ fn validate_numeric_ranges(
                 SkillEffect::Mire { .. } => continue,
             };
             let attack = i64::from(unit.attack) + i64::from(attack_bonus);
-            let power = i64::from(unit.power) + i64::from(power_bonus);
+            let power = i64::from(match skill.power_source {
+                crate::PowerSource::Physical => stats.physical_power,
+                crate::PowerSource::Magical => stats.magical_power,
+            }) + i64::from(power_bonus);
             if attack < i64::from(i32::MIN)
                 || attack
                     + i64::from(gameplay_config::FLANKING_ATTACK_BONUS)

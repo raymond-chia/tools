@@ -1,0 +1,169 @@
+# 裝備系統專用測試資料；所有能力與配裝均與正式遊戲資料獨立。
+[[ai_profiles]]
+id = "near"
+distance_preference = "near"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+
+[[terrain_types]]
+id = "plain"
+layer = "ground"
+entry_rule = "walkable"
+
+[[skills]]
+id = "melee"
+ranged = false
+min_range = 0
+max_range = 2
+effect = "attack"
+power_source = "physical"
+power_bonus = 0
+attack_bonus = 0
+
+[[skills]]
+id = "spell"
+ranged = false
+min_range = 0
+max_range = 2
+effect = "attack"
+power_source = "magical"
+power_bonus = 0
+attack_bonus = 0
+
+[[skills]]
+id = "push"
+ranged = false
+min_range = 0
+max_range = 2
+effect = "push"
+power_source = "physical"
+power_bonus = 1
+attack_bonus = 0
+
+[[skills]]
+id = "heal"
+ranged = false
+min_range = 0
+max_range = 2
+effect = "heal"
+power_source = "magical"
+power_bonus = 2
+
+[[unit_types]]
+id = "fighter"
+ai_profile = "near"
+visual = "fighter.svg"
+hp = 10
+movement = 0
+initiative = 100
+dodge = 2
+attack = 5
+physical_power = 3
+magical_power = 1
+skills = ["melee", "spell", "push", "heal"]
+main_hand = "sword"
+off_hand = "shield"
+armor = "heavy_armor"
+accessory = "power_ring"
+
+[[unit_types]]
+id = "mage"
+ai_profile = "near"
+visual = "fighter.svg"
+hp = 10
+movement = 0
+initiative = 0
+dodge = 2
+attack = 5
+physical_power = 1
+magical_power = 7
+skills = ["melee", "spell", "push", "heal"]
+main_hand = "staff"
+armor = "light_armor"
+accessory = "power_ring"
+
+[[unit_types]]
+id = "target"
+ai_profile = "near"
+visual = "fighter.svg"
+hp = 50
+movement = 0
+initiative = -100
+dodge = 2
+attack = 5
+physical_power = 0
+magical_power = 0
+skills = ["melee", "spell", "push", "heal"]
+
+[[equipment]]
+id = "sword"
+slot = "one_hand"
+hp = 0
+physical_power = 2
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "shield"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 3
+block_reduction = 2
+
+[[equipment]]
+id = "bow"
+slot = "two_hand"
+hp = 0
+physical_power = 4
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "staff"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 2
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "light_armor"
+slot = "armor"
+hp = 3
+physical_power = 0
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "heavy_armor"
+slot = "armor"
+hp = 5
+physical_power = 0
+magical_power = 0
+block = 2
+block_reduction = 1
+
+[[equipment]]
+id = "power_ring"
+slot = "accessory"
+hp = 1
+physical_power = 0
+magical_power = 2
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "tower_shield"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 30
+block_reduction = 4

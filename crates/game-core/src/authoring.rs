@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Definitions {
+    #[serde(default)]
+    pub equipment: Vec<EquipmentDef>,
     pub ai_profiles: Vec<AiProfile>,
     pub terrain_types: Vec<TerrainTypeDef>,
     pub skills: Vec<SkillDef>,
@@ -25,9 +27,17 @@ pub struct UnitType {
     pub movement: u32,
     pub initiative: i32,
     pub dodge: i32,
-    pub block: i32,
     pub attack: i32,
-    pub power: i32,
+    pub physical_power: i32,
+    pub magical_power: i32,
+    #[serde(default)]
+    pub main_hand: String,
+    #[serde(default)]
+    pub off_hand: String,
+    #[serde(default)]
+    pub armor: String,
+    #[serde(default)]
+    pub accessory: String,
     #[serde(default)]
     pub skills: Vec<String>,
 }
@@ -90,4 +100,25 @@ pub fn definitions_to_json(text: &str) -> Result<String, GameError> {
 pub fn map_to_json(text: &str) -> Result<String, GameError> {
     let value: Map = toml::from_str(text).map_err(|e| error::map_toml_parse(e.to_string()))?;
     serde_json::to_string(&value).map_err(|e| error::json_serialize(e.to_string()))
+}
+
+/// 裝備種類決定占用手數；護具與飾品不占用手。
+#[derive(Clone, Deserialize, Serialize)]
+pub struct EquipmentDef {
+    pub id: String,
+    pub slot: EquipmentSlot,
+    pub hp: i32,
+    pub physical_power: i32,
+    pub magical_power: i32,
+    pub block: i32,
+    pub block_reduction: i32,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EquipmentSlot {
+    OneHand,
+    TwoHand,
+    Armor,
+    Accessory,
 }

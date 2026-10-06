@@ -77,7 +77,7 @@ fn skill_min_range_limits_preview_and_action() {
     assert_eq!(error.message(), "目標距離太近");
 }
 
-// 驗證零射程治療可對自己施放，完整治療預覽與實際治療量符合力量加技能加值。
+// 驗證零射程治療可對自己施放，完整治療預覽與實際治療量符合魔法威力加技能加值。
 #[test]
 fn zero_range_heal_targets_self() {
     let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal { power_bonus: 4 });

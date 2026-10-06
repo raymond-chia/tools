@@ -1,0 +1,25 @@
+# 戰鬥資訊面板裝備測試。
+name = "equipment_presentation_test"
+width = 5
+height = 3
+
+[[units]]
+id = 1
+unit_type = "fighter"
+team = "player"
+x = 1
+y = 1
+
+[[units]]
+id = 2
+unit_type = "mage"
+team = "player"
+x = 0
+y = 2
+
+[[units]]
+id = 3
+unit_type = "target"
+team = { enemy = "targets" }
+x = 2
+y = 1

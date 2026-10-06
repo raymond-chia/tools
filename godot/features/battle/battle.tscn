@@ -575,7 +575,7 @@ autowrap_mode = 2
 
 [node name="DefenseLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1422269306]
 layout_mode = 2
-text = "閃避／格擋"
+text = "DEFENSE_STATS"
 
 [node name="DefenseValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1356774818]
 custom_maximum_size = Vector2(280, -1)
@@ -597,9 +597,53 @@ autowrap_mode = 2
 
 [node name="PowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1902669502]
 layout_mode = 2
-text = "威力"
+text = "POWER_STATS"
 
 [node name="PowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=82172087]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="MainHandLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_MAIN_HAND"
+
+[node name="MainHandValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="OffHandLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_OFF_HAND"
+
+[node name="OffHandValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="ArmorLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_ARMOR"
+
+[node name="ArmorValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="AccessoryLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_ACCESSORY"
+
+[node name="AccessoryValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3

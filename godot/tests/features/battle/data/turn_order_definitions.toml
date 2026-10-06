@@ -33,10 +33,12 @@ hp=10
 movement=4
 initiative=1
 dodge=2
-block=3
 attack=4
-power=5
+physical_power = 5
+magical_power = 5
 skills=["test_attack"]
+off_hand = "test_guard_3"
+
 [[unit_types]]
 ai_profile="near"
 id="lyra"
@@ -45,10 +47,12 @@ hp=8
 movement=5
 initiative=2
 dodge=4
-block=1
 attack=5
-power=3
+physical_power = 3
+magical_power = 3
 skills=["test_attack"]
+off_hand = "test_guard_1"
+
 [[unit_types]]
 ai_profile="near"
 id="mira"
@@ -57,10 +61,12 @@ hp=9
 movement=4
 initiative=3
 dodge=3
-block=2
 attack=4
-power=3
+physical_power = 3
+magical_power = 3
 skills=["test_attack"]
+off_hand = "test_guard_2"
+
 [[unit_types]]
 ai_profile="near"
 id="wolf_a"
@@ -69,7 +75,37 @@ hp=20
 movement=1
 initiative=-100
 dodge=2
-block=0
 attack=2
-power=1
+physical_power = 1
+magical_power = 1
 skills=["test_attack"]
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_1"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 1
+block_reduction = 2
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_2"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 2
+block_reduction = 2
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_3"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 3
+block_reduction = 2

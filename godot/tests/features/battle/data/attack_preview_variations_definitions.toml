@@ -87,10 +87,12 @@ hp=100
 movement=0
 initiative=100
 dodge=2
-block=3
 attack=5
-power=5
+physical_power = 5
+magical_power = 5
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
+off_hand = "test_guard_3"
+
 [[unit_types]]
 ai_profile="near"
 id="ogre"
@@ -99,10 +101,12 @@ hp=100
 movement=0
 initiative=-100
 dodge=1
-block=4
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
+off_hand = "test_guard_4"
+
 [[unit_types]]
 ai_profile="near"
 id="wolf_a"
@@ -111,10 +115,12 @@ hp=20
 movement=0
 initiative=-100
 dodge=1
-block=4
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
+off_hand = "test_guard_4"
+
 [[unit_types]]
 ai_profile="near"
 id="wolf_b"
@@ -123,10 +129,11 @@ hp=20
 movement=0
 initiative=-100
 dodge=7
-block=0
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
+accessory = "test_reduction_2"
 [[unit_types]]
 ai_profile="near"
 id="lyra"
@@ -135,7 +142,49 @@ hp=20
 movement=0
 initiative=-100
 dodge=2
-block=10
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["preview_5","preview_2","preview_7","preview_16","preview_0","setup_damage_20","setup_damage_4"]
+off_hand = "test_guard_10"
+
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_3"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 3
+block_reduction = 2
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_4"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 4
+block_reduction = 2
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_10"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 10
+block_reduction = 2
+
+# 專用減傷飾品：維持零格擋率案例原本的 2 點減傷預覽，不改變命中傷害。
+[[equipment]]
+id = "test_reduction_2"
+slot = "accessory"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 0
+block_reduction = 2

@@ -229,7 +229,15 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
             dodge: 0,
             block: 0,
             attack: 0,
-            power: 0,
+            physical_power: 0,
+            magical_power: 0,
+            block_reduction: 0,
+            equipment: EquipmentView {
+                main_hand: String::new(),
+                off_hand: String::new(),
+                armor: String::new(),
+                accessory: String::new(),
+            },
             skills: Vec::new(),
         },
     ));

@@ -49,10 +49,12 @@ hp=50
 movement=3
 initiative=100
 dodge=2
-block=3
 attack=4
-power=3
+physical_power = 3
+magical_power = 3
 skills=["precise_strike","finishing_strike"]
+off_hand = "test_guard_3"
+
 [[unit_types]]
 ai_profile="near"
 id="wolf_a"
@@ -61,10 +63,12 @@ hp=10000
 movement=1
 initiative=0
 dodge=2
-block=3
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["precise_strike","finishing_strike"]
+off_hand = "test_guard_3"
+
 [[unit_types]]
 ai_profile="near"
 id="wolf_b"
@@ -73,7 +77,19 @@ hp=1
 movement=1
 initiative=0
 dodge=2
-block=3
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["precise_strike","finishing_strike"]
+off_hand = "test_guard_3"
+
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_3"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 3
+block_reduction = 2

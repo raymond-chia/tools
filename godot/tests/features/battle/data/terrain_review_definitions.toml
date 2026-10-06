@@ -53,10 +53,11 @@ hp=100
 movement=20
 initiative=1000
 dodge=10
-block=10
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["shield_bash","mire"]
+off_hand = "test_guard_10"
 
 [[unit_types]]
 ai_profile="near"
@@ -68,10 +69,11 @@ hp=100
 movement=20
 initiative=1000
 dodge=10
-block=10
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["shield_bash","mire"]
+off_hand = "test_guard_10"
 
 [[unit_types]]
 ai_profile="near"
@@ -83,7 +85,19 @@ hp=100
 movement=20
 initiative=-1000
 dodge=10
-block=10
 attack=0
-power=0
+physical_power = 0
+magical_power = 0
 skills=["shield_bash","mire"]
+off_hand = "test_guard_10"
+
+
+# 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
+[[equipment]]
+id = "test_guard_10"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 10
+block_reduction = 2

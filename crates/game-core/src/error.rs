@@ -303,3 +303,7 @@ pub(crate) fn numeric_range(id: &str) -> GameError {
         format!("{id} 的數值超出核心可安全運算的範圍"),
     )
 }
+
+pub(crate) fn invalid_equipment(message: String) -> GameError {
+    GameError::new("invalid_equipment", message)
+}

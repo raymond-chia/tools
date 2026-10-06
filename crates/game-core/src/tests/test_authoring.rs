@@ -5,6 +5,7 @@ use crate::*;
 #[test]
 fn enemy_without_skill_rejected_on_load() {
     let definitions = authoring::Definitions {
+        equipment: Vec::new(),
         ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![TerrainTypeDef {
             id: "plain".into(),
@@ -26,9 +27,13 @@ fn enemy_without_skill_rejected_on_load() {
             movement: 1,
             initiative: 0,
             dodge: 0,
-            block: 0,
             attack: 0,
-            power: 1,
+            physical_power: 1,
+            magical_power: 1,
+            main_hand: String::new(),
+            off_hand: String::new(),
+            armor: String::new(),
+            accessory: String::new(),
             skills: Vec::new(),
         }],
     };

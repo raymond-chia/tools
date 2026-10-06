@@ -138,6 +138,7 @@ duration = 2
 
 [[skills]]
 id = "heal"
+power_source = "magical"
 ranged = true
 min_range = 0
 max_range = 4
@@ -150,18 +151,22 @@ ai_profile = "tank"
 visual = "fighter.svg"
 width = 1
 height = 1
-hp = 17
+hp = 12
 movement = 5
 initiative = 3
 dodge = 5
-block = 5
 attack = 5
-power = 5
+physical_power = 3
+magical_power = 1
 skills = [
     "melee_attack",
     "power_strike",
     "shield_bash",
 ]
+
+main_hand = "sword"
+off_hand = "shield"
+armor = "heavy_armor"
 
 [[unit_types]]
 id = "lyra"
@@ -169,17 +174,20 @@ ai_profile = "archer"
 visual = "archer.svg"
 width = 1
 height = 1
-hp = 13
+hp = 10
 movement = 5
 initiative = 5
 dodge = 5
-block = 0
 attack = 5
-power = 5
+physical_power = 3
+magical_power = 1
 skills = [
     "ranged_attack",
     "aimed_shot",
 ]
+
+main_hand = "bow"
+armor = "light_armor"
 
 [[unit_types]]
 id = "mira"
@@ -187,18 +195,21 @@ ai_profile = "healer"
 visual = "mage.svg"
 width = 1
 height = 1
-hp = 11
+hp = 8
 movement = 5
 initiative = 2
 dodge = 3
-block = 0
 attack = 5
-power = 5
+physical_power = 1
+magical_power = 3
 skills = [
     "melee_attack",
     "mire",
     "heal",
 ]
+
+main_hand = "staff"
+armor = "light_armor"
 
 [[unit_types]]
 id = "wolf"
@@ -206,11 +217,65 @@ ai_profile = "wolf_pack"
 visual = "wolf.svg"
 width = 1
 height = 1
-hp = 9
+hp = 11
 movement = 6
 initiative = 20
 dodge = 3
-block = 0
 attack = 4
-power = 3
+physical_power = 4
+magical_power = 0
 skills = ["melee_attack"]
+
+[[equipment]]
+id = "sword"
+slot = "one_hand"
+hp = 0
+physical_power = 2
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "shield"
+slot = "one_hand"
+hp = 0
+physical_power = 0
+magical_power = 0
+block = 2
+block_reduction = 1
+
+[[equipment]]
+id = "bow"
+slot = "two_hand"
+hp = 0
+physical_power = 2
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "staff"
+slot = "one_hand"
+hp = 0
+physical_power = 1
+magical_power = 2
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "light_armor"
+slot = "armor"
+hp = 3
+physical_power = 0
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "heavy_armor"
+slot = "armor"
+hp = 5
+physical_power = 0
+magical_power = 0
+block = 3
+block_reduction = 2

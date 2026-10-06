@@ -30,6 +30,10 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 	"defense": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/DefenseValue,
 	"attack": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/AttackValue,
 	"power": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/PowerValue,
+	"main_hand": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/MainHandValue,
+	"off_hand": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/OffHandValue,
+	"armor": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/ArmorValue,
+	"accessory": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/AccessoryValue,
 }
 @onready var terrain_name: Label = $Root/InfoPanel/Margin/Content/TerrainRows/TerrainValue
 @onready var terrain_cost: Label = $Root/InfoPanel/Margin/Content/TerrainRows/CostValue
@@ -204,9 +208,13 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		detail_values.size.text = tr("大型") if unit.large else tr("一般")
 		detail_values.movement.text = "%d" % int(unit.movement)
 		detail_values.initiative.text = "%d" % int(unit.initiative)
-		detail_values.defense.text = "%d / %d" % [int(unit.dodge), int(unit.block)]
+		detail_values.defense.text = "%d / %d / %d" % [int(unit.dodge), int(unit.block), int(unit.block_reduction)]
 		detail_values.attack.text = "%d" % int(unit.attack)
-		detail_values.power.text = "%d" % int(unit.power)
+		detail_values.power.text = "%d / %d" % [int(unit.physical_power), int(unit.magical_power)]
+		for slot in ["main_hand", "off_hand", "armor", "accessory"]:
+			var equipment_id: String = unit.equipment[slot]
+			var key := "EQUIPMENT_NAME_%s" % equipment_id.to_upper()
+			detail_values[slot].text = tr("EQUIPMENT_NONE") if equipment_id.is_empty() else (equipment_id if tr(key) == key else tr(key))
 	var terrain_names: Array[String] = []
 	for kind in terrain.terrains:
 		terrain_names.append(tr(BattleConfig.terrain_name_key(kind)))
@@ -494,6 +502,7 @@ func localized_skill_details(skill: Dictionary) -> String:
 	if details.attack_bonus != null:
 		lines.append(tr("SKILL_ATTACK_BONUS") % int(details.attack_bonus))
 	if details.power_bonus != null:
+		lines.append(tr("SKILL_POWER_SOURCE_%s" % details.power_source.to_upper()))
 		lines.append(tr("SKILL_POWER_BONUS") % int(details.power_bonus))
 	var effect: Dictionary = details.effect
 	if effect.kind == "push":

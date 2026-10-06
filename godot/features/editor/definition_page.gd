@@ -9,11 +9,13 @@ signal terrain_effect_confirmed(id: String, terrain: String)
 signal move_requested(category: String, id: String, offset: int)
 signal input_error(message: String)
 
-const TITLES := {"unit_types": "單位", "skills": "技能", "terrain_types": "地形"}
+const TITLES := {"unit_types": "單位", "skills": "技能", "terrain_types": "地形", "equipment": "裝備"}
 const FIELD_LABELS := {
 	"id": "ID", "visual": "外觀", "width": "佔地寬度", "height": "佔地高度",
 	"hp": "生命值", "movement": "移動力", "initiative": "先攻", "dodge": "閃避",
-	"block": "格擋", "attack": "命中", "power": "威力", "skills": "可用技能",
+	"block": "格擋", "attack": "命中", "physical_power": "物理威力", "magical_power": "魔法威力",
+	"main_hand": "主手", "off_hand": "副手", "armor": "護具", "accessory": "飾品",
+	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "skills": "可用技能",
 	"ranged": "遠程技能", "min_range": "最小範圍", "max_range": "最大範圍",
 	"effect": "效果", "attack_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
@@ -21,6 +23,8 @@ const FIELD_LABELS := {
 	"dodge_penalty": "閃避減值", "block_penalty": "格擋減值"
 }
 const CHOICES := {
+	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},
+	"power_source": {"physical": "物理", "magical": "魔法"},
 	"effect": {"attack": "攻擊", "push": "推擊", "mire": "產生地形", "heal": "治療"},
 	"layer": {"ground": "地面", "overlay": "上層"},
 	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
@@ -35,6 +39,7 @@ var removing_id := ""
 var source_id := ""
 var effect_skill_id := ""
 var effect_terrain_ids: Array = []
+var equipment_choices: Dictionary = {}
 var field_texts: Dictionary = {}
 var field_id := ""
 
@@ -122,7 +127,8 @@ func select_id(id: String) -> void:
 		entries.select(0)
 	refresh_fields()
 
-func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array) -> void:
+func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, loadout_choices: Dictionary) -> void:
+	equipment_choices = loadout_choices
 	effect_terrain_ids = terrain_ids
 	var previous := selected_id()
 	definitions = value
@@ -181,11 +187,15 @@ func refresh_fields() -> void:
 				check.toggled.connect(func(enabled: bool): toggle_skill(id, skill.id, enabled))
 				skills.add_child(check)
 			input = skills
-		elif CHOICES.has(key) or key == "terrain":
+		elif CHOICES.has(key) or key == "terrain" or key in ["main_hand", "off_hand", "armor", "accessory"]:
 			var choices: Dictionary = CHOICES.get(key, {})
 			if key == "terrain":
 				choices = {}
 				for terrain in effect_terrain_ids: choices[terrain] = terrain
+			if key in ["main_hand", "off_hand", "armor", "accessory"]:
+				choices = {"": "無"}
+				for equipment_id in equipment_choices[id][key]:
+					if not equipment_id.is_empty(): choices[equipment_id] = equipment_id
 			var option := OptionButton.new()
 			for choice in choices:
 				option.add_item(choices[choice])
