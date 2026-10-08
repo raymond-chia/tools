@@ -512,7 +512,7 @@ impl Game {
             for enemy in &enemies {
                 if !visited.contains(enemy)
                     && entity_distance(&self.world, source, *enemy)
-                        <= gameplay_config::ENEMY_CHAIN_RANGE
+                        <= gameplay_config::ENCOUNTER_RANGE
                 {
                     visited.insert(*enemy);
                     connected.push(*enemy);

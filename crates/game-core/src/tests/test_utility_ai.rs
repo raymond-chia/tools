@@ -1,5 +1,5 @@
 //! 先定義共用傾向設定與可見行為；不實作測試專用評分器或 AI 替身。
-use super::support::{ACTOR_ID, TARGET_ID};
+use super::support::{ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map};
 use crate::*;
 
 const DEFINITIONS: &str = include_str!("data/utility_ai_definitions.toml");
@@ -42,14 +42,11 @@ fn enemy() -> Team {
     Team::Enemy("test_enemy".into())
 }
 
-fn game(definitions: &toml::Value, placements: Vec<authoring::UnitPlacement>) -> Game {
-    let map = authoring::Map {
-        name: "utility_ai_test".into(),
-        width: 12,
-        height: 1,
-        terrains: Vec::new(),
-        units: placements,
-    };
+fn game(definitions: &toml::Value, diagram: &str, units: &[(char, i64, &str, Team)]) -> Game {
+    game_on_map(definitions, ascii_map("utility_ai_test", diagram, units))
+}
+
+fn game_on_map(definitions: &toml::Value, map: authoring::Map) -> Game {
     let source = toml::to_string(definitions).expect("測試定義應可序列化");
     let map = toml::to_string(&map).expect("測試地圖應可序列化");
     let mut game = Game::from_documents(&source, &map).expect("測試戰鬥應可載入");
@@ -57,12 +54,13 @@ fn game(definitions: &toml::Value, placements: Vec<authoring::UnitPlacement>) ->
     game
 }
 
-fn duel(definitions: &toml::Value, kind: &str, actor_x: i32, target_x: i32) -> Game {
+fn duel(definitions: &toml::Value, kind: &str, diagram: &str) -> Game {
     game(
         definitions,
-        vec![
-            placement(ACTOR_ID, kind, enemy(), actor_x),
-            placement(TARGET_ID, "target", Team::Player, target_x),
+        diagram,
+        &[
+            ('A', ACTOR_ID, kind, enemy()),
+            ('T', TARGET_ID, "target", Team::Player),
         ],
     )
 }
@@ -129,30 +127,29 @@ fn shared_profiles_survive_authoring_conversion() {
 #[test]
 fn tanks_share_approach_and_melee_behavior() {
     for kind in ["tank", "other_tank"] {
-        for (target_x, expected_x, expected_action) in
-            [(5, 4, Some(("melee", TARGET_ID))), (8, 6, None)]
-        {
-            let mut game = duel(&definitions(), kind, 2, target_x);
+        for (diagram, expected_x, expected_action) in [
+            ("..A..T......", 4, Some(("melee", TARGET_ID))),
+            ("..A.....T...", 6, None),
+        ] {
+            let mut game = duel(&definitions(), kind, diagram);
             let snapshot = act(&mut game);
-            assert_eq!(actor_x(&snapshot), expected_x, "{kind}, 目標 {target_x}");
-            assert_eq!(
-                action(&snapshot),
-                expected_action,
-                "{kind}, 目標 {target_x}"
-            );
+            assert_eq!(actor_x(&snapshot), expected_x, "{kind}, 地圖 {diagram}");
+            assert_eq!(action(&snapshot), expected_action, "{kind}, 地圖 {diagram}");
         }
     }
 }
 
-// 驗證遠距離射手依技能最大射程站位，太近時後退、太遠時靠近。
+// 驗證射手依 ASCII 目標位置及技能最大射程站位，太近時後退、太遠時靠近。
 #[test]
 fn archer_positions_before_shooting() {
-    for (name, target_x, expected_distance) in [
-        ("拉至最大射程", 5, 4),
-        ("近身時後退", 3, 3),
-        ("遠處時接近", 7, 4),
+    for (name, diagram, expected_distance) in [
+        ("拉至最大射程", "..A..T......", 4),
+        ("近身時後退", "..AT........", 3),
+        ("遠處時接近", "..A....T....", 4),
     ] {
-        let mut game = duel(&definitions(), "archer", 2, target_x);
+        let mut game = duel(&definitions(), "archer", diagram);
+        let target = game.entity(TARGET_ID).expect("ASCII 的 T 應建立目標單位");
+        let target_x = game.world.get::<Pos>(target).expect("目標應有位置").0.x;
         let snapshot = act(&mut game);
         assert_eq!(
             (actor_x(&snapshot) - i64::from(target_x)).abs(),
@@ -172,10 +169,11 @@ fn healer_prioritizes_healing_independent_of_skill_order() {
             toml::Value::Array(skills.map(|skill| toml::Value::String(skill.into())).into());
         let mut game = game(
             &definitions,
-            vec![
-                placement(ACTOR_ID, "healer", enemy(), 2),
-                placement(TARGET_ID, "target", Team::Player, 5),
-                placement(ALLY_ID, "target", enemy(), 1),
+            ".LA..T......",
+            &[
+                ('A', ACTOR_ID, "healer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "target", enemy()),
             ],
         );
         wound(&mut game, ALLY_ID, 20);
@@ -196,11 +194,12 @@ fn healer_prioritizes_healing_independent_of_skill_order() {
 fn healer_prefers_severe_wound_over_nearest_ally() {
     let mut game = game(
         &definitions(),
-        vec![
-            placement(ACTOR_ID, "healer", enemy(), 2),
-            placement(TARGET_ID, "target", Team::Player, 6),
-            placement(ALLY_ID, "target", enemy(), 1),
-            placement(SECOND_ALLY_ID, "target", enemy(), 4),
+        ".LA.S.T.....",
+        &[
+            ('A', ACTOR_ID, "healer", enemy()),
+            ('T', TARGET_ID, "target", Team::Player),
+            ('L', ALLY_ID, "target", enemy()),
+            ('S', SECOND_ALLY_ID, "target", enemy()),
         ],
     );
     wound(&mut game, ALLY_ID, 95);
@@ -213,10 +212,11 @@ fn healer_prefers_severe_wound_over_nearest_ally() {
 fn healer_moves_into_healing_range() {
     let mut game = game(
         &definitions(),
-        vec![
-            placement(ACTOR_ID, "healer", enemy(), 2),
-            placement(TARGET_ID, "target", Team::Player, 0),
-            placement(ALLY_ID, "target", enemy(), 7),
+        "T.A....L....",
+        &[
+            ('A', ACTOR_ID, "healer", enemy()),
+            ('T', TARGET_ID, "target", Team::Player),
+            ('L', ALLY_ID, "target", enemy()),
         ],
     );
     wound(&mut game, ALLY_ID, 20);
@@ -230,24 +230,31 @@ fn healer_moves_into_healing_range() {
 fn healer_approaches_unreachable_severe_wound_and_heals_light_wound() {
     let cases = [
         // 走滿第一段兩格後，輕傷隊友仍在治療射程內。
-        ("可走滿第一段", 5, 4, vec![2, 3, 4]),
+        ("可走滿第一段", "..A..L.T..S.", 4, vec![2, 3, 4]),
         // 走滿兩格會使輕傷隊友超出射程，因此只走一格後治療。
-        ("須縮短第一段", 0, 3, vec![2, 3]),
+        ("須縮短第一段", "L.A....T..S.", 3, vec![2, 3]),
     ];
     let mut failures = Vec::new();
-    for (name, light_x, expected_x, expected_path) in cases {
+    for (name, diagram, expected_x, expected_path) in cases {
         let mut game = game(
             &definitions(),
-            vec![
-                placement(ACTOR_ID, "healer", enemy(), 2),
-                placement(TARGET_ID, "target", Team::Player, 7),
-                placement(ALLY_ID, "target", enemy(), light_x),
-                placement(SECOND_ALLY_ID, "target", enemy(), 10),
+            diagram,
+            &[
+                ('A', ACTOR_ID, "healer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "target", enemy()),
+                ('S', SECOND_ALLY_ID, "target", enemy()),
             ],
         );
         wound(&mut game, ALLY_ID, 95);
         wound(&mut game, SECOND_ALLY_ID, 20);
 
+        let light = game.entity(ALLY_ID).expect("ASCII 的 L 應建立輕傷隊友");
+        let light_x = game.world.get::<Pos>(light).expect("輕傷隊友應有位置").0.x;
+        let severe = game
+            .entity(SECOND_ALLY_ID)
+            .expect("ASCII 的 S 應建立重傷隊友");
+        let severe_x = game.world.get::<Pos>(severe).expect("重傷隊友應有位置").0.x;
         let snapshot = act(&mut game);
         // 先彙整決策差異，讓尚未實作 AI 時也能一次看到兩個案例的失敗。
         let actual_x = actor_x(&snapshot);
@@ -263,7 +270,7 @@ fn healer_approaches_unreachable_severe_wound_and_heals_light_wound() {
             "{name}：輕傷隊友應在治療射程內"
         );
         assert!(
-            (10 - actual_x).abs() > 3,
+            (i64::from(severe_x) - actual_x).abs() > 3,
             "{name}：重傷隊友應仍在治療射程外"
         );
         let movements = snapshot["movements"]
@@ -331,11 +338,12 @@ fn healer_compares_current_health_and_overhealing() {
             .extend([low, high]);
         let mut game = game(
             &definitions,
-            vec![
-                placement(ACTOR_ID, "healer", enemy(), 5),
-                placement(TARGET_ID, "target", Team::Player, 8),
-                placement(ALLY_ID, "low_hp_ally", enemy(), 4),
-                placement(SECOND_ALLY_ID, "high_hp_ally", enemy(), 6),
+            "....LAS.T...",
+            &[
+                ('A', ACTOR_ID, "healer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "low_hp_ally", enemy()),
+                ('S', SECOND_ALLY_ID, "high_hp_ally", enemy()),
             ],
         );
         wound(&mut game, ALLY_ID, 20);
@@ -361,7 +369,7 @@ fn healer_compares_current_health_and_overhealing() {
 // 驗證沒有受傷隊友時治癒者改用攻擊，不對滿血單位施放治療或直接空過回合。
 #[test]
 fn healer_attacks_when_healing_is_unnecessary() {
-    let mut game = duel(&definitions(), "healer", 2, 5);
+    let mut game = duel(&definitions(), "healer", "..A..T......");
     assert_eq!(action(&act(&mut game)), Some(("shot", TARGET_ID)));
 }
 
@@ -375,10 +383,11 @@ fn profile_weights_change_heal_or_attack_choice() {
         profile_mut(&mut definitions, "healer")["healing_weight"] = healing.into();
         let mut game = game(
             &definitions,
-            vec![
-                placement(ACTOR_ID, "healer", enemy(), 2),
-                placement(TARGET_ID, "target", Team::Player, 5),
-                placement(ALLY_ID, "target", enemy(), 1),
+            ".LA..T......",
+            &[
+                ('A', ACTOR_ID, "healer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "target", enemy()),
             ],
         );
         wound(&mut game, ALLY_ID, 20);
@@ -398,10 +407,12 @@ fn unit_type_uses_referenced_profile() {
         let archer = unit_type_mut(&mut definitions, "archer");
         archer["ai_profile"] = profile.into();
         archer["skills"] = toml::Value::Array(vec!["shot".into(), "melee".into()]);
-        let mut game = duel(&definitions, "archer", 2, 5);
+        let mut game = duel(&definitions, "archer", "..A..T......");
+        let target = game.entity(TARGET_ID).expect("ASCII 的 T 應建立目標單位");
+        let target_x = game.world.get::<Pos>(target).expect("目標應有位置").0.x;
         let snapshot = act(&mut game);
         assert_eq!(
-            (actor_x(&snapshot) - 5).abs(),
+            (actor_x(&snapshot) - i64::from(target_x)).abs(),
             expected_distance,
             "{profile}"
         );
@@ -416,15 +427,19 @@ fn unit_type_uses_referenced_profile() {
 #[test]
 fn archer_prioritizes_a_defeatable_target() {
     for reverse in [false, true] {
-        let mut placements = vec![
-            placement(ACTOR_ID, "archer", enemy(), 5),
-            placement(TARGET_ID, "target", Team::Player, 2),
-            placement(ALLY_ID, "target", Team::Player, 8),
-        ];
+        let mut map = ascii_map(
+            "utility_ai_test",
+            "..T..A..L...",
+            &[
+                ('A', ACTOR_ID, "archer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "target", Team::Player),
+            ],
+        );
         if reverse {
-            placements.reverse();
+            map.units.reverse();
         }
-        let mut game = game(&definitions(), placements);
+        let mut game = game_on_map(&definitions(), map);
         wound(&mut game, ALLY_ID, 1);
         let snapshot = act(&mut game);
         assert_eq!(
@@ -436,20 +451,117 @@ fn archer_prioritizes_a_defeatable_target() {
     }
 }
 
+// 驗證尖刺後重新規劃仍追擊較遠的上回合目標；未設定追擊時改攻擊較近的敵人。
+#[test]
+fn pursuit_survives_replanning_after_spikes() {
+    const PURSUED_TARGET_ID: i64 = 2;
+    const ALTERNATIVE_TARGET_ID: i64 = 3;
+    for (pursuit, expected_target) in [(0, ALTERNATIVE_TARGET_ID), (100, PURSUED_TARGET_ID)] {
+        let mut definitions = definitions();
+        profile_mut(&mut definitions, "archer")["pursuit_weight"] = pursuit.into();
+        profile_mut(&mut definitions, "archer")["distance_preference"] = "near".into();
+        unit_type_mut(&mut definitions, "archer")["movement"] = 3.into();
+        let shot = definitions["skills"]
+            .as_array_mut()
+            .expect("測試定義應包含技能")
+            .iter_mut()
+            .find(|skill| skill["id"].as_str() == Some("shot"))
+            .expect("測試定義應包含射擊技能");
+        shot["max_range"] = 3.into();
+        let mut game = game(
+            &definitions,
+            "
+            A^T....
+            ####L##
+            ",
+            &[
+                ('A', ACTOR_ID, "archer", enemy()),
+                ('T', PURSUED_TARGET_ID, "target", Team::Player),
+                ('L', ALTERNATIVE_TARGET_ID, "target", Team::Player),
+            ],
+        );
+        // 第一回合 T 距離兩格，已在偏好的最近射程；L 距離五格，移動會被尖刺截斷，無法攻擊。
+        let first_snapshot = act(&mut game);
+        assert_eq!(action(&first_snapshot), Some(("shot", PURSUED_TARGET_ID)));
+        assert_eq!(actor_x(&first_snapshot), 0, "第一回合應原地攻擊");
+        assert_eq!(first_snapshot["movements"], serde_json::json!([]));
+        let actor = game.entity(ACTOR_ID).expect("AI 應仍存在");
+        let pursued = game.entity(PURSUED_TARGET_ID).expect("追擊目標應仍存在");
+        // 第二回合前 T 後退四格：T 距離六格、L 距離五格，踩尖刺停在 x=1 時仍都無法攻擊。
+        game.world
+            .get_mut::<Pos>(pursued)
+            .expect("追擊目標應有位置")
+            .0 = GridPos { x: 6, y: 0 };
+        wound(&mut game, PURSUED_TARGET_ID, 100);
+        *game.world.resource_mut::<Turn>() = Turn {
+            actor: Some(ACTOR_ID),
+            phase: Phase::Ready,
+            movement_remaining: 3,
+            movement_segments_used: 0,
+        };
+        for target_position in [GridPos { x: 6, y: 0 }, GridPos { x: 4, y: 1 }] {
+            let error = game
+                .preview_skill(ACTOR_ID, target_position, "shot")
+                .err()
+                .expect("第二回合移動前，兩個目標都應在射程外");
+            assert_eq!(error.id(), "target_too_far");
+        }
+        let snapshot = game
+            .command(Command::Continue)
+            .expect("AI 應可在尖刺中斷後完成行動");
+        let snapshot = serde_json::to_value(snapshot).expect("快照應可序列化");
+        assert_eq!(
+            actor_x(&snapshot),
+            3,
+            "追擊權重 {pursuit}：應在尖刺後繼續移動"
+        );
+        assert_eq!(game.world.get::<Hp>(actor).expect("AI 應有 HP").current, 97);
+        let paths: Vec<Vec<GridPos>> = snapshot["movements"]
+            .as_array()
+            .expect("快照應包含移動紀錄")
+            .iter()
+            .map(|movement| {
+                serde_json::from_value(movement["path"].clone()).expect("移動路徑應有效")
+            })
+            .collect();
+        assert_eq!(
+            paths,
+            vec![
+                vec![GridPos { x: 0, y: 0 }, GridPos { x: 1, y: 0 }],
+                vec![
+                    GridPos { x: 1, y: 0 },
+                    GridPos { x: 2, y: 0 },
+                    GridPos { x: 3, y: 0 }
+                ],
+            ],
+            "應先在尖刺停下，再重新規劃並繼續移動"
+        );
+        assert_eq!(
+            action(&snapshot),
+            Some(("shot", expected_target)),
+            "追擊權重 {pursuit}：無追擊時選兩格外的 L，有追擊時仍選三格外的 T"
+        );
+    }
+}
+
 // 驗證同分候選在相同亂數種子下穩定選擇，不受單位配置載入順序影響。
 #[test]
 fn equal_utility_has_a_stable_target_choice() {
     let mut choices = Vec::new();
     for reverse in [false, true, false] {
-        let mut placements = vec![
-            placement(ACTOR_ID, "archer", enemy(), 5),
-            placement(TARGET_ID, "target", Team::Player, 2),
-            placement(ALLY_ID, "target", Team::Player, 8),
-        ];
+        let mut map = ascii_map(
+            "utility_ai_test",
+            "..T..A..L...",
+            &[
+                ('A', ACTOR_ID, "archer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "target", Team::Player),
+            ],
+        );
         if reverse {
-            placements.reverse();
+            map.units.reverse();
         }
-        let mut game = game(&definitions(), placements);
+        let mut game = game_on_map(&definitions(), map);
         let snapshot = act(&mut game);
         let (skill, target) = action(&snapshot).expect("同分候選中應選出一次攻擊");
         assert_eq!(skill, "shot");
@@ -480,10 +592,12 @@ fn distance_preference_tracks_skill_range() {
             .expect("測試定義應包含射擊技能");
         shot["min_range"] = min_range.into();
         shot["max_range"] = max_range.into();
-        let mut game = duel(&definitions, "archer", 2, 5);
+        let mut game = duel(&definitions, "archer", "..A..T......");
+        let target = game.entity(TARGET_ID).expect("ASCII 的 T 應建立目標單位");
+        let target_x = game.world.get::<Pos>(target).expect("目標應有位置").0.x;
         let snapshot = act(&mut game);
         assert_eq!(
-            (actor_x(&snapshot) - 5).abs(),
+            (actor_x(&snapshot) - i64::from(target_x)).abs(),
             expected_distance,
             "{preference}, {min_range}..{max_range}"
         );
@@ -494,12 +608,12 @@ fn distance_preference_tracks_skill_range() {
 // 驗證第一段內可攻擊就施放，否則利用兩段接近射程但不施放，且沒有攻擊技能不追敵。
 #[test]
 fn fallback_uses_available_skill_ranges() {
-    for (skills, target_x, expected_x) in [
-        (vec!["shot"], 7, 3),
-        (vec!["shot"], 9, 5),
-        (vec!["shot"], 10, 6),
-        (vec!["shot"], 11, 6),
-        (vec!["heal"], 10, 2),
+    for (skills, diagram, expected_x, expected_action) in [
+        (vec!["shot"], "..A....T....", 3, Some(("shot", TARGET_ID))),
+        (vec!["shot"], "..A......T..", 5, None),
+        (vec!["shot"], "..A.......T.", 6, None),
+        (vec!["shot"], "..A........T", 6, None),
+        (vec!["heal"], "..A.......T.", 2, None),
     ] {
         let mut definitions = definitions();
         unit_type_mut(&mut definitions, "archer")["skills"] = toml::Value::Array(
@@ -508,22 +622,13 @@ fn fallback_uses_available_skill_ranges() {
                 .map(|skill| toml::Value::String((*skill).into()))
                 .collect(),
         );
-        let mut game = duel(&definitions, "archer", 2, target_x);
+        let mut game = duel(&definitions, "archer", diagram);
         let snapshot = act(&mut game);
-        assert_eq!(
-            actor_x(&snapshot),
-            expected_x,
-            "{skills:?}, 目標 {target_x}"
-        );
-        let expected_action = if target_x == 7 {
-            Some(("shot", TARGET_ID))
-        } else {
-            None
-        };
+        assert_eq!(actor_x(&snapshot), expected_x, "{skills:?}, 地圖 {diagram}");
         assert_eq!(
             action(&snapshot),
             expected_action,
-            "{skills:?}, 目標 {target_x}"
+            "{skills:?}, 地圖 {diagram}"
         );
     }
 }
@@ -536,15 +641,435 @@ fn healer_distance_uses_healing_range() {
         profile_mut(&mut definitions, "healer")["distance_preference"] = preference.into();
         let mut game = game(
             &definitions,
-            vec![
-                placement(ACTOR_ID, "healer", enemy(), 2),
-                placement(TARGET_ID, "target", Team::Player, 10),
-                placement(ALLY_ID, "target", enemy(), 4),
+            "..A.L.....T.",
+            &[
+                ('A', ACTOR_ID, "healer", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('L', ALLY_ID, "target", enemy()),
             ],
         );
         wound(&mut game, ALLY_ID, 20);
         let snapshot = act(&mut game);
         assert_eq!(actor_x(&snapshot), expected_x, "{preference}");
         assert_eq!(action(&snapshot), Some(("heal", ALLY_ID)));
+    }
+}
+
+struct RouteCase {
+    unit_type: &'static str,
+    name: &'static str,
+    diagram: &'static str,
+    movement: u32,
+    end: (i32, i32),
+    segments_used: u8,
+    remaining: u32,
+    hp: i32,
+    attacks: bool,
+    avoids_terrain: bool,
+}
+
+// 驗證完整佔用範圍與地形成本影響路徑及兩段預算，經過尖刺後同回合繼續移動。
+#[test]
+fn ai_routes_respect_footprints_hazards_and_movement_costs() {
+    let cases = [
+        // 驗證大型單位從牆下方繞路，目標下側被牆封住，只能在左側接敵。
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位繞過阻擋兩排的牆",
+            diagram: "
+                AA.#..T.
+                AA.#..~.
+                ........
+                ........
+            ",
+            movement: 8,
+            end: (4, 0),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位繞過阻擋兩排的牆",
+            diagram: "
+                ........
+                ........
+                AA.#..~.
+                AA.#..T.
+            ",
+            movement: 8,
+            end: (4, 2),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位繞過阻擋兩排的牆",
+            diagram: "
+                ........
+                ........
+                AA.#~...
+                AA.#..T.
+            ",
+            movement: 8,
+            end: (5, 1),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證只有近戰技能的大型單位無法穿過單格通道時，不向無法接敵的牆邊移動。
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位不能穿過一格高的通道",
+            diagram: "
+                AA.#..T.
+                AA......
+                ...#....
+                ...#....
+            ",
+            movement: 8,
+            end: (0, 0),
+            segments_used: 0,
+            remaining: 8,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: true,
+        },
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位可以貼近牆壁攻擊",
+            diagram: "
+                AA.#....
+                AA.T....
+                ...#....
+                ...#....
+            ",
+            movement: 8,
+            end: (1, 0),
+            segments_used: 0,
+            remaining: 7,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證近戰無法接敵但遠距射程足夠時，本回合先用兩段移動靠近，即使尚不能攻擊。
+        RouteCase {
+            unit_type: "ranged_tank",
+            name: "遠距射程足夠時先靠近",
+            diagram: "
+                AA....#.T..
+                AA.........
+            ",
+            movement: 1,
+            end: (2, 0),
+            segments_used: 2,
+            remaining: 0,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: true,
+        },
+        // 驗證近戰無法接敵且遠距射程不足時，本回合不向牆邊移動。
+        RouteCase {
+            unit_type: "ranged_tank",
+            name: "有遠距技能但射程不足時不動",
+            diagram: "
+                AA....#..T.
+                AA.........
+            ",
+            movement: 1,
+            end: (0, 0),
+            segments_used: 0,
+            remaining: 1,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: true,
+        },
+        // 驗證五步額度恰好抵達大型目標左側，依佔用邊緣進行近戰。
+        RouteCase {
+            unit_type: "tank",
+            name: "依大型目標的近側邊緣進入近戰射程",
+            diagram: "
+                ........
+                A.....TT
+                ......TT
+                ........
+            ",
+            movement: 5,
+            end: (5, 1),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證左側與下側被牆封住時，第一段內安全繞過尖刺至目標上方並攻擊。
+        RouteCase {
+            unit_type: "tank",
+            name: "第一段內安全繞過尖刺後攻擊",
+            diagram: "
+                ...~.
+                A^..T
+                ...~.
+            ",
+            movement: 5,
+            end: (3, 1),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證目標左側被牆封住時，用第二段安全繞到下側，且本回合不能攻擊。
+        RouteCase {
+            unit_type: "tank",
+            name: "第一段不足時用第二段安全繞到近戰射程",
+            diagram: "
+                A^..T
+                ....#
+            ",
+            movement: 3,
+            end: (3, 0),
+            segments_used: 1,
+            remaining: 1,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: true,
+        },
+        // 驗證單列棋盤無法繞路，經過尖刺受傷後，同回合繼續接敵。
+        RouteCase {
+            unit_type: "tank",
+            name: "無法繞路時經過尖刺後同回合繼續接敵",
+            diagram: "
+                A^..T
+            ",
+            movement: 2,
+            end: (3, 0),
+            segments_used: 1,
+            remaining: 1,
+            hp: 97,
+            attacks: false,
+            avoids_terrain: false,
+        },
+        // 驗證大型單位連續兩步覆蓋尖刺時各扣血，同回合用完兩段額度繼續走。
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位側邊經過尖刺後同回合繼續走",
+            diagram: "
+                AA....T.
+                AA^.....
+            ",
+            movement: 2,
+            end: (4, 0),
+            segments_used: 2,
+            remaining: 0,
+            hp: 94,
+            attacks: false,
+            avoids_terrain: false,
+        },
+        // 驗證下側封牆、左側為粗糙地面時，上側繞路成本 5，小於左側接敵成本 7。
+        RouteCase {
+            unit_type: "tank",
+            name: "繞路比兩格粗糙地面便宜且保留攻擊",
+            diagram: "
+                .....
+                A.~~T
+                ....#
+            ",
+            movement: 5,
+            end: (4, 0),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        RouteCase {
+            unit_type: "tank",
+            name: "繞路比兩格粗糙地面便宜且保留攻擊",
+            diagram: "
+                ....#
+                A.~~T
+                .....
+            ",
+            movement: 5,
+            end: (4, 2),
+            segments_used: 1,
+            remaining: 0,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證單列棋盤中粗糙地面成本為三，兩段四點額度恰好走到第二格。
+        RouteCase {
+            unit_type: "tank",
+            name: "粗糙地面超過第一段但可用第二段進入",
+            diagram: "
+                A~....T
+            ",
+            movement: 2,
+            end: (2, 0),
+            segments_used: 2,
+            remaining: 0,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: false,
+        },
+        // 驗證兩格高的單位側邊踩粗糙地面，四點額度只足以向右移動一格。
+        RouteCase {
+            unit_type: "tank",
+            name: "大型單位側邊的粗糙地面也扣除移動成本",
+            diagram: "
+                AA....T.
+                AA~.....
+            ",
+            movement: 2,
+            end: (1, 0),
+            segments_used: 1,
+            remaining: 1,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: false,
+        },
+    ];
+    for RouteCase {
+        unit_type,
+        name,
+        diagram,
+        movement,
+        end,
+        segments_used,
+        remaining,
+        hp,
+        attacks,
+        avoids_terrain,
+    } in cases
+    {
+        let AsciiBoard {
+            board,
+            markers,
+            terrains,
+        } = ascii_board(diagram);
+        let (start, actor_size) = *markers.get(&'A').expect("棋盤應包含 AI");
+        let (target, target_size) = *markers.get(&'T').expect("棋盤應包含目標");
+        let mut definitions = definitions();
+        for (kind, size) in [(unit_type, actor_size), ("target", target_size)] {
+            let unit = unit_type_mut(&mut definitions, kind);
+            let table = unit.as_table_mut().expect("測試單位種類應為 table");
+            table.insert("width".into(), size.0.into());
+            table.insert("height".into(), size.1.into());
+        }
+        unit_type_mut(&mut definitions, unit_type)["movement"] = i64::from(movement).into();
+        let mut actor = placement(ACTOR_ID, unit_type, enemy(), start.0);
+        actor.y = start.1;
+        let mut target_unit = placement(TARGET_ID, "target", Team::Player, target.0);
+        target_unit.y = target.1;
+        let mut game = game_on_map(
+            &definitions,
+            authoring::Map {
+                name: name.into(),
+                width: board.0,
+                height: board.1,
+                terrains: terrains.clone(),
+                units: vec![actor, target_unit],
+            },
+        );
+        let snapshot = act(&mut game);
+        let entity = game.entity(ACTOR_ID).expect("路徑測試 AI 應仍存活");
+        assert_eq!(
+            game.world.get::<Pos>(entity).expect("AI 應有位置").0,
+            GridPos { x: end.0, y: end.1 },
+            "{name}：實際停點"
+        );
+        assert_eq!(
+            action(&snapshot),
+            attacks.then_some(("melee", TARGET_ID)),
+            "{name}：後續攻擊"
+        );
+        assert_eq!(
+            game.world.get::<Hp>(entity).expect("AI 應有 HP").current,
+            hp,
+            "{name}：地形傷害"
+        );
+        let Turn {
+            actor: _,
+            phase,
+            movement_remaining,
+            movement_segments_used,
+        } = game.world.resource::<Turn>();
+        assert_eq!(
+            (*movement_segments_used, *movement_remaining),
+            (segments_used, remaining),
+            "{name}：實際移動必須依地形成本扣除兩段預算"
+        );
+        assert_eq!(*phase, Phase::Ended, "{name}：AI 完成行動後結束回合");
+        let movements = snapshot["movements"]
+            .as_array()
+            .expect("快照應包含移動紀錄");
+        let actual_path: Vec<GridPos> = if end == start {
+            assert!(movements.is_empty(), "{name}：不可產生移動紀錄");
+            Vec::new()
+        } else {
+            let mut path = Vec::new();
+            for movement in movements {
+                assert_eq!(movement["unit_id"], ACTOR_ID, "{name}：移動者應為 AI");
+                let segment: Vec<GridPos> = serde_json::from_value(movement["path"].clone())
+                    .expect("AI 移動紀錄應包含有效路徑");
+                if path.is_empty() {
+                    path.extend(segment);
+                } else {
+                    assert_eq!(segment.first(), path.last(), "{name}：移動路徑應連續");
+                    path.extend(segment.into_iter().skip(1));
+                }
+            }
+            assert_eq!(
+                path.first(),
+                Some(&GridPos {
+                    x: start.0,
+                    y: start.1
+                }),
+                "{name}：實際路徑應從起點開始"
+            );
+            assert_eq!(
+                path.last(),
+                Some(&GridPos { x: end.0, y: end.1 }),
+                "{name}：實際路徑應抵達停點"
+            );
+            path
+        };
+        for step in actual_path.windows(2) {
+            assert_eq!(
+                (step[1].x - step[0].x).abs() + (step[1].y - step[0].y).abs(),
+                1,
+                "{name}：每步只能移動到相鄰格"
+            );
+        }
+        for position in &actual_path {
+            assert!(
+                position.x >= 0
+                    && position.y >= 0
+                    && position.x + actor_size.0 <= board.0
+                    && position.y + actor_size.1 <= board.1,
+                "{name}：完整佔用範圍不可超出棋盤"
+            );
+            if avoids_terrain {
+                assert!(
+                    !terrains.iter().any(|TerrainPlacement { x, y, kind: _ }| {
+                        let (x, y) = (*x, *y);
+                        x >= position.x
+                            && x < position.x + actor_size.0
+                            && y >= position.y
+                            && y < position.y + actor_size.1
+                    }),
+                    "{name}：完整佔用範圍不可進入需避開的地形"
+                );
+            }
+        }
     }
 }

@@ -66,13 +66,49 @@ impl Game {
         })
     }
     pub(crate) fn move_to(&mut self, a: i64, end: GridPos) -> Result<(), GameError> {
+        let plan = self.move_plan(a, end)?;
+        self.execute_move_plan(a, plan)
+    }
+
+    /// AI 使用已評估的路徑；移動結算與玩家共用。
+    pub(crate) fn move_along(&mut self, actor: i64, path: Vec<GridPos>) -> Result<(), GameError> {
+        self.ensure(actor)?;
+        let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
+        let turn @ Turn {
+            actor: _,
+            phase: _,
+            movement_remaining: _,
+            movement_segments_used: _,
+        } = self.world.resource::<Turn>().clone();
+        if !can_move(&turn) {
+            return Err(error::cannot_move());
+        }
+        let allowance = self
+            .world
+            .get::<Unit>(entity)
+            .expect("移動單位應具有 Unit")
+            .movement;
+        let (first_budget, second_budget) = movement_budgets(&turn, allowance);
+        self.execute_move_plan(
+            actor,
+            MovePlan {
+                entity,
+                turn,
+                first_budget,
+                second_budget,
+                path,
+            },
+        )
+    }
+
+    fn execute_move_plan(&mut self, a: i64, plan: MovePlan) -> Result<(), GameError> {
         let MovePlan {
             entity: e,
             turn,
             first_budget,
             second_budget,
             path,
-        } = self.move_plan(a, end)?;
+        } = plan;
         let Turn {
             actor: _,
             phase: _,
@@ -159,6 +195,7 @@ impl Game {
         } else {
             None
         };
+        // 玩家保留第一段路徑；只有第一段無路可走時才使用兩段額度。
         let mut path = first_path
             .or_else(|| {
                 find_path(
@@ -171,13 +208,7 @@ impl Game {
                 )
             })
             .ok_or(error::unreachable_destination())?;
-        if let Some(terrain_index) = path
-            .iter()
-            .skip(1)
-            .position(|position| terrain_ends_movement(&self.world, *position, footprint))
-        {
-            path.truncate(terrain_index + 2);
-        }
+        truncate_at_hazard(&self.world, footprint, &mut path);
         Ok(MovePlan {
             entity,
             turn,
@@ -379,10 +410,15 @@ pub(crate) fn find_path(
     f: Footprint,
     b: u32,
 ) -> Option<Vec<GridPos>> {
-    let Paths { best, previous } = paths(w, e, s, f, b);
+    let search = paths(w, e, s, f, b);
+    reconstruct_path(&search, s, end)
+}
+
+fn reconstruct_path(search: &Paths, start: GridPos, end: GridPos) -> Option<Vec<GridPos>> {
+    let Paths { best, previous } = search;
     let mut state = *best.get(&end)?;
     let mut out = vec![state.position];
-    while state.position != s {
+    while state.position != start {
         state = *previous
             .get(&state)
             .expect("非起點的最佳尋路狀態必須有前一個狀態");
@@ -391,6 +427,100 @@ pub(crate) fn find_path(
     out.reverse();
     Some(out)
 }
+fn truncate_at_hazard(world: &World, footprint: Footprint, path: &mut Vec<GridPos>) {
+    if let Some(index) = path
+        .iter()
+        .skip(1)
+        .position(|position| terrain_ends_movement(world, *position, footprint))
+    {
+        path.truncate(index + 2);
+    }
+}
+
+pub(crate) struct MovementOption {
+    pub(crate) position: GridPos,
+    pub(crate) path: Vec<GridPos>,
+    pub(crate) cost: u32,
+}
+
+/// 同一批候選位置共用尋路結果；沿用玩家預覽的第一段優先與危險地形截斷。
+pub(crate) fn movement_options(
+    world: &World,
+    entity: Entity,
+    turn: &Turn,
+    include_second: bool,
+) -> Vec<MovementOption> {
+    let start = world.get::<Pos>(entity).expect("移動單位應具有位置").0;
+    let mut options = vec![MovementOption {
+        position: start,
+        path: vec![start],
+        cost: 0,
+    }];
+    if !can_move(turn) {
+        return options;
+    }
+    let footprint = *world
+        .get::<Footprint>(entity)
+        .expect("移動單位應具有佔用尺寸");
+    let allowance = world
+        .get::<Unit>(entity)
+        .expect("移動單位應具有 Unit")
+        .movement;
+    let (first_budget, second_budget) = movement_budgets(turn, allowance);
+    let first = if first_budget > 0 {
+        Some(paths(world, entity, start, footprint, first_budget))
+    } else {
+        None
+    };
+    let second = if include_second {
+        Some(paths(
+            world,
+            entity,
+            start,
+            footprint,
+            first_budget + second_budget,
+        ))
+    } else {
+        None
+    };
+    for (is_second, search) in first
+        .iter()
+        .map(|search| (false, search))
+        .chain(second.iter().map(|search| (true, search)))
+    {
+        let Paths { best, previous: _ } = search;
+        let mut positions: Vec<_> = best
+            .keys()
+            .copied()
+            .filter(|position| {
+                *position != start
+                    // 第一段只排除實際可到達的停點；被尖刺截斷的路徑不能遮蔽第二段安全路徑。
+                    && !(is_second && options.iter().any(|option| option.position == *position))
+            })
+            .collect();
+        positions.sort_by_key(|position| (position.y, position.x));
+        for position in positions {
+            let mut path =
+                reconstruct_path(search, start, position).expect("搜尋結果中的位置應可重建路徑");
+            truncate_at_hazard(world, footprint, &mut path);
+            if path.last() != Some(&position) {
+                continue;
+            }
+            let cost = path
+                .iter()
+                .skip(1)
+                .map(|position| footprint_movement_cost(world, *position, footprint))
+                .sum();
+            options.push(MovementOption {
+                position,
+                path,
+                cost,
+            });
+        }
+    }
+    options
+}
+
 pub(crate) fn toward_skill_range(
     w: &World,
     e: Entity,
@@ -401,6 +531,7 @@ pub(crate) fn toward_skill_range(
     b: u32,
     min_range: i32,
     max_range: i32,
+    preferred_range: i32,
 ) -> Option<Vec<GridPos>> {
     let Board {
         width,
@@ -417,21 +548,20 @@ pub(crate) fn toward_skill_range(
         .fold(0_u32, |total, cell| {
             total.saturating_add(footprint_movement_cost(w, cell, f))
         });
-    let Paths { best, previous } = paths(w, e, s, f, search_budget);
-    let end = *best.keys().min_by_key(|p| {
-        let range = footprint_distance(**p, f, target, target_footprint);
-        let gap = (min_range - range).max(range - max_range).max(0);
-        (gap, distance(**p, s), p.y, p.x)
-    })?;
-    let mut state = *best.get(&end).expect("選出的終點應有尋路狀態");
-    let mut route = vec![state.position];
-    while state.position != s {
-        state = *previous
-            .get(&state)
-            .expect("非起點的最佳尋路狀態必須有前一個狀態");
-        route.push(state.position);
-    }
-    route.reverse();
+    let search = paths(w, e, s, f, search_budget);
+    let Paths { best, previous: _ } = &search;
+    // 先確認整張地圖上可到達合法射程，再依本回合預算截取路徑；完全無路可達時不靠牆追敵。
+    let end = *best
+        .keys()
+        .filter(|p| {
+            let range = footprint_distance(**p, f, target, target_footprint);
+            (min_range..=max_range).contains(&range)
+        })
+        .min_by_key(|p| {
+            let range = footprint_distance(**p, f, target, target_footprint);
+            ((range - preferred_range).abs(), distance(**p, s), p.y, p.x)
+        })?;
+    let mut route = reconstruct_path(&search, s, end).expect("選出的終點應可重建路徑");
     let mut spent = 0;
     let mut steps = 1;
     for cell in route.iter().skip(1) {

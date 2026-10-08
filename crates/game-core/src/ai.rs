@@ -3,17 +3,17 @@ use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
-    AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, MovePreview,
-    MovementTransition, Pos, SkillDef, SkillEffect, SkillPreview, Skills, Turn, Unit,
+    AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, MovementTransition, Pos,
+    SkillDef, SkillEffect, SkillPreview, Skills, Turn, Unit,
 };
 use crate::movement::{
-    can_move, footprint_cell_distance, footprint_cells, footprint_distance, movement_budgets,
-    movement_ranges, toward_skill_range, unit_at_cell,
+    MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
+    movement_budgets, movement_options, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, validate_cell_skill_from_position,
 };
-use crate::terrain::{terrain_type, terrains_at};
+use crate::terrain::{terrain_ends_movement, terrain_type, terrains_at};
 use bevy_ecs::prelude::{Component, Entity, Resource, World};
 use std::collections::HashMap;
 
@@ -48,12 +48,6 @@ pub(crate) fn resolve_profiles(
     Ok(AiProfiles { by_unit_type })
 }
 
-struct PositionPlan {
-    position: GridPos,
-    path: Vec<GridPos>,
-    cost: u32,
-}
-
 struct SkillPlan {
     position_index: usize,
     skill: SkillDef,
@@ -68,131 +62,107 @@ struct PreviousAttackTarget(i64);
 
 impl Game {
     pub(crate) fn run_ai_turn(&mut self) -> Result<(), GameError> {
-        let Turn {
-            actor,
-            phase: _,
-            movement_remaining: _,
-            movement_segments_used: _,
-        } = self.world.resource::<Turn>();
-        let actor = actor.ok_or(error::missing_initiative_unit())?;
-        let entity = self.entity(actor).ok_or(error::missing_initiative_unit())?;
-        let unit = self.world.get::<Unit>(entity).expect("AI 單位應具有 Unit");
-        let AiProfiles { by_unit_type } = self.world.resource::<AiProfiles>();
-        let profile = by_unit_type
-            .get(&unit.unit_type)
-            .expect("作者資料已解析所有單位種類的 AI 傾向");
-        let Skills { definitions } = self.world.resource::<Skills>();
-        let mut skills: Vec<_> = unit
-            .skills
-            .iter()
-            .map(|id| definitions.get(id).expect("作者資料已驗證技能引用").clone())
-            .collect();
-        skills.sort_by(|a, b| a.id.cmp(&b.id));
-        let mut positions = self.ai_positions(actor, entity, false);
-        let healing_focus = healing_focus(&self.world, entity, profile, &skills);
-        let skill_plan = self.ai_skill_plan(entity, profile, &skills, &positions, healing_focus);
-        let (position_index, action) = match skill_plan {
-            Some(SkillPlan {
-                position_index,
-                skill,
-                target_cell,
-                target_id,
-                utility: _,
-            }) => (position_index, Some((skill, target_cell, target_id))),
-            None => {
-                positions = self.ai_positions(actor, entity, true);
-                (
-                    fallback_position(
-                        &self.world,
-                        entity,
-                        profile,
-                        &skills,
-                        &positions,
-                        healing_focus,
-                    ),
-                    None,
-                )
-            }
-        };
-        self.world
-            .entity_mut(entity)
-            .remove::<PreviousAttackTarget>();
-        let PositionPlan {
-            position,
-            path,
-            cost: _,
-        } = &positions[position_index];
-        if path.len() > 1 {
-            self.movements.push(MovementTransition {
-                unit_id: actor,
-                path: path.clone(),
-                before_log_index: self.world.resource::<crate::model::Log>().0.len(),
-            });
-            // 與玩家共用移動成本、階段、地形傷害及遭遇啟動流程。
-            self.move_to(actor, *position)?;
-            if self.world.get_entity(entity).is_err() {
-                return Ok(());
-            }
-        }
-        match action {
-            Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
-                let attack = matches!(
-                    skill.effect,
-                    SkillEffect::Attack { .. } | SkillEffect::Push { .. }
-                );
-                self.use_skill_at_cell(actor, cell, skill)?;
-                if attack && self.world.get_entity(entity).is_ok() {
-                    self.world
-                        .entity_mut(entity)
-                        .insert(PreviousAttackTarget(target_id));
+        loop {
+            let Turn {
+                actor,
+                phase: _,
+                movement_remaining: _,
+                movement_segments_used: _,
+            } = self.world.resource::<Turn>();
+            let actor = actor.ok_or(error::missing_initiative_unit())?;
+            let entity = self.entity(actor).ok_or(error::missing_initiative_unit())?;
+            let unit = self.world.get::<Unit>(entity).expect("AI 單位應具有 Unit");
+            let AiProfiles { by_unit_type } = self.world.resource::<AiProfiles>();
+            let profile = by_unit_type
+                .get(&unit.unit_type)
+                .expect("作者資料已解析所有單位種類的 AI 傾向");
+            let Skills { definitions } = self.world.resource::<Skills>();
+            let mut skills: Vec<_> = unit
+                .skills
+                .iter()
+                .map(|id| definitions.get(id).expect("作者資料已驗證技能引用").clone())
+                .collect();
+            skills.sort_by(|a, b| a.id.cmp(&b.id));
+            let mut positions =
+                movement_options(&self.world, entity, self.world.resource::<Turn>(), false);
+            let healing_focus = healing_focus(&self.world, entity, profile, &skills);
+            let skill_plan =
+                self.ai_skill_plan(entity, profile, &skills, &positions, healing_focus);
+            let (position_index, action) = match skill_plan {
+                Some(SkillPlan {
+                    position_index,
+                    skill,
+                    target_cell,
+                    target_id,
+                    utility: _,
+                }) => (position_index, Some((skill, target_cell, target_id))),
+                None => {
+                    positions =
+                        movement_options(&self.world, entity, self.world.resource::<Turn>(), true);
+                    (
+                        fallback_position(
+                            &self.world,
+                            entity,
+                            profile,
+                            &skills,
+                            &positions,
+                            healing_focus,
+                        ),
+                        None,
+                    )
                 }
-                Ok(())
-            }
-            _ => {
-                self.finish();
-                Ok(())
-            }
-        }
-    }
-
-    fn ai_positions(&self, actor: i64, entity: Entity, include_second: bool) -> Vec<PositionPlan> {
-        let start = self.world.get::<Pos>(entity).expect("AI 單位應具有位置").0;
-        let mut plans = vec![PositionPlan {
-            position: start,
-            path: vec![start],
-            cost: 0,
-        }];
-        let turn = self.world.resource::<Turn>();
-        if !can_move(turn) {
-            return plans;
-        }
-        let (first, second) = movement_ranges(&self.world, entity, turn);
-        let reachable = first
-            .into_iter()
-            .chain(second.into_iter().filter(|_| include_second));
-        for position in reachable.filter(|position| *position != start) {
-            if let Ok(MovePreview {
-                first: path,
-                second,
-                interrupted: _,
-                total_cost,
-            }) = self.preview_move(actor, position)
-            {
-                // 施放方案只用第一段；備用移動可用兩段，並保留共用預覽的實際路徑。
-                let mut path = path;
-                if include_second {
-                    path.extend(second.iter().skip(1).copied());
+            };
+            self.world
+                .entity_mut(entity)
+                .remove::<PreviousAttackTarget>();
+            let MovementOption {
+                position,
+                path,
+                cost: _,
+            } = &positions[position_index];
+            if path.len() > 1 {
+                self.movements.push(MovementTransition {
+                    unit_id: actor,
+                    path: path.clone(),
+                    before_log_index: self.world.resource::<crate::model::Log>().0.len(),
+                });
+                // 與玩家共用移動成本、階段、地形傷害及遭遇啟動流程。
+                self.move_along(actor, path.clone())?;
+                if self.world.get_entity(entity).is_err() {
+                    return Ok(());
                 }
-                if (include_second || second.is_empty()) && path.last() == Some(&position) {
-                    plans.push(PositionPlan {
-                        position,
-                        path,
-                        cost: total_cost,
-                    });
+                // 尖刺只中斷這次移動；仍有額度且尚未規劃技能時，從實際停點重新評估。
+                let footprint = *self
+                    .world
+                    .get::<Footprint>(entity)
+                    .expect("AI 單位應具有佔用尺寸");
+                if action.is_none()
+                    && terrain_ends_movement(&self.world, *position, footprint)
+                    && can_move(self.world.resource::<Turn>())
+                {
+                    continue;
+                }
+            }
+            match action {
+                Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
+                    let attack = matches!(
+                        skill.effect,
+                        SkillEffect::Attack { .. } | SkillEffect::Push { .. }
+                    );
+                    self.use_skill_at_cell(actor, cell, skill)?;
+                    if attack && self.world.get_entity(entity).is_ok() {
+                        self.world
+                            .entity_mut(entity)
+                            .insert(PreviousAttackTarget(target_id));
+                    }
+                    return Ok(());
+                }
+                _ => {
+                    self.finish();
+                    return Ok(());
                 }
             }
         }
-        plans
     }
 
     fn ai_skill_plan(
@@ -200,7 +170,7 @@ impl Game {
         actor: Entity,
         profile: &AiProfile,
         skills: &[SkillDef],
-        positions: &[PositionPlan],
+        positions: &[MovementOption],
         healing_focus: Option<Entity>,
     ) -> Option<SkillPlan> {
         if !can_use_skill(self.world.resource::<Turn>()) {
@@ -209,7 +179,7 @@ impl Game {
         let mut best: Option<SkillPlan> = None;
         for (
             position_index,
-            PositionPlan {
+            MovementOption {
                 position,
                 path: _,
                 cost,
@@ -445,7 +415,7 @@ fn fallback_position(
     actor: Entity,
     profile: &AiProfile,
     skills: &[SkillDef],
-    positions: &[PositionPlan],
+    positions: &[MovementOption],
     healing_focus: Option<Entity>,
 ) -> usize {
     if profile.positioning_weight == 0 {
@@ -498,11 +468,21 @@ fn fallback_position(
                 target_footprint,
                 footprint,
                 budget,
-                skill_distance,
+                skill.min_range,
+                skill.max_range,
                 skill_distance,
             )?;
-            let end = path.last().copied()?;
-            let index = positions.iter().position(|plan| plan.position == end)?;
+            // 理想停點可能因第一段危險路徑截斷而不可執行，仍沿規劃路徑前進到最遠合法停點。
+            let index = path
+                .iter()
+                .rev()
+                .find_map(|cell| positions.iter().position(|plan| plan.position == *cell))?;
+            let MovementOption {
+                position: end,
+                path: _,
+                cost: _,
+            } = &positions[index];
+            let end = *end;
             let distance = target_distance(world, actor, end, target);
             let range_gap = (skill.min_range - distance)
                 .max(distance - skill.max_range)

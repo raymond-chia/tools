@@ -15,10 +15,11 @@ fn push_collision_damages_both_units() {
         .get("push")
         .expect("測試推擊技能應存在")
         .clone();
-    game.use_skill_at_cell(ACTOR_ID, GridPos { x: 2, y: 1 }, skill)
+    let target = game.entity(TARGET_ID).expect("ASCII 的 T 應建立目標單位");
+    let target_position = game.world.get::<Pos>(target).expect("目標應有位置").0;
+    game.use_skill_at_cell(ACTOR_ID, target_position, skill)
         .expect("推擊應成功結算");
 
-    let target = game.entity(TARGET_ID).expect("測試目標應存在");
     let blocker = game.entity(BLOCKER_ID).expect("測試碰撞單位應存在");
     let log = game.world.resource::<Log>();
     let (damage, collision_damage, collision_units) = match log.0.last() {
@@ -34,7 +35,10 @@ fn push_collision_damages_both_units() {
     };
 
     assert_eq!(collision_damage, gameplay_config::COLLISION_DAMAGE);
-    assert_eq!(game.world.get::<Pos>(target).expect("目標應有位置").0.x, 2);
+    assert_eq!(
+        game.world.get::<Pos>(target).expect("目標應有位置").0,
+        target_position
+    );
     assert_eq!(
         game.world.get::<Hp>(target).expect("目標應有 HP").current,
         100 - damage - collision_damage
@@ -64,14 +68,18 @@ fn skill_min_range_limits_preview_and_action() {
         },
     );
     let actor = game.entity(ACTOR_ID).expect("測試攻擊者應存在");
+    let target = game.entity(TARGET_ID).expect("ASCII 的 T 應建立目標單位");
+    let target_position = game.world.get::<Pos>(target).expect("目標應有位置").0;
+    let blocker = game.entity(BLOCKER_ID).expect("ASCII 的 B 應建立阻擋單位");
+    let blocker_position = game.world.get::<Pos>(blocker).expect("阻擋單位應有位置").0;
     let range = crate::skill::skill_ranges(&game.world, actor);
-    assert!(!range[0].cells.contains(&GridPos { x: 2, y: 1 }));
-    assert!(range[0].cells.contains(&GridPos { x: 3, y: 1 }));
+    assert!(!range[0].cells.contains(&target_position));
+    assert!(range[0].cells.contains(&blocker_position));
 
     game.start().expect("測試戰鬥應可開始");
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
     let error = game
-        .use_skill_at_cell(ACTOR_ID, GridPos { x: 2, y: 1 }, skill)
+        .use_skill_at_cell(ACTOR_ID, target_position, skill)
         .expect_err("過近的目標應被拒絕");
     assert_eq!(error.id(), "target_too_close");
     assert_eq!(error.message(), "目標距離太近");
@@ -82,8 +90,9 @@ fn skill_min_range_limits_preview_and_action() {
 fn zero_range_heal_targets_self() {
     let mut game = game_with_skill_range_and_effect(0, 0, SkillEffect::Heal { power_bonus: 4 });
     let actor = game.entity(ACTOR_ID).expect("測試攻擊者應存在");
+    let actor_position = game.world.get::<Pos>(actor).expect("ASCII 的 A 應有位置").0;
     let range = crate::skill::skill_ranges(&game.world, actor);
-    assert_eq!(range[0].cells, vec![GridPos { x: 1, y: 1 }]);
+    assert_eq!(range[0].cells, vec![actor_position]);
 
     game.start().expect("測試戰鬥應可開始");
     game.world
@@ -91,7 +100,7 @@ fn zero_range_heal_targets_self() {
         .expect("施放者應有生命值")
         .current = 90;
     let preview = game
-        .preview_skill(ACTOR_ID, GridPos { x: 1, y: 1 }, "push")
+        .preview_skill(ACTOR_ID, actor_position, "push")
         .expect("零距離治療應可預覽");
     match preview {
         SkillPreview::Healing(HealingPreview {
@@ -108,7 +117,7 @@ fn zero_range_heal_targets_self() {
         _ => panic!("治療技能應產生治療預覽"),
     }
     let skill = game.world.resource::<Skills>().definitions["push"].clone();
-    game.use_skill_at_cell(ACTOR_ID, GridPos { x: 1, y: 1 }, skill)
+    game.use_skill_at_cell(ACTOR_ID, actor_position, skill)
         .expect("零距離治療應可對自己施放");
     assert_eq!(
         game.world

@@ -232,7 +232,7 @@ func test_movement_path_preview() -> void:
 		assert_array(path_x_offsets(battle.world.first_move_path, origin)).override_failure_message("%s：第一段路徑應正確" % test_case.name).is_equal(test_case.first)
 		assert_array(path_x_offsets(battle.world.second_move_path, origin)).override_failure_message("%s：第二段路徑應正確" % test_case.name).is_equal(test_case.second)
 
-# 驗證移動路徑碰到地刺時會在觸發格截斷，並啟用危險路徑警示狀態。
+# 驗證玩家第一段只能踩地刺時，不改走第二段安全繞路，並在地刺格截斷及顯示危險警示。
 func test_spikes_interrupt_movement_preview() -> void:
 	await prepare_case()
 	var spikes := Vector2i(1, 2)
