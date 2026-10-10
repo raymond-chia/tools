@@ -22,7 +22,7 @@ func after_test() -> void:
 	runner.set_time_factor(9.0)
 	await BattleTestSetup.wait_until_idle(battle, runner)
 
-# 驗證推擊先更新命中血條，再完成位移，最後呈現地形傷害，且查詢不重複播放事件。
+# 驗證推擊命中與位移期間血量不變，抵達後才呈現地形傷害，且查詢不重複播放事件。
 func test_push_then_terrain_damage_updates_health_in_order() -> void:
 	runner.set_time_factor(1.0)
 	var node: Node2D = battle.world.unit_nodes[TARGET_ID]
@@ -36,6 +36,8 @@ func test_push_then_terrain_damage_updates_health_in_order() -> void:
 	assert_dict(skill_event).is_not_empty()
 	assert_dict(terrain_event).is_not_empty()
 	assert_bool(skill_event.pushed).is_true()
+	assert_int(int(skill_event.damage)).is_zero()
+	assert_int(int(skill_event.remaining_hp)).is_equal(30)
 	assert_bool(battle.world.is_presenting_combat_events()).is_true()
 	assert_bool(is_equal_approx(health_fraction(node), initial_health)).override_failure_message("攻擊前衝期間不應提前顯示最終血量").is_true()
 	assert_vector(node.position).is_equal(start_position)

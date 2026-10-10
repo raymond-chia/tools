@@ -1259,19 +1259,18 @@ fn validate_numeric_ranges(
                 SkillEffect::Attack {
                     attack_bonus,
                     power_bonus,
-                }
-                | SkillEffect::Push {
-                    attack_bonus,
-                    power_bonus,
-                } => (attack_bonus, power_bonus),
-                SkillEffect::Heal { power_bonus } => (0, power_bonus),
+                } => (attack_bonus, Some(power_bonus)),
+                SkillEffect::Push { attack_bonus } => (attack_bonus, None),
+                SkillEffect::Heal { power_bonus } => (0, Some(power_bonus)),
                 SkillEffect::Mire { .. } => continue,
             };
             let attack = i64::from(unit.attack) + i64::from(attack_bonus);
-            let power = i64::from(match skill.power_source {
-                crate::PowerSource::Physical => stats.physical_power,
-                crate::PowerSource::Magical => stats.magical_power,
-            }) + i64::from(power_bonus);
+            let power = power_bonus.map_or(0, |bonus| {
+                i64::from(match skill.power_source {
+                    crate::PowerSource::Physical => stats.physical_power,
+                    crate::PowerSource::Magical => stats.magical_power,
+                }) + i64::from(bonus)
+            });
             if attack < i64::from(i32::MIN)
                 || attack
                     + i64::from(gameplay_config::FLANKING_ATTACK_BONUS)

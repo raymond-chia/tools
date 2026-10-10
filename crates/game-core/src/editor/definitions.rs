@@ -231,10 +231,7 @@ pub fn edit_definition_from_json(
                     attack_bonus: 0,
                     power_bonus: 0,
                 },
-                EffectSelection::Push => SkillEffect::Push {
-                    attack_bonus: 0,
-                    power_bonus: 0,
-                },
+                EffectSelection::Push => SkillEffect::Push { attack_bonus: 0 },
                 EffectSelection::Mire { terrain } => SkillEffect::Mire {
                     terrain,
                     duration: 2,

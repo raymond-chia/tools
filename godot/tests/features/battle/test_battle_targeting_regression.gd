@@ -44,7 +44,7 @@ func test_inspection_keeps_clicked_large_unit_cell() -> void:
 
 	assert_vector(battle.inspected_cell).override_failure_message("查看大型單位應以玩家實際點擊格為準").is_equal(clicked_cell)
 
-# 驗證單體技能射程以大型單位的實際點擊格計算，距離太遠時回報對應錯誤識別碼。
+# 驗證推擊射程以大型單位的實際點擊格計算，命中地圖邊界目標時只造成碰撞傷害。
 func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 	await load_test_documents()
 	battle.select_action("shield_bash")
@@ -55,7 +55,7 @@ func test_unit_skill_uses_clicked_large_unit_cell() -> void:
 	battle.select_action("shield_bash")
 	push_mouse_button(battle.world.cell_center(Vector2i(4, 1)), MOUSE_BUTTON_LEFT)
 	assert_str(battle.status).override_failure_message("點擊射程內的占用格應成功結算").is_empty()
-	assert_int(int(unit_with_id(OGRE_ID).hp)).override_failure_message("同一大型單位的近側占用格應可被命中").is_equal(93)
+	assert_int(int(unit_with_id(OGRE_ID).hp)).override_failure_message("同一大型單位的近側占用格命中後只受碰撞傷害").is_equal(98)
 
 # 驗證泥沼存在時保留普通地面並增加移動消耗，兩輪後只移除泥沼。
 func test_mire_movement_cost_and_duration() -> void:
@@ -77,14 +77,16 @@ func test_mire_movement_cost_and_duration() -> void:
 	assert_array(terrain_at(mire_cell).terrains).override_failure_message("兩輪結束後泥沼應消失").not_contains("mire")
 	assert_array(terrain_at(mire_cell).terrains).override_failure_message("泥沼消失後應保留原有地面").contains("plain")
 
-# 驗證推擊命中會沿攻擊者到目標的方向移動一格。
+# 驗證推擊命中會移動目標一格，且不造成直接傷害。
 func test_push_hit_moves_target_one_cell() -> void:
 	await load_test_documents()
 	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": 2, "y": 1, "skill": "shield_bash"})).override_failure_message("推擊應成功命中測試目標").is_true()
 	var target := unit_with_id(WOLF_A_ID)
 	assert_int(int(target.x)).override_failure_message("目標應沿攻擊方向向右移動一格").is_equal(3)
 	assert_int(int(target.y)).is_equal(1)
+	assert_int(int(target.hp)).is_equal(100)
 	var event := find_last_event("skill")
+	assert_int(int(event.damage)).is_zero()
 	assert_bool(event.pushed).override_failure_message("技能事件應記錄成功推動").is_true()
 	assert_int(int(event.collision_damage)).is_zero()
 
@@ -94,7 +96,7 @@ func test_blocked_push_deals_collision_damage() -> void:
 	assert_bool(battle.send({"type": "skill", "actor": ARIA_ID, "x": 4, "y": 1, "skill": "shield_bash"})).override_failure_message("對地圖邊界的大型目標推擊應完成結算").is_true()
 	var target := unit_with_id(OGRE_ID)
 	assert_int(int(target.x)).override_failure_message("受阻的大型目標不應移動").is_equal(4)
-	assert_int(int(target.hp)).override_failure_message("受阻推擊應造成兩點碰撞傷害及技能傷害").is_equal(93)
+	assert_int(int(target.hp)).override_failure_message("受阻推擊應只造成兩點碰撞傷害").is_equal(98)
 	var event := find_last_event("skill")
 	assert_bool(event.pushed).is_false()
 	assert_int(int(event.collision_damage)).override_failure_message("技能事件應記錄碰撞傷害").is_equal(2)

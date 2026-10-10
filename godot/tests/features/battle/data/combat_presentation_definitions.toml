@@ -29,7 +29,6 @@ min_range=1
 max_range=6
 effect="push"
 attack_bonus=100
-power_bonus=0
 
 [[skills]]
 id="presentation_finish"

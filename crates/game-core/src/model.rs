@@ -170,7 +170,7 @@ pub struct SkillDef {
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum SkillEffect {
     Attack { attack_bonus: i32, power_bonus: i32 },
-    Push { attack_bonus: i32, power_bonus: i32 },
+    Push { attack_bonus: i32 },
     Mire { terrain: String, duration: u32 },
     Heal { power_bonus: i32 },
 }

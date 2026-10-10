@@ -3,16 +3,13 @@ use super::support::{
 };
 use crate::*;
 
-// 驗證推擊撞上另一單位時停止移動，並記錄受碰撞單位的實例 ID、種類與傷害。
+// 驗證推擊撞上另一單位時停止移動。
 #[test]
 fn push_collision_damages_both_units() {
     let mut game = game_with_skill_on_ascii_map(
         1,
         1,
-        SkillEffect::Push {
-            attack_bonus: 100,
-            power_bonus: 0,
-        },
+        SkillEffect::Push { attack_bonus: 100 },
         Team::Enemy("test_enemy".into()),
         "
         .....
@@ -46,6 +43,7 @@ fn push_collision_damages_both_units() {
         _ => panic!("推擊應記錄單位碰撞且不移動"),
     };
 
+    assert_eq!(damage, 0);
     assert_eq!(collision_damage, gameplay_config::COLLISION_DAMAGE);
     assert_eq!(
         game.world.get::<Pos>(target).expect("目標應有位置").0,
@@ -74,10 +72,7 @@ fn skill_min_range_limits_preview_and_action() {
     let mut game = game_with_skill_on_ascii_map(
         2,
         2,
-        SkillEffect::Push {
-            attack_bonus: 100,
-            power_bonus: 0,
-        },
+        SkillEffect::Push { attack_bonus: 100 },
         Team::Enemy("test_enemy".into()),
         "
         .....

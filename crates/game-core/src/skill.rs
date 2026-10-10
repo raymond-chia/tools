@@ -156,7 +156,7 @@ impl Game {
             gameplay_config::BASE_DEFENSE + target_dodge,
             gameplay_config::BASE_DEFENSE + target_dodge + target_block,
         );
-        let base_damage = skill_power(unit_power(&self.world, ae, skill.power_source), power_bonus);
+        let base_damage = direct_damage(&self.world, ae, skill.power_source, power_bonus);
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
@@ -520,7 +520,7 @@ pub(crate) fn preview_unit_skill_from_position(
             AttackResult::Hit => hit_count += 1,
         }
     }
-    let hit_damage = skill_power(unit_power(world, attacker, skill.power_source), power_bonus);
+    let hit_damage = direct_damage(world, attacker, skill.power_source, power_bonus);
     let block_damage = attack_damage(
         hit_damage,
         AttackResult::Block,
@@ -609,6 +609,19 @@ fn healing_preview(
     }
 }
 
+// 推擊不具有直接傷害；預覽與結算共用此判斷。
+fn direct_damage(
+    world: &World,
+    actor: Entity,
+    source: crate::PowerSource,
+    power_bonus: Option<i32>,
+) -> i32 {
+    match power_bonus {
+        Some(bonus) => skill_power(unit_power(world, actor, source), bonus),
+        None => 0,
+    }
+}
+
 /// 技能造成的基礎傷害或治療量；加值為負時最低為 0，不會反轉成治療或傷害。
 fn skill_power(power: i32, power_bonus: i32) -> i32 {
     (power + power_bonus).max(0)
@@ -627,7 +640,7 @@ pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
 enum UnitSkillEffect {
     Attack {
         attack_bonus: i32,
-        power_bonus: i32,
+        power_bonus: Option<i32>,
         push: bool,
     },
     Heal {
@@ -712,15 +725,12 @@ fn validate_unit_skill_target_from_position(
             power_bonus,
         } => UnitSkillEffect::Attack {
             attack_bonus: *attack_bonus,
-            power_bonus: *power_bonus,
+            power_bonus: Some(*power_bonus),
             push: false,
         },
-        SkillEffect::Push {
-            attack_bonus,
-            power_bonus,
-        } => UnitSkillEffect::Attack {
+        SkillEffect::Push { attack_bonus } => UnitSkillEffect::Attack {
             attack_bonus: *attack_bonus,
-            power_bonus: *power_bonus,
+            power_bonus: None,
             push: true,
         },
         SkillEffect::Heal { power_bonus } => UnitSkillEffect::Heal {
@@ -1161,12 +1171,9 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
             Some(*power_bonus),
             SkillDetailEffect::Attack,
         ),
-        SkillEffect::Push {
-            attack_bonus,
-            power_bonus,
-        } => (
+        SkillEffect::Push { attack_bonus } => (
             Some(*attack_bonus),
-            Some(*power_bonus),
+            None,
             SkillDetailEffect::Push {
                 distance: gameplay_config::PUSH_DISTANCE,
             },

@@ -1,5 +1,7 @@
 [gd_resource type="Theme" format=3]
 
+[ext_resource type="FontFile" path="res://assets/fonts/NotoSans.ttf" id="1"]
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.055, 0.067, 0.086, 1)
 
@@ -11,6 +13,7 @@ content_margin_bottom = 8.0
 bg_color = Color(0.055, 0.067, 0.086, 0.9)
 
 [resource]
+default_font = ExtResource("1")
 default_font_size = 26
 Button/font_sizes/font_size = 28
 Label/font_sizes/font_size = 26

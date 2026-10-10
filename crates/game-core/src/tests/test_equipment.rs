@@ -234,7 +234,7 @@ fn skill_power_sources_apply_to_preview_and_resolution() {
             "damage",
             11,
         ),
-        // 推擊的技能加值使用物理能力。
+        // 推擊不因角色物理能力或裝備而造成直接傷害。
         (
             "戰士推擊",
             "fighter",
@@ -243,7 +243,7 @@ fn skill_power_sources_apply_to_preview_and_resolution() {
             GridPos { x: 2, y: 1 },
             "hit_damage",
             "damage",
-            6,
+            0,
         ),
         // 治療使用魔法能力，並加上治療技能的加值。
         (
