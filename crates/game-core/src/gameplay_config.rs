@@ -7,7 +7,6 @@ pub const COLLISION_DAMAGE: i32 = 2;
 pub const PUSH_DISTANCE: i32 = 1;
 pub const DEFAULT_MANA: i32 = 1;
 
-pub const FLANKING_ATTACK_BONUS: i32 = 2;
 pub const ENCOUNTER_RANGE: i32 = 10;
 
 /// 未放置 ground 地形的格子視為此地形。

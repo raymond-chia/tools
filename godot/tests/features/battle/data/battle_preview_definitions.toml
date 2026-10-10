@@ -59,9 +59,20 @@ min_range=1
 max_range=4
 effect="attack"
 
+# 專用特殊夾擊被動：驗證主動操作排除與單位詳情的技能說明。
+[[skills]]
+id="pack_flanking"
+power_source="physical"
+ranged=false
+min_range=0
+max_range=0
+effect="flanking"
+attack_bonus=4
+
 [[unit_types]]
 ai_profile="near"
 id="aria"
+passive_skills=["pack_flanking"]
 visual="fighter.svg"
 hp=10
 movement=2

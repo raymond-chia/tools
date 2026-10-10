@@ -1,3 +1,5 @@
+default_passive_skills = ["flanking"]
+
 [[equipment]]
 id = "sword"
 slot = "one_hand"
@@ -37,7 +39,7 @@ block_reduction = 0
 [[equipment]]
 id = "light_armor"
 slot = "armor"
-hp = 3
+hp = 5
 physical_power = 0
 magical_power = 0
 block = 0
@@ -125,8 +127,8 @@ entry_rule = "walkable"
 damage = 0
 blocks_sight = false
 extra_movement_cost = 1
-dodge_penalty = 3
-block_penalty = 3
+dodge_penalty = 2
+block_penalty = 2
 
 [[terrain_types]]
 id = "cliff"
@@ -147,6 +149,24 @@ blocks_sight = false
 extra_movement_cost = 0
 dodge_penalty = 0
 block_penalty = 0
+
+[[skills]]
+power_source = "physical"
+id = "flanking"
+ranged = false
+min_range = 0
+max_range = 0
+effect = "flanking"
+attack_bonus = 2
+
+[[skills]]
+power_source = "physical"
+id = "pack_flanking"
+ranged = false
+min_range = 0
+max_range = 0
+effect = "flanking"
+attack_bonus = 4
 
 [[skills]]
 power_source = "physical"
@@ -192,9 +212,9 @@ power_source = "physical"
 id = "aimed_shot"
 ranged = true
 min_range = 1
-max_range = 6
+max_range = 5
 effect = "attack"
-attack_bonus = 3
+attack_bonus = 2
 power_bonus = 0
 
 [[skills]]
@@ -286,15 +306,16 @@ skills = [
 
 [[unit_types]]
 id = "wolf"
+passive_skills = ["pack_flanking"]
 ai_profile = "wolf_pack"
 visual = "wolf.svg"
 width = 1
 height = 1
-hp = 11
+hp = 10
 movement = 6
 initiative = 20
-dodge = 3
-attack = 4
+dodge = 5
+attack = 5
 physical_power = 4
 magical_power = 0
 main_hand = ""

@@ -59,6 +59,7 @@ func _ready() -> void:
 		pages.set_tab_title(index, ["地圖與單位配置", "單位", "技能", "地形", "裝備"][index])
 	for page in definition_pages:
 		page.field_changed.connect(update_definition)
+		page.default_passive_skills_changed.connect(update_default_passive_skills)
 		page.move_requested.connect(move_definition)
 		page.terrain_effect_confirmed.connect(change_terrain_effect)
 		page.create_requested.connect(create_definition)
@@ -546,7 +547,12 @@ func move_unit(id: int, cell: Vector2i) -> void:
 func refresh_definitions() -> void:
 	var options := read_core_response(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})))
 	if options.is_empty(): return
-	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries, options.equipment_choices)
+	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries, options.equipment_choices, options.active_skill_ids, options.passive_skill_ids)
+
+func update_default_passive_skills(skills: Array) -> void:
+	if definitions.default_passive_skills == skills: return
+	if not edit_definition({"action": "update_default_passive_skills", "skills": skills}):
+		refresh_definitions()
 
 func find_definition(category: String, id: String) -> Dictionary:
 	for entry in definitions[category]:
@@ -623,7 +629,7 @@ func show_definition_error(details: Dictionary) -> void:
 		"referenced":
 			var references: Array[String] = []
 			for reference in details.references:
-				var category: String = {"unit_types": "單位", "skills": "技能", "maps": "地圖"}[reference.category]
+				var category: String = {"unit_types": "單位", "skills": "技能", "maps": "地圖", "defaults": "全體預設"}[reference.category]
 				var reference_id: String = reference.id
 				if reference.category == "maps": reference_id = reference_id.get_file()
 				references.append("• %s「%s」" % [category, reference_id])

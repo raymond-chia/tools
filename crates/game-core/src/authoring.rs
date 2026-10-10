@@ -2,33 +2,50 @@
 //! 由 Game::from_authoring 驗證並建立戰鬥；本檔宣告的格式不作為戰鬥運行時資料。
 use super::{SkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
+use crate::model::default_one;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Definitions {
     #[serde(default)]
     pub equipment: Vec<EquipmentDef>,
+    /// 所有單位預設取得的被動技能；同效果由單位版本覆蓋。
+    #[serde(default)]
+    pub default_passive_skills: Vec<String>,
+    #[serde(default)]
     pub ai_profiles: Vec<AiProfile>,
+    #[serde(default)]
     pub terrain_types: Vec<TerrainTypeDef>,
+    #[serde(default)]
     pub skills: Vec<SkillDef>,
+    #[serde(default)]
     pub unit_types: Vec<UnitType>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitType {
     pub id: String,
+    #[serde(default)]
     pub ai_profile: String,
+    #[serde(default)]
     pub visual: String,
-    #[serde(default = "one")]
+    #[serde(default = "default_one")]
     pub width: i32,
-    #[serde(default = "one")]
+    #[serde(default = "default_one")]
     pub height: i32,
+    #[serde(default = "default_one")]
     pub hp: i32,
+    #[serde(default)]
     pub movement: u32,
+    #[serde(default)]
     pub initiative: i32,
+    #[serde(default)]
     pub dodge: i32,
+    #[serde(default)]
     pub attack: i32,
+    #[serde(default)]
     pub physical_power: i32,
+    #[serde(default)]
     pub magical_power: i32,
     #[serde(default)]
     pub main_hand: String,
@@ -40,15 +57,22 @@ pub struct UnitType {
     pub accessory: String,
     #[serde(default)]
     pub skills: Vec<String>,
+    /// 與全體預設合併，同效果由此清單覆蓋；空清單保留預設。
+    #[serde(default)]
+    pub passive_skills: Vec<String>,
 }
 
 /// 共用戰術偏好；權重為非負整數，0 代表不評估該項收益。
 #[derive(Clone, Deserialize, Serialize)]
 pub struct AiProfile {
     pub id: String,
+    #[serde(default)]
     pub distance_preference: DistancePreference,
+    #[serde(default = "default_ai_weight")]
     pub damage_weight: u32,
+    #[serde(default)]
     pub healing_weight: u32,
+    #[serde(default = "default_ai_weight")]
     pub positioning_weight: u32,
     /// 額外偏好命中機率；0 維持只依傷害收益評估。
     #[serde(default)]
@@ -59,17 +83,21 @@ pub struct AiProfile {
 }
 
 /// 跨可用技能比較合法射程決定近遠站位，不另存固定格數。
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DistancePreference {
+    #[default]
     Near,
     Far,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Map {
+    #[serde(default)]
     pub name: String,
+    #[serde(default = "default_one")]
     pub width: i32,
+    #[serde(default = "default_one")]
     pub height: i32,
     #[serde(default)]
     pub terrains: Vec<TerrainPlacement>,
@@ -80,14 +108,14 @@ pub struct Map {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitPlacement {
     pub id: i64,
+    #[serde(default)]
     pub unit_type: String,
+    #[serde(default)]
     pub team: Team,
+    #[serde(default)]
     pub x: i32,
+    #[serde(default)]
     pub y: i32,
-}
-
-fn one() -> i32 {
-    1
 }
 
 // 共用文件讀取與格式轉換不依賴 editor feature；遊戲仍可直接讀取 TOML。
@@ -106,19 +134,30 @@ pub fn map_to_json(text: &str) -> Result<String, GameError> {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct EquipmentDef {
     pub id: String,
+    #[serde(default)]
     pub slot: EquipmentSlot,
+    #[serde(default)]
     pub hp: i32,
+    #[serde(default)]
     pub physical_power: i32,
+    #[serde(default)]
     pub magical_power: i32,
+    #[serde(default)]
     pub block: i32,
+    #[serde(default)]
     pub block_reduction: i32,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum EquipmentSlot {
+    #[default]
     OneHand,
     TwoHand,
     Armor,
     Accessory,
+}
+
+fn default_ai_weight() -> u32 {
+    10
 }

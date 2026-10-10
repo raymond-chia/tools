@@ -312,3 +312,10 @@ pub(crate) fn invalid_equipment(message: String) -> GameError {
 pub(crate) fn target_not_visible() -> GameError {
     GameError::new("target_not_visible", "目標位置不在視線內".to_owned())
 }
+
+pub(crate) fn invalid_passive_skills(owner: &str) -> GameError {
+    GameError::new(
+        "invalid_passive_skills",
+        format!("{owner} 的被動技能必須引用已定義的非負夾擊加成，且同一效果只能選一個版本"),
+    )
+}

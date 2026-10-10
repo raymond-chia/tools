@@ -1,6 +1,7 @@
 extends HSplitContainer
 
 # 資料頁只負責清單與作者輸入；資料操作由 game-core::editor 處理，遊戲規則由 game-core 驗證。
+signal default_passive_skills_changed(skills: Array)
 signal field_changed(category: String, id: String, key: String, value: Variant)
 signal create_requested(category: String, id: String, source_id: String)
 signal remove_requested(category: String, id: String)
@@ -15,7 +16,7 @@ const FIELD_LABELS := {
 	"hp": "生命值", "movement": "移動力", "initiative": "先攻", "dodge": "閃避",
 	"block": "格擋", "attack": "命中", "physical_power": "物理威力", "magical_power": "魔法威力",
 	"main_hand": "主手", "off_hand": "副手", "armor": "護具", "accessory": "飾品",
-	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "skills": "可用技能",
+	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "skills": "可用技能", "passive_skills": "被動技能",
 	"ranged": "遠程技能", "min_range": "最小範圍", "max_range": "最大範圍",
 	"effect": "效果", "attack_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
@@ -25,7 +26,7 @@ const FIELD_LABELS := {
 const CHOICES := {
 	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},
 	"power_source": {"physical": "物理", "magical": "魔法"},
-	"effect": {"attack": "攻擊", "push": "推擊", "mire": "產生地形", "heal": "治療"},
+	"effect": {"attack": "攻擊", "push": "推擊", "mire": "產生地形", "heal": "治療", "flanking": "被動夾擊"},
 	"layer": {"ground": "地面", "overlay": "上層"},
 	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
 }
@@ -40,6 +41,8 @@ var source_id := ""
 var effect_skill_id := ""
 var effect_terrain_ids: Array = []
 var equipment_choices: Dictionary = {}
+var active_skill_ids: Array = []
+var passive_skill_ids: Array = []
 var field_texts: Dictionary = {}
 var field_id := ""
 
@@ -127,8 +130,10 @@ func select_id(id: String) -> void:
 		entries.select(0)
 	refresh_fields()
 
-func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, loadout_choices: Dictionary) -> void:
+func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, loadout_choices: Dictionary, active_ids: Array, passive_ids: Array) -> void:
 	equipment_choices = loadout_choices
+	active_skill_ids = active_ids
+	passive_skill_ids = passive_ids
 	effect_terrain_ids = terrain_ids
 	var previous := selected_id()
 	definitions = value
@@ -165,13 +170,21 @@ func refresh_fields() -> void:
 		fields.remove_child(child)
 		child.queue_free()
 	var entry := selected_definition().duplicate()
+	if category == "unit_types":
+		var defaults_label := Label.new()
+		defaults_label.text = "全體預設被動技能"
+		fields.add_child(defaults_label)
+		fields.add_child(create_passive_selector(definitions.default_passive_skills, false, func(value: Variant): default_passive_skills_changed.emit(value)))
 	for key in entry:
+		if category == "skills" and entry.effect == "flanking" and key in ["power_source", "ranged", "min_range", "max_range"]: continue
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)
 		fields.add_child(label)
 		var value = entry[key]
 		var input: Control
-		if value is bool:
+		if key == "passive_skills":
+			input = create_passive_selector(value, true, func(v: Variant): field_changed.emit(category, id, key, v))
+		elif value is bool:
 			var check := CheckBox.new()
 			check.button_pressed = value
 			check.toggled.connect(func(v: bool): field_changed.emit(category, id, key, v))
@@ -180,11 +193,11 @@ func refresh_fields() -> void:
 			input = create_visual_selector(id, value)
 		elif key == "skills":
 			var skills := VBoxContainer.new()
-			for skill in definitions.skills:
+			for skill_id in active_skill_ids:
 				var check := CheckBox.new()
-				check.text = skill.id
-				check.button_pressed = value.has(skill.id)
-				check.toggled.connect(func(enabled: bool): toggle_skill(id, skill.id, enabled))
+				check.text = skill_id
+				check.button_pressed = value.has(skill_id)
+				check.toggled.connect(func(enabled: bool): toggle_skill(id, skill_id, enabled))
 				skills.add_child(check)
 			input = skills
 		elif CHOICES.has(key) or key == "terrain" or key in ["main_hand", "off_hand", "armor", "accessory"]:
@@ -294,4 +307,18 @@ func create_visual_selector(id: String, visual: String) -> OptionButton:
 		option.get_popup().set_item_icon_max_width(index, 48)
 		if filename == visual: option.select(index)
 	option.item_selected.connect(func(index: int): field_changed.emit(category, id, "visual", option.get_item_metadata(index)))
+	return option
+
+# 選項由核心分類；單位空清單保留全體預設，合併與覆蓋由核心處理。
+func create_passive_selector(value: Array, unit_passives: bool, changed: Callable) -> OptionButton:
+	var option := OptionButton.new()
+	option.custom_minimum_size.x = 320
+	option.add_item("使用全體預設" if unit_passives else "無")
+	option.set_item_metadata(option.item_count - 1, [])
+	for skill_id in passive_skill_ids:
+		option.add_item(skill_id)
+		option.set_item_metadata(option.item_count - 1, [skill_id])
+	for index in option.item_count:
+		if option.get_item_metadata(index) == value: option.select(index)
+	option.item_selected.connect(func(index: int): changed.call(option.get_item_metadata(index)))
 	return option

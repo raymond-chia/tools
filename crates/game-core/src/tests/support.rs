@@ -58,6 +58,7 @@ pub(super) fn game_with_skill_on_ascii_map(
         .collect();
     let definitions = authoring::Definitions {
         equipment: Vec::new(),
+        default_passive_skills: Vec::new(),
         ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![
             terrain,
@@ -112,6 +113,7 @@ fn test_unit_type(id: &str, initiative: i32, (width, height): (i32, i32)) -> aut
         armor: String::new(),
         accessory: String::new(),
         skills: vec![TEST_SKILL_ID.into()],
+        passive_skills: Vec::new(),
     }
 }
 

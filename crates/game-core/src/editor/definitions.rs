@@ -12,6 +12,9 @@ use std::collections::BTreeMap;
 #[serde(tag = "action", rename_all = "snake_case")]
 enum DefinitionEdit {
     SkillEffectOptions,
+    UpdateDefaultPassiveSkills {
+        skills: Vec<String>,
+    },
     Move {
         category: DefinitionCategory,
         id: String,
@@ -55,6 +58,7 @@ enum EffectSelection {
     Push,
     Mire { terrain: String },
     Heal,
+    Flanking,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -83,6 +87,9 @@ pub fn edit_definition_from_json(
     let command: DefinitionEdit = super::json::from_str(command)
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
     match command {
+        DefinitionEdit::UpdateDefaultPassiveSkills { skills } => {
+            definitions.default_passive_skills = skills;
+        }
         DefinitionEdit::SkillEffectOptions => {
             let terrain_ids: Vec<_> = definitions
                 .terrain_types
@@ -110,10 +117,26 @@ pub fn edit_definition_from_json(
                 .iter()
                 .map(|unit| (unit.id.clone(), equipment_choices(unit, &equipment)))
                 .collect();
-            return Ok(
-                serde_json::json!({"terrain_ids": terrain_ids, "terrain_entries": terrain_entries, "equipment_choices": equipment_choices})
-                    .to_string(),
-            );
+            let active_skill_ids: Vec<_> = definitions
+                .skills
+                .iter()
+                .filter(|skill| !matches!(skill.effect, SkillEffect::Flanking { .. }))
+                .map(|skill| &skill.id)
+                .collect();
+            let passive_skill_ids: Vec<_> = definitions
+                .skills
+                .iter()
+                .filter(|skill| matches!(skill.effect, SkillEffect::Flanking { .. }))
+                .map(|skill| &skill.id)
+                .collect();
+            return Ok(serde_json::json!({
+                "terrain_ids": terrain_ids,
+                "terrain_entries": terrain_entries,
+                "equipment_choices": equipment_choices,
+                "active_skill_ids": active_skill_ids,
+                "passive_skill_ids": passive_skill_ids,
+            })
+            .to_string());
         }
         DefinitionEdit::Move {
             category,
@@ -234,10 +257,16 @@ pub fn edit_definition_from_json(
                 EffectSelection::Push => SkillEffect::Push { attack_bonus: 0 },
                 EffectSelection::Mire { terrain } => SkillEffect::Mire {
                     terrain,
-                    duration: 2,
+                    duration: crate::model::default_duration(),
                 },
                 EffectSelection::Heal => SkillEffect::Heal { power_bonus: 0 },
+                EffectSelection::Flanking => SkillEffect::Flanking { attack_bonus: 0 },
             };
+            if matches!(skill.effect, SkillEffect::Flanking { .. }) {
+                skill.ranged = false;
+                skill.min_range = 0;
+                skill.max_range = 0;
+            }
             skill.power_source = if matches!(skill.effect, SkillEffect::Heal { .. }) {
                 crate::PowerSource::Magical
             } else {
@@ -249,7 +278,7 @@ pub fn edit_definition_from_json(
             match category {
                 DefinitionCategory::Equipment => definitions.equipment.push(EquipmentDef {
                     id,
-                    slot: EquipmentSlot::OneHand,
+                    slot: EquipmentSlot::default(),
                     hp: 0,
                     physical_power: 0,
                     magical_power: 0,
@@ -271,27 +300,28 @@ pub fn edit_definition_from_json(
                         .clone(),
                     id,
                     visual: String::new(),
-                    width: 1,
-                    height: 1,
-                    hp: 10,
-                    movement: 5,
+                    width: crate::model::default_one(),
+                    height: crate::model::default_one(),
+                    hp: crate::model::default_one(),
+                    movement: 0,
                     initiative: 0,
-                    dodge: 2,
-                    attack: 3,
-                    physical_power: 3,
+                    dodge: 0,
+                    attack: 0,
+                    physical_power: 0,
                     magical_power: 0,
                     main_hand: String::new(),
                     off_hand: String::new(),
                     armor: String::new(),
                     accessory: String::new(),
                     skills: Vec::new(),
+                    passive_skills: Vec::new(),
                 }),
                 DefinitionCategory::Skills => definitions.skills.push(SkillDef {
-                    power_source: crate::PowerSource::Physical,
+                    power_source: crate::PowerSource::default(),
                     id,
                     ranged: false,
-                    min_range: 1,
-                    max_range: 1,
+                    min_range: crate::model::default_one(),
+                    max_range: crate::model::default_one(),
                     effect: SkillEffect::Attack {
                         attack_bonus: 0,
                         power_bonus: 0,
@@ -301,8 +331,8 @@ pub fn edit_definition_from_json(
                     definitions.terrain_types.push(TerrainTypeDef {
                         blocks_sight: false,
                         id,
-                        layer: TerrainLayer::Overlay,
-                        entry_rule: TerrainEntryRule::Walkable,
+                        layer: TerrainLayer::default(),
+                        entry_rule: TerrainEntryRule::default(),
                         damage: 0,
                         extra_movement_cost: 0,
                         dodge_penalty: 0,
@@ -385,9 +415,19 @@ pub fn edit_definition_from_json(
         }
     }
 
+    crate::skill::validate_passive_skills(
+        &definitions.default_passive_skills,
+        &definitions.skills,
+        "全體預設",
+    )?;
     let equipment = crate::equipment::definitions(definitions.equipment.clone())?;
     for unit in &definitions.unit_types {
         crate::equipment::resolve(unit, &equipment)?;
+        crate::skill::resolve_unit_skills(
+            unit,
+            &definitions.default_passive_skills,
+            &definitions.skills,
+        )?;
     }
     for (path, map) in &maps {
         Game::from_authoring(definitions.clone(), map.clone()).map_err(|error| {
@@ -434,8 +474,20 @@ fn check_removal(
             }
         }
         DefinitionCategory::Skills => {
+            if definitions
+                .default_passive_skills
+                .iter()
+                .any(|skill| skill == id)
+            {
+                references.push(("defaults", "default_passive_skills".into()));
+            }
             for unit in &definitions.unit_types {
-                if unit.skills.iter().any(|skill| skill == id) {
+                if unit
+                    .skills
+                    .iter()
+                    .chain(unit.passive_skills.iter())
+                    .any(|skill| skill == id)
+                {
                     references.push(("unit_types", unit.id.clone()));
                 }
             }

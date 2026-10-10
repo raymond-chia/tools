@@ -200,3 +200,7 @@ SKILL_POWER_SOURCE_PHYSICAL,威力來源：物理,Power source: Physical
 SKILL_POWER_SOURCE_MAGICAL,威力來源：魔法,Power source: Magical
 ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy
 ERROR_TARGET_NOT_VISIBLE,目標位置不在視線內,Target position is not in line of sight
+SKILL_NAME_FLANKING,夾擊,Flanking
+SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
+SKILL_EFFECT_FLANKING,被動：近戰夾擊時攻擊加值 +%d,Passive: +%d attack modifier when flanking in melee
+ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；同一效果只能選一個版本,Invalid passive skills; select only one version of each effect

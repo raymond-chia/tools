@@ -2,7 +2,7 @@ extends Node
 
 const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
 const DEFINITIONS_PATH := "res://data/definitions.toml"
-const MAP_PATH := "res://data/maps/ash_valley.toml"
+const MAP_PATH := "res://data/maps/prelude.toml"
 
 func _ready() -> void:
 	var definitions_file := FileAccess.open(DEFINITIONS_PATH, FileAccess.READ)

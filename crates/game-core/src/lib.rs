@@ -24,10 +24,10 @@ pub use game::Game;
 pub use model::{
     AttackPreview, AttackResult, BattleMode, CollisionUnitLog, CombatLogEvent, Command,
     EquipmentView, GridPos, HealingPreview, HealthSegmentsView, InitiativeRollLog, MovePreview,
-    MovementTransition, Outcome, Phase, PowerSource, RollDegree, SkillDef, SkillDetailEffect,
-    SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView, SkillTargetKind, Snapshot, Team,
-    TerrainCellView, TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainLayer,
-    TerrainPlacement, TerrainTypeDef, TurnView, UnitView,
+    MovementTransition, Outcome, PassiveSkillView, Phase, PowerSource, RollDegree, SkillDef,
+    SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView,
+    SkillTargetKind, Snapshot, Team, TerrainCellView, TerrainDescriptionView, TerrainEffectView,
+    TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef, TurnView, UnitView,
 };
 #[cfg(test)]
 use model::{Board, Footprint, Hp, Id, Log, Pos, Skills, TemporaryTerrains, Turn, Unit};

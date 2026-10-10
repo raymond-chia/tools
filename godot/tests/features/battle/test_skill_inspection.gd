@@ -41,6 +41,27 @@ func after_test() -> void:
 		TranslationServer.remove_translation(translation)
 	test_translations.clear()
 
+# 驗證被動不提供可選主動按鈕，但單位資訊顯示技能名稱與翻譯後的特殊夾擊說明，切換單位後清空。
+func test_passive_skill_is_inspectable_but_not_selectable() -> void:
+	assert_int(battle.state.turn.actor).is_equal(1)
+	assert_array(battle.ui.action_buttons.keys()).contains_exactly(["melee_attack", "ranged_attack", "power_strike", "aimed_shot"])
+	var passive_label: Label = battle.ui.unit_details.get_node("PassiveSkills")
+	var cases := [
+		# 繁體中文顯示被動名稱、近戰夾擊條件與 4 點加成。
+		{"locale": "zh_TW", "text": "狼群夾擊：被動：近戰夾擊時攻擊加值 +4"},
+		# 英文顯示相同技能與特殊加成。
+		{"locale": "en", "text": "Pack flanking：Passive: +4 attack modifier when flanking in melee"},
+	]
+	for test_case in cases:
+		TranslationServer.set_locale(test_case.locale)
+		battle.world.inspection_clicked.emit(1, Vector2i(1, 3))
+		battle.present()
+		assert_bool(passive_label.is_visible_in_tree()).is_true()
+		assert_str(passive_label.text).is_equal(test_case.text)
+		battle.world.inspection_clicked.emit(2, Vector2i(3, 1))
+		assert_bool(battle.ui.unit_details.is_visible_in_tree()).is_true()
+		assert_str(passive_label.text).is_empty()
+
 # 驗證技能 hover 內容包含威力來源並隨目前語系翻譯，且標題不包含額外的狀態前綴。
 func test_skill_hover_uses_current_locale() -> void:
 	var cases := [

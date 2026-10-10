@@ -633,6 +633,7 @@ pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
         SkillEffect::Attack { .. } | SkillEffect::Push { .. } => SkillTargetKind::Enemy,
         SkillEffect::Heal { .. } => SkillTargetKind::Ally,
         SkillEffect::Mire { .. } => SkillTargetKind::Cell,
+        SkillEffect::Flanking { .. } => SkillTargetKind::Passive,
     }
 }
 
@@ -736,7 +737,9 @@ fn validate_unit_skill_target_from_position(
         SkillEffect::Heal { power_bonus } => UnitSkillEffect::Heal {
             power_bonus: *power_bonus,
         },
-        SkillEffect::Mire { .. } => return Err(error::unit_cannot_use_skill()),
+        SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } => {
+            return Err(error::unit_cannot_use_skill());
+        }
     };
     match effect {
         UnitSkillEffect::Heal { .. } if attacker_team != target_team => {
@@ -916,7 +919,12 @@ fn flanking_bonus(
             })
     });
     if has_supporter {
-        gameplay_config::FLANKING_ATTACK_BONUS
+        let unit = world.get::<Unit>(attacker).expect("攻擊者應具有 Unit");
+        flanking_attack_bonus(
+            unit.skills
+                .iter()
+                .map(|id| definitions.get(id).expect("單位技能引用已驗證")),
+        )
     } else {
         0
     }
@@ -1117,6 +1125,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
     let ranges: Vec<_> = skills
         .iter()
         .filter_map(|skill_id| definitions.get(skill_id))
+        .filter(|skill| !matches!(skill.effect, SkillEffect::Flanking { .. }))
         .map(|skill| {
             let SkillDef {
                 power_source: _,
@@ -1187,6 +1196,7 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
             },
         ),
         SkillEffect::Heal { power_bonus } => (None, Some(*power_bonus), SkillDetailEffect::Heal),
+        SkillEffect::Flanking { .. } => unreachable!("被動技能不建立主動技能範圍"),
     };
     SkillDetailsView {
         power_source: *power_source,
@@ -1213,4 +1223,89 @@ fn block_reduction(world: &World, entity: Entity) -> i32 {
         .get::<Unit>(entity)
         .expect("目標應具有 Unit 元件")
         .block_reduction
+}
+
+/// 作者輸入邊界只允許已定義的被動技能，且同一效果只能選一個版本。
+pub(crate) fn validate_passive_skills(
+    ids: &[String],
+    skills: &[SkillDef],
+    owner: &str,
+) -> Result<(), GameError> {
+    let valid = ids.iter().all(|id| {
+        skills.iter().any(|skill| {
+            skill.id == *id && matches!(skill.effect, SkillEffect::Flanking { attack_bonus } if attack_bonus >= 0)
+        })
+    });
+    if ids.len() > 1 || !valid {
+        return Err(error::invalid_passive_skills(owner));
+    }
+    Ok(())
+}
+
+pub(crate) fn flanking_attack_bonus<'a>(skills: impl Iterator<Item = &'a SkillDef>) -> i32 {
+    skills
+        .filter_map(|skill| match skill.effect {
+            SkillEffect::Flanking { attack_bonus } => Some(attack_bonus),
+            _ => None,
+        })
+        .next()
+        .unwrap_or(0)
+}
+
+pub(crate) fn passive_skill_views(
+    world: &World,
+    entity: Entity,
+) -> Vec<crate::model::PassiveSkillView> {
+    let unit = world.get::<Unit>(entity).expect("戰鬥單位應具有 Unit");
+    let Skills { definitions } = world.resource::<Skills>();
+    unit.skills
+        .iter()
+        .filter_map(|id| {
+            let skill = definitions.get(id).expect("單位技能已驗證");
+            match skill.effect {
+                SkillEffect::Flanking { attack_bonus } => Some(crate::model::PassiveSkillView {
+                    id: id.clone(),
+                    attack_bonus,
+                }),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// 載入與編輯器共用技能分配，執行期只保存已決定的完整技能清單。
+pub(crate) fn resolve_unit_skills(
+    unit: &crate::authoring::UnitType,
+    defaults: &[String],
+    skills: &[SkillDef],
+) -> Result<Vec<String>, GameError> {
+    validate_passive_skills(&unit.passive_skills, skills, &unit.id)?;
+    let mut passives: Vec<&SkillDef> = Vec::new();
+    for id in defaults.iter().chain(&unit.passive_skills) {
+        let skill = skills
+            .iter()
+            .find(|skill| skill.id == *id)
+            .expect("預設與單位被動技能已在作者輸入邊界驗證");
+        let effect = std::mem::discriminant(&skill.effect);
+        match passives
+            .iter()
+            .position(|existing| std::mem::discriminant(&existing.effect) == effect)
+        {
+            Some(index) => passives[index] = skill,
+            None => passives.push(skill),
+        }
+    }
+    if unit.skills.iter().any(|id| {
+        skills
+            .iter()
+            .any(|skill| skill.id == *id && matches!(skill.effect, SkillEffect::Flanking { .. }))
+    }) {
+        return Err(error::invalid_passive_skills(&unit.id));
+    }
+    Ok(unit
+        .skills
+        .iter()
+        .chain(passives.iter().map(|skill| &skill.id))
+        .cloned()
+        .collect())
 }

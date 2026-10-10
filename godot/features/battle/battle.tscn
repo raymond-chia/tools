@@ -512,6 +512,10 @@ theme_type_variation = &"HeadingLabel"
 text = "單位"
 autowrap_mode = 2
 
+[node name="PassiveSkills" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails"]
+layout_mode = 2
+autowrap_mode = 2
+
 [node name="Rows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails" unique_id=42214286]
 layout_mode = 2
 theme_override_constants/h_separation = 24

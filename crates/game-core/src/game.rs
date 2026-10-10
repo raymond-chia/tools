@@ -44,6 +44,7 @@ impl Game {
     ) -> Result<Self, GameError> {
         let authoring::Definitions {
             equipment,
+            default_passive_skills,
             ai_profiles,
             terrain_types,
             skills,
@@ -94,7 +95,10 @@ impl Game {
         let equipment = crate::equipment::definitions(equipment)?;
         let mut equipment_stats = HashMap::new();
         let mut types = HashMap::new();
-        for kind in unit_types {
+        crate::skill::validate_passive_skills(&default_passive_skills, &skills, "全體預設")?;
+        for mut kind in unit_types {
+            kind.skills =
+                crate::skill::resolve_unit_skills(&kind, &default_passive_skills, &skills)?;
             if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
                 return Err(error::invalid_unit_type(&kind.id));
             }
@@ -133,7 +137,13 @@ impl Game {
                 .get(&placement.unit_type)
                 .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
             // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
-            if matches!(placement.team, Team::Enemy(_)) && kind.skills.is_empty() {
+            if matches!(placement.team, Team::Enemy(_))
+                && !kind.skills.iter().any(|id| {
+                    skills.iter().any(|skill| {
+                        skill.id == *id && !matches!(skill.effect, SkillEffect::Flanking { .. })
+                    })
+                })
+            {
                 return Err(error::missing_ai_skill(placement.id));
             }
         }
@@ -176,6 +186,9 @@ impl Game {
         }
         let mut skill_definitions = HashMap::new();
         for skill in skills {
+            if matches!(skill.effect, SkillEffect::Flanking { attack_bonus } if attack_bonus < 0) {
+                return Err(error::invalid_passive_skills(&skill.id));
+            }
             if skill.min_range < 0 || skill.max_range < skill.min_range {
                 return Err(error::invalid_skill_range(&skill.id));
             }
@@ -263,6 +276,7 @@ impl Game {
                 armor: _,
                 accessory: _,
                 skills,
+                passive_skills: _,
             } = types
                 .get(&unit_type)
                 .expect("單位配置的類型已在上方驗證")
@@ -943,6 +957,7 @@ impl Game {
                 magical_power: f.magical_power,
                 block_reduction: f.block_reduction,
                 equipment: f.equipment.clone(),
+                passive_skills: crate::skill::passive_skill_views(&self.world, entity),
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
@@ -1262,7 +1277,7 @@ fn validate_numeric_ranges(
                 } => (attack_bonus, Some(power_bonus)),
                 SkillEffect::Push { attack_bonus } => (attack_bonus, None),
                 SkillEffect::Heal { power_bonus } => (0, Some(power_bonus)),
-                SkillEffect::Mire { .. } => continue,
+                SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } => continue,
             };
             let attack = i64::from(unit.attack) + i64::from(attack_bonus);
             let power = power_bonus.map_or(0, |bonus| {
@@ -1273,7 +1288,11 @@ fn validate_numeric_ranges(
             });
             if attack < i64::from(i32::MIN)
                 || attack
-                    + i64::from(gameplay_config::FLANKING_ATTACK_BONUS)
+                    + i64::from(crate::skill::flanking_attack_bonus(
+                        unit.skills
+                            .iter()
+                            .filter_map(|id| skills.iter().find(|skill| skill.id == *id)),
+                    ))
                     + i64::from(gameplay_config::ATTACK_DIE_SIDES)
                     > i64::from(i32::MAX)
                 || power < i64::from(i32::MIN)

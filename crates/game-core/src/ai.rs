@@ -80,7 +80,14 @@ impl Game {
             let mut skills: Vec<_> = unit
                 .skills
                 .iter()
-                .map(|id| definitions.get(id).expect("作者資料已驗證技能引用").clone())
+                .filter_map(|id| {
+                    let skill = definitions.get(id).expect("作者資料已驗證技能引用");
+                    if matches!(skill.effect, SkillEffect::Flanking { .. }) {
+                        None
+                    } else {
+                        Some(skill.clone())
+                    }
+                })
                 .collect();
             skills.sort_by(|a, b| a.id.cmp(&b.id));
             let mut positions =
@@ -536,6 +543,7 @@ fn relevant_positioning_skill(profile: &AiProfile, skill: &SkillDef, healing: bo
             !healing && profile.damage_weight > 0
         }
         SkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
+        SkillEffect::Flanking { .. } => false,
     }
 }
 

@@ -5,12 +5,15 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub struct GridPos {
+    #[serde(default)]
     pub x: i32,
+    #[serde(default)]
     pub y: i32,
 }
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Team {
+    #[default]
     Player,
     Enemy(String),
 }
@@ -159,33 +162,61 @@ pub struct SkillDef {
     #[serde(default)]
     pub(crate) power_source: PowerSource,
     pub(crate) id: String,
+    #[serde(default)]
     pub(crate) ranged: bool,
+    #[serde(default = "default_one")]
     pub(crate) min_range: i32,
+    #[serde(default = "default_one")]
     pub(crate) max_range: i32,
-    #[serde(flatten)]
+    #[serde(flatten, deserialize_with = "deserialize_skill_effect")]
     pub(crate) effect: SkillEffect,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum SkillEffect {
-    Attack { attack_bonus: i32, power_bonus: i32 },
-    Push { attack_bonus: i32 },
-    Mire { terrain: String, duration: u32 },
-    Heal { power_bonus: i32 },
+    Attack {
+        #[serde(default)]
+        attack_bonus: i32,
+        #[serde(default)]
+        power_bonus: i32,
+    },
+    Push {
+        #[serde(default)]
+        attack_bonus: i32,
+    },
+    Mire {
+        #[serde(default)]
+        terrain: String,
+        #[serde(default = "default_duration")]
+        duration: u32,
+    },
+    Heal {
+        #[serde(default)]
+        power_bonus: i32,
+    },
+    Flanking {
+        #[serde(default)]
+        attack_bonus: i32,
+    },
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainPlacement {
+    #[serde(default)]
     pub(crate) x: i32,
+    #[serde(default)]
     pub(crate) y: i32,
+    #[serde(default)]
     pub(crate) kind: String,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct TerrainTypeDef {
     pub id: String,
+    #[serde(default)]
     pub(crate) layer: TerrainLayer,
+    #[serde(default)]
     pub(crate) entry_rule: TerrainEntryRule,
     #[serde(default)]
     pub(crate) damage: i32,
@@ -200,16 +231,18 @@ pub struct TerrainTypeDef {
 }
 
 /// 每格剛好一個 ground（未指定時為預設地面），overlay 疊在 ground 上且數量不限。
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerrainLayer {
+    #[default]
     Ground,
     Overlay,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerrainEntryRule {
+    #[default]
     Walkable,
     Blocked,
     InstantDownWhenPushed,
@@ -389,6 +422,7 @@ pub enum SkillTargetKind {
     Cell,
     Ally,
     Enemy,
+    Passive,
 }
 
 #[derive(Serialize)]
@@ -506,6 +540,7 @@ pub struct UnitView {
     pub magical_power: i32,
     pub block_reduction: i32,
     pub equipment: EquipmentView,
+    pub passive_skills: Vec<PassiveSkillView>,
 }
 
 #[derive(Serialize)]
@@ -561,4 +596,31 @@ pub struct EquipmentView {
     pub off_hand: String,
     pub armor: String,
     pub accessory: String,
+}
+
+/// 已由核心分類的被動技能資訊，顯示層只負責翻譯與排版。
+#[derive(Serialize)]
+pub struct PassiveSkillView {
+    pub id: String,
+    pub attack_bonus: i32,
+}
+
+pub(crate) fn default_one() -> i32 {
+    1
+}
+
+pub(crate) fn default_duration() -> u32 {
+    1
+}
+
+// 扁平化列舉的標籤無法由欄位 default 補入，僅在作者省略標籤時指定一般攻擊。
+fn deserialize_skill_effect<'de, D>(deserializer: D) -> Result<SkillEffect, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let mut fields = serde_json::Map::<String, serde_json::Value>::deserialize(deserializer)?;
+    fields
+        .entry("effect".to_owned())
+        .or_insert_with(|| serde_json::Value::String("attack".to_owned()));
+    serde_json::from_value(serde_json::Value::Object(fields)).map_err(serde::de::Error::custom)
 }
