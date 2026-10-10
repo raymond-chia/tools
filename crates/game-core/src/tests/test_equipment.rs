@@ -452,11 +452,12 @@ fn editor_equipment_choices_enforce_slots_and_two_hands() {
         .expect("應可查詢配裝選項");
     let result: Value = serde_json::from_str(&result).expect("配裝選項應為有效 JSON");
     let choices = &result["equipment_choices"]["fighter"];
-    assert!(
-        !choices["main_hand"]
+    assert_eq!(
+        choices["main_hand"]
             .as_array()
             .expect("主手選項應為陣列")
-            .contains(&json!("bow"))
+            .contains(&json!("bow")),
+        false
     );
     assert_eq!(choices["armor"], json!(["", "heavy_armor", "light_armor"]));
     assert_eq!(choices["accessory"], json!(["", "power_ring"]));
@@ -544,11 +545,12 @@ fn editor_equipment_operations_preserve_references() {
     )
     .expect("未引用裝備應可刪除");
     definitions = edited_definitions(&result);
-    assert!(
-        !definitions
+    assert_eq!(
+        definitions
             .equipment
             .iter()
-            .any(|entry| entry.id == "heavy_copy")
+            .any(|entry| entry.id == "heavy_copy"),
+        false
     );
     assert_eq!(
         unit(&snapshot(&game(definitions)), ACTOR_ID)["block_reduction"],

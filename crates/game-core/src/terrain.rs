@@ -20,6 +20,7 @@ pub(crate) fn terrain_type<'a>(board: &'a Board, kind: &str) -> &'a TerrainTypeD
 
 pub(crate) fn terrain_damage(board: &Board, kind: &str) -> i32 {
     let TerrainTypeDef {
+        blocks_sight: _,
         id: _,
         layer: _,
         entry_rule: _,
@@ -57,6 +58,7 @@ pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
 pub(crate) fn ground_at<'a>(board: &Board, kinds: &'a [String]) -> Option<&'a String> {
     kinds.iter().find(|kind| {
         let TerrainTypeDef {
+            blocks_sight: _,
             id: _,
             layer,
             entry_rule: _,
@@ -75,6 +77,7 @@ pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {
         .iter()
         .map(|kind| {
             let TerrainTypeDef {
+                blocks_sight: _,
                 id: _,
                 layer: _,
                 entry_rule: _,
@@ -113,6 +116,7 @@ pub(crate) fn terrain_ends_movement(w: &World, position: GridPos, footprint: Foo
         .iter()
         .any(|kind| {
             let TerrainTypeDef {
+                blocks_sight: _,
                 id: _,
                 layer: _,
                 entry_rule: _,
@@ -138,6 +142,7 @@ fn footprint_has_entry_rule(
         .any(|cell| {
             terrains_at(w, cell).iter().any(|kind| {
                 let TerrainTypeDef {
+                    blocks_sight: _,
                     id: _,
                     layer: _,
                     entry_rule,
@@ -208,6 +213,7 @@ impl Game {
             .expect("進入地形的單位應具有 Footprint 元件");
         for terrain in footprint_terrains(&self.world, position, footprint) {
             let TerrainTypeDef {
+                blocks_sight: _,
                 id: _,
                 layer: _,
                 entry_rule,

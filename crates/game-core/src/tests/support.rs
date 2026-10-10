@@ -3,6 +3,7 @@ use crate::*;
 pub(super) const ACTOR_ID: i64 = 1;
 pub(super) const TARGET_ID: i64 = 2;
 pub(super) const BLOCKER_ID: i64 = 3;
+pub(super) const TEST_SKILL_ID: &str = "test_skill";
 
 pub(super) fn tank_ai_profile() -> authoring::AiProfile {
     authoring::AiProfile {
@@ -16,41 +17,16 @@ pub(super) fn tank_ai_profile() -> authoring::AiProfile {
     }
 }
 
-pub(super) fn push_collision_game() -> Game {
-    game_with_skill_range_and_effect(
-        1,
-        1,
-        SkillEffect::Push {
-            attack_bonus: 100,
-            power_bonus: 0,
-        },
-    )
-}
-
-pub(super) fn game_with_skill_range_and_effect(
-    min_range: i32,
-    max_range: i32,
-    effect: SkillEffect,
-) -> Game {
-    game_with_skill_on_ascii_map(
-        min_range,
-        max_range,
-        effect,
-        "
-        .....
-        .ATB.
-        ",
-    )
-}
-
-// 共用技能與移動 fixture 由 ASCII 決定起點，避免測試再手動搬動單位。
+// 單技能測試共用建局：A 為施放者，T 的陣營由案例指定、B 為敵人，各自尺寸與起點由 ASCII 決定。
 pub(super) fn game_with_skill_on_ascii_map(
     min_range: i32,
     max_range: i32,
     effect: SkillEffect,
+    target_team: Team,
     diagram: &str,
 ) -> Game {
     let terrain = TerrainTypeDef {
+        blocks_sight: false,
         id: "plain".into(),
         layer: TerrainLayer::Ground,
         entry_rule: TerrainEntryRule::Walkable,
@@ -59,61 +35,71 @@ pub(super) fn game_with_skill_on_ascii_map(
         dodge_penalty: 0,
         block_penalty: 0,
     };
-    let mut rough = terrain.clone();
-    rough.id = "rough".into();
+    let layout = ascii_board(diagram);
+    let units: Vec<_> = [
+        ('A', ACTOR_ID, "test_actor", Team::Player),
+        ('T', TARGET_ID, "test_target", target_team),
+        (
+            'B',
+            BLOCKER_ID,
+            "test_blocker",
+            Team::Enemy("test_enemy".into()),
+        ),
+    ]
+    .into_iter()
+    .filter(|(marker, _, _, _)| layout.markers.contains_key(marker))
+    .collect();
+    let unit_types = units
+        .iter()
+        .map(|(marker, _, kind, _)| {
+            let (_, size) = layout.markers[marker];
+            test_unit_type(kind, if *marker == 'A' { 100 } else { 0 }, size)
+        })
+        .collect();
     let definitions = authoring::Definitions {
         equipment: Vec::new(),
         ai_profiles: vec![tank_ai_profile()],
-        terrain_types: vec![terrain, rough],
+        terrain_types: vec![
+            terrain,
+            TerrainTypeDef {
+                id: "wall".into(),
+                layer: TerrainLayer::Overlay,
+                entry_rule: TerrainEntryRule::Blocked,
+                blocks_sight: true,
+                damage: 0,
+                extra_movement_cost: 0,
+                dodge_penalty: 0,
+                block_penalty: 0,
+            },
+        ],
         skills: vec![SkillDef {
             power_source: if matches!(&effect, SkillEffect::Heal { .. }) {
                 PowerSource::Magical
             } else {
                 PowerSource::Physical
             },
-            id: "push".into(),
+            id: TEST_SKILL_ID.into(),
             ranged: false,
             min_range,
             max_range,
             effect,
         }],
-        unit_types: vec![
-            push_collision_unit_type("test_player", 100),
-            push_collision_unit_type("test_unit", 0),
-        ],
+        unit_types,
     };
-    let map = ascii_map(
-        "test_map",
-        diagram,
-        &[
-            ('A', ACTOR_ID, "test_player", Team::Player),
-            (
-                'T',
-                TARGET_ID,
-                "test_unit",
-                Team::Enemy("test_enemy".into()),
-            ),
-            (
-                'B',
-                BLOCKER_ID,
-                "test_unit",
-                Team::Enemy("test_enemy".into()),
-            ),
-        ],
-    );
+    let map = map_from_ascii_board("test_map", &layout, &units);
     match Game::from_authoring(definitions, map) {
         Ok(game) => game,
         Err(error) => panic!("測試戰鬥定義應有效：{}", error.message()),
     }
 }
 
-fn push_collision_unit_type(id: &str, initiative: i32) -> authoring::UnitType {
+fn test_unit_type(id: &str, initiative: i32, (width, height): (i32, i32)) -> authoring::UnitType {
     authoring::UnitType {
         ai_profile: "tank".into(),
         id: id.into(),
         visual: id.into(),
-        width: 1,
-        height: 1,
+        width,
+        height,
         hp: 100,
         movement: 0,
         initiative,
@@ -125,7 +111,7 @@ fn push_collision_unit_type(id: &str, initiative: i32) -> authoring::UnitType {
         off_hand: String::new(),
         armor: String::new(),
         accessory: String::new(),
-        skills: vec!["push".into()],
+        skills: vec![TEST_SKILL_ID.into()],
     }
 }
 
@@ -211,11 +197,19 @@ pub(super) fn ascii_map(
     diagram: &str,
     units: &[(char, i64, &str, Team)],
 ) -> authoring::Map {
+    map_from_ascii_board(name, &ascii_board(diagram), units)
+}
+
+pub(super) fn map_from_ascii_board(
+    name: &str,
+    layout: &AsciiBoard,
+    units: &[(char, i64, &str, Team)],
+) -> authoring::Map {
     let AsciiBoard {
         board,
         markers,
         terrains,
-    } = ascii_board(diagram);
+    } = layout;
     let placements = units
         .iter()
         .map(|(marker, id, kind, team)| {
@@ -233,7 +227,7 @@ pub(super) fn ascii_map(
         name: name.into(),
         width: board.0,
         height: board.1,
-        terrains,
+        terrains: terrains.clone(),
         units: placements,
     }
 }

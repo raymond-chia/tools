@@ -25,6 +25,7 @@ const PREVIEW_IGNORED_ERROR_IDS := [
 	"unreachable_destination",
 	"target_too_close",
 	"target_too_far",
+	"target_not_visible",
 	"heal_allies_only",
 	"cannot_attack_ally",
 ]

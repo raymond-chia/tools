@@ -20,7 +20,7 @@ const FIELD_LABELS := {
 	"effect": "效果", "attack_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
 	"entry_rule": "進入規則", "damage": "傷害", "extra_movement_cost": "額外移動消耗",
-	"dodge_penalty": "閃避減值", "block_penalty": "格擋減值"
+	"blocks_sight": "阻擋視線", "dodge_penalty": "閃避減值", "block_penalty": "格擋減值"
 }
 const CHOICES := {
 	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},

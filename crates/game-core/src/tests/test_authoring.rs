@@ -8,6 +8,7 @@ fn enemy_without_skill_rejected_on_load() {
         equipment: Vec::new(),
         ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![TerrainTypeDef {
+            blocks_sight: false,
             id: "plain".into(),
             layer: TerrainLayer::Ground,
             entry_rule: TerrainEntryRule::Walkable,

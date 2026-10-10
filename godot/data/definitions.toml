@@ -66,6 +66,7 @@ block_penalty = 3
 
 [[terrain_types]]
 id = "cliff"
+blocks_sight = true
 layer = "ground"
 entry_rule = "blocked"
 damage = 0

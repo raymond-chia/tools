@@ -8,9 +8,7 @@ use crate::model::{
     RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview,
     SkillRangeView, SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, Turn, Unit,
 };
-use crate::movement::{
-    fits, footprint_cell_distance, footprint_cells, footprint_distance, overlap, unit_at_cell,
-};
+use crate::movement::{fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell};
 use crate::terrain::{
     TerrainEntry, footprint_blocks_push, footprint_on_impassable, footprint_terrain_penalty,
     terrain_type,
@@ -418,8 +416,11 @@ pub(crate) fn validate_cell_skill_from_position(
         return Err(error::target_cell_impassable());
     }
     let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用尺寸");
-    check_skill_range(
-        footprint_cell_distance(origin, footprint, cell),
+    crate::sight::check_sight_in_range(
+        world,
+        origin,
+        footprint,
+        cell,
         skill.min_range,
         skill.max_range,
     )?;
@@ -613,21 +614,6 @@ fn skill_power(power: i32, power_bonus: i32) -> i32 {
     (power + power_bonus).max(0)
 }
 
-/// 集中技能射程的包含邊界與錯誤分類，供施放、預覽、包夾與 AI 共用。
-pub(crate) fn check_skill_range(
-    distance: i32,
-    min_range: i32,
-    max_range: i32,
-) -> Result<(), GameError> {
-    if distance < min_range {
-        Err(error::target_too_close())
-    } else if distance > max_range {
-        Err(error::target_too_far())
-    } else {
-        Ok(())
-    }
-}
-
 /// 技能指定的目標種類；以技能種類決定行為時一律經過此函式。
 pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
     match effect {
@@ -751,9 +737,14 @@ fn validate_unit_skill_target_from_position(
         }
         UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
     }
-    let target_distance =
-        footprint_cell_distance(attacker_position, attacker_footprint, target_cell);
-    check_skill_range(target_distance, *min_range, *max_range)?;
+    crate::sight::check_sight_in_range(
+        world,
+        attacker_position,
+        attacker_footprint,
+        target_cell,
+        *min_range,
+        *max_range,
+    )?;
     Ok((target, effect))
 }
 
@@ -953,13 +944,20 @@ fn target_side_from_position(
     } = *world
         .get::<Footprint>(target)
         .expect("包夾目標應具有 Footprint");
-    let target_distance = footprint_distance(
-        unit_position,
-        unit_footprint,
-        target_position,
-        target_footprint,
-    );
-    if check_skill_range(target_distance, min_range, max_range).is_err() {
+    if !footprint_cells(target_position, target_footprint)
+        .into_iter()
+        .any(|cell| {
+            crate::sight::check_sight_in_range(
+                world,
+                unit_position,
+                unit_footprint,
+                cell,
+                min_range,
+                max_range,
+            )
+            .is_ok()
+        })
+    {
         return None;
     }
 
@@ -1123,7 +1121,10 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
                 for x in 0..*width {
                     let cell = GridPos { x, y };
                     let cell_distance = footprint_cell_distance(position, footprint, cell);
-                    if check_skill_range(cell_distance, *min_range, *max_range).is_ok()
+                    if crate::sight::check_sight_in_range(
+                        w, position, footprint, cell, *min_range, *max_range,
+                    )
+                    .is_ok()
                         && (target_kind(effect) != SkillTargetKind::Enemy || cell_distance > 0)
                     {
                         cells.push(cell);

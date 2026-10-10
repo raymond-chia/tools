@@ -11,6 +11,7 @@ mod game;
 mod gameplay_config;
 mod model;
 mod movement;
+mod sight;
 mod skill;
 mod terrain;
 #[cfg(test)]

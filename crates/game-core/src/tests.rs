@@ -7,3 +7,5 @@ mod test_equipment;
 mod test_movement;
 mod test_skill;
 mod test_utility_ai;
+
+mod test_sight;

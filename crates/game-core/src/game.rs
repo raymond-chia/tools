@@ -1047,6 +1047,7 @@ impl Game {
                                 layer: _,
                                 entry_rule,
                                 damage,
+                                blocks_sight,
                                 extra_movement_cost,
                                 dodge_penalty,
                                 block_penalty,
@@ -1073,6 +1074,7 @@ impl Game {
                             TerrainDescriptionView {
                                 terrain: kind.clone(),
                                 entry_rule: *entry_rule,
+                                blocks_sight: *blocks_sight,
                                 values,
                             }
                         })

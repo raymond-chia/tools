@@ -341,7 +341,7 @@ impl PartialEq for Node {
     }
 }
 
-struct Paths {
+pub(crate) struct Paths {
     best: HashMap<GridPos, PathState>,
     previous: HashMap<PathState, PathState>,
 }
@@ -521,18 +521,8 @@ pub(crate) fn movement_options(
     options
 }
 
-pub(crate) fn toward_skill_range(
-    w: &World,
-    e: Entity,
-    s: GridPos,
-    target: GridPos,
-    target_footprint: Footprint,
-    f: Footprint,
-    b: u32,
-    min_range: i32,
-    max_range: i32,
-    preferred_range: i32,
-) -> Option<Vec<GridPos>> {
+/// 同一次接敵規劃共用全圖可達路徑，搜尋結果不依目標或技能改變。
+pub(crate) fn full_board_paths(w: &World, e: Entity, s: GridPos, f: Footprint) -> Paths {
     let Board {
         width,
         height,
@@ -548,20 +538,38 @@ pub(crate) fn toward_skill_range(
         .fold(0_u32, |total, cell| {
             total.saturating_add(footprint_movement_cost(w, cell, f))
         });
-    let search = paths(w, e, s, f, search_budget);
-    let Paths { best, previous: _ } = &search;
+    paths(w, e, s, f, search_budget)
+}
+
+pub(crate) fn toward_skill_range(
+    w: &World,
+    search: &Paths,
+    s: GridPos,
+    target: GridPos,
+    target_footprint: Footprint,
+    f: Footprint,
+    b: u32,
+    min_range: i32,
+    max_range: i32,
+    preferred_range: i32,
+) -> Option<Vec<GridPos>> {
+    let Paths { best, previous: _ } = search;
     // 先確認整張地圖上可到達合法射程，再依本回合預算截取路徑；完全無路可達時不靠牆追敵。
     let end = *best
         .keys()
         .filter(|p| {
-            let range = footprint_distance(**p, f, target, target_footprint);
-            (min_range..=max_range).contains(&range)
+            footprint_cells(target, target_footprint)
+                .into_iter()
+                .any(|cell| {
+                    crate::sight::check_sight_in_range(w, **p, f, cell, min_range, max_range)
+                        .is_ok()
+                })
         })
         .min_by_key(|p| {
             let range = footprint_distance(**p, f, target, target_footprint);
             ((range - preferred_range).abs(), distance(**p, s), p.y, p.x)
         })?;
-    let mut route = reconstruct_path(&search, s, end).expect("選出的終點應可重建路徑");
+    let mut route = reconstruct_path(search, s, end).expect("選出的終點應可重建路徑");
     let mut spent = 0;
     let mut steps = 1;
     for cell in route.iter().skip(1) {

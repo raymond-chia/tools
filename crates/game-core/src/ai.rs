@@ -8,7 +8,7 @@ use crate::model::{
 };
 use crate::movement::{
     MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
-    movement_budgets, movement_options, toward_skill_range, unit_at_cell,
+    full_board_paths, movement_budgets, movement_options, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, validate_cell_skill_from_position,
@@ -112,9 +112,6 @@ impl Game {
                     )
                 }
             };
-            self.world
-                .entity_mut(entity)
-                .remove::<PreviousAttackTarget>();
             let MovementOption {
                 position,
                 path,
@@ -143,6 +140,10 @@ impl Game {
                     continue;
                 }
             }
+            // 同回合重新規劃仍沿用上回合目標，確定結束規劃後才清除記憶。
+            self.world
+                .entity_mut(entity)
+                .remove::<PreviousAttackTarget>();
             match action {
                 Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
                     let attack = matches!(
@@ -423,27 +424,26 @@ fn fallback_position(
     }
     let start = positions[0].position;
     let team = &world.get::<Unit>(actor).expect("AI 單位應具有 Unit").team;
-    let target = healing_focus.or_else(|| {
-        world
-            .iter_entities()
-            .filter(|target| target.get::<Unit>().is_some_and(|unit| &unit.team != team))
-            .min_by_key(|target| {
+    let targets = match healing_focus {
+        Some(target) => vec![target],
+        None => {
+            let mut targets: Vec<_> = world
+                .iter_entities()
+                .filter(|target| target.get::<Unit>().is_some_and(|unit| &unit.team != team))
+                .map(|target| target.id())
+                .collect();
+            targets.sort_by_key(|target| {
                 (
-                    target_distance(world, actor, start, target.id()),
-                    target.get::<Id>().expect("目標應具有 Id").0,
+                    target_distance(world, actor, start, *target),
+                    world.get::<Id>(*target).expect("目標應具有 Id").0,
                 )
-            })
-            .map(|target| target.id())
-    });
-    let target = match target {
-        Some(target) => target,
-        None => return 0,
+            });
+            targets
+        }
     };
     let footprint = *world
         .get::<Footprint>(actor)
         .expect("AI 單位應具有佔用尺寸");
-    let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
-    let goal = world.get::<Pos>(target).expect("目標應具有位置").0;
     let allowance = world
         .get::<Unit>(actor)
         .expect("AI 單位應具有 Unit")
@@ -454,52 +454,64 @@ fn fallback_position(
         Some(distance) => distance,
         None => return 0,
     };
-    // 共用跨技能偏好；每條路徑仍須朝該技能可施放的合法射程前進。
-    skills
-        .iter()
-        .filter(|skill| relevant_positioning_skill(profile, skill, healing_focus.is_some()))
-        .filter_map(|skill| {
-            let skill_distance = desired.clamp(skill.min_range, skill.max_range);
-            let path = toward_skill_range(
-                world,
-                actor,
-                start,
-                goal,
-                target_footprint,
-                footprint,
-                budget,
-                skill.min_range,
-                skill.max_range,
-                skill_distance,
-            )?;
-            // 理想停點可能因第一段危險路徑截斷而不可執行，仍沿規劃路徑前進到最遠合法停點。
-            let index = path
-                .iter()
-                .rev()
-                .find_map(|cell| positions.iter().position(|plan| plan.position == *cell))?;
-            let MovementOption {
-                position: end,
-                path: _,
-                cost: _,
-            } = &positions[index];
-            let end = *end;
-            let distance = target_distance(world, actor, end, target);
-            let range_gap = (skill.min_range - distance)
-                .max(distance - skill.max_range)
-                .max(0);
-            Some((
-                (
-                    range_gap,
-                    (distance - desired).abs(),
-                    positions[index].cost,
-                    &skill.id,
-                ),
-                index,
-            ))
-        })
-        .min_by(|(a, _), (b, _)| a.cmp(b))
-        .map(|(_, index)| index)
-        .unwrap_or(0)
+    if targets.is_empty() {
+        return 0;
+    }
+    let search = full_board_paths(world, actor, start, footprint);
+    // 依距離與 ID 選擇有合法施放路徑的敵人；治療仍優先接近既定的重傷隊友。
+    for target in targets {
+        let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
+        let goal = world.get::<Pos>(target).expect("目標應具有位置").0;
+        // 共用跨技能偏好；每條路徑仍須朝該技能可施放的合法射程前進。
+        let position = skills
+            .iter()
+            .filter(|skill| relevant_positioning_skill(profile, skill, healing_focus.is_some()))
+            .filter_map(|skill| {
+                let skill_distance = desired.clamp(skill.min_range, skill.max_range);
+                let path = toward_skill_range(
+                    world,
+                    &search,
+                    start,
+                    goal,
+                    target_footprint,
+                    footprint,
+                    budget,
+                    skill.min_range,
+                    skill.max_range,
+                    skill_distance,
+                )?;
+                // 理想停點可能因第一段危險路徑截斷而不可執行，仍沿規劃路徑前進到最遠合法停點。
+                let index = path
+                    .iter()
+                    .rev()
+                    .find_map(|cell| positions.iter().position(|plan| plan.position == *cell))?;
+                let MovementOption {
+                    position: end,
+                    path: _,
+                    cost: _,
+                } = &positions[index];
+                let end = *end;
+                let distance = target_distance(world, actor, end, target);
+                let range_gap = (skill.min_range - distance)
+                    .max(distance - skill.max_range)
+                    .max(0);
+                Some((
+                    (
+                        range_gap,
+                        (distance - desired).abs(),
+                        positions[index].cost,
+                        &skill.id,
+                    ),
+                    index,
+                ))
+            })
+            .min_by(|(a, _), (b, _)| a.cmp(b))
+            .map(|(_, index)| index);
+        if let Some(index) = position {
+            return index;
+        }
+    }
+    0
 }
 
 /// 攻擊與治療分別比較可用技能，避免自我治療的零射程影響接敵站位。

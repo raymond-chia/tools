@@ -190,6 +190,8 @@ pub struct TerrainTypeDef {
     #[serde(default)]
     pub(crate) damage: i32,
     #[serde(default)]
+    pub(crate) blocks_sight: bool,
+    #[serde(default)]
     pub(crate) extra_movement_cost: u32,
     #[serde(default)]
     pub(crate) dodge_penalty: i32,
@@ -407,6 +409,7 @@ pub enum SkillDetailEffect {
 pub struct TerrainDescriptionView {
     pub terrain: String,
     pub entry_rule: TerrainEntryRule,
+    pub blocks_sight: bool,
     pub values: TerrainDescriptionValues,
 }
 

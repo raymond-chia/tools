@@ -174,6 +174,7 @@ ERROR_UNREACHABLE_DESTINATION,目的地不可達,Destination is unreachable
 ERROR_WRONG_TURN,現在不是該單位的回合,It is not this unit's turn
 ERROR_NUMERIC_RANGE,數值超出核心可安全運算的範圍,Values exceed the safe arithmetic range
 TERRAIN_EFFECT_BLOCKED,無法通行,Impassable
+TERRAIN_EFFECT_BLOCKS_SIGHT,阻擋視線,Blocks line of sight
 TERRAIN_EFFECT_INSTANT_DOWN,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
 TERRAIN_EFFECT_DODGE,閃避 −{value},Dodge −{value}
 TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
@@ -198,3 +199,4 @@ EQUIPMENT_NAME_POWER_RING,魔力戒指,Magic ring
 SKILL_POWER_SOURCE_PHYSICAL,威力來源：物理,Power source: Physical
 SKILL_POWER_SOURCE_MAGICAL,威力來源：魔法,Power source: Magical
 ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy
+ERROR_TARGET_NOT_VISIBLE,目標位置不在視線內,Target position is not in line of sight

@@ -120,8 +120,9 @@ fn encounter_movement_activates_connected_enemies() {
             y: 0,
         })
         .expect("玩家應可接近敵人");
-    assert!(
+    assert_eq!(
         snapshot.battle_mode == BattleMode::Combat,
+        true,
         "接近敵人後應進入戰鬥"
     );
     assert_participants(&game, &markers, "ATUV", "移動觸發");

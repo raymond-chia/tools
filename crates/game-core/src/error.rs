@@ -307,3 +307,8 @@ pub(crate) fn numeric_range(id: &str) -> GameError {
 pub(crate) fn invalid_equipment(message: String) -> GameError {
     GameError::new("invalid_equipment", message)
 }
+
+/// 瞄準格不在視線內；不影響範圍技能的其他效果格。
+pub(crate) fn target_not_visible() -> GameError {
+    GameError::new("target_not_visible", "目標位置不在視線內".to_owned())
+}

@@ -1,5 +1,7 @@
 //! 先定義共用傾向設定與可見行為；不實作測試專用評分器或 AI 替身。
-use super::support::{ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map};
+use super::support::{
+    ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map, map_from_ascii_board,
+};
 use crate::*;
 
 const DEFINITIONS: &str = include_str!("data/utility_ai_definitions.toml");
@@ -26,16 +28,6 @@ fn profile_mut<'a>(definitions: &'a mut toml::Value, id: &str) -> &'a mut toml::
         .iter_mut()
         .find(|profile| profile["id"].as_str() == Some(id))
         .expect("測試定義應包含指定傾向")
-}
-
-fn placement(id: i64, kind: &str, team: Team, x: i32) -> authoring::UnitPlacement {
-    authoring::UnitPlacement {
-        id,
-        unit_type: kind.into(),
-        team,
-        x,
-        y: 0,
-    }
 }
 
 fn enemy() -> Team {
@@ -265,12 +257,14 @@ fn healer_approaches_unreachable_severe_wound_and_heals_light_wound() {
             ));
             continue;
         }
-        assert!(
+        assert_eq!(
             (actual_x - i64::from(light_x)).abs() <= 3,
+            true,
             "{name}：輕傷隊友應在治療射程內"
         );
-        assert!(
+        assert_eq!(
             (i64::from(severe_x) - actual_x).abs() > 3,
+            true,
             "{name}：重傷隊友應仍在治療射程外"
         );
         let movements = snapshot["movements"]
@@ -296,11 +290,12 @@ fn healer_approaches_unreachable_severe_wound_and_heals_light_wound() {
             .iter()
             .position(|event| event["type"] == "healing" && event["actor"] == ACTOR_ID)
             .expect("應產生施放者的治療紀錄");
-        assert!(
+        assert_eq!(
             movements[0]["before_log_index"]
                 .as_u64()
                 .expect("移動紀錄應包含對應日誌索引")
                 <= healing_index as u64,
+            true,
             "{name}：移動應發生在治療前"
         );
         for (id, expected_hp) in [(ALLY_ID, 100), (SECOND_ALLY_ID, 20)] {
@@ -312,7 +307,7 @@ fn healer_approaches_unreachable_severe_wound_and_heals_light_wound() {
             assert_eq!(*current, expected_hp, "{name}，隊友 {id}");
         }
     }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert_eq!(failures.is_empty(), true, "{}", failures.join("\n"));
 }
 
 // 驗證不同生命上限下優先治療低血量隊友，但其會溢補時改治療能完整接受治療的高血量隊友。
@@ -447,7 +442,7 @@ fn archer_prioritizes_a_defeatable_target() {
             Some(("shot", ALLY_ID)),
             "反向載入 {reverse}"
         );
-        assert!(game.entity(ALLY_ID).is_none(), "可擊倒目標應已離場");
+        assert_eq!(game.entity(ALLY_ID).is_none(), true, "可擊倒目標應已離場");
     }
 }
 
@@ -456,6 +451,18 @@ fn archer_prioritizes_a_defeatable_target() {
 fn pursuit_survives_replanning_after_spikes() {
     const PURSUED_TARGET_ID: i64 = 2;
     const ALTERNATIVE_TARGET_ID: i64 = 3;
+    // 第一回合配置：T 在最近射程內，通往 L 的路徑會被尖刺截斷。
+    let first_turn_diagram = "
+        A^T....
+        ###.###
+        ###L###
+        ";
+    // 第二回合路徑：A 是起點，S 是尖刺停點，X 是途經格，E 是終點；T 已後退。
+    let second_turn_diagram = "
+        ASXE..T
+        ###.###
+        ###L###
+        ";
     for (pursuit, expected_target) in [(0, ALTERNATIVE_TARGET_ID), (100, PURSUED_TARGET_ID)] {
         let mut definitions = definitions();
         profile_mut(&mut definitions, "archer")["pursuit_weight"] = pursuit.into();
@@ -470,10 +477,7 @@ fn pursuit_survives_replanning_after_spikes() {
         shot["max_range"] = 3.into();
         let mut game = game(
             &definitions,
-            "
-            A^T....
-            ####L##
-            ",
+            first_turn_diagram,
             &[
                 ('A', ACTOR_ID, "archer", enemy()),
                 ('T', PURSUED_TARGET_ID, "target", Team::Player),
@@ -487,11 +491,20 @@ fn pursuit_survives_replanning_after_spikes() {
         assert_eq!(first_snapshot["movements"], serde_json::json!([]));
         let actor = game.entity(ACTOR_ID).expect("AI 應仍存在");
         let pursued = game.entity(PURSUED_TARGET_ID).expect("追擊目標應仍存在");
-        // 第二回合前 T 後退四格：T 距離六格、L 距離五格，踩尖刺停在 x=1 時仍都無法攻擊。
+        let AsciiBoard {
+            board: _,
+            markers,
+            terrains: _,
+        } = ascii_board(second_turn_diagram);
+        let position = |marker| {
+            let ((x, y), _) = markers[&marker];
+            GridPos { x, y }
+        };
+        // 第二回合前 T 後退四格，踩尖刺停在 S 時仍都無法攻擊。
         game.world
             .get_mut::<Pos>(pursued)
             .expect("追擊目標應有位置")
-            .0 = GridPos { x: 6, y: 0 };
+            .0 = position('T');
         wound(&mut game, PURSUED_TARGET_ID, 100);
         *game.world.resource_mut::<Turn>() = Turn {
             actor: Some(ACTOR_ID),
@@ -499,7 +512,7 @@ fn pursuit_survives_replanning_after_spikes() {
             movement_remaining: 3,
             movement_segments_used: 0,
         };
-        for target_position in [GridPos { x: 6, y: 0 }, GridPos { x: 4, y: 1 }] {
+        for target_position in [position('T'), position('L')] {
             let error = game
                 .preview_skill(ACTOR_ID, target_position, "shot")
                 .err()
@@ -512,7 +525,7 @@ fn pursuit_survives_replanning_after_spikes() {
         let snapshot = serde_json::to_value(snapshot).expect("快照應可序列化");
         assert_eq!(
             actor_x(&snapshot),
-            3,
+            i64::from(position('E').x),
             "追擊權重 {pursuit}：應在尖刺後繼續移動"
         );
         assert_eq!(game.world.get::<Hp>(actor).expect("AI 應有 HP").current, 97);
@@ -527,12 +540,8 @@ fn pursuit_survives_replanning_after_spikes() {
         assert_eq!(
             paths,
             vec![
-                vec![GridPos { x: 0, y: 0 }, GridPos { x: 1, y: 0 }],
-                vec![
-                    GridPos { x: 1, y: 0 },
-                    GridPos { x: 2, y: 0 },
-                    GridPos { x: 3, y: 0 }
-                ],
+                vec![position('A'), position('S')],
+                vec![position('S'), position('X'), position('E')],
             ],
             "應先在尖刺停下，再重新規劃並繼續移動"
         );
@@ -605,6 +614,37 @@ fn distance_preference_tracks_skill_range() {
     }
 }
 
+// 驗證 AI 可由大型施放者符合最小射程的佔用格原地攻擊，不受較近佔用格影響。
+#[test]
+fn ai_minimum_range_uses_any_actor_cell() {
+    let mut definitions = definitions();
+    let actor_type = unit_type_mut(&mut definitions, "archer")
+        .as_table_mut()
+        .expect("測試單位種類應為 TOML table");
+    actor_type.insert("width".into(), 2.into());
+    actor_type.insert("height".into(), 2.into());
+    actor_type.insert("movement".into(), 0.into());
+    let shot = definitions["skills"]
+        .as_array_mut()
+        .expect("測試定義應包含技能陣列")
+        .iter_mut()
+        .find(|skill| skill["id"].as_str() == Some("shot"))
+        .expect("測試定義應包含射擊技能");
+    shot["min_range"] = 3.into();
+    shot["max_range"] = 3.into();
+    let mut game = duel(
+        &definitions,
+        "archer",
+        "
+        AA.T
+        AA..
+        ",
+    );
+    let snapshot = act(&mut game);
+    assert_eq!(action(&snapshot), Some(("shot", TARGET_ID)));
+    assert_eq!(snapshot["movements"], serde_json::json!([]));
+}
+
 // 驗證第一段內可攻擊就施放，否則利用兩段接近射程但不施放，且沒有攻擊技能不追敵。
 #[test]
 fn fallback_uses_available_skill_ranges() {
@@ -630,6 +670,88 @@ fn fallback_uses_available_skill_ranges() {
             expected_action,
             "{skills:?}, 地圖 {diagram}"
         );
+    }
+}
+
+// 驗證最近敵人被封閉牆隔離時，AI 仍以兩段移動朝另一個可達敵人前進。
+#[test]
+fn fallback_skips_isolated_nearest_enemy() {
+    let mut definitions = definitions();
+    unit_type_mut(&mut definitions, "archer")["movement"] = 1.into();
+    for (name, diagram, isolated) in [
+        (
+            "只有可達敵人",
+            "
+            ....#.
+            A...##
+            S.....
+            E.....
+            ......
+            ......
+            ......
+            ......
+            ......
+            L.....
+            ",
+            false,
+        ),
+        (
+            "較近敵人被牆隔離",
+            "
+            ....#T
+            A...##
+            S.....
+            E.....
+            ......
+            ......
+            ......
+            ......
+            ......
+            L.....
+            ",
+            true,
+        ),
+    ] {
+        let AsciiBoard {
+            board: _,
+            markers,
+            terrains: _,
+        } = ascii_board(diagram);
+        let position = |marker| {
+            let ((x, y), _) = markers[&marker];
+            GridPos { x, y }
+        };
+        let mut units = vec![
+            ('A', ACTOR_ID, "archer", enemy()),
+            ('L', ALLY_ID, "target", Team::Player),
+        ];
+        if isolated {
+            units.push(('T', TARGET_ID, "target", Team::Player));
+        }
+        let mut game = game(&definitions, diagram, &units);
+        let snapshot = act(&mut game);
+        let actor = game.entity(ACTOR_ID).expect("AI 行動後應仍存在");
+        assert_eq!(
+            game.world.get::<Pos>(actor).expect("AI 應有位置").0,
+            position('E'),
+            "{name}：應朝可達敵人移動兩格"
+        );
+        let paths: Vec<_> = snapshot["movements"]
+            .as_array()
+            .expect("快照應包含移動紀錄")
+            .iter()
+            .map(|movement| movement["path"].clone())
+            .collect();
+        assert_eq!(
+            paths,
+            vec![serde_json::json!([
+                position('A'),
+                position('S'),
+                position('E'),
+            ])],
+            "{name}：應沿最短路徑接近可達敵人"
+        );
+        assert_eq!(action(&snapshot), None, "{name}：本回合仍在射程外");
     }
 }
 
@@ -757,6 +879,19 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             remaining: 7,
             hp: 100,
             attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證封閉牆後的射程內目標無法施放，AI 不會隔牆攻擊或向不可施放的位置前進。
+        RouteCase {
+            unit_type: "archer",
+            name: "射程內目標被封閉牆遮擋時不動也不攻擊",
+            diagram: "A.#.T",
+            movement: 2,
+            end: (0, 0),
+            segments_used: 0,
+            remaining: 2,
+            hp: 100,
+            attacks: false,
             avoids_terrain: true,
         },
         // 驗證近戰無法接敵但遠距射程足夠時，本回合先用兩段移動靠近，即使尚不能攻擊。
@@ -951,13 +1086,14 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
         avoids_terrain,
     } in cases
     {
+        let layout = ascii_board(diagram);
         let AsciiBoard {
             board,
             markers,
             terrains,
-        } = ascii_board(diagram);
+        } = &layout;
         let (start, actor_size) = *markers.get(&'A').expect("棋盤應包含 AI");
-        let (target, target_size) = *markers.get(&'T').expect("棋盤應包含目標");
+        let (_, target_size) = *markers.get(&'T').expect("棋盤應包含目標");
         let mut definitions = definitions();
         for (kind, size) in [(unit_type, actor_size), ("target", target_size)] {
             let unit = unit_type_mut(&mut definitions, kind);
@@ -966,20 +1102,15 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             table.insert("height".into(), size.1.into());
         }
         unit_type_mut(&mut definitions, unit_type)["movement"] = i64::from(movement).into();
-        let mut actor = placement(ACTOR_ID, unit_type, enemy(), start.0);
-        actor.y = start.1;
-        let mut target_unit = placement(TARGET_ID, "target", Team::Player, target.0);
-        target_unit.y = target.1;
-        let mut game = game_on_map(
-            &definitions,
-            authoring::Map {
-                name: name.into(),
-                width: board.0,
-                height: board.1,
-                terrains: terrains.clone(),
-                units: vec![actor, target_unit],
-            },
+        let map = map_from_ascii_board(
+            name,
+            &layout,
+            &[
+                ('A', ACTOR_ID, unit_type, enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+            ],
         );
+        let mut game = game_on_map(&definitions, map);
         let snapshot = act(&mut game);
         let entity = game.entity(ACTOR_ID).expect("路徑測試 AI 應仍存活");
         assert_eq!(
@@ -1013,7 +1144,7 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             .as_array()
             .expect("快照應包含移動紀錄");
         let actual_path: Vec<GridPos> = if end == start {
-            assert!(movements.is_empty(), "{name}：不可產生移動紀錄");
+            assert_eq!(movements.is_empty(), true, "{name}：不可產生移動紀錄");
             Vec::new()
         } else {
             let mut path = Vec::new();
@@ -1051,22 +1182,24 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             );
         }
         for position in &actual_path {
-            assert!(
+            assert_eq!(
                 position.x >= 0
                     && position.y >= 0
                     && position.x + actor_size.0 <= board.0
                     && position.y + actor_size.1 <= board.1,
+                true,
                 "{name}：完整佔用範圍不可超出棋盤"
             );
             if avoids_terrain {
-                assert!(
-                    !terrains.iter().any(|TerrainPlacement { x, y, kind: _ }| {
+                assert_eq!(
+                    terrains.iter().any(|TerrainPlacement { x, y, kind: _ }| {
                         let (x, y) = (*x, *y);
                         x >= position.x
                             && x < position.x + actor_size.0
                             && y >= position.y
                             && y < position.y + actor_size.1
                     }),
+                    false,
                     "{name}：完整佔用範圍不可進入需避開的地形"
                 );
             }

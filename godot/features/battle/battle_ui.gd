@@ -520,6 +520,8 @@ func localized_terrain_description(description: Dictionary) -> String:
 			parts.append(tr("TERRAIN_EFFECT_BLOCKED"))
 		"instant_down_when_pushed":
 			parts.append(tr("TERRAIN_EFFECT_INSTANT_DOWN"))
+	if description.blocks_sight:
+		parts.append(tr("TERRAIN_EFFECT_BLOCKS_SIGHT"))
 	var value_keys := {
 		"dodge_penalty": "TERRAIN_EFFECT_DODGE",
 		"block_penalty": "TERRAIN_EFFECT_BLOCK",

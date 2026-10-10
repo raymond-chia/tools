@@ -302,6 +302,7 @@ pub fn edit_definition_from_json(
                 }),
                 DefinitionCategory::TerrainTypes => {
                     definitions.terrain_types.push(TerrainTypeDef {
+                        blocks_sight: false,
                         id,
                         layer: TerrainLayer::Overlay,
                         entry_rule: TerrainEntryRule::Walkable,

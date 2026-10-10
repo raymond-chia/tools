@@ -126,6 +126,7 @@ skills = ["melee"]
 # 二維路徑測試專用地形。
 [[terrain_types]]
 id = "wall"
+blocks_sight = true
 layer = "overlay"
 entry_rule = "blocked"
 

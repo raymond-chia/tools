@@ -1,4 +1,4 @@
-use super::support::{ACTOR_ID, AsciiBoard, ascii_board, game_with_skill_on_ascii_map};
+use super::support::{ACTOR_ID, AsciiBoard, ascii_board};
 use crate::model::Exploration;
 use crate::*;
 
@@ -180,31 +180,9 @@ fn second_movement_segment_preserves_remaining_budget() {
         Check::Preview,
         Check::Execution,
     ] {
-        let mut game = game_with_skill_on_ascii_map(
-            1,
-            1,
-            SkillEffect::Push {
-                attack_bonus: 100,
-                power_bonus: 0,
-            },
-            "
-            A....
-            ..TB.
-            ",
-        );
-        game.start().expect("測試戰鬥應可開始");
+        let layout = ascii_board("A....");
+        let mut game = movement_game(3, &layout);
         let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
-        game.world
-            .get_mut::<Unit>(entity)
-            .expect("玩家應有 Unit")
-            .movement = 3;
-        // 沿無障礙的上排跨入第二段，再分次移動。
-        *game.world.resource_mut::<Turn>() = Turn {
-            actor: Some(ACTOR_ID),
-            phase: Phase::Ready,
-            movement_remaining: 3,
-            movement_segments_used: 0,
-        };
         game.move_to(ACTOR_ID, GridPos { x: 4, y: 0 })
             .expect("移動四格應跨入第二段並剩餘兩格");
         game.move_to(ACTOR_ID, GridPos { x: 3, y: 0 })
@@ -227,7 +205,11 @@ fn second_movement_segment_preserves_remaining_budget() {
             failures.push(check);
         }
     }
-    assert!(failures.is_empty(), "第二段預算未正確保留：{failures:?}");
+    assert_eq!(
+        failures.is_empty(),
+        true,
+        "第二段預算未正確保留：{failures:?}"
+    );
 }
 
 // 驗證第一段剛好用完後可開始第二段，並依第二段消耗決定剩餘額度及技能狀態。
@@ -236,40 +218,22 @@ fn second_movement_segment_starts_after_first_is_exhausted() {
     for (destination_x, remaining, expected_phase) in
         [(4, 2, Phase::Moving), (0, 0, Phase::AfterMove)]
     {
-        let mut game = game_with_skill_on_ascii_map(
-            1,
-            1,
-            SkillEffect::Push {
-                attack_bonus: 100,
-                power_bonus: 0,
-            },
-            "
-            A....
-            ..TB.
-            ",
-        );
-        game.start().expect("測試戰鬥應可開始");
+        let layout = ascii_board("A....");
+        let mut game = movement_game(3, &layout);
         let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
-        game.world
-            .get_mut::<Unit>(entity)
-            .expect("玩家應有 Unit")
-            .movement = 3;
-        *game.world.resource_mut::<Turn>() = Turn {
-            actor: Some(ACTOR_ID),
-            phase: Phase::Ready,
-            movement_remaining: 3,
-            movement_segments_used: 0,
-        };
         game.move_to(ACTOR_ID, GridPos { x: 3, y: 0 })
             .expect("第一段應可剛好用完");
-        assert!(crate::skill::can_use_skill(game.world.resource::<Turn>()));
+        assert_eq!(
+            crate::skill::can_use_skill(game.world.resource::<Turn>()),
+            true
+        );
         let destination = GridPos {
             x: destination_x,
             y: 0,
         };
         let (_, second) =
             crate::movement::movement_ranges(&game.world, entity, game.world.resource::<Turn>());
-        assert!(second.contains(&destination));
+        assert_eq!(second.contains(&destination), true);
         game.preview_move(ACTOR_ID, destination)
             .expect("第二段應可預覽");
         game.move_to(ACTOR_ID, destination)
@@ -282,7 +246,7 @@ fn second_movement_segment_starts_after_first_is_exhausted() {
         } = game.world.resource::<Turn>();
         assert_eq!(*movement_remaining, remaining);
         assert_eq!(*phase, expected_phase);
-        assert!(!crate::skill::can_use_skill(turn));
+        assert_eq!(crate::skill::can_use_skill(turn), false);
     }
 }
 
@@ -347,6 +311,7 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
             (
                 "spikes".into(),
                 TerrainTypeDef {
+                    blocks_sight: false,
                     id: "spikes".into(),
                     layer: TerrainLayer::Overlay,
                     entry_rule: TerrainEntryRule::Walkable,
@@ -359,6 +324,7 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
             (
                 "plain".into(),
                 TerrainTypeDef {
+                    blocks_sight: false,
                     id: "plain".into(),
                     layer: TerrainLayer::Ground,
                     entry_rule: TerrainEntryRule::Walkable,
@@ -372,6 +338,7 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
     });
     world.insert_resource(Log::default());
     world.insert_resource(TemporaryTerrains::default());
+    world.insert_resource(model::Encounter::default());
     world.insert_resource(Exploration {
         mode: BattleMode::Combat,
         turns: HashMap::new(),
