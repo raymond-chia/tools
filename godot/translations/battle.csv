@@ -1,105 +1,88 @@
 keys,zh_TW,en
-SKILL_NAME_MELEE_ATTACK,近戰攻擊,Melee Attack
-SKILL_NAME_RANGED_ATTACK,遠程攻擊,Ranged Attack
-SKILL_NAME_POWER_STRIKE,強力一擊,Power Strike
-SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
-SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
-SKILL_NAME_MIRE,泥沼,Mire
-SKILL_NAME_HEAL,治癒術,Heal
-SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
-SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
-HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
-HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
-SKILL_TARGET_CELL,目標：地面格,Target: Ground cell
-SKILL_TARGET_ENEMY,目標：敵方單位,Target: Enemy unit
-SKILL_TYPE_MELEE,類型：近戰,Type: Melee
-SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
-SKILL_RANGE,射程：%d 格,Range: %d tiles
-SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
-SKILL_HIT_BONUS,命中加值：%+d,Hit modifier: %+d
-SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
-SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,"Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too"
-SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
-TERRAIN_DESCRIPTION_NONE,無特殊效果,No special effect
-TERRAIN_NAME_PLAIN,平地,Plain
-TERRAIN_NAME_ROUGH,崎嶇地面,Rough ground
-TERRAIN_NAME_SPIKES,地刺,Spikes
-TERRAIN_NAME_MIRE,泥沼,Mire
-TERRAIN_NAME_CLIFF,峭壁,Cliff wall
-TERRAIN_NAME_CHASM,懸崖,Chasm
-COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
-COMBAT_LOG_TERRAIN_INSTANT_DOWN,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
-ATTACK_RESULT_DODGE,閃避,Dodge
-ATTACK_RESULT_BLOCK,格擋,Block
-ATTACK_RESULT_HIT,命中,Hit
-ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
-ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d,HP %d / %d | MP %d
-ATTACK_PREVIEW_DAMAGE,傷害 %d,Damage %d
-ATTACK_PREVIEW_HIT,命中 %d%%,Hit %d%%
 ATTACK_PREVIEW_BLOCK,格擋 %d%%,Block %d%%
-ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
-BATTLE_MENU,選單,Menu
-UNIT_NAME_ARIA,亞莉亞・劍士,Aria · Fighter
-UNIT_NAME_LYRA,萊拉・遊俠,Lyra · Ranger
-UNIT_NAME_MIRA,米菈・術士,Mira · Mage
-UNIT_NAME_WOLF,荒原狼,Wasteland Wolf
-TEAM_NAME_WILD_ANIMALS,野生動物,Wild Animals
-BATTLE_MOVE_COST_INITIAL,移動消耗 0,Move cost 0
-ATTACK_PREVIEW_DAMAGE_INITIAL,傷害 0,Damage 0
-ATTACK_PREVIEW_HIT_INITIAL,命中 0%,Hit 0%
 ATTACK_PREVIEW_BLOCK_INITIAL,格擋 0%,Block 0%
+ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
 ATTACK_PREVIEW_CRITICAL_INITIAL,暴擊率 0%,Critical chance 0%
-DETAIL_SKILL,技能,Skill
-DETAIL_SKILL_DESCRIPTION,技能說明,Skill details
-COMBAT_LOG_TITLE,戰鬥紀錄,Combat Log
-BATTLE_DELAY,延後,Delay
-BATTLE_CANCEL_DELAY,取消延後,Cancel delay
-BATTLE_MOVEMENT_REMAINING_INITIAL,剩餘移動 0,Movement left 0
-BATTLE_MOVEMENT_REMAINING,剩餘移動 %d,Movement left %d
-BATTLE_ACTIONS,攻擊與技能,Attacks and Skills
+ATTACK_PREVIEW_DAMAGE,傷害 %d,Damage %d
+ATTACK_PREVIEW_DAMAGE_INITIAL,傷害 0,Damage 0
 ATTACK_PREVIEW_HEADING,攻擊預覽,Attack Preview
+ATTACK_PREVIEW_HIT,命中 %d%%,Hit %d%%
+ATTACK_PREVIEW_HIT_INITIAL,命中 0%,Hit 0%
+ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d,HP %d / %d | MP %d
+ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
+ATTACK_RESULT_BLOCK,格擋,Block
+ATTACK_RESULT_CRITICAL,暴擊,Critical
+ATTACK_RESULT_DODGE,閃避,Dodge
+ATTACK_RESULT_HEAL,治療,Healing
+ATTACK_RESULT_HIT,命中,Hit
+BATTLE_ACTIONS,攻擊與技能,Attacks and Skills
+BATTLE_CANCEL_DELAY,取消延後,Cancel delay
+BATTLE_DELAY,延後,Delay
 BATTLE_END_TURN,結束回合,End Turn
-DETAIL_TITLE,詳情,Details
-DETAIL_TERRAIN,地形,Terrain
-DETAIL_TERRAIN_EFFECTS,地面效果,Ground effect
-DETAIL_TEAM,陣營,Team
-DETAIL_SIZE,體型,Size
-DETAIL_MOVEMENT,移動,Movement
-DETAIL_INITIATIVE,先攻,Initiative
-DETAIL_HIT,命中,Hit
-DETAIL_MOVE_COST,移動消耗,Move cost
-COMBAT_LOG_HIDE,隱藏紀錄,Hide Log
-COMBAT_LOG_SHOW,顯示紀錄,Show Log
-TEAM_ALLY,我方,Ally
-TEAM_ENEMY,敵方,Enemy
-UNIT_SIZE_LARGE,大型,Large
-UNIT_SIZE_NORMAL,一般,Normal
+BATTLE_MENU,選單,Menu
+BATTLE_MOVEMENT_REMAINING,剩餘移動 %d,Movement left %d
+BATTLE_MOVEMENT_REMAINING_INITIAL,剩餘移動 0,Movement left 0
 BATTLE_MOVE_COST,移動消耗 %d,Move cost %d
+BATTLE_MOVE_COST_INITIAL,移動消耗 0,Move cost 0
 BATTLE_STATUS_CONTROLS,左鍵選擇與移動；右鍵查看單位或地面資訊。,Left-click to select and move; right-click to inspect a unit or ground.
+BATTLE_STATUS_SELECT_CELL,請選擇地圖上的格子。,Select a cell on the map.
 BATTLE_STATUS_SELECT_SKILL_TARGET,請選擇技能目標。,Select a target for the skill.
 BATTLE_STATUS_SKILL_CANCELLED,已取消技能。,Skill cancelled.
-BATTLE_STATUS_SELECT_CELL,請選擇地圖上的格子。,Select a cell on the map.
 COMBAT_FLOATING_BLOCK_DAMAGE,格擋 -%d,Block -%d
-COMBAT_LOG_ROUND,── 第 %d 輪 ──,── Round %d ──
-COMBAT_LOG_INITIATIVE_ROLL,%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s: D%d roll %d + initiative %d = %d
-COMBAT_LOG_SKILL_TARGET,%s 使用「%s」影響 %s,%s uses %s on %s
-ATTACK_RESULT_HEAL,治療,Healing
-COMBAT_LOG_HEAL_RESULT,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
-COMBAT_LOG_HIT,命中加值：%d%s%s = %d,Hit modifier: %d%s%s = %d
-COMBAT_LOG_HIT_ROLL,D%d 擲骰 %d + 命中加值 %d = 命中總值 %d,D%d roll %d + hit modifier %d = hit total %d
-COMBAT_LOG_TARGET_DEFENSE,目標防禦：閃避門檻 %d／格擋門檻 %d,Target defense: dodge %d / block %d
-ATTACK_RESULT_CRITICAL,暴擊,Critical
-COMBAT_LOG_CRITICAL_SUFFIX,，%s,", %s"
 COMBAT_LOG_ATTACK_RESULT,結果：%s%s,Result: %s%s
 COMBAT_LOG_BLOCK_DAMAGE,傷害：原始 %d − 格擋 %d = %d，HP %d/%d,Damage: raw %d − block %d = %d; HP %d/%d
+COMBAT_LOG_COLLISION_DAMAGE,"%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s is struck and takes %d collision damage; HP %d/%d"
+COMBAT_LOG_CRITICAL_SUFFIX,，%s,", %s"
 COMBAT_LOG_DAMAGE_RESULT,結果：%s%s，%d 傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
+COMBAT_LOG_FLANKING_MODIFIER,包抄,Flanking
+COMBAT_LOG_HEAL_RESULT,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
+COMBAT_LOG_HIDE,隱藏紀錄,Hide Log
+COMBAT_LOG_HIT,命中加值：%d%s%s = %d,Hit modifier: %d%s%s = %d
+COMBAT_LOG_HIT_ROLL,D%d 擲骰 %d + 命中加值 %d = 命中總值 %d,D%d roll %d + hit modifier %d = hit total %d
+COMBAT_LOG_INITIATIVE_ROLL,%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s: D%d roll %d + initiative %d = %d
 COMBAT_LOG_PUSH,%s 被沿攻擊方向推動 %d 格,%s is pushed %d tiles in the attack direction
 COMBAT_LOG_PUSH_BLOCKED,推擊受阻，%s 額外受到 %d 點碰撞傷害,Push blocked: %s takes %d collision damage
-COMBAT_LOG_COLLISION_DAMAGE,"%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s is struck and takes %d collision damage; HP %d/%d"
-COMBAT_LOG_UNIT_DEFEATED,%s 倒下,%s is defeated
+COMBAT_LOG_ROUND,── 第 %d 輪 ──,── Round %d ──
+COMBAT_LOG_SHOW,顯示紀錄,Show Log
 COMBAT_LOG_SKILL,%s 使用「%s」,%s uses %s
+COMBAT_LOG_SKILL_TARGET,%s 使用「%s」影響 %s,%s uses %s on %s
+COMBAT_LOG_TARGET_DEFENSE,目標防禦：閃避門檻 %d／格擋門檻 %d,Target defense: dodge %d / block %d
 COMBAT_LOG_TERRAIN_CREATED,產生「%s」,Creates %s
-COMBAT_LOG_FLANKING_MODIFIER,包抄,Flanking
+COMBAT_LOG_TERRAIN_DAMAGE,"%s 踩到「%s」，受到 %d 點傷害，HP %d/%d","%s entered %s and took %d damage; HP %d/%d"
+COMBAT_LOG_TERRAIN_INSTANT_DOWN,"%s 被推入「%s」，受到 %d 點墜落傷害並倒下，HP %d/%d","%s was pushed into %s, took %d falling damage, and was defeated; HP %d/%d"
+COMBAT_LOG_TITLE,戰鬥紀錄,Combat Log
+COMBAT_LOG_UNIT_DEFEATED,%s 倒下,%s is defeated
+DETAIL_ACTIVE_SKILLS,主動技能,Active
+DETAIL_ATTRIBUTES,屬性,Attributes
+DETAIL_BLOCK_REDUCTION,格擋減傷,Block reduction
+DETAIL_HIT,命中,Hit
+DETAIL_INITIATIVE,先攻,Initiative
+DETAIL_MAGICAL_POWER,魔法威力,Magical power
+DETAIL_MOVEMENT,移動,Movement
+DETAIL_MOVE_COST,移動消耗,Move cost
+DETAIL_NO_ACTIVE_SKILLS,無主動技能,No active skills
+DETAIL_NO_PASSIVE_SKILLS,無被動技能,No passive skills
+DETAIL_PASSIVE_SKILLS,被動技能,Passive
+DETAIL_PHYSICAL_POWER,物理威力,Physical power
+DETAIL_SIZE,體型,Size
+DETAIL_SKILL,技能,Skill
+DETAIL_SKILL_DESCRIPTION,技能說明,Skill details
+DETAIL_TEAM,陣營,Team
+DETAIL_TERRAIN,地形,Terrain
+DETAIL_TERRAIN_EFFECTS,地面效果,Ground effect
+DETAIL_TITLE,詳情,Details
+EQUIPMENT_ACCESSORY,飾品,Accessory
+EQUIPMENT_ARMOR,護具,Armor
+EQUIPMENT_MAIN_HAND,主手,Main hand
+EQUIPMENT_NAME_BOW,弓,Bow
+EQUIPMENT_NAME_HEAVY_ARMOR,重甲,Heavy armor
+EQUIPMENT_NAME_LIGHT_ARMOR,輕甲,Light armor
+EQUIPMENT_NAME_POWER_RING,魔力戒指,Magic ring
+EQUIPMENT_NAME_SHIELD,盾牌,Shield
+EQUIPMENT_NAME_STAFF,法杖,Staff
+EQUIPMENT_NAME_SWORD,單手劍,Sword
+EQUIPMENT_NONE,無,None
+EQUIPMENT_OFF_HAND,副手,Off hand
 ERROR_CANNOT_ATTACK_ALLY,不能攻擊友軍,Cannot attack an ally
 ERROR_CANNOT_CONTINUE,目前沒有可推進的自動回合,No automatic turn can be advanced
 ERROR_CANNOT_MOVE,目前不能移動,Cannot move now
@@ -110,11 +93,8 @@ ERROR_CORE_RESPONSE_JSON_PARSE,核心回應解析失敗,Failed to parse core res
 ERROR_DEFINITIONS_TOML_PARSE,定義檔格式錯誤,Definitions file format is invalid
 ERROR_DELAY_AFTER_ACTION,開始行動後不能延後,Cannot delay after acting
 ERROR_DUPLICATE_SKILL_ID,技能 ID 重複,Duplicate skill ID
-ERROR_DUPLICATE_TERRAIN_TYPE_ID,地形 ID 重複,Duplicate terrain type ID
-ERROR_MULTIPLE_GROUND_TERRAINS,同一格只能有一個地面地形,Only one ground terrain is allowed per cell
-ERROR_MISSING_DEFAULT_GROUND_TERRAIN,必須定義地面地形 plain,The ground terrain plain must be defined
-ERROR_SKILL_TERRAIN_NOT_OVERLAY,技能產生的地形必須是上層地形,Terrain created by a skill must be an overlay
 ERROR_DUPLICATE_TERRAIN,同一格的地形重複,Duplicate terrain on the same cell
+ERROR_DUPLICATE_TERRAIN_TYPE_ID,地形 ID 重複,Duplicate terrain type ID
 ERROR_DUPLICATE_UNIT_PLACEMENT_ID,單位配置 ID 重複,Duplicate unit placement ID
 ERROR_DUPLICATE_UNIT_SKILL,單位定義重複指定技能,Unit type has a duplicate skill
 ERROR_DUPLICATE_UNIT_TYPE_ID,單位定義 ID 重複,Duplicate unit type ID
@@ -124,7 +104,9 @@ ERROR_GAME_NOT_LOADED,尚未載入戰鬥資料,Battle data is not loaded
 ERROR_HEAL_ALLIES_ONLY,只能治療自己或友軍,Can only heal yourself or allies
 ERROR_INVALID_DELAY_TARGET,只能延後到尚未行動的單位之後,Can only delay after a unit that has not acted
 ERROR_INVALID_DURATION,技能持續時間必須大於 0,Skill duration must be greater than zero
+ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy
 ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be positive
+ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；同一效果只能選一個版本,Invalid passive skills; select only one version of each effect
 ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
 ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
 ERROR_INVALID_TERRAIN_VALUES,地形傷害、閃避懲罰與格擋懲罰不可為負數,"Terrain damage, dodge penalty, and block penalty cannot be negative"
@@ -134,13 +116,18 @@ ERROR_MAP_TOML_PARSE,地圖檔格式錯誤,Map file format is invalid
 ERROR_MISSING_ACTOR,找不到行動角色,Acting unit not found
 ERROR_MISSING_AI_SKILL,敵方單位沒有技能,Enemy unit has no skills
 ERROR_MISSING_ATTACKER,找不到攻擊者,Attacker not found
+ERROR_MISSING_DEFAULT_GROUND_TERRAIN,必須定義地面地形 plain,The ground terrain plain must be defined
 ERROR_MISSING_DELAY_TARGET,找不到延後目標,Delay target not found
 ERROR_MISSING_INITIATIVE_UNIT,找不到先攻單位,Initiative unit not found
 ERROR_MISSING_MOVE_UNIT,找不到移動單位,Moving unit not found
 ERROR_MISSING_TARGET,找不到目標,Target not found
+ERROR_MULTIPLE_GROUND_TERRAINS,同一格只能有一個地面地形,Only one ground terrain is allowed per cell
+ERROR_NUMERIC_RANGE,數值超出核心可安全運算的範圍,Values exceed the safe arithmetic range
 ERROR_OVERLAPPING_UNIT,單位與其他單位重疊,Unit overlaps another unit
-ERROR_TARGET_CELL_OUT_OF_BOUNDS,目標格超出地圖,Target cell is out of bounds
+ERROR_SKILL_TERRAIN_NOT_OVERLAY,技能產生的地形必須是上層地形,Terrain created by a skill must be an overlay
 ERROR_TARGET_CELL_IMPASSABLE,不能在不可進入的地形施放地形法術,Cannot cast terrain spells on impassable terrain
+ERROR_TARGET_CELL_OUT_OF_BOUNDS,目標格超出地圖,Target cell is out of bounds
+ERROR_TARGET_NOT_VISIBLE,目標位置不在視線內,Target position is not in line of sight
 ERROR_TARGET_TOO_CLOSE,目標距離太近,Target is too close
 ERROR_TARGET_TOO_FAR,目標距離太遠,Target is too far
 ERROR_TERRAIN_OUT_OF_BOUNDS,地形超出地圖範圍,Terrain is out of bounds
@@ -153,40 +140,53 @@ ERROR_UNKNOWN_UNIT_SKILL,單位使用了未知技能,A unit uses an unknown skil
 ERROR_UNKNOWN_UNIT_TYPE,找不到單位定義,Unit type not found
 ERROR_UNREACHABLE_DESTINATION,目的地不可達,Destination is unreachable
 ERROR_WRONG_TURN,現在不是該單位的回合,It is not this unit's turn
-ERROR_NUMERIC_RANGE,數值超出核心可安全運算的範圍,Values exceed the safe arithmetic range
+HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
+HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
+SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit modifier when flanking in melee
+SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
+SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
+SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,"Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too"
+SKILL_HIT_BONUS,命中加值：%+d,Hit modifier: %+d
+SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
+SKILL_NAME_FLANKING,夾擊,Flanking
+SKILL_NAME_HEAL,治癒術,Heal
+SKILL_NAME_MELEE_ATTACK,近戰攻擊,Melee Attack
+SKILL_NAME_MIRE,泥沼,Mire
+SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
+SKILL_NAME_POWER_STRIKE,強力一擊,Power Strike
+SKILL_NAME_RANGED_ATTACK,遠程攻擊,Ranged Attack
+SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
+SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
+SKILL_POWER_SOURCE_MAGICAL,威力來源：魔法,Power source: Magical
+SKILL_POWER_SOURCE_PHYSICAL,威力來源：物理,Power source: Physical
+SKILL_RANGE,射程：%d 格,Range: %d tiles
+SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
+SKILL_TARGET_ALLY,目標：自己或友方單位,Target: Self or ally
+SKILL_TARGET_CELL,目標：地面格,Target: Ground cell
+SKILL_TARGET_ENEMY,目標：敵方單位,Target: Enemy unit
+SKILL_TYPE_MELEE,類型：近戰,Type: Melee
+SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
+TEAM_ALLY,我方,Ally
+TEAM_ENEMY,敵方,Enemy
+TEAM_NAME_WILD_ANIMALS,野生動物,Wild Animals
+TERRAIN_DESCRIPTION_NONE,無特殊效果,No special effect
+TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
 TERRAIN_EFFECT_BLOCKED,無法通行,Impassable
 TERRAIN_EFFECT_BLOCKS_SIGHT,阻擋視線,Blocks line of sight
-TERRAIN_EFFECT_INSTANT_DOWN,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
-TERRAIN_EFFECT_DODGE,閃避 −{value},Dodge −{value}
-TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
-TERRAIN_EFFECT_MOVEMENT,移動消耗 +{value},Movement cost +{value}
 TERRAIN_EFFECT_DAMAGE,造成 {value} 點傷害,Deals {value} damage
+TERRAIN_EFFECT_DODGE,閃避 −{value},Dodge −{value}
 TERRAIN_EFFECT_DURATION,剩餘 {value} 回合,{value} rounds remaining
-DETAIL_BLOCK_REDUCTION,格擋減傷,Block reduction
-DETAIL_PHYSICAL_POWER,物理威力,Physical power
-DETAIL_MAGICAL_POWER,魔法威力,Magical power
-EQUIPMENT_NONE,無,None
-EQUIPMENT_MAIN_HAND,主手,Main hand
-EQUIPMENT_OFF_HAND,副手,Off hand
-EQUIPMENT_ARMOR,護具,Armor
-EQUIPMENT_ACCESSORY,飾品,Accessory
-EQUIPMENT_NAME_SWORD,單手劍,Sword
-EQUIPMENT_NAME_SHIELD,盾牌,Shield
-EQUIPMENT_NAME_BOW,弓,Bow
-EQUIPMENT_NAME_STAFF,法杖,Staff
-EQUIPMENT_NAME_LIGHT_ARMOR,輕甲,Light armor
-EQUIPMENT_NAME_HEAVY_ARMOR,重甲,Heavy armor
-EQUIPMENT_NAME_POWER_RING,魔力戒指,Magic ring
-SKILL_POWER_SOURCE_PHYSICAL,威力來源：物理,Power source: Physical
-SKILL_POWER_SOURCE_MAGICAL,威力來源：魔法,Power source: Magical
-ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy
-ERROR_TARGET_NOT_VISIBLE,目標位置不在視線內,Target position is not in line of sight
-SKILL_NAME_FLANKING,夾擊,Flanking
-SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
-SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit modifier when flanking in melee
-ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；同一效果只能選一個版本,Invalid passive skills; select only one version of each effect
-DETAIL_ATTRIBUTES,屬性,Attributes
-DETAIL_ACTIVE_SKILLS,主動技能,Active
-DETAIL_PASSIVE_SKILLS,被動技能,Passive
-DETAIL_NO_ACTIVE_SKILLS,無主動技能,No active skills
-DETAIL_NO_PASSIVE_SKILLS,無被動技能,No passive skills
+TERRAIN_EFFECT_INSTANT_DOWN,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
+TERRAIN_EFFECT_MOVEMENT,移動消耗 +{value},Movement cost +{value}
+TERRAIN_NAME_CHASM,懸崖,Chasm
+TERRAIN_NAME_CLIFF,峭壁,Cliff wall
+TERRAIN_NAME_MIRE,泥沼,Mire
+TERRAIN_NAME_PLAIN,平地,Plain
+TERRAIN_NAME_ROUGH,崎嶇地面,Rough ground
+TERRAIN_NAME_SPIKES,地刺,Spikes
+UNIT_NAME_ARIA,亞莉亞・劍士,Aria · Fighter
+UNIT_NAME_LYRA,萊拉・遊俠,Lyra · Ranger
+UNIT_NAME_MIRA,米菈・術士,Mira · Mage
+UNIT_NAME_WOLF,荒原狼,Wasteland Wolf
+UNIT_SIZE_LARGE,大型,Large
+UNIT_SIZE_NORMAL,一般,Normal

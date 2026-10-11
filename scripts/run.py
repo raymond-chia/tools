@@ -1,4 +1,5 @@
 import argparse
+import csv
 from pathlib import Path
 import shutil
 import subprocess
@@ -18,6 +19,28 @@ GODOT_TEST_LOG = ROOT_DIRECTORY / "ignore-tmp" / "godot-tests.log"
 GDUNIT_REPORT_DIRECTORY = ROOT_DIRECTORY / "ignore-tmp" / "gdunit4-reports"
 GDUNIT_REPORT_PATH = "res://../ignore-tmp/gdunit4-reports"
 GDUNIT_ORPHAN_WARNING = 101
+
+
+def sort_translation_keys() -> int:
+    for path in sorted((PROJECT_DIRECTORY / "translations").glob("*.csv")):
+        with path.open("r", encoding="utf-8", newline="") as source:
+            lines = source.readlines()
+        reader = csv.reader(lines)
+        next(reader)
+        header = lines[:reader.line_num]
+        rows = []
+        start = reader.line_num
+        for row in reader:
+            rows.append((row[0], lines[start:reader.line_num]))
+            start = reader.line_num
+
+        rows.sort(key=lambda row: row[0])
+        with path.open("w", encoding="utf-8", newline="") as destination:
+            destination.writelines(header)
+            for _, record_lines in rows:
+                destination.writelines(record_lines)
+        print(f"已排序 {path.relative_to(ROOT_DIRECTORY)}（{len(rows)} 筆）")
+    return 0
 
 
 def build_bridge(*, editor: bool) -> int:
@@ -94,6 +117,7 @@ def run_rust_tests() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command")
+    commands.add_parser("sort-tr", help="依 key 排序翻譯 CSV")
     commands.add_parser("editor", help="啟動遊戲資料編輯器")
     test_command = commands.add_parser("test", help="執行測試")
     test_command.add_argument("target", choices=("godot", "rust"))
@@ -107,6 +131,7 @@ def main() -> int:
         )
         return 1
 
+    # 所有 command 分派只能在此 match 處理，禁止在其他位置另行分派。
     match (arguments.command, arguments.target):
         case ("test", "rust"):
             run = run_rust_tests
@@ -114,6 +139,8 @@ def main() -> int:
             run = run_godot_tests
         case ("editor", None):
             run = run_editor
+        case ("sort-tr", None):
+            return sort_translation_keys()
         case (None, None):
             run = run_game
 
