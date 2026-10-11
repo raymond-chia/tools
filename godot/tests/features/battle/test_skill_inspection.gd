@@ -7,14 +7,14 @@ var battle
 var runner: GdUnitSceneRunner
 var test_translations: Array[Translation] = []
 
-# 準備本案例的真實戰鬥場景與專用資源。
+# 準備真實戰鬥場景與專用翻譯，使用命中加值的語意 key。
 func setup_test() -> void:
 	add_test_translation("zh_TW", {
 		"SKILL_POWER_STRIKE_NAME": "強力一擊",
 		"SKILL_TARGET_ENEMY": "目標：敵方單位",
 		"SKILL_TYPE_MELEE": "類型：近戰",
 		"SKILL_RANGE": "射程：%d 格",
-		"SKILL_ATTACK_BONUS": "攻擊加值：%+d",
+		"SKILL_HIT_BONUS": "命中加值：%+d",
 		"SKILL_POWER_BONUS": "威力加值：%+d",
 		"SKILL_POWER_SOURCE_PHYSICAL": "威力來源：物理",
 	})
@@ -23,7 +23,7 @@ func setup_test() -> void:
 		"SKILL_TARGET_ENEMY": "Target: Enemy unit",
 		"SKILL_TYPE_MELEE": "Type: Melee",
 		"SKILL_RANGE": "Range: %d tiles",
-		"SKILL_ATTACK_BONUS": "Attack modifier: %+d",
+		"SKILL_HIT_BONUS": "Hit modifier: %+d",
 		"SKILL_POWER_BONUS": "Power modifier: %+d",
 		"SKILL_POWER_SOURCE_PHYSICAL": "Power source: Physical",
 	})
@@ -38,16 +38,16 @@ func cleanup_test() -> void:
 		TranslationServer.remove_translation(translation)
 	test_translations.clear()
 
-# 驗證被動不提供可選主動按鈕，但被動技能分頁顯示技能名稱與翻譯後的特殊夾擊說明，切換無被動單位後顯示無被動技能。
+# 驗證被動不提供可選主動按鈕，但被動技能分頁顯示技能名稱與翻譯後的夾擊命中加值說明，切換無被動單位後顯示無被動技能。
 func test_passive_skill_is_inspectable_but_not_selectable() -> void:
 	assert_int(battle.state.turn.actor).is_equal(1)
 	assert_array(battle.ui.action_buttons.keys()).contains_exactly(["melee_attack", "ranged_attack", "power_strike", "aimed_shot"])
 	var passive_label: Label = battle.ui.passive_skills_text
 	var cases := [
 		# 繁體中文顯示被動名稱、近戰夾擊條件與 4 點加成。
-		{"locale": "zh_TW", "text": "狼群夾擊：被動：近戰夾擊時攻擊加值 +4"},
+		{"locale": "zh_TW", "text": "狼群夾擊：被動：近戰夾擊時命中加值 +4"},
 		# 英文顯示相同技能與特殊加成。
-		{"locale": "en", "text": "Pack flanking：Passive: +4 attack modifier when flanking in melee"},
+		{"locale": "en", "text": "Pack flanking：Passive: +4 hit modifier when flanking in melee"},
 	]
 	for test_case in cases:
 		TranslationServer.set_locale(test_case.locale)
@@ -136,11 +136,11 @@ func test_detail_tabs_layout_and_scrolling() -> void:
 		assert_int(skill_page.scroll_vertical).is_zero()
 		battle.ui.info_panel.size = original_panel_size
 
-# 驗證技能 hover 內容包含威力來源並隨目前語系翻譯，且標題不包含額外的狀態前綴。
+# 驗證中英文技能 hover 依威力來源、命中加值、威力加值排序，且標題不包含額外的狀態前綴。
 func test_skill_hover_uses_current_locale() -> void:
 	var cases := [
-		{"locale": "zh_TW", "title": "強力一擊", "details": "目標：敵方單位\n類型：近戰\n射程：1 格\n攻擊加值：+2\n威力來源：物理\n威力加值：+2"},
-		{"locale": "en", "title": "Power Strike", "details": "Target: Enemy unit\nType: Melee\nRange: 1 tiles\nAttack modifier: +2\nPower source: Physical\nPower modifier: +2"},
+		{"locale": "zh_TW", "title": "強力一擊", "details": "目標：敵方單位\n類型：近戰\n射程：1 格\n威力來源：物理\n命中加值：+2\n威力加值：+2"},
+		{"locale": "en", "title": "Power Strike", "details": "Target: Enemy unit\nType: Melee\nRange: 1 tiles\nPower source: Physical\nHit modifier: +2\nPower modifier: +2"},
 	]
 	for test_case in cases:
 		TranslationServer.set_locale(test_case.locale)

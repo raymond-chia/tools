@@ -27,9 +27,9 @@ fn attack_damage_uses_expected_formula() {
     }
 }
 
-// 驗證被動夾擊加成、ASCII 站位、技能類型、射程及大型目標佔用格共同決定攻擊加值。
+// 驗證被動夾擊加成、ASCII 站位、技能類型、射程及大型目標佔用格共同決定命中加值。
 #[test]
-fn attack_modifier_uses_expected_flanking_bonus() {
+fn hit_uses_expected_flanking_bonus() {
     for (name, diagram, ranged, min_range, max_range, flanking) in [
         // 驗證相鄰目標的兩側近戰單位提供包夾。
         (
@@ -161,16 +161,16 @@ fn attack_modifier_uses_expected_flanking_bonus() {
         for (passive_name, passive_id, expected_bonus) in [
             // 無被動技能時，即使形成夾擊也沒有加成。
             ("無被動", None, 0),
-            // 一般夾擊被動提供 2 點攻擊加值。
+            // 一般夾擊被動提供 2 點命中加值。
             ("一般夾擊", Some("test_flanking"), 2),
-            // 特殊夾擊被動提供 4 點攻擊加值，支援者不需要持有被動。
+            // 特殊夾擊被動提供 4 點命中加值，支援者不需要持有被動。
             ("特殊夾擊", Some("test_pack_flanking"), 4),
         ] {
             let (world, attacker, target) =
                 flanking_world(diagram, min_range, max_range, passive_id);
             let expected_modifier = 5 + if flanking { expected_bonus } else { 0 };
             assert_eq!(
-                attack_modifier(&world, attacker, target, &skill, 0),
+                hit(&world, attacker, target, &skill, 0),
                 expected_modifier,
                 "{name}／{passive_name}"
             );
@@ -190,7 +190,7 @@ fn attack_skill(ranged: bool, min_range: i32, max_range: i32) -> SkillDef {
         min_range,
         max_range,
         effect: SkillEffect::Attack {
-            attack_bonus: 0,
+            hit_bonus: 0,
             power_bonus: 0,
         },
     }
@@ -215,7 +215,7 @@ fn spawn_unit(
                 initiative: 0,
                 dodge: 0,
                 block: 0,
-                attack: 5,
+                hit: 5,
                 physical_power: 1,
                 magical_power: 1,
                 block_reduction: 0,
@@ -279,7 +279,7 @@ fn flanking_world(
     });
     let mut definitions = HashMap::from([(melee_skill_id.clone(), melee_skill)]);
     // 每個案例都定義相同的兩種被動，只改變攻擊者持有的技能 ID。
-    for (id, attack_bonus) in [("test_flanking", 2), ("test_pack_flanking", 4)] {
+    for (id, hit_bonus) in [("test_flanking", 2), ("test_pack_flanking", 4)] {
         definitions.insert(
             id.to_owned(),
             SkillDef {
@@ -288,7 +288,7 @@ fn flanking_world(
                 ranged: false,
                 min_range: 0,
                 max_range: 0,
-                effect: SkillEffect::Flanking { attack_bonus },
+                effect: SkillEffect::Flanking { hit_bonus },
             },
         );
     }

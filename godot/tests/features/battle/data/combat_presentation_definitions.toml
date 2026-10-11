@@ -28,7 +28,7 @@ ranged=false
 min_range=1
 max_range=6
 effect="push"
-attack_bonus=100
+hit_bonus=100
 
 [[skills]]
 id="presentation_finish"
@@ -36,7 +36,7 @@ ranged=true
 min_range=1
 max_range=6
 effect="attack"
-attack_bonus=100
+hit_bonus=100
 power_bonus=100
 
 [[skills]]
@@ -54,7 +54,7 @@ ranged=false
 min_range=1
 max_range=1
 effect="attack"
-attack_bonus=0
+hit_bonus=0
 power_bonus=0
 
 [[unit_types]]
@@ -65,7 +65,7 @@ hp=100
 movement=3
 initiative=1000
 dodge=0
-attack=5
+hit=5
 physical_power = 5
 magical_power = 5
 skills=["presentation_push","presentation_finish"]
@@ -78,7 +78,7 @@ hp=100
 movement=3
 initiative=900
 dodge=0
-attack=0
+hit=0
 physical_power = 5
 magical_power = 5
 skills=["presentation_heal"]
@@ -91,7 +91,7 @@ hp=30
 movement=0
 initiative=-1000
 dodge=0
-attack=0
+hit=0
 physical_power = 0
 magical_power = 0
 skills=["idle_attack"]

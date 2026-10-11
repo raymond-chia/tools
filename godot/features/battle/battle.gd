@@ -11,7 +11,7 @@ var pending_action := ""
 var inspected_cell := Vector2i(-1, -1)
 var inspected_skill := ""
 var selecting_delay := false
-var status := "左鍵選擇與移動；右鍵查看單位或地面資訊。"
+var status := "BATTLE_STATUS_CONTROLS"
 var battle_name := ""
 var editor_preview := false
 var back_button: Button
@@ -138,7 +138,7 @@ func select_action(action: String) -> void:
 		return
 	selecting_delay = false
 	pending_action = action
-	status = "請選擇技能目標。"
+	status = "BATTLE_STATUS_SELECT_SKILL_TARGET"
 	present()
 
 func _on_primary_clicked(unit_id: int, cell: Vector2i) -> void:
@@ -165,7 +165,7 @@ func _on_inspection_clicked(unit_id: int, cell: Vector2i) -> void:
 		return
 	if pending_action != "" and (unit_id == 0 or world.unit_occupies_cell_id(unit_id, inspected_cell)):
 		pending_action = ""
-		status = "已取消技能。"
+		status = "BATTLE_STATUS_SKILL_CANCELLED"
 		present()
 		return
 	if not world.is_cell_on_board(cell):
@@ -190,7 +190,7 @@ func _on_skill_inspection_requested(skill_id: String) -> void:
 
 func use_pending_action(cell: Vector2i) -> void:
 	if not world.is_cell_on_board(cell):
-		status = "請選擇地圖上的格子。"
+		status = "BATTLE_STATUS_SELECT_CELL"
 		present()
 		return
 	var actor: int = state.turn.actor

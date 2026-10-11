@@ -26,7 +26,7 @@ damage=3
 [[skills]]
 id="melee_attack"
 ranged=false
-attack_bonus=0
+hit_bonus=0
 power_bonus=0
 min_range=1
 max_range=1
@@ -35,7 +35,7 @@ effect="attack"
 [[skills]]
 id="ranged_attack"
 ranged=true
-attack_bonus=0
+hit_bonus=0
 power_bonus=0
 min_range=1
 max_range=3
@@ -44,7 +44,7 @@ effect="attack"
 [[skills]]
 id="power_strike"
 ranged=false
-attack_bonus=2
+hit_bonus=2
 power_bonus=2
 min_range=1
 max_range=1
@@ -53,7 +53,7 @@ effect="attack"
 [[skills]]
 id="aimed_shot"
 ranged=true
-attack_bonus=3
+hit_bonus=3
 power_bonus=0
 min_range=1
 max_range=4
@@ -67,7 +67,7 @@ ranged=false
 min_range=0
 max_range=0
 effect="flanking"
-attack_bonus=4
+hit_bonus=4
 
 [[unit_types]]
 ai_profile="near"
@@ -78,7 +78,7 @@ hp=10
 movement=2
 initiative=100
 dodge=2
-attack=5
+hit=5
 physical_power = 5
 magical_power = 5
 skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]
@@ -92,7 +92,7 @@ hp=20
 movement=2
 initiative=-100
 dodge=1
-attack=5
+hit=5
 physical_power = 6
 magical_power = 6
 skills=["melee_attack","ranged_attack","power_strike","aimed_shot"]

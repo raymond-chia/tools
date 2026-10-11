@@ -368,7 +368,7 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
             initiative: 0,
             dodge: 0,
             block: 0,
-            attack: 0,
+            hit: 0,
             physical_power: 0,
             magical_power: 0,
             block_reduction: 0,

@@ -68,7 +68,7 @@ pub(crate) struct Unit {
     pub(crate) initiative: i32,
     pub(crate) dodge: i32,
     pub(crate) block: i32,
-    pub(crate) attack: i32,
+    pub(crate) hit: i32,
     pub(crate) physical_power: i32,
     pub(crate) magical_power: i32,
     pub(crate) block_reduction: i32,
@@ -177,13 +177,13 @@ pub struct SkillDef {
 pub enum SkillEffect {
     Attack {
         #[serde(default)]
-        attack_bonus: i32,
+        hit_bonus: i32,
         #[serde(default)]
         power_bonus: i32,
     },
     Push {
         #[serde(default)]
-        attack_bonus: i32,
+        hit_bonus: i32,
     },
     Mire {
         #[serde(default)]
@@ -197,7 +197,7 @@ pub enum SkillEffect {
     },
     Flanking {
         #[serde(default)]
-        attack_bonus: i32,
+        hit_bonus: i32,
     },
 }
 
@@ -322,11 +322,11 @@ pub enum CombatLogEvent {
         target_team: Team,
         roll: i32,
         die_sides: u32,
-        attack_stat_modifier: i32,
-        skill_attack_modifier: i32,
+        base_hit: i32,
+        skill_hit: i32,
         flanking_modifier: i32,
-        attack_modifier: i32,
-        attack_total: i32,
+        hit: i32,
+        hit_total: i32,
         dodge_target: i32,
         block_target: i32,
         result: AttackResult,
@@ -411,7 +411,7 @@ pub struct SkillDetailsView {
     pub ranged: bool,
     pub min_range: i32,
     pub max_range: i32,
-    pub attack_bonus: Option<i32>,
+    pub hit_bonus: Option<i32>,
     pub power_bonus: Option<i32>,
     pub effect: SkillDetailEffect,
 }
@@ -535,7 +535,7 @@ pub struct UnitView {
     pub initiative: i32,
     pub dodge: i32,
     pub block: i32,
-    pub attack: i32,
+    pub hit: i32,
     pub physical_power: i32,
     pub magical_power: i32,
     pub block_reduction: i32,
@@ -609,7 +609,7 @@ pub struct ActiveSkillView {
 #[derive(Serialize)]
 pub struct PassiveSkillView {
     pub id: String,
-    pub attack_bonus: i32,
+    pub hit_bonus: i32,
 }
 
 pub(crate) fn default_one() -> i32 {

@@ -33,6 +33,6 @@ pub use model::{
 use model::{Board, Footprint, Hp, Id, Log, Pos, Skills, TemporaryTerrains, Turn, Unit};
 pub use skill::degree;
 #[cfg(test)]
-use skill::{attack_damage, attack_modifier};
+use skill::{attack_damage, hit};
 #[cfg(test)]
 use std::collections::HashMap;

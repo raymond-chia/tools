@@ -42,7 +42,7 @@ pub struct UnitType {
     #[serde(default)]
     pub dodge: i32,
     #[serde(default)]
-    pub attack: i32,
+    pub hit: i32,
     #[serde(default)]
     pub physical_power: i32,
     #[serde(default)]

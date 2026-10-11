@@ -35,7 +35,7 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 	"dodge": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/DodgeValue,
 	"block": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/BlockValue,
 	"block_reduction": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/BlockReductionValue,
-	"attack": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/AttackValue,
+	"hit": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/HitValue,
 	"physical_power": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/PhysicalPowerValue,
 	"magical_power": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/MagicalPowerValue,
 	"main_hand": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/MainHandValue,
@@ -176,10 +176,10 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	var actor := unit_with_id(snapshot.units, snapshot.turn.actor)
 	actor_name.text = localized_unit_name(actor.unit_type) if not actor.is_empty() else "—"
 	actor_portrait.texture = load(BattleConfig.unit_art_path(actor.visual)) if not actor.is_empty() else null
-	movement.text = tr("剩餘移動 %d") % int(snapshot.turn.move_remaining)
+	movement.text = tr("BATTLE_MOVEMENT_REMAINING") % int(snapshot.turn.move_remaining)
 	present_turn_order(snapshot, selecting_delay)
 	delay_button.disabled = not snapshot.turn.can_delay
-	delay_button.text = tr("取消延後") if selecting_delay else tr("延後")
+	delay_button.text = tr("BATTLE_CANCEL_DELAY") if selecting_delay else tr("BATTLE_DELAY")
 	presented_skills = snapshot.skill_ranges
 	sync_action_buttons()
 	if not hovered_skill_id.is_empty() and skill_with_id(presented_skills, hovered_skill_id).is_empty():
@@ -196,7 +196,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	var inspected_skill := skill_with_id(presented_skills, inspected_skill_id)
 	if not inspected_skill.is_empty():
 		info_panel.visible = true
-		info_title.text = tr("技能")
+		info_title.text = tr("DETAIL_SKILL")
 		detail_tabs.hide()
 		unit_name.hide()
 		unit_details.visible = false
@@ -209,7 +209,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	info_panel.visible = inspected
 	if not inspected:
 		return
-	info_title.text = tr("詳情")
+	info_title.text = tr("DETAIL_TITLE")
 	inspected_skill_details.visible = false
 	detail_tabs.show()
 	var unit := unit_with_id(snapshot.units, terrain.unit_id)
@@ -228,21 +228,21 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		unit_name.text = localized_unit_name(unit.unit_type)
 		var passive_lines: Array[String] = []
 		for passive in unit.passive_skills:
-			passive_lines.append("%s：%s" % [tr(BattleConfig.skill_name_key(passive.id)), tr("SKILL_EFFECT_FLANKING") % int(passive.attack_bonus)])
+			passive_lines.append("%s：%s" % [tr(BattleConfig.skill_name_key(passive.id)), tr("SKILL_EFFECT_FLANKING") % int(passive.hit_bonus)])
 		passive_skills_text.text = "\n\n".join(passive_lines) if not passive_lines.is_empty() else tr("DETAIL_NO_PASSIVE_SKILLS")
 		var active_lines: Array[String] = []
 		for skill in unit.active_skills:
 			active_lines.append("%s\n%s" % [localized_skill_name(skill), localized_skill_details(skill)])
 		active_skills_text.text = "\n\n".join(active_lines) if not active_lines.is_empty() else tr("DETAIL_NO_ACTIVE_SKILLS")
-		detail_values.team.text = tr("我方") if unit.team is String else tr("敵方") + "（%s）" % tr(BattleConfig.team_name_key(unit.team.enemy))
+		detail_values.team.text = tr("TEAM_ALLY") if unit.team is String else tr("TEAM_ENEMY") + "（%s）" % tr(BattleConfig.team_name_key(unit.team.enemy))
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
-		detail_values.size.text = tr("大型") if unit.large else tr("一般")
+		detail_values.size.text = tr("UNIT_SIZE_LARGE") if unit.large else tr("UNIT_SIZE_NORMAL")
 		detail_values.movement.text = "%d" % int(unit.movement)
 		detail_values.initiative.text = "%d" % int(unit.initiative)
 		detail_values.dodge.text = "%d" % int(unit.dodge)
 		detail_values.block.text = "%d" % int(unit.block)
 		detail_values.block_reduction.text = "%d" % int(unit.block_reduction)
-		detail_values.attack.text = "%d" % int(unit.attack)
+		detail_values.hit.text = "%d" % int(unit.hit)
 		detail_values.physical_power.text = "%d" % int(unit.physical_power)
 		detail_values.magical_power.text = "%d" % int(unit.magical_power)
 		for slot in ["main_hand", "off_hand", "armor", "accessory"]:
@@ -253,7 +253,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	for kind in terrain.terrains:
 		terrain_names.append(tr(BattleConfig.terrain_name_key(kind)))
 	terrain_name.text = "、".join(terrain_names)
-	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("無法通行")
+	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("TERRAIN_EFFECT_BLOCKED")
 	var terrain_descriptions: Array[String] = []
 	for description in terrain.effect_descriptions:
 		terrain_descriptions.append(localized_terrain_description(description))
@@ -307,7 +307,7 @@ func present_move_cost(total_cost, pointer_position: Vector2) -> void:
 	move_cost_popup.visible = total_cost != null
 	if total_cost == null:
 		return
-	move_cost_label.text = tr("移動消耗 %d") % int(total_cost)
+	move_cost_label.text = tr("BATTLE_MOVE_COST") % int(total_cost)
 	move_cost_popup.reset_size()
 	position_pointer_popup(move_cost_popup, pointer_position, MOVE_COST_POPUP_OFFSET)
 
@@ -396,42 +396,42 @@ func format_log(events: Array, start_index := 0) -> String:
 		var marker := "▼" if expanded else "▶"
 		match event.type:
 			"new_round":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("── 第 %d 輪 ──") % int(event.round)])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("COMBAT_LOG_ROUND") % int(event.round)])
 				if expanded:
 					for initiative_roll in event.initiative_rolls:
-						entries.append(tr("%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d") % [colored_unit(initiative_roll.unit_type, initiative_roll.team), int(initiative_roll.die_sides), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
+						entries.append(tr("COMBAT_LOG_INITIATIVE_ROLL") % [colored_unit(initiative_roll.unit_type, initiative_roll.team), int(initiative_roll.die_sides), int(initiative_roll.roll), int(initiative_roll.modifier), int(initiative_roll.total)])
 			"skill", "healing":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」影響 %s") % [colored_unit(event.actor_type, event.actor_team), tr(BattleConfig.skill_name_key(event.skill)), colored_unit(event.target_type, event.target_team)]])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("COMBAT_LOG_SKILL_TARGET") % [colored_unit(event.actor_type, event.actor_team), tr(BattleConfig.skill_name_key(event.skill)), colored_unit(event.target_type, event.target_team)]])
 				if not expanded:
 					continue
 				if event.type == "healing":
-					entries.append(tr("結果：%s，回復 %d HP，HP %d/%d") % [RESULT_STYLE % tr("治療"), int(event.healing), int(event.remaining_hp), int(event.max_hp)])
+					entries.append(tr("COMBAT_LOG_HEAL_RESULT") % [RESULT_STYLE % tr("ATTACK_RESULT_HEAL"), int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 					continue
-				entries.append(tr("攻擊加值：%d%s%s = %d") % [int(event.attack_stat_modifier), format_modifier_term("技能", int(event.skill_attack_modifier)), format_modifier_term("包抄", int(event.flanking_modifier)), int(event.attack_modifier)])
-				entries.append(tr("D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d") % [int(event.die_sides), int(event.roll), int(event.attack_modifier), int(event.attack_total)])
-				entries.append(tr("目標防禦：閃避門檻 %d／格擋門檻 %d") % [int(event.dodge_target), int(event.block_target)])
+				entries.append(tr("COMBAT_LOG_HIT") % [int(event.base_hit), format_modifier_term("DETAIL_SKILL", int(event.skill_hit)), format_modifier_term("COMBAT_LOG_FLANKING_MODIFIER", int(event.flanking_modifier)), int(event.hit)])
+				entries.append(tr("COMBAT_LOG_HIT_ROLL") % [int(event.die_sides), int(event.roll), int(event.hit), int(event.hit_total)])
+				entries.append(tr("COMBAT_LOG_TARGET_DEFENSE") % [int(event.dodge_target), int(event.block_target)])
 				var result: String = RESULT_STYLE % tr("ATTACK_RESULT_%s" % event.result.to_upper())
-				var critical := tr("，%s") % ("[color=#ff7043]%s[/color]" % tr("暴擊")) if event.critical else ""
+				var critical := tr("COMBAT_LOG_CRITICAL_SUFFIX") % ("[color=#ff7043]%s[/color]" % tr("ATTACK_RESULT_CRITICAL")) if event.critical else ""
 				if event.result == "block":
-					entries.append(tr("結果：%s%s") % [result, critical])
-					entries.append(tr("傷害：原始 %d − 格擋 %d = %d，HP %d/%d") % [int(event.raw_damage), int(event.damage_reduction), int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+					entries.append(tr("COMBAT_LOG_ATTACK_RESULT") % [result, critical])
+					entries.append(tr("COMBAT_LOG_BLOCK_DAMAGE") % [int(event.raw_damage), int(event.damage_reduction), int(event.damage), int(event.remaining_hp), int(event.max_hp)])
 				else:
-					entries.append(tr("結果：%s%s，%d 傷害，HP %d/%d") % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
+					entries.append(tr("COMBAT_LOG_DAMAGE_RESULT") % [result, critical, int(event.damage), int(event.remaining_hp), int(event.max_hp)])
 				if event.pushed:
-					entries.append(tr("%s 被沿攻擊方向推動 %d 格") % [colored_unit(event.target_type, event.target_team), int(event.push_distance)])
+					entries.append(tr("COMBAT_LOG_PUSH") % [colored_unit(event.target_type, event.target_team), int(event.push_distance)])
 				elif event.push_blocked:
-					entries.append(tr("推擊受阻，%s 額外受到 %d 點碰撞傷害") % [colored_unit(event.target_type, event.target_team), int(event.collision_damage)])
+					entries.append(tr("COMBAT_LOG_PUSH_BLOCKED") % [colored_unit(event.target_type, event.target_team), int(event.collision_damage)])
 					for collision_unit in event.collision_units:
-						entries.append(tr("%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d") % [colored_unit(collision_unit.unit_type, collision_unit.team), int(event.collision_damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
+						entries.append(tr("COMBAT_LOG_COLLISION_DAMAGE") % [colored_unit(collision_unit.unit_type, collision_unit.team), int(event.collision_damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
 				if event.downed:
-					entries.append(tr("%s 倒下") % colored_unit(event.target_type, event.target_team))
+					entries.append(tr("COMBAT_LOG_UNIT_DEFEATED") % colored_unit(event.target_type, event.target_team))
 				for collision_unit in event.collision_units:
 					if collision_unit.downed:
-						entries.append(tr("%s 倒下") % colored_unit(collision_unit.unit_type, collision_unit.team))
+						entries.append(tr("COMBAT_LOG_UNIT_DEFEATED") % colored_unit(collision_unit.unit_type, collision_unit.team))
 			"terrain_created":
-				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("%s 使用「%s」") % [colored_unit(event.actor_type, event.actor_team), tr(BattleConfig.skill_name_key(event.skill))]])
+				entries.append("[url=log_entry:%d]%s %s[/url]" % [index, marker, tr("COMBAT_LOG_SKILL") % [colored_unit(event.actor_type, event.actor_team), tr(BattleConfig.skill_name_key(event.skill))]])
 				if expanded:
-					entries.append(tr("產生「%s」") % tr(BattleConfig.terrain_name_key(event.terrain)))
+					entries.append(tr("COMBAT_LOG_TERRAIN_CREATED") % tr(BattleConfig.terrain_name_key(event.terrain)))
 			"terrain_damage":
 				var log_key := "COMBAT_LOG_TERRAIN_INSTANT_DOWN" if event.instant_down else "COMBAT_LOG_TERRAIN_DAMAGE"
 				var log_text := tr(log_key) % [colored_unit(event.target_type, event.target_team), tr(BattleConfig.terrain_name_key(event.terrain)), int(event.damage), int(event.remaining_hp), int(event.max_hp)]
@@ -468,7 +468,7 @@ func _on_battle_log_gui_input(event: InputEvent) -> void:
 
 func _on_log_visibility_toggled(hidden: bool) -> void:
 	log_panel.visible = not hidden
-	log_visibility_button.text = tr("顯示紀錄") if hidden else tr("隱藏紀錄")
+	log_visibility_button.text = tr("COMBAT_LOG_SHOW") if hidden else tr("COMBAT_LOG_HIDE")
 
 func localized_unit_name(unit_type: String) -> String:
 	return tr(BattleConfig.unit_name_key(unit_type))
@@ -533,10 +533,11 @@ func localized_skill_details(skill: Dictionary) -> String:
 		lines.append(tr("SKILL_RANGE_INTERVAL") % [int(details.min_range), int(details.max_range)])
 	else:
 		lines.append(tr("SKILL_RANGE") % int(details.max_range))
-	if details.attack_bonus != null:
-		lines.append(tr("SKILL_ATTACK_BONUS") % int(details.attack_bonus))
 	if details.power_bonus != null:
 		lines.append(tr("SKILL_POWER_SOURCE_%s" % details.power_source.to_upper()))
+	if details.hit_bonus != null:
+		lines.append(tr("SKILL_HIT_BONUS") % int(details.hit_bonus))
+	if details.power_bonus != null:
 		lines.append(tr("SKILL_POWER_BONUS") % int(details.power_bonus))
 	var effect: Dictionary = details.effect
 	if effect.kind == "push":

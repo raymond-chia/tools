@@ -9,7 +9,7 @@ fn sight_game(diagram: &str, effect: SkillEffect, target_team: Team) -> Game {
 
 fn attack() -> SkillEffect {
     SkillEffect::Attack {
-        attack_bonus: 100,
+        hit_bonus: 100,
         power_bonus: 0,
     }
 }
@@ -90,7 +90,7 @@ fn all_skill_targets_require_sight() {
     for (effect, target_team) in [
         (attack(), Team::Enemy("test_enemy".into())),
         (
-            SkillEffect::Push { attack_bonus: 100 },
+            SkillEffect::Push { hit_bonus: 100 },
             Team::Enemy("test_enemy".into()),
         ),
         (SkillEffect::Heal { power_bonus: 1 }, Team::Player),
@@ -258,7 +258,7 @@ fn skill_range_and_sight_require_the_same_origin_cell() {
         for (effect, target_team) in [
             (attack(), Team::Enemy("test_enemy".into())),
             (
-                SkillEffect::Push { attack_bonus: 100 },
+                SkillEffect::Push { hit_bonus: 100 },
                 Team::Enemy("test_enemy".into()),
             ),
             (SkillEffect::Heal { power_bonus: 1 }, Team::Player),

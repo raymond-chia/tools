@@ -14,11 +14,11 @@ const TITLES := {"unit_types": "單位", "skills": "技能", "terrain_types": "�
 const FIELD_LABELS := {
 	"id": "ID", "visual": "外觀", "width": "佔地寬度", "height": "佔地高度",
 	"hp": "生命值", "movement": "移動力", "initiative": "先攻", "dodge": "閃避",
-	"block": "格擋", "attack": "命中", "physical_power": "物理威力", "magical_power": "魔法威力",
+	"block": "格擋", "hit": "命中", "physical_power": "物理威力", "magical_power": "魔法威力",
 	"main_hand": "主手", "off_hand": "副手", "armor": "護具", "accessory": "飾品",
 	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "skills": "可用技能", "passive_skills": "被動技能",
 	"ranged": "遠程技能", "min_range": "最小範圍", "max_range": "最大範圍",
-	"effect": "效果", "attack_bonus": "命中加成", "power_bonus": "威力加成",
+	"effect": "效果", "hit_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
 	"entry_rule": "進入規則", "damage": "傷害", "extra_movement_cost": "額外移動消耗",
 	"blocks_sight": "阻擋視線", "dodge_penalty": "閃避減值", "block_penalty": "格擋減值"

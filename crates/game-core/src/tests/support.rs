@@ -105,7 +105,7 @@ fn test_unit_type(id: &str, initiative: i32, (width, height): (i32, i32)) -> aut
         movement: 0,
         initiative,
         dodge: 0,
-        attack: 0,
+        hit: 0,
         physical_power: 1,
         magical_power: 1,
         main_hand: String::new(),

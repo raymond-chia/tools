@@ -16,7 +16,7 @@ SKILL_TYPE_MELEE,類型：近戰,Type: Melee
 SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
 SKILL_RANGE,射程：%d 格,Range: %d tiles
 SKILL_RANGE_INTERVAL,射程：%d–%d 格,Range: %d–%d tiles
-SKILL_ATTACK_BONUS,攻擊加值：%+d,Attack modifier: %+d
+SKILL_HIT_BONUS,命中加值：%+d,Hit modifier: %+d
 SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,"Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too"
 SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
@@ -38,86 +38,68 @@ ATTACK_PREVIEW_DAMAGE,傷害 %d,Damage %d
 ATTACK_PREVIEW_HIT,命中 %d%%,Hit %d%%
 ATTACK_PREVIEW_BLOCK,格擋 %d%%,Block %d%%
 ATTACK_PREVIEW_CRITICAL,暴擊率 %d%%,Critical chance %d%%
-選單,選單,Menu
-灰燼谷伏擊,灰燼谷伏擊,Ash Valley Ambush
+BATTLE_MENU,選單,Menu
 UNIT_NAME_ARIA,亞莉亞・劍士,Aria · Fighter
 UNIT_NAME_LYRA,萊拉・遊俠,Lyra · Ranger
 UNIT_NAME_MIRA,米菈・術士,Mira · Mage
 UNIT_NAME_WOLF,荒原狼,Wasteland Wolf
 TEAM_NAME_WILD_ANIMALS,野生動物,Wild Animals
-近戰攻擊,近戰攻擊,Melee Attack
-遠程攻擊,遠程攻擊,Ranged Attack
-強力一擊,強力一擊,Power Strike
-瞄準射擊,瞄準射擊,Aimed Shot
-盾牌推擊,盾牌推擊,Shield Bash
-泥沼,泥沼,Mire
-治癒術,治癒術,Heal
-移動消耗 0,移動消耗 0,Move cost 0
-傷害 0,傷害 0,Damage 0
-命中 0%,命中 0%,Hit 0%
-格擋 0%,格擋 0%,Block 0%
-暴擊率 0%,暴擊率 0%,Critical chance 0%
-技能,技能,Skill
-技能說明,技能說明,Skill details
-戰鬥紀錄,戰鬥紀錄,Combat Log
-延後,延後,Delay
-取消延後,取消延後,Cancel delay
-剩餘移動 0,剩餘移動 0,Movement left 0
-剩餘移動 %d,剩餘移動 %d,Movement left %d
-攻擊與技能,攻擊與技能,Attacks and Skills
-攻擊預覽,攻擊預覽,Attack Preview
-結束回合,結束回合,End Turn
-詳情,詳情,Details
-單位,單位,Unit
-地面,地面,Ground
-地形,地形,Terrain
-地面效果,地面效果,Ground effect
-陣營,陣營,Team
-生命,生命,Health
-體型,體型,Size
-移動,移動,Movement
-先攻,先攻,Initiative
-閃避／格擋,閃避／格擋,Dodge / Block
-攻擊,攻擊,Attack
-威力,威力,Power
-移動消耗,移動消耗,Move cost
-隱藏紀錄,隱藏紀錄,Hide Log
-顯示紀錄,顯示紀錄,Show Log
-我方,我方,Ally
-敵方,敵方,Enemy
-大型,大型,Large
-一般,一般,Normal
-無法通行,無法通行,Impassable
-移動消耗 %d,移動消耗 %d,Move cost %d
-左鍵選擇與移動；右鍵查看單位或地面資訊。,左鍵選擇與移動；右鍵查看單位或地面資訊。,Left-click to select and move; right-click to inspect a unit or ground.
-請選擇施法格子。,請選擇施法格子。,Select a ground cell for the skill.
-請選擇技能目標。,請選擇技能目標。,Select a target for the skill.
-請選擇一個單位作為目標。,請選擇一個單位作為目標。,Select a unit as the target.
-已取消技能。,已取消技能。,Skill cancelled.
-請選擇地圖上的格子。,請選擇地圖上的格子。,Select a cell on the map.
-閃避,閃避,Dodge
-格擋,格擋,Block
-格擋 -%d,格擋 -%d,Block -%d
-── 第 %d 輪 ──,── 第 %d 輪 ──,── Round %d ──
-%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s: D%d roll %d + initiative %d = %d
-%s 使用「%s」影響 %s,%s 使用「%s」影響 %s,%s uses %s on %s
-治療,治療,Healing
-結果：%s，回復 %d HP，HP %d/%d,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
-攻擊加值：%d%s%s = %d,攻擊加值：%d%s%s = %d,Attack modifier: %d%s%s = %d
-D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d 擲骰 %d + 攻擊加值 %d = 攻擊總值 %d,D%d roll %d + attack modifier %d = attack total %d
-目標防禦：閃避門檻 %d／格擋門檻 %d,目標防禦：閃避門檻 %d／格擋門檻 %d,Target defense: dodge %d / block %d
-暴擊,暴擊,Critical
-，%s,，%s,", %s"
-結果：%s%s,結果：%s%s,Result: %s%s
-傷害：原始 %d − 格擋 %d = %d，HP %d/%d,傷害：原始 %d − 格擋 %d = %d，HP %d/%d,Damage: raw %d − block %d = %d; HP %d/%d
-結果：%s%s，%d 傷害，HP %d/%d,結果：%s%s，%d 傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
-%s 被沿攻擊方向推動 %d 格,%s 被沿攻擊方向推動 %d 格,%s is pushed %d tiles in the attack direction
-推擊受阻，%s 額外受到 %d 點碰撞傷害,推擊受阻，%s 額外受到 %d 點碰撞傷害,Push blocked: %s takes %d collision damage
-"%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s is struck and takes %d collision damage; HP %d/%d"
-%s 倒下,%s 倒下,%s is defeated
-%s 使用「%s」,%s 使用「%s」,%s uses %s
-產生「%s」,產生「%s」,Creates %s
-包抄,包抄,Flanking
+BATTLE_MOVE_COST_INITIAL,移動消耗 0,Move cost 0
+ATTACK_PREVIEW_DAMAGE_INITIAL,傷害 0,Damage 0
+ATTACK_PREVIEW_HIT_INITIAL,命中 0%,Hit 0%
+ATTACK_PREVIEW_BLOCK_INITIAL,格擋 0%,Block 0%
+ATTACK_PREVIEW_CRITICAL_INITIAL,暴擊率 0%,Critical chance 0%
+DETAIL_SKILL,技能,Skill
+DETAIL_SKILL_DESCRIPTION,技能說明,Skill details
+COMBAT_LOG_TITLE,戰鬥紀錄,Combat Log
+BATTLE_DELAY,延後,Delay
+BATTLE_CANCEL_DELAY,取消延後,Cancel delay
+BATTLE_MOVEMENT_REMAINING_INITIAL,剩餘移動 0,Movement left 0
+BATTLE_MOVEMENT_REMAINING,剩餘移動 %d,Movement left %d
+BATTLE_ACTIONS,攻擊與技能,Attacks and Skills
+ATTACK_PREVIEW_HEADING,攻擊預覽,Attack Preview
+BATTLE_END_TURN,結束回合,End Turn
+DETAIL_TITLE,詳情,Details
+DETAIL_TERRAIN,地形,Terrain
+DETAIL_TERRAIN_EFFECTS,地面效果,Ground effect
+DETAIL_TEAM,陣營,Team
+DETAIL_SIZE,體型,Size
+DETAIL_MOVEMENT,移動,Movement
+DETAIL_INITIATIVE,先攻,Initiative
+DETAIL_HIT,命中,Hit
+DETAIL_MOVE_COST,移動消耗,Move cost
+COMBAT_LOG_HIDE,隱藏紀錄,Hide Log
+COMBAT_LOG_SHOW,顯示紀錄,Show Log
+TEAM_ALLY,我方,Ally
+TEAM_ENEMY,敵方,Enemy
+UNIT_SIZE_LARGE,大型,Large
+UNIT_SIZE_NORMAL,一般,Normal
+BATTLE_MOVE_COST,移動消耗 %d,Move cost %d
+BATTLE_STATUS_CONTROLS,左鍵選擇與移動；右鍵查看單位或地面資訊。,Left-click to select and move; right-click to inspect a unit or ground.
+BATTLE_STATUS_SELECT_SKILL_TARGET,請選擇技能目標。,Select a target for the skill.
+BATTLE_STATUS_SKILL_CANCELLED,已取消技能。,Skill cancelled.
+BATTLE_STATUS_SELECT_CELL,請選擇地圖上的格子。,Select a cell on the map.
+COMBAT_FLOATING_BLOCK_DAMAGE,格擋 -%d,Block -%d
+COMBAT_LOG_ROUND,── 第 %d 輪 ──,── Round %d ──
+COMBAT_LOG_INITIATIVE_ROLL,%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s: D%d roll %d + initiative %d = %d
+COMBAT_LOG_SKILL_TARGET,%s 使用「%s」影響 %s,%s uses %s on %s
+ATTACK_RESULT_HEAL,治療,Healing
+COMBAT_LOG_HEAL_RESULT,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
+COMBAT_LOG_HIT,命中加值：%d%s%s = %d,Hit modifier: %d%s%s = %d
+COMBAT_LOG_HIT_ROLL,D%d 擲骰 %d + 命中加值 %d = 命中總值 %d,D%d roll %d + hit modifier %d = hit total %d
+COMBAT_LOG_TARGET_DEFENSE,目標防禦：閃避門檻 %d／格擋門檻 %d,Target defense: dodge %d / block %d
+ATTACK_RESULT_CRITICAL,暴擊,Critical
+COMBAT_LOG_CRITICAL_SUFFIX,，%s,", %s"
+COMBAT_LOG_ATTACK_RESULT,結果：%s%s,Result: %s%s
+COMBAT_LOG_BLOCK_DAMAGE,傷害：原始 %d − 格擋 %d = %d，HP %d/%d,Damage: raw %d − block %d = %d; HP %d/%d
+COMBAT_LOG_DAMAGE_RESULT,結果：%s%s，%d 傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
+COMBAT_LOG_PUSH,%s 被沿攻擊方向推動 %d 格,%s is pushed %d tiles in the attack direction
+COMBAT_LOG_PUSH_BLOCKED,推擊受阻，%s 額外受到 %d 點碰撞傷害,Push blocked: %s takes %d collision damage
+COMBAT_LOG_COLLISION_DAMAGE,"%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s is struck and takes %d collision damage; HP %d/%d"
+COMBAT_LOG_UNIT_DEFEATED,%s 倒下,%s is defeated
+COMBAT_LOG_SKILL,%s 使用「%s」,%s uses %s
+COMBAT_LOG_TERRAIN_CREATED,產生「%s」,Creates %s
+COMBAT_LOG_FLANKING_MODIFIER,包抄,Flanking
 ERROR_CANNOT_ATTACK_ALLY,不能攻擊友軍,Cannot attack an ally
 ERROR_CANNOT_CONTINUE,目前沒有可推進的自動回合,No automatic turn can be advanced
 ERROR_CANNOT_MOVE,目前不能移動,Cannot move now
@@ -183,7 +165,6 @@ TERRAIN_EFFECT_DURATION,剩餘 {value} 回合,{value} rounds remaining
 DETAIL_BLOCK_REDUCTION,格擋減傷,Block reduction
 DETAIL_PHYSICAL_POWER,物理威力,Physical power
 DETAIL_MAGICAL_POWER,魔法威力,Magical power
-EQUIPMENT,裝備,Equipment
 EQUIPMENT_NONE,無,None
 EQUIPMENT_MAIN_HAND,主手,Main hand
 EQUIPMENT_OFF_HAND,副手,Off hand
@@ -202,7 +183,7 @@ ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,I
 ERROR_TARGET_NOT_VISIBLE,目標位置不在視線內,Target position is not in line of sight
 SKILL_NAME_FLANKING,夾擊,Flanking
 SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
-SKILL_EFFECT_FLANKING,被動：近戰夾擊時攻擊加值 +%d,Passive: +%d attack modifier when flanking in melee
+SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit modifier when flanking in melee
 ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；同一效果只能選一個版本,Invalid passive skills; select only one version of each effect
 DETAIL_ATTRIBUTES,屬性,Attributes
 DETAIL_ACTIVE_SKILLS,主動技能,Active

@@ -29,7 +29,7 @@ fn enemy_without_skill_rejected_on_load() {
             movement: 1,
             initiative: 0,
             dodge: 0,
-            attack: 0,
+            hit: 0,
             physical_power: 1,
             magical_power: 1,
             main_hand: String::new(),

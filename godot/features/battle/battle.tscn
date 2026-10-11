@@ -45,7 +45,7 @@ offset_right = 620.0
 offset_bottom = 78.0
 theme_override_colors/font_color = Color(0.94902, 0.831373, 0.607843, 1)
 theme_override_font_sizes/font_size = 54
-text = "灰燼谷伏擊"
+text = ""
 
 [node name="MoveCostPopup" type="PanelContainer" parent="UI/Root" unique_id=330312368]
 visible = false
@@ -55,7 +55,7 @@ mouse_filter = 2
 
 [node name="Label" type="Label" parent="UI/Root/MoveCostPopup" unique_id=1971572601]
 layout_mode = 2
-text = "移動消耗 0"
+text = "BATTLE_MOVE_COST_INITIAL"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -79,7 +79,7 @@ theme_override_constants/separation = 6
 [node name="Title" type="Label" parent="UI/Root/AttackPreview/Margin/Content" unique_id=563644868]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
-text = "攻擊預覽"
+text = "ATTACK_PREVIEW_HEADING"
 
 [node name="ResourceRow" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content" unique_id=1382004891]
 layout_mode = 2
@@ -92,7 +92,7 @@ text = "HP 0 / 0｜MP 1"
 
 [node name="Damage" type="Label" parent="UI/Root/AttackPreview/Margin/Content/ResourceRow" unique_id=688712973]
 layout_mode = 2
-text = "傷害 0"
+text = "ATTACK_PREVIEW_DAMAGE_INITIAL"
 horizontal_alignment = 2
 
 [node name="Details" type="HBoxContainer" parent="UI/Root/AttackPreview/Margin/Content" unique_id=88130857]
@@ -102,19 +102,19 @@ theme_override_constants/separation = 8
 [node name="Hit" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details" unique_id=1094267125]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "命中 0%"
+text = "ATTACK_PREVIEW_HIT_INITIAL"
 horizontal_alignment = 1
 
 [node name="Block" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details" unique_id=1996306920]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "格擋 0%"
+text = "ATTACK_PREVIEW_BLOCK_INITIAL"
 horizontal_alignment = 1
 
 [node name="Critical" type="Label" parent="UI/Root/AttackPreview/Margin/Content/Details" unique_id=1728429245]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "暴擊率 0%"
+text = "ATTACK_PREVIEW_CRITICAL_INITIAL"
 horizontal_alignment = 1
 
 [node name="HealthMarkers" type="Control" parent="UI/Root/AttackPreview/Margin/Content" unique_id=1426511633]
@@ -217,11 +217,11 @@ theme_override_constants/separation = 8
 [node name="Title" type="Label" parent="UI/Root/HoveredSkill/Margin/Content" unique_id=1055447773]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
-text = "技能"
+text = "DETAIL_SKILL"
 
 [node name="Details" type="Label" parent="UI/Root/HoveredSkill/Margin/Content" unique_id=1796803146]
 layout_mode = 2
-text = "技能說明"
+text = "DETAIL_SKILL_DESCRIPTION"
 autowrap_mode = 2
 
 [node name="LogPanel" type="Panel" parent="UI/Root" unique_id=1465909814]
@@ -258,7 +258,7 @@ theme_override_constants/separation = 12
 [node name="Title" type="Label" parent="UI/Root/LogPanel/Margin/Content" unique_id=997955482]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
-text = "戰鬥紀錄"
+text = "COMBAT_LOG_TITLE"
 
 [node name="Entries" type="RichTextLabel" parent="UI/Root/LogPanel/Margin/Content" unique_id=445708774]
 layout_mode = 2
@@ -281,7 +281,7 @@ offset_right = -40.0
 offset_bottom = 88.0
 grow_horizontal = 0
 toggle_mode = true
-text = "隱藏紀錄"
+text = "COMBAT_LOG_HIDE"
 
 [node name="LeftColumn" type="VBoxContainer" parent="UI/Root" unique_id=1188849361]
 layout_mode = 1
@@ -323,7 +323,7 @@ offset_top = -48.0
 offset_right = 120.0
 grow_horizontal = 0
 grow_vertical = 0
-text = "延後"
+text = "BATTLE_DELAY"
 
 [node name="CurrentUnitBar" type="Panel" parent="UI/Root/LeftColumn" unique_id=883535864]
 custom_minimum_size = Vector2(426, 176)
@@ -370,7 +370,7 @@ autowrap_mode = 3
 
 [node name="Movement" type="Label" parent="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/NameAndMovement" unique_id=1655902080]
 layout_mode = 2
-text = "剩餘移動 0"
+text = "BATTLE_MOVEMENT_REMAINING_INITIAL"
 
 [node name="ActionBar" type="Panel" parent="UI/Root" unique_id=424199129]
 layout_mode = 1
@@ -406,7 +406,7 @@ theme_override_constants/separation = 4
 
 [node name="Title" type="Label" parent="UI/Root/ActionBar/Margin/Layout/Actions" unique_id=215328332]
 layout_mode = 2
-text = "攻擊與技能"
+text = "BATTLE_ACTIONS"
 
 [node name="Buttons" type="HBoxContainer" parent="UI/Root/ActionBar/Margin/Layout/Actions" unique_id=1836712815]
 layout_mode = 2
@@ -422,7 +422,7 @@ custom_minimum_size = Vector2(180, 72)
 layout_mode = 2
 size_flags_vertical = 8
 theme_type_variation = &"PrimaryButton"
-text = "結束回合"
+text = "BATTLE_END_TURN"
 
 [node name="Status" type="Label" parent="UI/Root" unique_id=1756298131]
 layout_mode = 1
@@ -434,7 +434,7 @@ offset_top = -143.0
 offset_right = 1150.0
 offset_bottom = -111.0
 grow_vertical = 0
-text = "左鍵選擇與移動；右鍵查看單位或地面資訊。"
+text = "BATTLE_STATUS_CONTROLS"
 vertical_alignment = 1
 
 [node name="InfoPanel" type="PanelContainer" parent="UI/Root" unique_id=1260530961]
@@ -471,7 +471,7 @@ mouse_default_cursor_shape = 13
 layout_mode = 2
 size_flags_horizontal = 3
 theme_type_variation = &"HeadingLabel"
-text = "詳情"
+text = "DETAIL_TITLE"
 vertical_alignment = 1
 
 [node name="Close" type="Button" parent="UI/Root/InfoPanel/Margin/Content/Header" unique_id=802454022]
@@ -487,12 +487,12 @@ theme_override_constants/separation = 10
 [node name="Name" type="Label" parent="UI/Root/InfoPanel/Margin/Content/SkillDetails" unique_id=1222380467]
 layout_mode = 2
 theme_type_variation = &"HeadingLabel"
-text = "技能"
+text = "DETAIL_SKILL"
 autowrap_mode = 2
 
 [node name="Details" type="Label" parent="UI/Root/InfoPanel/Margin/Content/SkillDetails" unique_id=1163905536]
 layout_mode = 2
-text = "技能說明"
+text = "DETAIL_SKILL_DESCRIPTION"
 autowrap_mode = 2
 
 [node name="UnitName" type="Label" parent="UI/Root/InfoPanel/Margin/Content"]
@@ -506,7 +506,7 @@ layout_mode = 2
 size_flags_vertical = 3
 clip_tabs = false
 theme_override_font_sizes/font_size = 20
-tab_0/title = "地形"
+tab_0/title = "DETAIL_TERRAIN"
 tab_1/title = "DETAIL_ATTRIBUTES"
 tab_2/title = "DETAIL_ACTIVE_SKILLS"
 tab_3/title = "DETAIL_PASSIVE_SKILLS"
@@ -528,7 +528,7 @@ columns = 2
 
 [node name="TerrainLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=1760620082]
 layout_mode = 2
-text = "地形"
+text = "DETAIL_TERRAIN"
 
 [node name="TerrainValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=856038111]
 custom_maximum_size = Vector2(280, -1)
@@ -539,7 +539,7 @@ autowrap_mode = 2
 
 [node name="CostLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=187402672]
 layout_mode = 2
-text = "移動消耗"
+text = "DETAIL_MOVE_COST"
 
 [node name="CostValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=1573503191]
 custom_maximum_size = Vector2(280, -1)
@@ -550,7 +550,7 @@ autowrap_mode = 2
 
 [node name="EffectLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=195611038]
 layout_mode = 2
-text = "地面效果"
+text = "DETAIL_TERRAIN_EFFECTS"
 
 [node name="EffectValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=998091986]
 custom_maximum_size = Vector2(280, -1)
@@ -581,7 +581,7 @@ columns = 2
 
 [node name="TeamLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1667310013]
 layout_mode = 2
-text = "陣營"
+text = "DETAIL_TEAM"
 
 [node name="TeamValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1460731533]
 custom_maximum_size = Vector2(280, -1)
@@ -603,7 +603,7 @@ autowrap_mode = 2
 
 [node name="SizeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1663230119]
 layout_mode = 2
-text = "體型"
+text = "DETAIL_SIZE"
 
 [node name="SizeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=359824839]
 custom_maximum_size = Vector2(280, -1)
@@ -614,7 +614,7 @@ autowrap_mode = 2
 
 [node name="MovementLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=351357159]
 layout_mode = 2
-text = "移動"
+text = "DETAIL_MOVEMENT"
 
 [node name="MovementValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=360268508]
 custom_maximum_size = Vector2(280, -1)
@@ -625,7 +625,7 @@ autowrap_mode = 2
 
 [node name="InitiativeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=2026487544]
 layout_mode = 2
-text = "先攻"
+text = "DETAIL_INITIATIVE"
 
 [node name="InitiativeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=131765223]
 custom_maximum_size = Vector2(280, -1)
@@ -636,7 +636,7 @@ autowrap_mode = 2
 
 [node name="DodgeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
 layout_mode = 2
-text = "閃避"
+text = "ATTACK_RESULT_DODGE"
 
 [node name="DodgeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
 custom_maximum_size = Vector2(280, -1)
@@ -647,7 +647,7 @@ autowrap_mode = 2
 
 [node name="BlockLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
 layout_mode = 2
-text = "格擋"
+text = "ATTACK_RESULT_BLOCK"
 
 [node name="BlockValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
 custom_maximum_size = Vector2(280, -1)
@@ -667,11 +667,11 @@ size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
 
-[node name="AttackLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=2030797192]
+[node name="HitLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=2030797192]
 layout_mode = 2
-text = "攻擊"
+text = "DETAIL_HIT"
 
-[node name="AttackValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1798711331]
+[node name="HitValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1798711331]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
@@ -773,4 +773,4 @@ offset_top = 20.0
 offset_right = 155.0
 offset_bottom = 68.0
 flat = false
-text = "選單"
+text = "BATTLE_MENU"

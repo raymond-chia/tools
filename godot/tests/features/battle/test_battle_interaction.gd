@@ -46,7 +46,7 @@ func test_combat_presentation_locks_inputs_and_restores_them() -> void:
 		battle.world.inspection_clicked.emit(2, Vector2i(0, 3))
 		assert_vector(battle.inspected_cell).is_equal(Vector2i(0, 3))
 
-# 驗證地圖外、空地與友方等無效技能目標保留待選技能及戰鬥狀態，之後可正常施放。
+# 驗證無效技能目標保留待選技能與戰鬥狀態、畫面顯示翻譯後提示，之後可正常施放。
 func test_failed_skill_keeps_selection_until_valid_target() -> void:
 	var cases := [
 		{"cell": Vector2i(-1, -1), "status": "請選擇地圖上的格子。"},
@@ -63,7 +63,7 @@ func test_failed_skill_keeps_selection_until_valid_target() -> void:
 		assert_str(battle.status).is_not_empty()
 		assert_str(battle.ui.status.text).is_equal(tr(battle.status))
 		if not test_case.status.is_empty():
-			assert_str(battle.status).is_equal(test_case.status)
+			assert_str(battle.ui.status.text).is_equal(test_case.status)
 		assert_bool(battle.ui.action_buttons.presentation_push.button_pressed).is_true()
 		battle.world.primary_clicked.emit(3, Vector2i(2, 1))
 		assert_str(battle.pending_action).is_empty()

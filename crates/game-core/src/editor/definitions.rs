@@ -251,16 +251,16 @@ pub fn edit_definition_from_json(
                 .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
             skill.effect = match effect {
                 EffectSelection::Attack => SkillEffect::Attack {
-                    attack_bonus: 0,
+                    hit_bonus: 0,
                     power_bonus: 0,
                 },
-                EffectSelection::Push => SkillEffect::Push { attack_bonus: 0 },
+                EffectSelection::Push => SkillEffect::Push { hit_bonus: 0 },
                 EffectSelection::Mire { terrain } => SkillEffect::Mire {
                     terrain,
                     duration: crate::model::default_duration(),
                 },
                 EffectSelection::Heal => SkillEffect::Heal { power_bonus: 0 },
-                EffectSelection::Flanking => SkillEffect::Flanking { attack_bonus: 0 },
+                EffectSelection::Flanking => SkillEffect::Flanking { hit_bonus: 0 },
             };
             if matches!(skill.effect, SkillEffect::Flanking { .. }) {
                 skill.ranged = false;
@@ -306,7 +306,7 @@ pub fn edit_definition_from_json(
                     movement: 0,
                     initiative: 0,
                     dodge: 0,
-                    attack: 0,
+                    hit: 0,
                     physical_power: 0,
                     magical_power: 0,
                     main_hand: String::new(),
@@ -323,7 +323,7 @@ pub fn edit_definition_from_json(
                     min_range: crate::model::default_one(),
                     max_range: crate::model::default_one(),
                     effect: SkillEffect::Attack {
-                        attack_bonus: 0,
+                        hit_bonus: 0,
                         power_bonus: 0,
                     },
                 }),

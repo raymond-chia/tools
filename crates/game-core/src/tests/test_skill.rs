@@ -9,7 +9,7 @@ fn push_collision_damages_both_units() {
     let mut game = game_with_skill_on_ascii_map(
         1,
         1,
-        SkillEffect::Push { attack_bonus: 100 },
+        SkillEffect::Push { hit_bonus: 100 },
         Team::Enemy("test_enemy".into()),
         "
         .....
@@ -72,7 +72,7 @@ fn skill_min_range_limits_preview_and_action() {
     let mut game = game_with_skill_on_ascii_map(
         2,
         2,
-        SkillEffect::Push { attack_bonus: 100 },
+        SkillEffect::Push { hit_bonus: 100 },
         Team::Enemy("test_enemy".into()),
         "
         .....

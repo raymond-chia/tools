@@ -36,7 +36,7 @@ func test_inspection_changes_from_right_click() -> void:
 		assert_str(battle.pending_action).override_failure_message("%s：不應建立待選技能" % test_case.name).is_empty()
 		assert_dict(combat_state(battle.state)).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
 
-# 驗證技能待選時右鍵先查看單位並更新範圍，重複查看或點空地才取消技能，且不改變戰鬥資料。
+# 驗證技能待選時右鍵先查看、重複查看或點空地才取消，畫面顯示翻譯後提示且不改變戰鬥資料。
 func test_pending_action_right_click_priority() -> void:
 	var test_data := [
 		{"name": "未查看時先顯示單位", "initial": "none", "click": "unit:%d" % ARIA_ID, "result": "inspect"},
@@ -57,7 +57,7 @@ func test_pending_action_right_click_priority() -> void:
 		var expected_status := "請選擇技能目標。" if test_case.result == "inspect" else "已取消技能。"
 		assert_inspection(battle, expected_target, test_case.name)
 		assert_str(battle.pending_action).override_failure_message("%s：技能狀態應符合右鍵優先規則" % test_case.name).is_equal(expected_action)
-		assert_str(battle.status).override_failure_message("%s：提示文字應符合技能狀態" % test_case.name).is_equal(expected_status)
+		assert_str(battle.ui.status.text).override_failure_message("%s：畫面提示文字應符合技能狀態" % test_case.name).is_equal(expected_status)
 		assert_dict(combat_state(battle.state)).override_failure_message("%s：不應修改核心戰鬥狀態" % test_case.name).is_equal(state_before_input)
 
 # 驗證戰鬥區域外的右鍵與右鍵放開事件不會改變目前查看狀態。

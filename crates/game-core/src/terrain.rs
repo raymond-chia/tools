@@ -247,7 +247,7 @@ impl Game {
                 initiative: _,
                 dodge: _,
                 block: _,
-                attack: _,
+                hit: _,
                 physical_power: _,
                 magical_power: _,
                 block_reduction: _,

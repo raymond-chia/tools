@@ -65,7 +65,7 @@ impl Game {
             initiative: _,
             dodge: _,
             block: _,
-            attack: _,
+            hit: _,
             physical_power: _,
             magical_power: _,
             block_reduction: _,
@@ -84,7 +84,7 @@ impl Game {
             initiative: _,
             dodge: _,
             block: _,
-            attack: _,
+            hit: _,
             physical_power: _,
             magical_power: _,
             block_reduction: _,
@@ -95,12 +95,12 @@ impl Game {
             .get::<Unit>(te)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        let (attack_bonus, power_bonus, push) = match effect {
+        let (hit_bonus, power_bonus, push) = match effect {
             UnitSkillEffect::Attack {
-                attack_bonus,
+                hit_bonus,
                 power_bonus,
                 push,
-            } => (attack_bonus, power_bonus, push),
+            } => (hit_bonus, power_bonus, push),
             UnitSkillEffect::Heal { power_bonus } => {
                 let HealingPreview {
                     target: target_id,
@@ -136,13 +136,13 @@ impl Game {
                 return Ok(());
             }
         };
-        let AttackModifierBreakdown {
-            attack_stat_modifier,
-            skill_attack_modifier,
+        let HitBreakdown {
+            base_hit,
+            skill_hit,
             flanking_modifier,
             total: modifier,
-        } = attack_modifier_breakdown(&self.world, ae, te, &skill, attack_bonus);
-        let natural = die(&mut self.world, gameplay_config::ATTACK_DIE_SIDES) as i32;
+        } = hit_breakdown(&self.world, ae, te, &skill, hit_bonus);
+        let natural = die(&mut self.world, gameplay_config::HIT_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
         let target_block = effective_block(&self.world, te);
         let degree = degree(
@@ -244,7 +244,7 @@ impl Game {
                         initiative: _,
                         dodge: _,
                         block: _,
-                        attack: _,
+                        hit: _,
                         physical_power: _,
                         magical_power: _,
                         block_reduction: _,
@@ -289,12 +289,12 @@ impl Game {
                 target_type,
                 target_team,
                 roll: natural,
-                die_sides: gameplay_config::ATTACK_DIE_SIDES,
-                attack_stat_modifier,
-                skill_attack_modifier,
+                die_sides: gameplay_config::HIT_DIE_SIDES,
+                base_hit,
+                skill_hit,
                 flanking_modifier,
-                attack_modifier: modifier,
-                attack_total: natural + modifier,
+                hit: modifier,
+                hit_total: natural + modifier,
                 dodge_target: gameplay_config::BASE_DEFENSE + target_dodge,
                 block_target: gameplay_config::BASE_DEFENSE + target_dodge + target_block,
                 result,
@@ -437,7 +437,7 @@ pub(crate) fn preview_unit_skill_from_position(
 ) -> Result<SkillPreview, GameError> {
     let (target_entity, effect) =
         validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)?;
-    let (attack_bonus, power_bonus) = match effect {
+    let (hit_bonus, power_bonus) = match effect {
         UnitSkillEffect::Heal { power_bonus } => {
             return Ok(SkillPreview::Healing(healing_preview(
                 world,
@@ -448,10 +448,10 @@ pub(crate) fn preview_unit_skill_from_position(
             )));
         }
         UnitSkillEffect::Attack {
-            attack_bonus,
+            hit_bonus,
             power_bonus,
             push: _,
-        } => (attack_bonus, power_bonus),
+        } => (hit_bonus, power_bonus),
     };
 
     let Unit {
@@ -462,7 +462,7 @@ pub(crate) fn preview_unit_skill_from_position(
         initiative: _,
         dodge: _,
         block: _,
-        attack: _,
+        hit: _,
         physical_power: _,
         magical_power: _,
         block_reduction: _,
@@ -479,7 +479,7 @@ pub(crate) fn preview_unit_skill_from_position(
         initiative: _,
         dodge: _,
         block: _,
-        attack: _,
+        hit: _,
         physical_power: _,
         magical_power: _,
         block_reduction: _,
@@ -495,25 +495,18 @@ pub(crate) fn preview_unit_skill_from_position(
     } = world
         .get::<Hp>(target_entity)
         .expect("已建立的戰鬥單位應具有 Hp 元件");
-    let AttackModifierBreakdown {
-        attack_stat_modifier: _,
-        skill_attack_modifier: _,
+    let HitBreakdown {
+        base_hit: _,
+        skill_hit: _,
         flanking_modifier: _,
         total: modifier,
-    } = attack_modifier_breakdown_from_position(
-        world,
-        attacker,
-        position,
-        target_entity,
-        skill,
-        attack_bonus,
-    );
+    } = hit_breakdown_from_position(world, attacker, position, target_entity, skill, hit_bonus);
     let dodge_target = gameplay_config::BASE_DEFENSE + effective_dodge(world, target_entity);
     let block_target = dodge_target + effective_block(world, target_entity);
     let mut dodge_count = 0;
     let mut block_count = 0;
     let mut hit_count = 0;
-    for natural in 1..=gameplay_config::ATTACK_DIE_SIDES as i32 {
+    for natural in 1..=gameplay_config::HIT_DIE_SIDES as i32 {
         match attack_result(natural, modifier, dodge_target, block_target) {
             AttackResult::Dodge => dodge_count += 1,
             AttackResult::Block => block_count += 1,
@@ -543,10 +536,10 @@ pub(crate) fn preview_unit_skill_from_position(
         hit_remaining_hp,
         block_remaining_hp,
         dodge_remaining_hp: *target_hp,
-        dodge_chance: dodge_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
-        block_chance: block_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
-        hit_chance: hit_count * 100 / gameplay_config::ATTACK_DIE_SIDES,
-        critical_chance: 100 / gameplay_config::ATTACK_DIE_SIDES,
+        dodge_chance: dodge_count * 100 / gameplay_config::HIT_DIE_SIDES,
+        block_chance: block_count * 100 / gameplay_config::HIT_DIE_SIDES,
+        hit_chance: hit_count * 100 / gameplay_config::HIT_DIE_SIDES,
+        critical_chance: 100 / gameplay_config::HIT_DIE_SIDES,
         dodge_damage: 0,
         block_damage,
         critical_block_damage: attack_damage(
@@ -640,7 +633,7 @@ pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
 /// 以單位為目標的技能效果，只能由 validate_unit_skill_target 驗證後取得。
 enum UnitSkillEffect {
     Attack {
-        attack_bonus: i32,
+        hit_bonus: i32,
         power_bonus: Option<i32>,
         push: bool,
     },
@@ -691,7 +684,7 @@ fn validate_unit_skill_target_from_position(
         initiative: _,
         dodge: _,
         block: _,
-        attack: _,
+        hit: _,
         physical_power: _,
         magical_power: _,
         block_reduction: _,
@@ -708,7 +701,7 @@ fn validate_unit_skill_target_from_position(
         initiative: _,
         dodge: _,
         block: _,
-        attack: _,
+        hit: _,
         physical_power: _,
         magical_power: _,
         block_reduction: _,
@@ -722,15 +715,15 @@ fn validate_unit_skill_target_from_position(
     }
     let effect = match skill_effect {
         SkillEffect::Attack {
-            attack_bonus,
+            hit_bonus,
             power_bonus,
         } => UnitSkillEffect::Attack {
-            attack_bonus: *attack_bonus,
+            hit_bonus: *hit_bonus,
             power_bonus: Some(*power_bonus),
             push: false,
         },
-        SkillEffect::Push { attack_bonus } => UnitSkillEffect::Attack {
-            attack_bonus: *attack_bonus,
+        SkillEffect::Push { hit_bonus } => UnitSkillEffect::Attack {
+            hit_bonus: *hit_bonus,
             power_bonus: None,
             push: true,
         },
@@ -788,60 +781,60 @@ enum TargetSide {
     Below,
 }
 
-struct AttackModifierBreakdown {
-    attack_stat_modifier: i32,
-    skill_attack_modifier: i32,
+struct HitBreakdown {
+    base_hit: i32,
+    skill_hit: i32,
     flanking_modifier: i32,
     total: i32,
 }
 
 #[cfg(test)]
-pub(crate) fn attack_modifier(
+pub(crate) fn hit(
     world: &World,
     attacker: Entity,
     target: Entity,
     skill: &SkillDef,
-    attack_bonus: i32,
+    hit_bonus: i32,
 ) -> i32 {
-    let AttackModifierBreakdown {
-        attack_stat_modifier: _,
-        skill_attack_modifier: _,
+    let HitBreakdown {
+        base_hit: _,
+        skill_hit: _,
         flanking_modifier: _,
         total,
-    } = attack_modifier_breakdown(world, attacker, target, skill, attack_bonus);
+    } = hit_breakdown(world, attacker, target, skill, hit_bonus);
     total
 }
 
-fn attack_modifier_breakdown(
+fn hit_breakdown(
     world: &World,
     attacker: Entity,
     target: Entity,
     skill: &SkillDef,
-    attack_bonus: i32,
-) -> AttackModifierBreakdown {
+    hit_bonus: i32,
+) -> HitBreakdown {
     let position = world.get::<Pos>(attacker).expect("攻擊者應具有位置").0;
-    attack_modifier_breakdown_from_position(world, attacker, position, target, skill, attack_bonus)
+    hit_breakdown_from_position(world, attacker, position, target, skill, hit_bonus)
 }
 
-fn attack_modifier_breakdown_from_position(
+fn hit_breakdown_from_position(
     world: &World,
     attacker: Entity,
     position: GridPos,
     target: Entity,
     skill: &SkillDef,
-    attack_bonus: i32,
-) -> AttackModifierBreakdown {
+    hit_bonus: i32,
+) -> HitBreakdown {
     let unit = world
         .get::<Unit>(attacker)
         .expect("可發動攻擊的單位應具有 Unit");
-    let attack_stat_modifier = unit.attack;
-    let skill_attack_modifier = attack_bonus;
+    let base_hit = unit.hit;
+    let skill_hit = hit_bonus;
     let flanking_modifier = flanking_bonus(world, attacker, position, target, skill);
-    AttackModifierBreakdown {
-        attack_stat_modifier,
-        skill_attack_modifier,
+    HitBreakdown {
+        base_hit,
+        skill_hit,
         flanking_modifier,
-        total: attack_stat_modifier + skill_attack_modifier + flanking_modifier,
+        total: base_hit + skill_hit + flanking_modifier,
     }
 }
 
@@ -887,7 +880,7 @@ fn flanking_bonus(
             initiative: _,
             dodge: _,
             block: _,
-            attack: _,
+            hit: _,
             physical_power: _,
             magical_power: _,
             block_reduction: _,
@@ -920,7 +913,7 @@ fn flanking_bonus(
     });
     if has_supporter {
         let unit = world.get::<Unit>(attacker).expect("攻擊者應具有 Unit");
-        flanking_attack_bonus(
+        flanking_hit_bonus(
             unit.skills
                 .iter()
                 .map(|id| definitions.get(id).expect("單位技能引用已驗證")),
@@ -1035,7 +1028,7 @@ pub(crate) fn can_use_skill(turn: &Turn) -> bool {
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
     if n == 1 {
         RollDegree::CriticalFailure
-    } else if n == gameplay_config::ATTACK_DIE_SIDES as i32 {
+    } else if n == gameplay_config::HIT_DIE_SIDES as i32 {
         RollDegree::CriticalSuccess
     } else if n + m >= t {
         RollDegree::Success
@@ -1114,7 +1107,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         initiative: _,
         dodge: _,
         block: _,
-        attack: _,
+        hit: _,
         physical_power: _,
         magical_power: _,
         block_reduction: _,
@@ -1171,17 +1164,17 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
         effect: skill_effect,
     } = skill;
     let target = target_kind(skill_effect);
-    let (attack_bonus, power_bonus, effect) = match skill_effect {
+    let (hit_bonus, power_bonus, effect) = match skill_effect {
         SkillEffect::Attack {
-            attack_bonus,
+            hit_bonus,
             power_bonus,
         } => (
-            Some(*attack_bonus),
+            Some(*hit_bonus),
             Some(*power_bonus),
             SkillDetailEffect::Attack,
         ),
-        SkillEffect::Push { attack_bonus } => (
-            Some(*attack_bonus),
+        SkillEffect::Push { hit_bonus } => (
+            Some(*hit_bonus),
             None,
             SkillDetailEffect::Push {
                 distance: gameplay_config::PUSH_DISTANCE,
@@ -1204,7 +1197,7 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
         ranged: *ranged,
         min_range: *min_range,
         max_range: *max_range,
-        attack_bonus,
+        hit_bonus,
         power_bonus,
         effect,
     }
@@ -1233,7 +1226,8 @@ pub(crate) fn validate_passive_skills(
 ) -> Result<(), GameError> {
     let valid = ids.iter().all(|id| {
         skills.iter().any(|skill| {
-            skill.id == *id && matches!(skill.effect, SkillEffect::Flanking { attack_bonus } if attack_bonus >= 0)
+            skill.id == *id
+                && matches!(skill.effect, SkillEffect::Flanking { hit_bonus } if hit_bonus >= 0)
         })
     });
     if ids.len() > 1 || !valid {
@@ -1242,10 +1236,10 @@ pub(crate) fn validate_passive_skills(
     Ok(())
 }
 
-pub(crate) fn flanking_attack_bonus<'a>(skills: impl Iterator<Item = &'a SkillDef>) -> i32 {
+pub(crate) fn flanking_hit_bonus<'a>(skills: impl Iterator<Item = &'a SkillDef>) -> i32 {
     skills
         .filter_map(|skill| match skill.effect {
-            SkillEffect::Flanking { attack_bonus } => Some(attack_bonus),
+            SkillEffect::Flanking { hit_bonus } => Some(hit_bonus),
             _ => None,
         })
         .next()
@@ -1282,9 +1276,9 @@ pub(crate) fn passive_skill_views(
         .filter_map(|id| {
             let skill = definitions.get(id).expect("單位技能已驗證");
             match skill.effect {
-                SkillEffect::Flanking { attack_bonus } => Some(crate::model::PassiveSkillView {
+                SkillEffect::Flanking { hit_bonus } => Some(crate::model::PassiveSkillView {
                     id: id.clone(),
-                    attack_bonus,
+                    hit_bonus,
                 }),
                 _ => None,
             }

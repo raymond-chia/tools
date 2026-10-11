@@ -1,6 +1,6 @@
 //! 集中管理遊戲規則中可供企劃調整的數值。
 
-pub const ATTACK_DIE_SIDES: u32 = 20;
+pub const HIT_DIE_SIDES: u32 = 20;
 pub const INITIATIVE_DIE_SIDES: u32 = 20;
 pub const BASE_DEFENSE: i32 = 10;
 pub const COLLISION_DAMAGE: i32 = 2;

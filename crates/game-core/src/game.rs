@@ -186,7 +186,7 @@ impl Game {
         }
         let mut skill_definitions = HashMap::new();
         for skill in skills {
-            if matches!(skill.effect, SkillEffect::Flanking { attack_bonus } if attack_bonus < 0) {
+            if matches!(skill.effect, SkillEffect::Flanking { hit_bonus } if hit_bonus < 0) {
                 return Err(error::invalid_passive_skills(&skill.id));
             }
             if skill.min_range < 0 || skill.max_range < skill.min_range {
@@ -268,7 +268,7 @@ impl Game {
                 movement,
                 initiative,
                 dodge,
-                attack,
+                hit,
                 physical_power: _,
                 magical_power: _,
                 main_hand: _,
@@ -322,7 +322,7 @@ impl Game {
                     initiative,
                     dodge,
                     block,
-                    attack,
+                    hit,
                     physical_power,
                     magical_power,
                     block_reduction,
@@ -952,7 +952,7 @@ impl Game {
                 initiative: f.initiative,
                 dodge: effective_dodge(&self.world, entity),
                 block: effective_block(&self.world, entity),
-                attack: f.attack,
+                hit: f.hit,
                 physical_power: f.physical_power,
                 magical_power: f.magical_power,
                 block_reduction: f.block_reduction,
@@ -1271,30 +1271,30 @@ fn validate_numeric_ranges(
             .iter()
             .filter(|skill| unit.skills.contains(&skill.id))
         {
-            let (attack_bonus, power_bonus) = match skill.effect {
+            let (hit_bonus, power_bonus) = match skill.effect {
                 SkillEffect::Attack {
-                    attack_bonus,
+                    hit_bonus,
                     power_bonus,
-                } => (attack_bonus, Some(power_bonus)),
-                SkillEffect::Push { attack_bonus } => (attack_bonus, None),
+                } => (hit_bonus, Some(power_bonus)),
+                SkillEffect::Push { hit_bonus } => (hit_bonus, None),
                 SkillEffect::Heal { power_bonus } => (0, Some(power_bonus)),
                 SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } => continue,
             };
-            let attack = i64::from(unit.attack) + i64::from(attack_bonus);
+            let hit = i64::from(unit.hit) + i64::from(hit_bonus);
             let power = power_bonus.map_or(0, |bonus| {
                 i64::from(match skill.power_source {
                     crate::PowerSource::Physical => stats.physical_power,
                     crate::PowerSource::Magical => stats.magical_power,
                 }) + i64::from(bonus)
             });
-            if attack < i64::from(i32::MIN)
-                || attack
-                    + i64::from(crate::skill::flanking_attack_bonus(
+            if hit < i64::from(i32::MIN)
+                || hit
+                    + i64::from(crate::skill::flanking_hit_bonus(
                         unit.skills
                             .iter()
                             .filter_map(|id| skills.iter().find(|skill| skill.id == *id)),
                     ))
-                    + i64::from(gameplay_config::ATTACK_DIE_SIDES)
+                    + i64::from(gameplay_config::HIT_DIE_SIDES)
                     > i64::from(i32::MAX)
                 || power < i64::from(i32::MIN)
                 || power.max(0) * 2 > i64::from(i32::MAX)
