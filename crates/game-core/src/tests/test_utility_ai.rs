@@ -788,7 +788,7 @@ struct RouteCase {
     avoids_terrain: bool,
 }
 
-// 驗證完整佔用範圍與地形成本影響路徑及兩段預算，經過尖刺後同回合繼續移動。
+// 驗證佔用範圍、阻擋來源與地形成本影響路徑及兩段預算，經過尖刺後同回合繼續移動。
 #[test]
 fn ai_routes_respect_footprints_hazards_and_movement_costs() {
     let cases = [
@@ -844,6 +844,38 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             attacks: true,
             avoids_terrain: true,
         },
+        // 驗證友方單位擋住直線但有替代路線時，繞路後近戰。
+        RouteCase {
+            unit_type: "tank",
+            name: "繞過單位後攻擊",
+            diagram: "
+                A..B..T
+                .......
+            ",
+            movement: 8,
+            end: (5, 0),
+            segments_used: 0,
+            remaining: 1,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
+        // 驗證暫時牆擋住直線但有替代路線時，繞路後近戰。
+        RouteCase {
+            unit_type: "tank",
+            name: "繞過暫時地形後攻擊",
+            diagram: "
+                A..X..T
+                .......
+            ",
+            movement: 8,
+            end: (5, 0),
+            segments_used: 0,
+            remaining: 1,
+            hp: 100,
+            attacks: true,
+            avoids_terrain: true,
+        },
         // 驗證只有近戰技能的大型單位無法穿過單格通道時，不向無法接敵的牆邊移動。
         RouteCase {
             unit_type: "tank",
@@ -888,6 +920,36 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             end: (0, 0),
             segments_used: 0,
             remaining: 2,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: true,
+        },
+        // 驗證暫時牆封死通道時仍朝目標前進，停在暫時牆前。
+        RouteCase {
+            unit_type: "tank",
+            name: "暫時地形封路仍接近目標",
+            diagram: "
+                A.X.T
+            ",
+            movement: 2,
+            end: (1, 0),
+            segments_used: 0,
+            remaining: 1,
+            hp: 100,
+            attacks: false,
+            avoids_terrain: true,
+        },
+        // 驗證友方單位封死通道時仍朝目標前進，停在單位前。
+        RouteCase {
+            unit_type: "tank",
+            name: "單位封路仍接近目標",
+            diagram: "
+                A.B.T
+            ",
+            movement: 2,
+            end: (1, 0),
+            segments_used: 0,
+            remaining: 1,
             hp: 100,
             attacks: false,
             avoids_terrain: true,
@@ -1100,15 +1162,27 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             table.insert("height".into(), size.1.into());
         }
         unit_type_mut(&mut definitions, unit_type)["movement"] = i64::from(movement).into();
-        let map = map_from_ascii_board(
-            name,
-            &layout,
-            &[
-                ('A', ACTOR_ID, unit_type, enemy()),
-                ('T', TARGET_ID, "target", Team::Player),
-            ],
-        );
+        // B 表示友方阻擋單位，X 表示本回合仍有效的暫時牆。
+        let mut units = vec![
+            ('A', ACTOR_ID, unit_type, enemy()),
+            ('T', TARGET_ID, "target", Team::Player),
+        ];
+        if markers.contains_key(&'B') {
+            units.push(('B', ALLY_ID, "target", enemy()));
+        }
+        let map = map_from_ascii_board(name, &layout, &units);
         let mut game = game_on_map(&definitions, map);
+        if let Some(((x, y), _)) = markers.get(&'X') {
+            game.world.resource_mut::<TemporaryTerrains>().0.insert(
+                GridPos { x: *x, y: *y },
+                HashMap::from([(
+                    "wall".into(),
+                    model::TemporaryTerrain {
+                        expires_after_round: 10,
+                    },
+                )]),
+            );
+        }
         let snapshot = act(&mut game);
         let entity = game.entity(ACTOR_ID).expect("路徑測試 AI 應仍存活");
         assert_eq!(
@@ -1188,6 +1262,18 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
                 true,
                 "{name}：完整佔用範圍不可超出棋盤"
             );
+            for marker in ['B', 'X'] {
+                if let Some(((x, y), (width, height))) = markers.get(&marker) {
+                    assert_eq!(
+                        position.x < x + width
+                            && position.x + actor_size.0 > *x
+                            && position.y < y + height
+                            && position.y + actor_size.1 > *y,
+                        false,
+                        "{name}：完整佔用範圍不可穿越 {marker} 障礙"
+                    );
+                }
+            }
             if avoids_terrain {
                 assert_eq!(
                     terrains.iter().any(|TerrainPlacement { x, y, kind: _ }| {

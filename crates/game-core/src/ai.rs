@@ -4,16 +4,17 @@ use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
     AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos, SkillDef, SkillEffect,
-    SkillPreview, SkillTargetKind, Skills, Turn, Unit,
+    SkillPreview, SkillTargetKind, Skills, TemporaryTerrains, Turn, Unit,
 };
 use crate::movement::{
     MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
-    full_board_paths, movement_budgets, movement_options, toward_skill_range, unit_at_cell,
+    full_board_paths, movement_budgets, movement_options, occupied, toward_skill_range,
+    unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
 };
-use crate::terrain::{terrain_ends_movement, terrain_type, terrains_at};
+use crate::terrain::{footprint_on_impassable, terrain_ends_movement, terrain_type, terrains_at};
 use bevy_ecs::prelude::{Component, Entity, Resource, World};
 use std::collections::HashMap;
 
@@ -456,58 +457,77 @@ fn fallback_position(
     if targets.is_empty() {
         return 0;
     }
-    let search = full_board_paths(world, actor, start, footprint);
-    // 依距離與 ID 選擇有合法施放路徑的敵人；治療仍優先接近既定的重傷隊友。
-    for target in targets {
-        let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
-        let goal = world.get::<Pos>(target).expect("目標應具有位置").0;
-        // 共用跨技能偏好；每條路徑仍須朝該技能可施放的合法射程前進。
-        let position = skills
-            .iter()
-            .filter(|skill| relevant_positioning_skill(profile, skill, healing_focus.is_some()))
-            .filter_map(|skill| {
-                let skill_distance = desired.clamp(skill.min_range, skill.max_range);
-                let path = toward_skill_range(
-                    world,
-                    &search,
-                    start,
-                    goal,
-                    target_footprint,
-                    footprint,
-                    budget,
-                    skill.min_range,
-                    skill.max_range,
-                    skill_distance,
-                )?;
-                // 理想停點可能因第一段危險路徑截斷而不可執行，仍沿規劃路徑前進到最遠合法停點。
-                let index = path
-                    .iter()
-                    .rev()
-                    .find_map(|cell| positions.iter().position(|plan| plan.position == *cell))?;
-                let MovementOption {
-                    position: end,
-                    path: _,
-                    cost: _,
-                } = &positions[index];
-                let end = *end;
-                let distance = target_distance(world, actor, end, target);
-                let range_gap = (skill.min_range - distance)
-                    .max(distance - skill.max_range)
-                    .max(0);
-                Some((
-                    (
-                        range_gap,
-                        (distance - desired).abs(),
-                        positions[index].cost,
-                        &skill.id,
-                    ),
-                    index,
-                ))
-            })
-            .min_by(|(a, _), (b, _)| a.cmp(b))
-            .map(|(_, index)| index);
-        if let Some(index) = position {
-            return index;
+    // 先選實際可達的目標；全部無路可達時，才只依永久地形規劃。
+    for permanent_only in [false, true] {
+        // 規劃資料只保留永久地形，沿用同一套通行、成本與視線規則。
+        let permanent_world = permanent_only.then(|| {
+            let mut permanent_world = World::new();
+            permanent_world.insert_resource(world.resource::<Board>().clone());
+            permanent_world.insert_resource(TemporaryTerrains::default());
+            permanent_world
+        });
+        let planning_world = permanent_world.as_ref().unwrap_or(world);
+        let search = full_board_paths(planning_world, actor, start, footprint);
+        // 依距離與 ID 選擇有合法施放路徑的敵人；治療仍優先接近既定的重傷隊友。
+        for &target in &targets {
+            let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
+            let goal = world.get::<Pos>(target).expect("目標應具有位置").0;
+            // 共用跨技能偏好；每條路徑仍須朝該技能可施放的合法射程前進。
+            let position = skills
+                .iter()
+                .filter(|skill| relevant_positioning_skill(profile, skill, healing_focus.is_some()))
+                .filter_map(|skill| {
+                    let skill_distance = desired.clamp(skill.min_range, skill.max_range);
+                    let path = toward_skill_range(
+                        planning_world,
+                        &search,
+                        start,
+                        goal,
+                        target_footprint,
+                        footprint,
+                        budget,
+                        skill.min_range,
+                        skill.max_range,
+                        skill_distance,
+                    )?;
+                    // 理想停點可能因第一段危險路徑截斷而不可執行，仍沿規劃路徑前進到最遠合法停點。
+                    // 只取實際可通行的路徑前綴，不能選到障礙另一側的可達停點。
+                    let route_end = path
+                        .iter()
+                        .skip(1)
+                        .position(|cell| {
+                            occupied(world, actor, *cell, footprint)
+                                || footprint_on_impassable(world, *cell, footprint)
+                        })
+                        .map_or(path.len(), |index| index + 1);
+                    let index = path[..route_end].iter().rev().find_map(|cell| {
+                        positions.iter().position(|plan| plan.position == *cell)
+                    })?;
+                    let MovementOption {
+                        position: end,
+                        path: _,
+                        cost: _,
+                    } = &positions[index];
+                    let end = *end;
+                    let distance = target_distance(world, actor, end, target);
+                    let range_gap = (skill.min_range - distance)
+                        .max(distance - skill.max_range)
+                        .max(0);
+                    Some((
+                        (
+                            range_gap,
+                            (distance - desired).abs(),
+                            positions[index].cost,
+                            &skill.id,
+                        ),
+                        index,
+                    ))
+                })
+                .min_by(|(a, _), (b, _)| a.cmp(b))
+                .map(|(_, index)| index);
+            if let Some(index) = position {
+                return index;
+            }
         }
     }
     0
