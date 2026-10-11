@@ -16,12 +16,11 @@ func setup_test() -> void:
 	if had_language_settings:
 		original_settings = FileAccess.get_file_as_bytes(LANGUAGE_SETTINGS)
 	for test_case in [
-		{"locale": "zh_TW", "title": "演出測試戰鬥", "actor": "測試戰士", "skill": "測試推擊"},
-		{"locale": "en", "title": "Presentation Test", "actor": "Test Fighter", "skill": "Test Push"},
+		{"locale": "zh_TW", "actor": "測試戰士", "skill": "測試推擊"},
+		{"locale": "en", "actor": "Test Fighter", "skill": "Test Push"},
 	]:
 		var translation := Translation.new()
 		translation.locale = test_case.locale
-		translation.add_message("combat_presentation", test_case.title)
 		translation.add_message(BattleConfig.unit_name_key("presentation_actor"), test_case.actor)
 		translation.add_message(BattleConfig.skill_name_key("presentation_push"), test_case.skill)
 		TranslationServer.add_translation(translation)
@@ -47,7 +46,7 @@ func cleanup_test() -> void:
 		TranslationServer.remove_translation(translation)
 	test_translations.clear()
 
-# 驗證選單切換中英文同步更新標題、日誌、技能與單位查看，保留展開狀態並關閉舊預覽。
+# 驗證選單切換中英文同步更新日誌、技能與單位查看，保留展開狀態並關閉舊預覽。
 func test_language_menu_refreshes_existing_content() -> void:
 	# 先用真實攻擊產生可翻譯的戰鬥日誌，再回到下一輪玩家。
 	assert_bool(battle.send({"type": "skill", "actor": 1, "x": 2, "y": 1, "skill": "presentation_push"})).is_true()
@@ -60,8 +59,8 @@ func test_language_menu_refreshes_existing_content() -> void:
 	battle.world.inspection_clicked.emit(1, Vector2i(0, 1))
 	var popup: PopupMenu = battle.ui.menu_button.get_popup()
 	var cases := [
-		{"id": 1, "locale": "en", "title": "Presentation Test", "actor": "Test Fighter", "skill": "Test Push"},
-		{"id": 0, "locale": "zh_TW", "title": "演出測試戰鬥", "actor": "測試戰士", "skill": "測試推擊"},
+		{"id": 1, "locale": "en", "actor": "Test Fighter", "skill": "Test Push"},
+		{"id": 0, "locale": "zh_TW", "actor": "測試戰士", "skill": "測試推擊"},
 	]
 	for test_case in cases:
 		battle.ui.present_move_cost(1, Vector2.ZERO)
@@ -73,7 +72,6 @@ func test_language_menu_refreshes_existing_content() -> void:
 		assert_str(TranslationServer.get_locale()).is_equal(test_case.locale)
 		assert_bool(popup.is_item_checked(test_case.id)).is_true()
 		assert_bool(popup.is_item_checked(1 - test_case.id)).is_false()
-		assert_str(battle.ui.get_node("Root/BattleTitle").text).is_equal(test_case.title)
 		assert_str(battle.ui.actor_name.text).is_equal(test_case.actor)
 		assert_str(battle.ui.unit_name.text).is_equal(test_case.actor)
 		assert_str(battle.ui.battle_log.text).contains(test_case.actor)
@@ -89,9 +87,9 @@ func test_language_menu_refreshes_existing_content() -> void:
 		battle.ui.inspection_closed.emit()
 		battle.world.inspection_clicked.emit(1, Vector2i(0, 1))
 
-# 驗證選單選擇寫入語言設定，重新建立真實戰鬥場景時讀回語系、勾選與標題。
+# 驗證選單選擇寫入語言設定，重新建立真實戰鬥場景時讀回語系與勾選。
 func test_language_preference_is_loaded_by_next_battle() -> void:
-	for test_case in [{"id": 1, "locale": "en", "title": "Presentation Test"}, {"id": 0, "locale": "zh_TW", "title": "演出測試戰鬥"}]:
+	for test_case in [{"id": 1, "locale": "en"}, {"id": 0, "locale": "zh_TW"}]:
 		battle.ui.menu_button.get_popup().id_pressed.emit(test_case.id)
 		var settings := ConfigFile.new()
 		assert_int(settings.load(LANGUAGE_SETTINGS)).is_equal(OK)
@@ -102,4 +100,3 @@ func test_language_preference_is_loaded_by_next_battle() -> void:
 		await next_runner.simulate_frames(1)
 		assert_str(TranslationServer.get_locale()).is_equal(test_case.locale)
 		assert_bool(next_battle.ui.menu_button.get_popup().is_item_checked(test_case.id)).is_true()
-		assert_str(next_battle.ui.get_node("Root/BattleTitle").text).is_equal(test_case.title)

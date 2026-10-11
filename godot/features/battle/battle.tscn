@@ -35,16 +35,6 @@ grow_vertical = 2
 mouse_filter = 2
 theme = ExtResource("4")
 
-[node name="BattleTitle" type="Label" parent="UI/Root" unique_id=1712591140]
-layout_mode = 0
-offset_left = 271.0
-offset_top = 12.0
-offset_right = 711.0
-offset_bottom = 78.0
-theme_override_colors/font_color = Color(0.94902, 0.831373, 0.607843, 1)
-theme_override_font_sizes/font_size = 54
-text = ""
-
 [node name="MoveCostPopup" type="PanelContainer" parent="UI/Root" unique_id=330312368]
 visible = false
 custom_minimum_size = Vector2(160, 48)

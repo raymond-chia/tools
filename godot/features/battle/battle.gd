@@ -12,7 +12,6 @@ var inspected_cell := Vector2i(-1, -1)
 var inspected_skill := ""
 var selecting_delay := false
 var status := "BATTLE_STATUS_CONTROLS"
-var battle_name := ""
 var editor_preview := false
 var back_button: Button
 var definitions_document := ""
@@ -52,23 +51,13 @@ func _ready() -> void:
 	if state.is_empty():
 		present()
 		return
-	var map_info := read_core_response(core.map_to_json(map_document))
-	if map_info.is_empty():
-		present()
-		return
-	battle_name = map_info.name
-	update_battle_title()
 	core.set_random_seed(randi() if random_seed == null else int(random_seed))
 	world.setup_map(state)
 	send({"type": "start"})
 
 func _on_language_changed() -> void:
-	update_battle_title()
 	ui.refresh_log_language()
 	ui.present(displayed_state, pending_action, inspected_cell, inspected_skill, status, selecting_delay)
-
-func update_battle_title() -> void:
-	$UI/Root/BattleTitle.text = ("測試：" if editor_preview else "") + tr(battle_name)
 
 func return_to_editor() -> void:
 	get_tree().change_scene_to_file("res://features/editor/editor.tscn")
