@@ -4,14 +4,14 @@ use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
     AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos, SkillDef, SkillEffect,
-    SkillPreview, Skills, Turn, Unit,
+    SkillPreview, SkillTargetKind, Skills, Turn, Unit,
 };
 use crate::movement::{
     MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
     full_board_paths, movement_budgets, movement_options, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
-    can_use_skill, preview_unit_skill_from_position, validate_cell_skill_from_position,
+    can_use_skill, preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
 };
 use crate::terrain::{terrain_ends_movement, terrain_type, terrains_at};
 use bevy_ecs::prelude::{Component, Entity, Resource, World};
@@ -82,7 +82,7 @@ impl Game {
                 .iter()
                 .filter_map(|id| {
                     let skill = definitions.get(id).expect("作者資料已驗證技能引用");
-                    if matches!(skill.effect, SkillEffect::Flanking { .. }) {
+                    if target_kind(&skill.effect) == SkillTargetKind::Passive {
                         None
                     } else {
                         Some(skill.clone())
@@ -148,10 +148,7 @@ impl Game {
                 .remove::<PreviousAttackTarget>();
             match action {
                 Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
-                    let attack = matches!(
-                        skill.effect,
-                        SkillEffect::Attack { .. } | SkillEffect::Push { .. }
-                    );
+                    let attack = target_kind(&skill.effect) == SkillTargetKind::Enemy;
                     self.use_skill_at_cell(actor, cell, skill)?;
                     if attack && self.world.get_entity(entity).is_ok() {
                         self.world

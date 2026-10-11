@@ -150,7 +150,7 @@ impl Game {
             .world
             .get::<Footprint>(e)
             .expect("執行移動的單位應具有 Footprint 元件");
-        let before_log_index = self.world.resource::<Log>().0.len();
+        let log_insert_index = self.world.resource::<Log>().0.len();
         let mut actual_path = vec![*path.first().expect("已規劃的移動路徑應包含起點")];
         let mut spent = 0;
         for p in path.iter().copied().skip(1) {
@@ -170,7 +170,7 @@ impl Game {
             self.movements.push(MovementTransition {
                 unit_id: a,
                 path: actual_path,
-                before_log_index,
+                log_insert_index,
             });
         }
         spent

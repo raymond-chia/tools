@@ -18,9 +18,9 @@ pub fn paint_terrain_from_json(
     command: &str,
 ) -> Result<String, EditorError> {
     let definitions: Definitions = super::json::from_str(definitions)
-        .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let mut map: Map = super::json::from_str(map)
-        .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
     let TerrainBrush { x, y, layer, kind } = super::json::from_str(command)
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
     if x < 0 || y < 0 || x >= map.width || y >= map.height {

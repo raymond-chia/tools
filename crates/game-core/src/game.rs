@@ -1,18 +1,19 @@
 //! 載入、命令分派、回合流程與快照。
 use crate::error::GameError;
 use crate::model::{
-    BattleMode, Board, CombatLogEvent, Command, DeliveredLogCount, Encounter, Exploration,
-    Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos,
-    Random, ResultState, SkillDef, SkillEffect, SkillTargetKind, Skills, Snapshot, Team,
-    TemporaryTerrains, TerrainCellView, TerrainDescriptionValues, TerrainDescriptionView,
-    TerrainEffectView, TerrainLayer, Turn, TurnView, Unit, UnitView,
+    BattleMode, Board, CombatLogEvent, Command, Encounter, Exploration, Footprint, GridPos, Hp, Id,
+    InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState, SkillDef,
+    SkillEffect, SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
+    TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainLayer, Turn,
+    TurnView, Unit, UnitView,
 };
 use crate::movement::{
     can_move, entity_distance, fits, footprint_cells, movement_ranges, unit_at_cell,
 };
 use crate::skill::{can_use_skill, effective_block, effective_dodge, skill_ranges, target_kind};
 use crate::terrain::{
-    footprint_on_impassable, ground_at, movement_cost, terrain_damage, terrain_type, terrains_at,
+    footprint_on_impassable, ground_at, movement_cost, temporary_remaining_rounds, terrain_damage,
+    terrain_type, terrains_at,
 };
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, World};
@@ -140,7 +141,7 @@ impl Game {
             if matches!(placement.team, Team::Enemy(_))
                 && !kind.skills.iter().any(|id| {
                     skills.iter().any(|skill| {
-                        skill.id == *id && !matches!(skill.effect, SkillEffect::Flanking { .. })
+                        skill.id == *id && target_kind(&skill.effect) != SkillTargetKind::Passive
                     })
                 })
             {
@@ -243,7 +244,6 @@ impl Game {
         });
         w.insert_resource(Random(0xc0ffee));
         w.insert_resource(Log::default());
-        w.insert_resource(DeliveredLogCount::default());
         w.insert_resource(ResultState(Outcome::Ongoing));
         w.insert_resource(Skills {
             definitions: skill_definitions,
@@ -340,10 +340,8 @@ impl Game {
     pub fn command(&mut self, c: Command) -> Result<Snapshot, GameError> {
         self.apply_command(c)?;
         let mut snapshot = self.snapshot(None);
-        let delivered_count = self.world.resource::<DeliveredLogCount>().0;
-        snapshot.log = self.world.resource::<Log>().0[delivered_count..].to_vec();
-        self.world.resource_mut::<DeliveredLogCount>().0 += snapshot.log.len();
-        snapshot.movements = self.movements.clone();
+        snapshot.log = std::mem::take(&mut self.world.resource_mut::<Log>().0);
+        snapshot.movements = std::mem::take(&mut self.movements);
         Ok(snapshot)
     }
     fn apply_command(&mut self, c: Command) -> Result<(), GameError> {
@@ -1044,7 +1042,6 @@ impl Game {
         let terrain_cells = (0..*height)
             .flat_map(|y| {
                 let board = b;
-                let temporary = temporary_terrains;
                 let world = &self.world;
                 let units = &units;
                 (0..*width).map(move |x| {
@@ -1068,23 +1065,12 @@ impl Game {
                                 dodge_penalty,
                                 block_penalty,
                             } = terrain_type(board, kind);
-                            let remaining = temporary
-                                .get(&position)
-                                .and_then(|items| items.get(kind))
-                                .filter(|_| {
-                                    !fixed_terrains
-                                        .get(&position)
-                                        .is_some_and(|items| items.contains(kind))
-                                })
-                                .map(|terrain| {
-                                    terrain.expires_after_round.saturating_sub(*round) + 1
-                                });
                             let values = TerrainDescriptionValues {
                                 dodge_penalty: (*dodge_penalty > 0).then_some(*dodge_penalty),
                                 block_penalty: (*block_penalty > 0).then_some(*block_penalty),
                                 extra_movement_cost: (*extra_movement_cost > 0)
                                     .then_some(*extra_movement_cost),
-                                remaining_rounds: remaining,
+                                remaining_rounds: temporary_remaining_rounds(world, position, kind),
                                 damage: (*damage > 0).then_some(*damage),
                             };
                             TerrainDescriptionView {
@@ -1098,16 +1084,17 @@ impl Game {
                     TerrainCellView {
                         x,
                         y,
-                        passable: terrains.iter().all(|kind| {
-                            terrain_type(board, kind).entry_rule
-                                == crate::model::TerrainEntryRule::Walkable
-                        }),
-                        ground_visual: terrain_type(
-                            board,
-                            ground_at(board, &terrains).expect("terrains_at 必含 ground"),
-                        )
-                        .id
-                        .clone(),
+                        passable: !footprint_on_impassable(
+                            world,
+                            position,
+                            Footprint {
+                                width: 1,
+                                height: 1,
+                            },
+                        ),
+                        ground_visual: ground_at(board, &terrains)
+                            .expect("terrains_at 必含 ground")
+                            .clone(),
                         terrains,
                         unit_id: units
                             .iter()
@@ -1142,11 +1129,11 @@ impl Game {
                     }
                 }
                 for (position, kinds) in temporary_terrains {
-                    for (kind, terrain) in kinds {
-                        if fixed_terrains
-                            .get(position)
-                            .is_some_and(|items| items.contains(kind))
-                        {
+                    for kind in kinds.keys() {
+                        // 與固定地形同種類時已由上方列出。
+                        let remaining_rounds =
+                            temporary_remaining_rounds(&self.world, *position, kind);
+                        if remaining_rounds.is_none() {
                             continue;
                         }
                         effects.push(TerrainEffectView {
@@ -1155,9 +1142,7 @@ impl Game {
                             damage: terrain_damage(b, kind),
                             visual: kind.clone(),
                             effect: kind.clone(),
-                            remaining_rounds: Some(
-                                terrain.expires_after_round.saturating_sub(*round) + 1,
-                            ),
+                            remaining_rounds,
                         });
                     }
                 }

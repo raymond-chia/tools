@@ -645,6 +645,7 @@ func show_definition_error(details: Dictionary) -> void:
 		"duplicate_id": show_error("ID「%s」已存在。" % id)
 		"not_found": show_error("找不到 ID「%s」。" % id)
 		"default_ground": show_error("「%s」是核心保留的預設地形 ID，不能刪除。" % id)
+		"missing_map": show_error("請先建立地圖，才能修改定義。")
 		"referenced":
 			var references: Array[String] = []
 			for reference in details.references:

@@ -13,8 +13,8 @@ pub use map::paint_terrain_from_json;
 
 /// 依地圖配置順序列出既有敵方派系，供編輯器選用。
 pub fn enemy_factions_from_json(map: &str) -> Result<String, EditorError> {
-    let map: Map =
-        json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+    let map: Map = json::from_str(map)
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
     let mut factions = Vec::new();
     for unit in map.units {
         if let crate::Team::Enemy(faction) = unit.team {
@@ -24,16 +24,16 @@ pub fn enemy_factions_from_json(map: &str) -> Result<String, EditorError> {
         }
     }
     serde_json::to_string(&serde_json::json!({ "factions": factions }))
-        .map_err(|e| EditorError::input("json_serialize", e.to_string()))
+        .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }
 
 /// 將 Godot 編輯器傳來的 JSON 定義與地圖資料驗證後，轉成儲存或試玩用的 TOML 文件。
 /// JSON 僅用於編輯器與 Rust 之間傳遞資料；實際保存的檔案仍是 TOML。
 pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, String), EditorError> {
     let mut definitions: Definitions = json::from_str(definitions)
-        .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
-    let map: Map =
-        json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
+    let map: Map = json::from_str(map)
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
     Game::from_authoring(definitions.clone(), map.clone())?;
     // 單位的技能依技能頁籤排列存檔，不沿用勾選的先後順序。
     for unit in &mut definitions.unit_types {
@@ -47,9 +47,9 @@ pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, Stri
     }
     Ok((
         toml::to_string_pretty(&definitions)
-            .map_err(|e| EditorError::input("toml_serialize", e.to_string()))?,
+            .map_err(|e| EditorError::conversion("toml_serialize", e.to_string()))?,
         toml::to_string_pretty(&map)
-            .map_err(|e| EditorError::input("toml_serialize", e.to_string()))?,
+            .map_err(|e| EditorError::conversion("toml_serialize", e.to_string()))?,
     ))
 }
 
@@ -65,10 +65,10 @@ pub fn inspected_preview_from_json(
     inspected_actor: Option<i64>,
 ) -> Result<String, EditorError> {
     let definitions: Definitions = json::from_str(definitions)
-        .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
-    let map: Map =
-        json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
+    let map: Map = json::from_str(map)
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
     let game = Game::from_authoring(definitions, map)?;
     serde_json::to_string(&game.snapshot(inspected_actor))
-        .map_err(|e| EditorError::input("json_serialize", e.to_string()))
+        .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }

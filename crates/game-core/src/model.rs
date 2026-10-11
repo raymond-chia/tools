@@ -145,9 +145,6 @@ pub(crate) struct Random(pub(crate) u64);
 #[derive(Resource, Default)]
 pub(crate) struct Log(pub(crate) Vec<CombatLogEvent>);
 
-#[derive(Resource, Default)]
-pub(crate) struct DeliveredLogCount(pub(crate) usize);
-
 #[derive(Resource)]
 pub(crate) struct ResultState(pub(crate) Outcome);
 
@@ -302,7 +299,8 @@ pub struct Snapshot {
 pub struct MovementTransition {
     pub unit_id: i64,
     pub path: Vec<GridPos>,
-    pub before_log_index: usize,
+    /// 此移動在同一批 command 日誌中的插入位置。
+    pub log_insert_index: usize,
 }
 
 #[derive(Clone, Serialize)]

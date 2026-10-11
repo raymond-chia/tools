@@ -8,7 +8,7 @@ pub enum EditorError {
         path: String,
         error: GameError,
     },
-    Input {
+    Conversion {
         id: &'static str,
         message: String,
     },
@@ -26,8 +26,8 @@ impl From<GameError> for EditorError {
 }
 
 impl EditorError {
-    pub(crate) fn input(id: &'static str, message: String) -> Self {
-        Self::Input { id, message }
+    pub(crate) fn conversion(id: &'static str, message: String) -> Self {
+        Self::Conversion { id, message }
     }
 
     pub(crate) fn operation(
@@ -50,7 +50,9 @@ impl EditorError {
             Self::Map { path, error } => serde_json::json!({
                 "error_id": error.id(), "error": error.message(), "map_path": path,
             }),
-            Self::Input { id, message } => serde_json::json!({"error_id": id, "error": message}),
+            Self::Conversion { id, message } => {
+                serde_json::json!({"error_id": id, "error": message})
+            }
             Self::Operation {
                 kind,
                 id,

@@ -34,10 +34,7 @@ pub(crate) fn duplicate_unit_type_id() -> GameError {
 }
 
 pub(crate) fn invalid_ai_profile(id: &str) -> GameError {
-    GameError::new(
-        "invalid_ai_profile",
-        format!("AI 傾向 {id} 的 id 不可空白、偏好距離不可為負值"),
-    )
+    GameError::new("invalid_ai_profile", format!("AI 傾向 {id} 的 id 不可空白"))
 }
 
 pub(crate) fn duplicate_ai_profile(id: &str) -> GameError {
@@ -67,7 +64,7 @@ pub(crate) fn terrain_out_of_bounds() -> GameError {
 }
 
 pub(crate) fn duplicate_skill_id() -> GameError {
-    GameError::new("duplicate_skill_id", "duplicate skill id".to_owned())
+    GameError::new("duplicate_skill_id", "技能 ID 重複".to_owned())
 }
 
 pub(crate) fn missing_ai_skill(id: i64) -> GameError {
@@ -115,10 +112,6 @@ pub(crate) fn unreachable_destination() -> GameError {
 
 pub(crate) fn cannot_use_skill() -> GameError {
     GameError::new("cannot_use_skill", "目前不能使用技能".to_owned())
-}
-
-pub(crate) fn missing_attacker() -> GameError {
-    GameError::new("missing_attacker", "找不到攻擊者".to_owned())
 }
 
 pub(crate) fn missing_target() -> GameError {
@@ -304,8 +297,39 @@ pub(crate) fn numeric_range(id: &str) -> GameError {
     )
 }
 
-pub(crate) fn invalid_equipment(message: String) -> GameError {
-    GameError::new("invalid_equipment", message)
+// 配裝錯誤共用同一個錯誤 ID，訊息保留具體原因。
+const INVALID_EQUIPMENT: &str = "invalid_equipment";
+
+pub(crate) fn invalid_equipment_definition(id: &str) -> GameError {
+    GameError::new(
+        INVALID_EQUIPMENT,
+        format!("裝備 {id} 的 ID 不可空白，能力加值不可為負數"),
+    )
+}
+
+pub(crate) fn duplicate_equipment_id() -> GameError {
+    GameError::new(INVALID_EQUIPMENT, "裝備 ID 重複".to_owned())
+}
+
+pub(crate) fn unknown_equipment(unit: &str, equipment: &str) -> GameError {
+    GameError::new(
+        INVALID_EQUIPMENT,
+        format!("單位 {unit} 引用不存在的裝備 {equipment}"),
+    )
+}
+
+pub(crate) fn equipment_wrong_slot(unit: &str, equipment: &str) -> GameError {
+    GameError::new(
+        INVALID_EQUIPMENT,
+        format!("單位 {unit} 的裝備 {equipment} 放在錯誤欄位"),
+    )
+}
+
+pub(crate) fn too_many_hand_equipment(unit: &str) -> GameError {
+    GameError::new(
+        INVALID_EQUIPMENT,
+        format!("單位 {unit} 的手持裝備超過兩隻手"),
+    )
 }
 
 /// 瞄準格不在視線內；不影響範圍技能的其他效果格。

@@ -28,7 +28,6 @@ var movement_tweens := {}
 var hit_tweens := {}
 var attack_tweens := {}
 var combat_event_queue: Array[Dictionary] = []
-var received_log_count := 0
 var playing_combat_events := false
 var pending_death_ids := {}
 
@@ -140,10 +139,9 @@ func sync_unit_sprites() -> void:
 		BattleVisuals.style_unit_node(node, large, unit.team, unit_occupies_cell(unit, inspected_cell))
 
 func queue_new_combat_events() -> void:
-	var previous_log_count := received_log_count
-	for offset in state.log.size():
-		queue_movements_before_log(previous_log_count + offset)
-		var event: Dictionary = state.log[offset]
+	for index in state.log.size():
+		queue_movements_before_log(index)
+		var event: Dictionary = state.log[index]
 		if event.type in ["skill", "healing", "terrain_damage"]:
 			combat_event_queue.append(event)
 			if event.get("downed", false):
@@ -152,12 +150,11 @@ func queue_new_combat_events() -> void:
 				for collision_unit in event.collision_units:
 					if collision_unit.downed:
 						pending_death_ids[collision_unit.unit] = true
-	queue_movements_before_log(previous_log_count + state.log.size())
-	received_log_count += state.log.size()
+	queue_movements_before_log(state.log.size())
 
 func queue_movements_before_log(log_index: int) -> void:
 	for movement in state.get("movements", []):
-		if int(movement.before_log_index) == log_index:
+		if int(movement.log_insert_index) == log_index:
 			combat_event_queue.append({
 				"type": "movement",
 				"unit_id": movement.unit_id,

@@ -16,17 +16,21 @@ use crate::terrain::{
 use bevy_ecs::prelude::{Entity, World};
 
 impl Game {
+    /// 預覽與施放共用：確認輪到該單位且本回合仍可使用技能，回傳施放者。
+    fn skill_caster(&self, actor: i64) -> Result<Entity, GameError> {
+        self.ensure(actor)?;
+        if !can_use_skill(self.world.resource::<Turn>()) {
+            return Err(error::cannot_use_skill());
+        }
+        self.entity(actor).ok_or(error::missing_actor())
+    }
     pub fn preview_skill(
         &self,
         actor: i64,
         target_cell: GridPos,
         skill_id: &str,
     ) -> Result<SkillPreview, GameError> {
-        self.ensure(actor)?;
-        if !can_use_skill(self.world.resource::<Turn>()) {
-            return Err(error::cannot_use_skill());
-        }
-        let attacker = self.entity(actor).ok_or(error::missing_attacker())?;
+        let attacker = self.skill_caster(actor)?;
         let Skills { definitions } = self.world.resource::<Skills>();
         let skill = definitions
             .get(skill_id)
@@ -40,17 +44,12 @@ impl Game {
         position: GridPos,
         skill: SkillDef,
     ) -> Result<(), GameError> {
+        let ae = self.skill_caster(actor)?;
         if target_kind(&skill.effect) == SkillTargetKind::Cell {
-            return self.use_cell_skill(actor, position, skill);
+            return self.use_cell_skill(ae, actor, position, skill);
         }
         let a = actor;
         let target_cell = position;
-        self.ensure(a)?;
-        let turn = self.world.resource::<Turn>();
-        if !can_use_skill(turn) {
-            return Err(error::cannot_use_skill());
-        }
-        let ae = self.entity(a).ok_or(error::missing_attacker())?;
         let (te, effect) = validate_unit_skill_target(&self.world, ae, target_cell, &skill)?;
         let target = self
             .world
@@ -215,7 +214,7 @@ impl Game {
                 self.movements.push(MovementTransition {
                     unit_id: target,
                     path: vec![current, destination],
-                    before_log_index: self.world.resource::<Log>().0.len() + 1,
+                    log_insert_index: self.world.resource::<Log>().0.len() + 1,
                 });
                 pushed = true;
             } else {
@@ -314,15 +313,11 @@ impl Game {
     }
     fn use_cell_skill(
         &mut self,
+        entity: Entity,
         actor: i64,
         position: GridPos,
         skill: SkillDef,
     ) -> Result<(), GameError> {
-        self.ensure(actor)?;
-        if !can_use_skill(self.world.resource::<Turn>()) {
-            return Err(error::cannot_use_skill());
-        }
-        let entity = self.entity(actor).ok_or(error::missing_actor())?;
         let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
         let (terrain, duration) =
             validate_cell_skill_from_position(&self.world, entity, origin, position, &skill)?;
@@ -1109,7 +1104,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
     let ranges: Vec<_> = skills
         .iter()
         .filter_map(|skill_id| definitions.get(skill_id))
-        .filter(|skill| !matches!(skill.effect, SkillEffect::Flanking { .. }))
+        .filter(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
         .map(|skill| {
             let SkillDef {
                 power_source: _,
@@ -1216,10 +1211,9 @@ pub(crate) fn validate_passive_skills(
     owner: &str,
 ) -> Result<(), GameError> {
     let valid = ids.iter().all(|id| {
-        skills.iter().any(|skill| {
-            skill.id == *id
-                && matches!(skill.effect, SkillEffect::Flanking { hit_bonus } if hit_bonus >= 0)
-        })
+        skills
+            .iter()
+            .any(|skill| skill.id == *id && target_kind(&skill.effect) == SkillTargetKind::Passive)
     });
     if ids.len() > 1 || !valid {
         return Err(error::invalid_passive_skills(owner));
@@ -1248,7 +1242,7 @@ pub(crate) fn active_skill_views(
     unit.skills
         .iter()
         .map(|id| definitions.get(id).expect("單位技能已驗證"))
-        .filter(|skill| !matches!(skill.effect, SkillEffect::Flanking { .. }))
+        .filter(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
         .map(|skill| crate::model::ActiveSkillView {
             id: skill.id.clone(),
             details: skill_details(skill, board),
@@ -1302,7 +1296,7 @@ pub(crate) fn resolve_unit_skills(
     if unit.skills.iter().any(|id| {
         skills
             .iter()
-            .any(|skill| skill.id == *id && matches!(skill.effect, SkillEffect::Flanking { .. }))
+            .any(|skill| skill.id == *id && target_kind(&skill.effect) == SkillTargetKind::Passive)
     }) {
         return Err(error::invalid_passive_skills(&unit.id));
     }

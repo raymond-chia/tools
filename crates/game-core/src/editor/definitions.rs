@@ -2,7 +2,10 @@
 use super::EditorError;
 use crate::authoring::{Definitions, EquipmentDef, EquipmentSlot, Map, UnitType};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
-use crate::{Game, SkillDef, SkillEffect, TerrainEntryRule, TerrainLayer, TerrainTypeDef};
+use crate::skill::target_kind;
+use crate::{
+    Game, SkillDef, SkillEffect, SkillTargetKind, TerrainEntryRule, TerrainLayer, TerrainTypeDef,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -81,9 +84,9 @@ pub fn edit_definition_from_json(
     command: &str,
 ) -> Result<String, EditorError> {
     let mut definitions: Definitions = super::json::from_str(definitions)
-        .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let maps: BTreeMap<String, Map> = super::json::from_str(maps)
-        .map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
     let command: DefinitionEdit = super::json::from_str(command)
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
     match command {
@@ -120,13 +123,13 @@ pub fn edit_definition_from_json(
             let active_skill_ids: Vec<_> = definitions
                 .skills
                 .iter()
-                .filter(|skill| !matches!(skill.effect, SkillEffect::Flanking { .. }))
+                .filter(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
                 .map(|skill| &skill.id)
                 .collect();
             let passive_skill_ids: Vec<_> = definitions
                 .skills
                 .iter()
-                .filter(|skill| matches!(skill.effect, SkillEffect::Flanking { .. }))
+                .filter(|skill| target_kind(&skill.effect) == SkillTargetKind::Passive)
                 .map(|skill| &skill.id)
                 .collect();
             return Ok(serde_json::json!({
@@ -142,68 +145,26 @@ pub fn edit_definition_from_json(
             category,
             id,
             offset,
-        } => {
-            if offset == 0 {
-                return Err(EditorError::operation("invalid_command", &id, Vec::new()));
+        } => match category {
+            DefinitionCategory::Equipment => {
+                move_entry(&mut definitions.equipment, &id, offset, |_, _| true)?
             }
-            if matches!(category, DefinitionCategory::TerrainTypes) {
+            DefinitionCategory::UnitTypes => {
+                move_entry(&mut definitions.unit_types, &id, offset, |_, _| true)?
+            }
+            DefinitionCategory::Skills => {
+                move_entry(&mut definitions.skills, &id, offset, |_, _| true)?
+            }
+            DefinitionCategory::TerrainTypes => {
                 // 地形固定依圖層分組；拖曳只調整同圖層內的順序。
                 definitions
                     .terrain_types
                     .sort_by_key(|terrain| terrain.layer != TerrainLayer::Ground);
+                move_entry(&mut definitions.terrain_types, &id, offset, |a, b| {
+                    a.layer == b.layer
+                })?
             }
-            let ids: Vec<_> = match category {
-                DefinitionCategory::Equipment => definitions
-                    .equipment
-                    .iter()
-                    .map(|entry| &entry.id)
-                    .collect(),
-                DefinitionCategory::UnitTypes => definitions
-                    .unit_types
-                    .iter()
-                    .map(|entry| &entry.id)
-                    .collect(),
-                DefinitionCategory::Skills => {
-                    definitions.skills.iter().map(|entry| &entry.id).collect()
-                }
-                DefinitionCategory::TerrainTypes => definitions
-                    .terrain_types
-                    .iter()
-                    .map(|entry| &entry.id)
-                    .collect(),
-            };
-            let index = ids
-                .iter()
-                .position(|entry| **entry == id)
-                .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
-            let target = index as i64 + i64::from(offset);
-            if target < 0 || target >= ids.len() as i64 {
-                return Err(EditorError::operation("invalid_command", &id, Vec::new()));
-            }
-            match category {
-                DefinitionCategory::Equipment => {
-                    let entry = definitions.equipment.remove(index);
-                    definitions.equipment.insert(target as usize, entry);
-                }
-                DefinitionCategory::UnitTypes => {
-                    let entry = definitions.unit_types.remove(index);
-                    definitions.unit_types.insert(target as usize, entry);
-                }
-                DefinitionCategory::Skills => {
-                    let entry = definitions.skills.remove(index);
-                    definitions.skills.insert(target as usize, entry);
-                }
-                DefinitionCategory::TerrainTypes => {
-                    if definitions.terrain_types[index].layer
-                        != definitions.terrain_types[target as usize].layer
-                    {
-                        return Err(EditorError::operation("invalid_command", &id, Vec::new()));
-                    }
-                    let entry = definitions.terrain_types.remove(index);
-                    definitions.terrain_types.insert(target as usize, entry);
-                }
-            }
-        }
+        },
         DefinitionEdit::UpdateField {
             category,
             id,
@@ -211,36 +172,14 @@ pub fn edit_definition_from_json(
             value,
         } => match category {
             DefinitionCategory::Equipment => {
-                let entry = definitions
-                    .equipment
-                    .iter_mut()
-                    .find(|entry| entry.id == id)
-                    .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
-                update_field(entry, &key, value)?;
+                update_entry(&mut definitions.equipment, &id, &key, value)?
             }
             DefinitionCategory::UnitTypes => {
-                let entry = definitions
-                    .unit_types
-                    .iter_mut()
-                    .find(|entry| entry.id == id)
-                    .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
-                update_field(entry, &key, value)?;
+                update_entry(&mut definitions.unit_types, &id, &key, value)?
             }
-            DefinitionCategory::Skills => {
-                let entry = definitions
-                    .skills
-                    .iter_mut()
-                    .find(|entry| entry.id == id)
-                    .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
-                update_field(entry, &key, value)?;
-            }
+            DefinitionCategory::Skills => update_entry(&mut definitions.skills, &id, &key, value)?,
             DefinitionCategory::TerrainTypes => {
-                let entry = definitions
-                    .terrain_types
-                    .iter_mut()
-                    .find(|entry| entry.id == id)
-                    .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
-                update_field(entry, &key, value)?;
+                update_entry(&mut definitions.terrain_types, &id, &key, value)?
             }
         },
         DefinitionEdit::ChangeSkillEffect { id, effect } => {
@@ -262,7 +201,7 @@ pub fn edit_definition_from_json(
                 EffectSelection::Heal => SkillEffect::Heal { power_bonus: 0 },
                 EffectSelection::Flanking => SkillEffect::Flanking { hit_bonus: 0 },
             };
-            if matches!(skill.effect, SkillEffect::Flanking { .. }) {
+            if target_kind(&skill.effect) == SkillTargetKind::Passive {
                 skill.ranged = false;
                 skill.min_range = 0;
                 skill.max_range = 0;
@@ -347,50 +286,19 @@ pub fn edit_definition_from_json(
             source_id,
         } => {
             validate_new_id(&definitions, category, &id)?;
-            if !contains_id(&definitions, category, &source_id) {
-                return Err(EditorError::operation("not_found", &source_id, Vec::new()));
-            }
             // ID 建立後不可更動；複製只設定新資料的 ID，因此不需要更新既有引用。
             match category {
                 DefinitionCategory::Equipment => {
-                    let index = definitions
-                        .equipment
-                        .iter()
-                        .position(|entry| entry.id == source_id)
-                        .expect("已確認裝備來源存在");
-                    let mut entry = definitions.equipment[index].clone();
-                    entry.id = id;
-                    definitions.equipment.insert(index + 1, entry);
+                    duplicate_entry(&mut definitions.equipment, id, &source_id)?
                 }
                 DefinitionCategory::UnitTypes => {
-                    let index = definitions
-                        .unit_types
-                        .iter()
-                        .position(|unit| unit.id == source_id)
-                        .expect("已確認複製來源的單位 ID 存在");
-                    let mut unit = definitions.unit_types[index].clone();
-                    unit.id = id;
-                    definitions.unit_types.insert(index + 1, unit);
+                    duplicate_entry(&mut definitions.unit_types, id, &source_id)?
                 }
                 DefinitionCategory::Skills => {
-                    let index = definitions
-                        .skills
-                        .iter()
-                        .position(|skill| skill.id == source_id)
-                        .expect("已確認複製來源的技能 ID 存在");
-                    let mut skill = definitions.skills[index].clone();
-                    skill.id = id;
-                    definitions.skills.insert(index + 1, skill);
+                    duplicate_entry(&mut definitions.skills, id, &source_id)?
                 }
                 DefinitionCategory::TerrainTypes => {
-                    let index = definitions
-                        .terrain_types
-                        .iter()
-                        .position(|entry| entry.id == source_id)
-                        .expect("已確認複製來源的地形 ID 存在");
-                    let mut terrain = definitions.terrain_types[index].clone();
-                    terrain.id = id;
-                    definitions.terrain_types.insert(index + 1, terrain);
+                    duplicate_entry(&mut definitions.terrain_types, id, &source_id)?
                 }
             }
         }
@@ -401,33 +309,19 @@ pub fn edit_definition_from_json(
         DefinitionEdit::Remove { category, id } => {
             check_removal(&definitions, &maps, category, &id)?;
             match category {
-                DefinitionCategory::Equipment => {
-                    definitions.equipment.retain(|entry| entry.id != id)
-                }
-                DefinitionCategory::UnitTypes => {
-                    definitions.unit_types.retain(|unit| unit.id != id)
-                }
-                DefinitionCategory::Skills => definitions.skills.retain(|skill| skill.id != id),
+                DefinitionCategory::Equipment => remove_entry(&mut definitions.equipment, &id),
+                DefinitionCategory::UnitTypes => remove_entry(&mut definitions.unit_types, &id),
+                DefinitionCategory::Skills => remove_entry(&mut definitions.skills, &id),
                 DefinitionCategory::TerrainTypes => {
-                    definitions.terrain_types.retain(|entry| entry.id != id);
+                    remove_entry(&mut definitions.terrain_types, &id)
                 }
             }
         }
     }
 
-    crate::skill::validate_passive_skills(
-        &definitions.default_passive_skills,
-        &definitions.skills,
-        "全體預設",
-    )?;
-    let equipment = crate::equipment::definitions(definitions.equipment.clone())?;
-    for unit in &definitions.unit_types {
-        crate::equipment::resolve(unit, &equipment)?;
-        crate::skill::resolve_unit_skills(
-            unit,
-            &definitions.default_passive_skills,
-            &definitions.skills,
-        )?;
+    // 定義的合法性由每張地圖的完整載入檢查。
+    if maps.is_empty() {
+        return Err(EditorError::operation("missing_map", "", Vec::new()));
     }
     for (path, map) in &maps {
         Game::from_authoring(definitions.clone(), map.clone()).map_err(|error| {
@@ -438,7 +332,7 @@ pub fn edit_definition_from_json(
         })?;
     }
     serde_json::to_string(&EditedDocuments { definitions })
-        .map_err(|e| EditorError::input("json_serialize", e.to_string()))
+        .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }
 
 // 檢查與實際刪除共用同一份引用判斷；預檢不修改文件。
@@ -453,14 +347,9 @@ fn check_removal(
     match category {
         DefinitionCategory::Equipment => {
             for unit in &definitions.unit_types {
-                if [
-                    &unit.main_hand,
-                    &unit.off_hand,
-                    &unit.armor,
-                    &unit.accessory,
-                ]
-                .iter()
-                .any(|entry| entry.as_str() == id)
+                if crate::equipment::equipment_slots(unit)
+                    .iter()
+                    .any(|(_, _, entry)| *entry == id)
                 {
                     references.push(("unit_types", unit.id.clone()));
                 }
@@ -514,13 +403,112 @@ fn check_removal(
 
 fn contains_id(definitions: &Definitions, category: DefinitionCategory, id: &str) -> bool {
     match category {
-        DefinitionCategory::Equipment => definitions.equipment.iter().any(|entry| entry.id == id),
-        DefinitionCategory::UnitTypes => definitions.unit_types.iter().any(|unit| unit.id == id),
-        DefinitionCategory::Skills => definitions.skills.iter().any(|skill| skill.id == id),
-        DefinitionCategory::TerrainTypes => {
-            definitions.terrain_types.iter().any(|entry| entry.id == id)
-        }
+        DefinitionCategory::Equipment => position(&definitions.equipment, id).is_some(),
+        DefinitionCategory::UnitTypes => position(&definitions.unit_types, id).is_some(),
+        DefinitionCategory::Skills => position(&definitions.skills, id).is_some(),
+        DefinitionCategory::TerrainTypes => position(&definitions.terrain_types, id).is_some(),
     }
+}
+
+/// 編輯器以 ID 操作的作者資料。
+trait Identified: Clone {
+    fn id(&self) -> &str;
+    fn set_id(&mut self, id: String);
+}
+
+impl Identified for EquipmentDef {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+}
+
+impl Identified for UnitType {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+}
+
+impl Identified for SkillDef {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+}
+
+impl Identified for TerrainTypeDef {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+}
+
+fn position<T: Identified>(entries: &[T], id: &str) -> Option<usize> {
+    entries.iter().position(|entry| entry.id() == id)
+}
+
+fn existing_position<T: Identified>(entries: &[T], id: &str) -> Result<usize, EditorError> {
+    position(entries, id).ok_or_else(|| EditorError::operation("not_found", id, Vec::new()))
+}
+
+/// 只能移動到 same_group 判定為同組的位置。
+fn move_entry<T: Identified>(
+    entries: &mut Vec<T>,
+    id: &str,
+    offset: i32,
+    same_group: impl Fn(&T, &T) -> bool,
+) -> Result<(), EditorError> {
+    let invalid = || EditorError::operation("invalid_command", id, Vec::new());
+    if offset == 0 {
+        return Err(invalid());
+    }
+    let index = existing_position(entries, id)?;
+    let target = usize::try_from(index as i64 + i64::from(offset))
+        .ok()
+        .filter(|target| *target < entries.len())
+        .ok_or_else(invalid)?;
+    if !same_group(&entries[index], &entries[target]) {
+        return Err(invalid());
+    }
+    let entry = entries.remove(index);
+    entries.insert(target, entry);
+    Ok(())
+}
+
+fn update_entry<T: Identified + Serialize + serde::de::DeserializeOwned>(
+    entries: &mut [T],
+    id: &str,
+    key: &str,
+    value: serde_json::Value,
+) -> Result<(), EditorError> {
+    let index = existing_position(entries, id)?;
+    update_field(&mut entries[index], key, value)
+}
+
+/// 複本插在來源之後。
+fn duplicate_entry<T: Identified>(
+    entries: &mut Vec<T>,
+    id: String,
+    source_id: &str,
+) -> Result<(), EditorError> {
+    let index = existing_position(entries, source_id)?;
+    let mut entry = entries[index].clone();
+    entry.set_id(id);
+    entries.insert(index + 1, entry);
+    Ok(())
+}
+
+fn remove_entry<T: Identified>(entries: &mut Vec<T>, id: &str) {
+    entries.retain(|entry| entry.id() != id);
 }
 
 fn validate_new_id(
@@ -558,13 +546,13 @@ fn update_field<T: Serialize + serde::de::DeserializeOwned>(
     value: serde_json::Value,
 ) -> Result<(), EditorError> {
     let mut document = serde_json::to_value(&*entry)
-        .map_err(|e| EditorError::input("json_serialize", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))?;
     if key == "id" || key == "effect" || document.get(key).is_none() {
         return Err(EditorError::operation("invalid_field", key, Vec::new()));
     }
     document[key] = value;
     *entry = super::json::from_value(document)
-        .map_err(|e| EditorError::input("definitions_json_parse", e.to_string()))?;
+        .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     Ok(())
 }
 
@@ -572,28 +560,25 @@ fn update_field<T: Serialize + serde::de::DeserializeOwned>(
 fn equipment_choices(
     unit: &UnitType,
     entries: &std::collections::HashMap<String, EquipmentDef>,
-) -> std::collections::BTreeMap<&'static str, Vec<String>> {
+) -> BTreeMap<&'static str, Vec<String>> {
     let mut candidates: Vec<_> = entries.keys().cloned().collect();
     candidates.sort();
     candidates.insert(0, String::new());
-    let mut result = std::collections::BTreeMap::new();
-    for slot in ["main_hand", "off_hand", "armor", "accessory"] {
-        let choices = candidates
-            .iter()
-            .filter(|id| {
-                let mut candidate = unit.clone();
-                match slot {
-                    "main_hand" => candidate.main_hand = (*id).clone(),
-                    "off_hand" => candidate.off_hand = (*id).clone(),
-                    "armor" => candidate.armor = (*id).clone(),
-                    "accessory" => candidate.accessory = (*id).clone(),
-                    _ => unreachable!("配裝欄位來自上方固定清單"),
-                }
-                crate::equipment::resolve(&candidate, entries).is_ok()
-            })
-            .cloned()
-            .collect();
-        result.insert(slot, choices);
-    }
-    result
+    let slots = crate::equipment::equipment_slots(unit);
+    slots
+        .iter()
+        .enumerate()
+        .map(|(index, (key, _, _))| {
+            let choices = candidates
+                .iter()
+                .filter(|id| {
+                    let mut candidate = slots;
+                    candidate[index].2 = id;
+                    crate::equipment::resolve_slots(unit, candidate, entries).is_ok()
+                })
+                .cloned()
+                .collect();
+            (*key, choices)
+        })
+        .collect()
 }

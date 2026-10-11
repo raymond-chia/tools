@@ -537,7 +537,8 @@ fn editor_command(
     command: Value,
 ) -> Result<String, editor::EditorError> {
     let source = serde_json::to_string(definitions).expect("編輯器測試定義應可轉為 JSON");
-    editor::edit_definition_from_json(&source, "{}", &command.to_string())
+    let maps = json!({ "equipment_map": map() });
+    editor::edit_definition_from_json(&source, &maps.to_string(), &command.to_string())
 }
 
 #[cfg(feature = "editor")]

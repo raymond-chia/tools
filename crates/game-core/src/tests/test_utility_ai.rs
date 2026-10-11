@@ -281,17 +281,15 @@ fn healer_approaches_unreachable_severe_wound_and_heals_light_wound() {
             serde_json::json!(expected_path),
             "{name}"
         );
-        // 移動索引對應完整戰鬥日誌；command 快照只包含本次新增的日誌。
-        let full_log =
-            serde_json::to_value(&game.world.resource::<Log>().0).expect("完整戰鬥日誌應可序列化");
-        let healing_index = full_log
+        // 移動索引對應 command 快照中本批日誌的位置。
+        let healing_index = snapshot["log"]
             .as_array()
-            .expect("完整日誌應為陣列")
+            .expect("快照應包含本批日誌")
             .iter()
             .position(|event| event["type"] == "healing" && event["actor"] == ACTOR_ID)
             .expect("應產生施放者的治療紀錄");
         assert_eq!(
-            movements[0]["before_log_index"]
+            movements[0]["log_insert_index"]
                 .as_u64()
                 .expect("移動紀錄應包含對應日誌索引")
                 <= healing_index as u64,

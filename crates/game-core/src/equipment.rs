@@ -13,6 +13,19 @@ pub(crate) struct EquipmentStats {
     pub(crate) equipment: crate::model::EquipmentView,
 }
 
+/// 依序為欄位名稱、欄位可放入的裝備種類與目前裝備 ID（空字串代表未裝備）。
+pub(crate) type EquipmentSlots<'a> = [(&'static str, EquipmentSlot, &'a str); 4];
+
+/// 單位配裝欄位的唯一清單。
+pub(crate) fn equipment_slots(unit: &UnitType) -> EquipmentSlots<'_> {
+    [
+        ("main_hand", EquipmentSlot::OneHand, &unit.main_hand),
+        ("off_hand", EquipmentSlot::OneHand, &unit.off_hand),
+        ("armor", EquipmentSlot::Armor, &unit.armor),
+        ("accessory", EquipmentSlot::Accessory, &unit.accessory),
+    ]
+}
+
 pub(crate) fn definitions(
     entries: Vec<EquipmentDef>,
 ) -> Result<HashMap<String, EquipmentDef>, GameError> {
@@ -29,13 +42,10 @@ pub(crate) fn definitions(
             .iter()
             .any(|value| *value < 0)
         {
-            return Err(error::invalid_equipment(format!(
-                "裝備 {} 的 ID 不可空白，能力加值不可為負數",
-                entry.id
-            )));
+            return Err(error::invalid_equipment_definition(&entry.id));
         }
         if result.insert(entry.id.clone(), entry).is_some() {
-            return Err(error::invalid_equipment("裝備 ID 重複".to_owned()));
+            return Err(error::duplicate_equipment_id());
         }
     }
     Ok(result)
@@ -45,37 +55,32 @@ pub(crate) fn resolve(
     unit: &UnitType,
     entries: &HashMap<String, EquipmentDef>,
 ) -> Result<EquipmentStats, GameError> {
+    resolve_slots(unit, equipment_slots(unit), entries)
+}
+
+/// 以指定配裝計算單位能力。
+pub(crate) fn resolve_slots(
+    unit: &UnitType,
+    slots: EquipmentSlots<'_>,
+    entries: &HashMap<String, EquipmentDef>,
+) -> Result<EquipmentStats, GameError> {
     let mut hp = i64::from(unit.hp);
     let mut physical = i64::from(unit.physical_power);
     let mut magical = i64::from(unit.magical_power);
     let mut block = 0i64;
     let mut reduction = 0i64;
     let mut hands = 0;
-    let equipment = crate::model::EquipmentView {
-        main_hand: unit.main_hand.clone(),
-        off_hand: unit.off_hand.clone(),
-        armor: unit.armor.clone(),
-        accessory: unit.accessory.clone(),
-    };
-    for (id, slot) in [
-        (&unit.main_hand, EquipmentSlot::OneHand),
-        (&unit.off_hand, EquipmentSlot::OneHand),
-        (&unit.armor, EquipmentSlot::Armor),
-        (&unit.accessory, EquipmentSlot::Accessory),
-    ] {
+    for (_, slot, id) in slots {
         if id.is_empty() {
             continue;
         }
-        let entry = entries.get(id).ok_or_else(|| {
-            error::invalid_equipment(format!("單位 {} 引用不存在的裝備 {id}", unit.id))
-        })?;
+        let entry = entries
+            .get(id)
+            .ok_or_else(|| error::unknown_equipment(&unit.id, id))?;
         if entry.slot != slot
             && !(slot == EquipmentSlot::OneHand && entry.slot == EquipmentSlot::TwoHand)
         {
-            return Err(error::invalid_equipment(format!(
-                "單位 {} 的裝備 {id} 放在錯誤欄位",
-                unit.id
-            )));
+            return Err(error::equipment_wrong_slot(&unit.id, id));
         }
         hands += match entry.slot {
             EquipmentSlot::OneHand => 1,
@@ -89,18 +94,26 @@ pub(crate) fn resolve(
         reduction += i64::from(entry.block_reduction);
     }
     if hands > 2 {
-        return Err(error::invalid_equipment(format!(
-            "單位 {} 的手持裝備超過兩隻手",
-            unit.id
-        )));
+        return Err(error::too_many_hand_equipment(&unit.id));
     }
     let number = |value| i32::try_from(value).map_err(|_| error::numeric_range(&unit.id));
+    let [
+        (_, _, main_hand),
+        (_, _, off_hand),
+        (_, _, armor),
+        (_, _, accessory),
+    ] = slots;
     Ok(EquipmentStats {
         hp: number(hp)?,
         physical_power: number(physical)?,
         magical_power: number(magical)?,
         block: number(block)?,
         block_reduction: number(reduction)?,
-        equipment,
+        equipment: crate::model::EquipmentView {
+            main_hand: main_hand.to_owned(),
+            off_hand: off_hand.to_owned(),
+            armor: armor.to_owned(),
+            accessory: accessory.to_owned(),
+        },
     })
 }

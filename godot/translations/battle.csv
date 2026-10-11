@@ -115,7 +115,6 @@ ERROR_JSON_SERIALIZE,無法轉換資料,Could not convert data
 ERROR_MAP_TOML_PARSE,地圖檔格式錯誤,Map file format is invalid
 ERROR_MISSING_ACTOR,找不到行動角色,Acting unit not found
 ERROR_MISSING_AI_SKILL,敵方單位沒有技能,Enemy unit has no skills
-ERROR_MISSING_ATTACKER,找不到攻擊者,Attacker not found
 ERROR_MISSING_DEFAULT_GROUND_TERRAIN,必須定義地面地形 plain,The ground terrain plain must be defined
 ERROR_MISSING_DELAY_TARGET,找不到延後目標,Delay target not found
 ERROR_MISSING_INITIATIVE_UNIT,找不到先攻單位,Initiative unit not found

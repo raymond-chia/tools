@@ -2,8 +2,8 @@
 use crate::game::{DamageResult, Game};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::model::{
-    Board, CombatLogEvent, Footprint, GridPos, Hp, Log, Pos, TemporaryTerrains, TerrainEntryRule,
-    TerrainLayer, TerrainTypeDef, Unit,
+    Board, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Log, Pos, TemporaryTerrain,
+    TemporaryTerrains, TerrainEntryRule, TerrainLayer, TerrainTypeDef, Unit,
 };
 use crate::movement::footprint_cells;
 use bevy_ecs::prelude::{Entity, World};
@@ -89,6 +89,36 @@ pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {
             *extra_movement_cost
         })
         .sum::<u32>()
+}
+
+/// 暫時地形的剩餘回合數（含本回合）；同格已有同種類固定地形時以固定地形為準，回傳 None。
+pub(crate) fn temporary_remaining_rounds(w: &World, position: GridPos, kind: &str) -> Option<u32> {
+    let Board {
+        width: _,
+        height: _,
+        terrains,
+        terrain_types: _,
+    } = w.resource::<Board>();
+    if terrains
+        .get(&position)
+        .is_some_and(|kinds| kinds.iter().any(|fixed| fixed == kind))
+    {
+        return None;
+    }
+    let TemporaryTerrain {
+        expires_after_round,
+    } = w
+        .resource::<TemporaryTerrains>()
+        .0
+        .get(&position)?
+        .get(kind)?;
+    let Encounter {
+        participants: _,
+        order: _,
+        cursor: _,
+        round,
+    } = w.resource::<Encounter>();
+    Some(expires_after_round.saturating_sub(*round) + 1)
 }
 
 /// 佔用範圍內的地形種類；同種類跨越多格時只結算一次。
