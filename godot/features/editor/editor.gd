@@ -17,6 +17,7 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
 @onready var team_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Team
 @onready var faction_field: LineEdit = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Faction
+@onready var existing_factions: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/ExistingFactions
 @onready var map_view = $Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map
 @onready var pages: TabContainer = $Layout/Pages
 @onready var definition_pages: Array = [$Layout/Pages/UnitPage, $Layout/Pages/SkillPage, $Layout/Pages/TerrainPage, $Layout/Pages/EquipmentPage]
@@ -86,6 +87,13 @@ func _ready() -> void:
 	map_name.text_submitted.connect(func(_value: String): commit_map_name())
 	map_name.focus_exited.connect(commit_map_name)
 	team_list.item_selected.connect(func(_index: int): refresh_tools_visibility())
+	existing_factions.get_popup().about_to_popup.connect(refresh_existing_factions)
+	existing_factions.item_selected.connect(func(index: int):
+		faction_field.text = existing_factions.get_item_text(index)
+		existing_factions.select(0)
+	)
+	existing_factions.add_item("選擇既有敵方派系")
+	existing_factions.set_item_disabled(0, true)
 	faction_field.visible = false
 	width_box.value_changed.connect(func(_value: float): resize_map())
 	height_box.value_changed.connect(func(_value: float): resize_map())
@@ -474,6 +482,17 @@ func refresh_tools_visibility() -> void:
 	unit_list.visible = mode == 2
 	team_list.visible = mode == 2
 	faction_field.visible = mode == 2 and team_list.selected != 0
+	existing_factions.visible = faction_field.visible
+
+func refresh_existing_factions() -> void:
+	var result := read_core_response(core.enemy_factions_from_json(JSON.stringify(map_data)))
+	if result.is_empty(): return
+	var factions: Array = result.factions
+	existing_factions.clear()
+	existing_factions.add_item("尚無既有敵方派系" if factions.is_empty() else "選擇既有敵方派系")
+	existing_factions.set_item_disabled(0, true)
+	for faction in factions:
+		existing_factions.add_item(faction)
 
 # 筆刷只傳遞作者選擇；圖層替換、清除與合法性由 Rust 決定。
 func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:

@@ -96,6 +96,13 @@ impl TacticalGame {
     }
     #[cfg(feature = "editor")]
     #[func]
+    fn enemy_factions_from_json(&self, map: GString) -> GString {
+        editor_response(game_core::editor::enemy_factions_from_json(
+            &map.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
+    #[func]
     fn inspected_preview_from_json(
         &self,
         definitions: GString,

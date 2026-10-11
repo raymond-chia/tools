@@ -11,6 +11,22 @@ pub use definitions::edit_definition_from_json;
 pub use error::EditorError;
 pub use map::paint_terrain_from_json;
 
+/// 依地圖配置順序列出既有敵方派系，供編輯器選用。
+pub fn enemy_factions_from_json(map: &str) -> Result<String, EditorError> {
+    let map: Map =
+        json::from_str(map).map_err(|e| EditorError::input("map_json_parse", e.to_string()))?;
+    let mut factions = Vec::new();
+    for unit in map.units {
+        if let crate::Team::Enemy(faction) = unit.team {
+            if !factions.contains(&faction) {
+                factions.push(faction);
+            }
+        }
+    }
+    serde_json::to_string(&serde_json::json!({ "factions": factions }))
+        .map_err(|e| EditorError::input("json_serialize", e.to_string()))
+}
+
 /// 將 Godot 編輯器傳來的 JSON 定義與地圖資料驗證後，轉成儲存或試玩用的 TOML 文件。
 /// JSON 僅用於編輯器與 Rust 之間傳遞資料；實際保存的檔案仍是 TOML。
 pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, String), EditorError> {

@@ -183,10 +183,6 @@ layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 
-[node name="Unit" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
-custom_minimum_size = Vector2(145, 0)
-layout_mode = 2
-
 [node name="Team" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 layout_mode = 2
 
@@ -195,6 +191,14 @@ custom_minimum_size = Vector2(110, 0)
 layout_mode = 2
 text = "enemies"
 placeholder_text = "敵方派系"
+
+[node name="ExistingFactions" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
+layout_mode = 2
+allow_reselect = true
+
+[node name="Unit" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
+custom_minimum_size = Vector2(145, 0)
+layout_mode = 2
 
 [node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials"]
 layout_mode = 2
