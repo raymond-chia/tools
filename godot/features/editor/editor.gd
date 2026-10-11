@@ -1,7 +1,5 @@
 extends Control
 
-const DEFINITIONS_PATH := "res://data/definitions.toml"
-const MAP_DIR := "res://data/maps/"
 const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
 const MODES := ["繪製地面", "繪製上層", "放置單位", "移動單位", "刪除單位"]
 const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
@@ -24,6 +22,9 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var status_label: Label = $Layout/Status
 
 var editing_mode := 0
+var data_dir := DataSource.directory()
+var definitions_path := data_dir + "definitions.toml"
+var map_dir := data_dir + "maps/"
 var terrain_brushes := {"ground": "", "overlay": ""}
 
 var core
@@ -97,7 +98,7 @@ func _ready() -> void:
 	faction_field.visible = false
 	width_box.value_changed.connect(func(_value: float): resize_map())
 	height_box.value_changed.connect(func(_value: float): resize_map())
-	var source := read_file(DEFINITIONS_PATH)
+	var source := read_file(definitions_path)
 	if source.is_empty():
 		return
 	var parsed := read_core_response(core.definitions_to_json(source))
@@ -137,9 +138,9 @@ func read_file(path: String) -> String:
 func refresh_map_list() -> void:
 	var previous := selected_map()
 	map_list.clear()
-	for filename in DirAccess.get_files_at(MAP_DIR):
+	for filename in DirAccess.get_files_at(map_dir):
 		if not filename.ends_with(".toml"): continue
-		var path := MAP_DIR + filename
+		var path := map_dir + filename
 		var index := map_list.add_item(filename)
 		map_list.set_item_metadata(index, path)
 	if not map_file.is_empty() and not FileAccess.file_exists(map_file):
@@ -222,7 +223,7 @@ func submit_map() -> void:
 	if not filename.is_valid_filename() or filename in [".", ".."]:
 		$AddMapDialog/Form/Error.text = "請輸入有效的檔案名稱，不可包含路徑或檔名禁用字元。"
 		return
-	var path := MAP_DIR + filename + ".toml"
+	var path := map_dir + filename + ".toml"
 	if FileAccess.file_exists(path):
 		$AddMapDialog/Form/Error.text = "檔案「%s.toml」已存在。" % filename
 		return
@@ -247,7 +248,7 @@ func save_map() -> void:
 	if not commit_pending_fields(): return
 	var result := serialize_documents()
 	if result.is_empty(): return
-	var documents := {DEFINITIONS_PATH: result.definitions, map_file: result.map}
+	var documents := {definitions_path: result.definitions, map_file: result.map}
 	for path in documents:
 		var file := FileAccess.open(path, FileAccess.WRITE)
 		if file == null:
@@ -605,9 +606,9 @@ func update_definition(category: String, id: String, key: String, value: Variant
 # ID 建立後不可更動，因此不需要更新既有引用；刪除檢查仍涵蓋所有地圖。
 func edit_definition(command: Dictionary) -> bool:
 	var maps := {}
-	for filename in DirAccess.get_files_at(MAP_DIR):
+	for filename in DirAccess.get_files_at(map_dir):
 		if not filename.ends_with(".toml"): continue
-		var path := MAP_DIR + filename
+		var path := map_dir + filename
 		if path == map_file: continue
 		var parsed := read_core_response(core.map_to_json(read_file(path)))
 		if parsed.is_empty(): return false
