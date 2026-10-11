@@ -8,8 +8,11 @@ signal turn_order_focus_requested(unit_id: int)
 signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
 signal language_changed
+signal playback_speed_changed(speed: float)
 
 enum DetailTab { TERRAIN, ATTRIBUTES, ACTIVE_SKILLS, PASSIVE_SKILLS }
+
+const PLAYBACK_SPEEDS := [1, 2, 4]
 
 const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
@@ -18,6 +21,7 @@ const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 
 @onready var root: Control = $Root
+@onready var playback_speed_button: Button = $Root/PlaybackSpeed
 @onready var menu_button: MenuButton = $Root/Menu
 @onready var info_panel: PanelContainer = $Root/InfoPanel
 @onready var info_title: Label = $Root/InfoPanel/Margin/Content/Header/Title
@@ -94,9 +98,11 @@ var presented_log_events: Array = []
 var dragging_battle_log := false
 var presented_skills: Array = []
 var hovered_skill_id := ""
+var playback_speed_index := 0
 
 func _ready() -> void:
 	detail_tabs.tab_changed.connect(_on_detail_tab_changed)
+	playback_speed_button.pressed.connect(_on_playback_speed_pressed)
 	var settings := ConfigFile.new()
 	if settings.load(LANGUAGE_SETTINGS) == OK:
 		TranslationServer.set_locale(settings.get_value("language", "locale", "zh_TW"))
@@ -119,6 +125,12 @@ func _ready() -> void:
 	$Root/ActionBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 	delay_button.pressed.connect(func(): delay_selection_requested.emit())
 
+func _on_playback_speed_pressed() -> void:
+	playback_speed_index = (playback_speed_index + 1) % PLAYBACK_SPEEDS.size()
+	var speed: int = PLAYBACK_SPEEDS[playback_speed_index]
+	playback_speed_button.text = "×%d" % speed
+	playback_speed_changed.emit(float(speed))
+
 func _on_detail_tab_changed(index: int) -> void:
 	if showing_unit_tabs:
 		last_unit_detail_tab = index
@@ -140,6 +152,7 @@ func update_language_menu() -> void:
 
 func apply_ui_z_order() -> void:
 	menu_button.z_index = BattleConfig.MENU_Z_INDEX
+	playback_speed_button.z_index = BattleConfig.MENU_Z_INDEX
 	$Root/LogPanel.z_index = BattleConfig.UI_Z_BASE
 	$Root/LogVisibilityButton.z_index = BattleConfig.UI_Z_BASE
 	$Root/LeftColumn.z_index = BattleConfig.UI_Z_BASE

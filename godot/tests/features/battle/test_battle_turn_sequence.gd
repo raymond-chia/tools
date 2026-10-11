@@ -64,6 +64,44 @@ func test_enemy_automatic_turn_locks_inputs_before_and_during_animation() -> voi
 	battle.ui.action_buttons.melee_attack.pressed.emit()
 	assert_str(battle.pending_action).is_equal("melee_attack")
 
+# 驗證倍率按鈕依序循環，並即時更新已開始的戰鬥等待而不改變核心狀態。
+func test_playback_speed_cycles_during_presentation() -> void:
+	var before: Dictionary = battle.state.duplicate(true)
+	var tween: Tween = battle.world.create_presentation_tween()
+	tween.tween_interval(10.0)
+	var animation: Tween = battle.world.animate_unit_hit(ARIA_ID)
+	assert_str(battle.ui.playback_speed_button.text).is_equal("×1")
+	for speed in [2, 4, 1]:
+		battle.ui.playback_speed_button.pressed.emit()
+		assert_str(battle.ui.playback_speed_button.text).is_equal("×%d" % speed)
+		assert_float(battle.world.playback_speed).is_equal(float(speed))
+		var elapsed := tween.get_total_elapsed_time()
+		tween.custom_step(0.1)
+		assert_float(tween.get_total_elapsed_time() - elapsed).is_equal_approx(0.1 * speed, 0.001)
+		assert_dict(battle.state).is_equal(before)
+		if speed == 2:
+			var animation_elapsed := animation.get_total_elapsed_time()
+			animation.custom_step(0.01)
+			assert_float(animation.get_total_elapsed_time() - animation_elapsed).is_equal_approx(0.02, 0.001)
+	tween.kill()
+
+# 驗證各倍率完整執行相同敵方回合後，核心結果與玩家操作解鎖一致。
+func test_playback_speeds_preserve_turn_results() -> void:
+	var expected: Dictionary = {}
+	for speed in [1, 2, 4]:
+		if speed != 1:
+			runner = await replace_battle(runner, TEST_DEFINITIONS, TEST_MAP)
+			battle = runner.scene()
+		while battle.world.playback_speed != float(speed):
+			battle.ui.playback_speed_button.pressed.emit()
+		assert_bool(battle.send({"type": "end_turn", "actor": ARIA_ID})).is_true()
+		await wait_for_battle_idle()
+		if speed == 1:
+			expected = battle.state.duplicate(true)
+		else:
+			assert_dict(battle.state).is_equal(expected)
+		assert_bool(battle.input_is_locked()).is_false()
+
 func assert_locked_operations() -> void:
 	var before: Dictionary = battle.state.duplicate(true)
 	var camera_position: Vector2 = battle.world.camera.position

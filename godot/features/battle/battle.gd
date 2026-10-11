@@ -40,6 +40,7 @@ func _ready() -> void:
 	ui.inspection_closed.connect(_close_inspection)
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	ui.language_changed.connect(_on_language_changed)
+	ui.playback_speed_changed.connect(world.set_playback_speed)
 	core = TacticalGame.new()
 	if editor_preview:
 		back_button = Button.new()
@@ -89,7 +90,7 @@ func advance_automatic_turn() -> void:
 		return
 	if world.is_presenting_combat_events():
 		await world.combat_events_finished
-	await get_tree().create_timer(BattleConfig.COMBAT_EVENT_PAUSE).timeout
+	await world.wait_for_presentation(BattleConfig.COMBAT_EVENT_PAUSE)
 	if is_inside_tree():
 		send({"type": "continue"})
 

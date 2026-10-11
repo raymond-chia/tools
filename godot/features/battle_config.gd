@@ -35,7 +35,7 @@ const UI_Z_INSPECTION := 10
 const UI_Z_TOOLTIP := 20
 const MENU_Z_INDEX := 30
 const GROUND_Z_INDEX := -10
-const UNITS_Z_INDEX := -9
+const UNITS_Z_INDEX := 1
 
 # 目前行動單位的移動範圍填色與外框。
 const FIRST_MOVE_COLOR := Color(0.5, 0.7, 1.0)

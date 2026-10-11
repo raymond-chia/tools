@@ -30,10 +30,30 @@ var attack_tweens := {}
 var combat_event_queue: Array[Dictionary] = []
 var playing_combat_events := false
 var pending_death_ids := {}
+var playback_speed := 1.0
+var presentation_tweens: Array[Tween] = []
 
 func _ready() -> void:
 	ground.z_index = BattleConfig.GROUND_Z_INDEX
 	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
+
+# 集中管理戰鬥演出的倍率，包含已開始的動畫與等待。
+func set_playback_speed(speed: float) -> void:
+	playback_speed = speed
+	presentation_tweens = presentation_tweens.filter(func(tween: Tween): return tween.is_valid())
+	for tween in presentation_tweens:
+		tween.set_speed_scale(speed)
+
+func create_presentation_tween() -> Tween:
+	presentation_tweens = presentation_tweens.filter(func(tween: Tween): return tween.is_valid())
+	var tween := create_tween().set_speed_scale(playback_speed)
+	presentation_tweens.append(tween)
+	return tween
+
+func wait_for_presentation(duration: float) -> void:
+	var tween := create_presentation_tween()
+	tween.tween_interval(duration)
+	await tween.finished
 
 func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
@@ -180,7 +200,7 @@ func play_combat_event_queue() -> void:
 			"healing":
 				present_event_health(event.target, event.remaining_hp, event.max_hp)
 				present_unit_text(event.target, "+%d" % int(event.healing), BattleConfig.HEALING_TEXT_COLOR)
-				await get_tree().create_timer(BattleConfig.COMBAT_RESULT_HOLD).timeout
+				await wait_for_presentation(BattleConfig.COMBAT_RESULT_HOLD)
 			"terrain_damage":
 				await wait_for_unit_movement(event.target)
 				present_event_health(event.target, event.remaining_hp, event.max_hp)
@@ -191,10 +211,10 @@ func play_combat_event_queue() -> void:
 				var hit_tween := animate_unit_hit(event.target)
 				if hit_tween != null:
 					await hit_tween.finished
-				await get_tree().create_timer(BattleConfig.COMBAT_RESULT_HOLD).timeout
+				await wait_for_presentation(BattleConfig.COMBAT_RESULT_HOLD)
 				if event.downed:
 					await animate_unit_death(event.target)
-		await get_tree().create_timer(BattleConfig.COMBAT_EVENT_PAUSE).timeout
+		await wait_for_presentation(BattleConfig.COMBAT_EVENT_PAUSE)
 	playing_combat_events = false
 	sync_unit_sprites()
 	queue_redraw()
@@ -233,8 +253,8 @@ func present_skill_result(event: Dictionary, movement: Dictionary) -> void:
 		if hit_tween.is_running():
 			await hit_tween.finished
 	else:
-		await get_tree().create_timer(BattleConfig.HIT_FLASH_DURATION * 2.0).timeout
-	await get_tree().create_timer(BattleConfig.COMBAT_RESULT_HOLD).timeout
+		await wait_for_presentation(BattleConfig.HIT_FLASH_DURATION * 2.0)
+	await wait_for_presentation(BattleConfig.COMBAT_RESULT_HOLD)
 	if event.downed:
 		await animate_unit_death(event.target)
 	for collision_unit in event.collision_units:
@@ -265,7 +285,7 @@ func present_unit_text(unit_id: int, text: String, color: Color, horizontal_offs
 	label.add_theme_constant_override("outline_size", 6)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	unit_nodes[unit_id].add_child(label)
-	var tween := create_tween().bind_node(label).set_parallel(true)
+	var tween := create_presentation_tween().bind_node(label).set_parallel(true)
 	tween.tween_property(label, "position:y", label.position.y - BattleConfig.FLOATING_TEXT_RISE, BattleConfig.FLOATING_TEXT_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(label, "modulate:a", 0.0, BattleConfig.FLOATING_TEXT_DURATION).set_delay(BattleConfig.FLOATING_TEXT_DURATION * 0.45)
 	tween.chain().tween_callback(label.queue_free)
@@ -277,7 +297,7 @@ func animate_unit_hit(unit_id: int) -> Tween:
 	stop_tween(hit_tweens, unit_id)
 	visual.position = Vector2.ZERO
 	visual.modulate = Color.WHITE
-	var tween := create_tween().bind_node(visual).set_parallel(true)
+	var tween := create_presentation_tween().bind_node(visual).set_parallel(true)
 	tween.tween_property(visual, "modulate", Color(2.4, 2.4, 2.4, 1.0), BattleConfig.HIT_FLASH_DURATION)
 	tween.tween_property(visual, "position:x", BattleConfig.HIT_SHAKE_DISTANCE, BattleConfig.HIT_FLASH_DURATION)
 	tween.chain().tween_property(visual, "modulate", Color.WHITE, BattleConfig.HIT_FLASH_DURATION)
@@ -294,7 +314,7 @@ func animate_unit_attack(actor_id: int, target_id: int) -> Tween:
 	stop_tween(attack_tweens, actor_id)
 	actor_visual.position = Vector2.ZERO
 	actor_visual.modulate = Color.WHITE
-	var tween := create_tween().bind_node(actor_visual).set_parallel(true)
+	var tween := create_presentation_tween().bind_node(actor_visual).set_parallel(true)
 	tween.tween_property(actor_visual, "position", direction * BattleConfig.ATTACK_LUNGE_DISTANCE, BattleConfig.ATTACK_LUNGE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(actor_visual, "modulate", Color(1.45, 1.3, 0.85, 1.0), BattleConfig.ATTACK_LUNGE_DURATION)
 	tween.chain().tween_property(actor_visual, "position", Vector2.ZERO, BattleConfig.ATTACK_LUNGE_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -306,7 +326,7 @@ func animate_unit_death(unit_id: int, falling := false) -> void:
 	if unit_id == 0 or not unit_nodes.has(unit_id):
 		return
 	var node: Node2D = unit_nodes[unit_id]
-	var tween := create_tween().bind_node(node).set_parallel(true)
+	var tween := create_presentation_tween().bind_node(node).set_parallel(true)
 	if falling:
 		node.get_node("Health").hide()
 		tween.tween_property(node, "position:y", node.position.y + BattleConfig.FALL_DISTANCE, BattleConfig.FALL_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -336,7 +356,7 @@ func animate_movement_event(event: Dictionary) -> void:
 	# 陣亡單位已不在最新 snapshot，仍使用節點保留的呈現資料播放最後路徑。
 	var unit: Dictionary = node.get_meta("presentation_unit")
 	stop_tween(movement_tweens, unit_id)
-	var tween := create_tween().bind_node(node)
+	var tween := create_presentation_tween().bind_node(node)
 	for cell_value in event.path.slice(1):
 		var path_cell := Vector2i(int(cell_value.x), int(cell_value.y))
 		var destination := cell_center(path_cell)

@@ -28,6 +28,7 @@ BATTLE_STATUS_CONTROLS,左鍵選擇與移動；右鍵查看單位或地面資訊
 BATTLE_STATUS_SELECT_CELL,請選擇地圖上的格子。,Select a cell on the map.
 BATTLE_STATUS_SELECT_SKILL_TARGET,請選擇技能目標。,Select a target for the skill.
 BATTLE_STATUS_SKILL_CANCELLED,已取消技能。,Skill cancelled.
+CHAPTER_PRELUDE,序章,Prelude
 COMBAT_FLOATING_BLOCK_DAMAGE,格擋 -%d,Block -%d
 COMBAT_LOG_ATTACK_RESULT,結果：%s%s,Result: %s%s
 COMBAT_LOG_BLOCK_DAMAGE,傷害：原始 %d − 格擋 %d = %d，HP %d/%d,Damage: raw %d − block %d = %d; HP %d/%d

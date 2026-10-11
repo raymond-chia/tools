@@ -114,7 +114,7 @@ func test_downed_unit_is_removed_after_death_presentation() -> void:
 		assert_bool(battle.world.unit_nodes.has(TARGET_ID)).is_false()
 		assert_bool(battle.input_is_locked()).is_false()
 
-# 驗證滿血與缺血治療的預覽、綠色浮字、血條及日誌都使用真實核心結果，並能切回攻擊預覽。
+# 驗證滿血與缺血治療的預覽、浮字、血條及翻譯 key 日誌符合核心結果，並能切回攻擊預覽。
 func test_healing_preview_and_presentation() -> void:
 	for injured in [false, true]:
 		await load_map("spikes")
@@ -149,7 +149,7 @@ func test_healing_preview_and_presentation() -> void:
 		runner.set_time_factor(9.0)
 		await wait_until_idle(battle, runner)
 		var formatted: String = battle.ui.format_log(battle.ui.presented_log_events)
-		assert_str(formatted).contains(tr("結果：%s，回復 %d HP，HP %d/%d") % [battle.ui.RESULT_STYLE % tr("治療"), int(event.healing), int(event.remaining_hp), int(event.max_hp)])
+		assert_str(formatted).contains(tr("COMBAT_LOG_HEAL_RESULT") % [battle.ui.RESULT_STYLE % tr("ATTACK_RESULT_HEAL"), int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 		var attack: Dictionary = battle.read_core_response(battle.core.preview_skill(ACTOR_ID, 2, 1, "presentation_push"))
 		battle.ui.present_attack_preview(attack, Vector2.ZERO)
 		assert_bool(battle.ui.healing_preview_segment.visible).is_false()
