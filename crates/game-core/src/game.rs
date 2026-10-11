@@ -1260,10 +1260,7 @@ fn validate_numeric_ranges(
                 .initiative
                 .checked_add(gameplay_config::INITIATIVE_DIE_SIDES as i32)
                 .is_none()
-            || i64::from(gameplay_config::BASE_DEFENSE)
-                + i64::from(unit.dodge.max(0))
-                + i64::from(stats.block.max(0))
-                > i64::from(i32::MAX)
+            || i64::from(unit.dodge.max(0)) + i64::from(stats.block.max(0)) > i64::from(i32::MAX)
         {
             return Err(error::numeric_range(&unit.id));
         }

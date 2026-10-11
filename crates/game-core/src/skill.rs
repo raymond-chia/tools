@@ -145,17 +145,8 @@ impl Game {
         let natural = die(&mut self.world, gameplay_config::HIT_DIE_SIDES) as i32;
         let target_dodge = effective_dodge(&self.world, te);
         let target_block = effective_block(&self.world, te);
-        let degree = degree(
-            natural,
-            modifier,
-            gameplay_config::BASE_DEFENSE + target_dodge,
-        );
-        let result = attack_result(
-            natural,
-            modifier,
-            gameplay_config::BASE_DEFENSE + target_dodge,
-            gameplay_config::BASE_DEFENSE + target_dodge + target_block,
-        );
+        let degree = degree(natural, modifier, target_dodge);
+        let result = attack_result(natural, modifier, target_dodge, target_dodge + target_block);
         let base_damage = direct_damage(&self.world, ae, skill.power_source, power_bonus);
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
@@ -295,8 +286,8 @@ impl Game {
                 flanking_modifier,
                 hit: modifier,
                 hit_total: natural + modifier,
-                dodge_target: gameplay_config::BASE_DEFENSE + target_dodge,
-                block_target: gameplay_config::BASE_DEFENSE + target_dodge + target_block,
+                dodge_target: target_dodge,
+                block_target: target_dodge + target_block,
                 result,
                 critical,
                 raw_damage,
@@ -501,7 +492,7 @@ pub(crate) fn preview_unit_skill_from_position(
         flanking_modifier: _,
         total: modifier,
     } = hit_breakdown_from_position(world, attacker, position, target_entity, skill, hit_bonus);
-    let dodge_target = gameplay_config::BASE_DEFENSE + effective_dodge(world, target_entity);
+    let dodge_target = effective_dodge(world, target_entity);
     let block_target = dodge_target + effective_block(world, target_entity);
     let mut dodge_count = 0;
     let mut block_count = 0;

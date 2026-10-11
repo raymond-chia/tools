@@ -312,85 +312,183 @@ fn skill_power_sources_apply_to_preview_and_resolution() {
     }
 }
 
-// 驗證裝備減傷與格擋機率、暴擊和完全減傷均符合預覽，無裝備時實際結果不會格擋。
+// 驗證相同命中與閃避下，裝備提供的格擋能力決定預覽機率。
 #[test]
-fn equipment_block_reduction_matches_preview_and_resolution() {
+fn equipment_block_chance_matches_loadout() {
+    struct Case {
+        name: &'static str,
+        shield: &'static str,
+        armor: &'static str,
+        block_chance: i32,
+        hit_chance: i32,
+    }
     let cases = [
-        // 無裝備沒有格擋，原本會格擋的骰值變為命中。
-        ("無裝備", "", "", 5, "hit", false, 0, 5, 10, 5, 45),
-        // 盾牌提供 2 點格擋減傷。
-        ("盾牌", "shield", "", 6, "block", false, 15, 3, 6, 3, 47),
-        // 盾牌與重甲的減傷加總為 3。
-        (
-            "盾牌重甲",
-            "shield",
-            "heavy_armor",
-            5,
-            "block",
-            false,
-            25,
-            2,
-            4,
-            2,
-            53,
-        ),
-        // 強格擋仍可擋住自然 20，先扣 4 點再加倍。
-        (
-            "暴擊格擋",
-            "tower_shield",
-            "",
-            15,
-            "block",
-            true,
-            70,
-            1,
-            2,
-            2,
-            48,
-        ),
-        // 減傷完全吸收傷害時，暴擊也不會產生傷害。
-        (
-            "完全格擋",
-            "tower_shield",
-            "heavy_armor",
-            15,
-            "block",
-            true,
-            70,
-            0,
-            0,
-            0,
-            55,
-        ),
+        // 無裝備不會格擋，成功的攻擊全部命中。
+        Case {
+            name: "無裝備",
+            shield: "",
+            armor: "",
+            block_chance: 0,
+            hit_chance: 70,
+        },
+        // 盾牌的 3 點格擋對應骰值 7～9。
+        Case {
+            name: "盾牌",
+            shield: "shield",
+            armor: "",
+            block_chance: 15,
+            hit_chance: 55,
+        },
+        // 盾牌與重甲共 5 點格擋，對應骰值 7～11。
+        Case {
+            name: "盾牌重甲",
+            shield: "shield",
+            armor: "heavy_armor",
+            block_chance: 25,
+            hit_chance: 45,
+        },
+        // 塔盾能格擋所有成功攻擊，包括自然 20。
+        Case {
+            name: "塔盾",
+            shield: "tower_shield",
+            armor: "",
+            block_chance: 70,
+            hit_chance: 0,
+        },
+        // 重甲不再提高已達上限的塔盾格擋機率。
+        Case {
+            name: "塔盾重甲",
+            shield: "tower_shield",
+            armor: "heavy_armor",
+            block_chance: 70,
+            hit_chance: 0,
+        },
     ];
-    for (
+    for Case {
+        name,
+        shield,
+        armor,
+        block_chance,
+        hit_chance,
+    } in cases
+    {
+        let mut definitions = definitions();
+        let target = unit_type_mut(&mut definitions, "target");
+        // 攻擊方命中加值為 5；目標閃避由 2 增至 12，骰值 1～6 會閃避。
+        target.dodge += 10;
+        target.off_hand = shield.into();
+        target.armor = armor.into();
+        let mut game = game(definitions);
+        game.start().expect("格擋機率測試應可開始");
+        let preview = preview(&game, "melee", GridPos { x: 2, y: 1 });
+        assert_eq!(preview["dodge_chance"], 30, "{name}");
+        assert_eq!(preview["block_chance"], block_chance, "{name}");
+        assert_eq!(preview["hit_chance"], hit_chance, "{name}");
+    }
+}
+
+// 驗證裝備減傷的預覽與實際結算一致，暴擊先減傷再加倍，完全減傷不扣血。
+#[test]
+fn equipment_block_damage_matches_preview_and_resolution() {
+    struct Case {
+        name: &'static str,
+        shield: &'static str,
+        armor: &'static str,
+        seed: u64,
+        roll: i32,
+        result: &'static str,
+        critical: bool,
+        damage: i64,
+    }
+    let cases = [
+        // 骰值 11 在無裝備時直接命中，造成完整的 5 點傷害。
+        Case {
+            name: "無裝備命中",
+            shield: "",
+            armor: "",
+            seed: 5,
+            roll: 11,
+            result: "hit",
+            critical: false,
+            damage: 5,
+        },
+        // 骰值 8 被盾牌格擋，5 點傷害扣除盾牌減傷 2 後剩 3。
+        Case {
+            name: "盾牌格擋",
+            shield: "shield",
+            armor: "",
+            seed: 6,
+            roll: 8,
+            result: "block",
+            critical: false,
+            damage: 3,
+        },
+        // 骰值 11 被盾牌與重甲格擋，5 點傷害扣除合計減傷 3 後剩 2。
+        Case {
+            name: "盾牌重甲格擋",
+            shield: "shield",
+            armor: "heavy_armor",
+            seed: 5,
+            roll: 11,
+            result: "block",
+            critical: false,
+            damage: 2,
+        },
+        // 自然 20 被塔盾格擋，傷害為 (5 - 4) × 2 = 2。
+        Case {
+            name: "暴擊格擋",
+            shield: "tower_shield",
+            armor: "",
+            seed: 15,
+            roll: 20,
+            result: "block",
+            critical: true,
+            damage: 2,
+        },
+        // 塔盾與重甲共減傷 5，自然 20 的傷害為 (5 - 5) × 2 = 0。
+        Case {
+            name: "完全格擋",
+            shield: "tower_shield",
+            armor: "heavy_armor",
+            seed: 15,
+            roll: 20,
+            result: "block",
+            critical: true,
+            damage: 0,
+        },
+    ];
+    for Case {
         name,
         shield,
         armor,
         seed,
+        roll,
         result,
         critical,
-        block_chance,
-        block_damage,
-        critical_block_damage,
         damage,
-        remaining_hp,
-    ) in cases
+    } in cases
     {
         let mut definitions = definitions();
         let target = unit_type_mut(&mut definitions, "target");
+        // 增加 10 點閃避，讓盾牌案例能實際發生格擋。
+        target.dodge += 10;
         target.off_hand = shield.into();
         target.armor = armor.into();
         let mut game = game(definitions);
-        game.start().expect("格擋測試應可開始");
-        game.set_random_seed(seed);
+        game.start().expect("格擋減傷測試應可開始");
+        let before = snapshot(&game);
+        let hp_before = unit(&before, TARGET_ID)["hp"]
+            .as_i64()
+            .expect("目標血量應為整數");
         let preview = preview(&game, "melee", GridPos { x: 2, y: 1 });
-        assert_eq!(preview["block_chance"], block_chance, "{name}");
-        assert_eq!(preview["block_damage"], block_damage, "{name}");
-        assert_eq!(
-            preview["critical_block_damage"], critical_block_damage,
-            "{name}"
-        );
+        let damage_field = match (result, critical) {
+            ("hit", false) => "hit_damage",
+            ("block", false) => "block_damage",
+            ("block", true) => "critical_block_damage",
+            _ => panic!("減傷案例應為普通命中、普通格擋或暴擊格擋"),
+        };
+        assert_eq!(preview[damage_field], damage, "{name}");
+        game.set_random_seed(seed);
         let snapshot = serde_json::to_value(
             game.command(Command::Skill {
                 actor: ACTOR_ID,
@@ -398,7 +496,7 @@ fn equipment_block_reduction_matches_preview_and_resolution() {
                 y: 1,
                 skill: "melee".into(),
             })
-            .expect("格擋測試應結算成功"),
+            .expect("格擋減傷測試應結算成功"),
         )
         .expect("快照應可序列化");
         let event = snapshot["log"]
@@ -407,10 +505,15 @@ fn equipment_block_reduction_matches_preview_and_resolution() {
             .iter()
             .find(|event| event["type"] == "skill")
             .expect("技能應產生日誌");
+        assert_eq!(event["roll"], roll, "{name}");
         assert_eq!(event["result"], result, "{name}");
         assert_eq!(event["critical"], critical, "{name}");
         assert_eq!(event["damage"], damage, "{name}");
-        assert_eq!(unit(&snapshot, TARGET_ID)["hp"], remaining_hp, "{name}");
+        assert_eq!(
+            unit(&snapshot, TARGET_ID)["hp"],
+            hp_before - damage,
+            "{name}"
+        );
     }
 }
 

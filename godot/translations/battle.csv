@@ -145,7 +145,7 @@ HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
 SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit modifier when flanking in melee
 SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
 SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
-SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；受阻時目標受碰撞傷害，撞到單位時雙方受傷,"Effect: Pushes the target %d tile on hit; blocked targets take collision damage, and colliding units take damage too"
+SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；發生碰撞時，參與碰撞的單位皆受到碰撞傷害,Effect: Pushes the target %d tile on hit; all units involved in a collision take collision damage
 SKILL_HIT_BONUS,命中加值：%+d,Hit modifier: %+d
 SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
 SKILL_NAME_FLANKING,夾擊,Flanking
