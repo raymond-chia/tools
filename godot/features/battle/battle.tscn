@@ -13,11 +13,9 @@ script = ExtResource("1")
 script = ExtResource("2")
 
 [node name="Ground" type="TileMapLayer" parent="World" unique_id=1570646684]
-z_index = -10
 position = Vector2(212, 360)
 
 [node name="Units" type="Node2D" parent="World" unique_id=563973539]
-z_index = 1
 y_sort_enabled = true
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=480117644]

@@ -27,13 +27,15 @@ var unit_nodes := {}
 var movement_tweens := {}
 var hit_tweens := {}
 var attack_tweens := {}
-var prepared_move_unit_id := 0
-var prepared_move_path: Array[Vector2i] = []
 var combat_event_queue: Array[Dictionary] = []
 var received_log_count := 0
 var playing_combat_events := false
 var pending_death_ids := {}
-var pending_movement_ids := {}
+
+func _ready() -> void:
+	ground.z_index = BattleConfig.GROUND_Z_INDEX
+	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
+
 func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
 	BattleVisuals.setup_ground(ground, state.terrain_cells)
@@ -47,15 +49,14 @@ func _process(delta: float) -> void:
 	camera.move_with_input(delta)
 
 func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_core, new_snapshot: bool) -> void:
-	var previous_state := state
 	state = snapshot
 	pending_action = action
 	inspected_cell = inspected
 	core = game_core
 	if not state.is_empty():
 		if new_snapshot:
-			queue_new_combat_events(previous_state)
-		sync_unit_sprites(previous_state)
+			queue_new_combat_events()
+		sync_unit_sprites()
 		start_combat_event_queue()
 	update_move_preview()
 	update_attack_preview()
@@ -111,7 +112,7 @@ func unit_cell(unit_id: int) -> Vector2i:
 		return Vector2i(-1, -1)
 	return Vector2i(unit.x, unit.y)
 
-func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
+func sync_unit_sprites() -> void:
 	var current_unit_ids := {}
 	for unit in state.units:
 		current_unit_ids[unit.id] = true
@@ -131,62 +132,15 @@ func sync_unit_sprites(previous_state: Dictionary = {}) -> void:
 		else:
 			node = unit_nodes[unit.id]
 		node.set_meta("presentation_unit", unit)
-		# 演出期間保留目前血條，各次結果由事件更新，避免提前顯示最終 HP。
+		# 演出期間由核心事件更新位置與血條，不提前套用最終狀態。
 		if is_new or not is_presenting_combat_events():
 			BattleVisuals.update_unit_health(node, unit)
-		var center := footprint_center(unit)
-		var previous_unit := unit_with_id(previous_state.get("units", []), unit.id)
-		var moved: bool = not previous_unit.is_empty() and (previous_unit.x != unit.x or previous_unit.y != unit.y)
-		if is_new:
-			node.position = center
-		elif pending_movement_ids.has(unit.id):
-			pass
-		elif not moved:
-			if not has_active_tween(movement_tweens, unit.id):
-				node.position = center
-		elif moved and unit_has_movement_transition(unit.id):
-			pending_movement_ids[unit.id] = true
-		else:
-			animate_unit_movement(unit.id, node, center, unit)
-		node.z_index = int(center.y)
+			node.position = footprint_center(unit)
 		var large: bool = unit.large
 		BattleVisuals.style_unit_node(node, large, unit.team, unit_occupies_cell(unit, inspected_cell))
 
-func prepare_move_animation(unit_id: int, destination: Vector2i) -> void:
-	prepared_move_unit_id = unit_id
-	prepared_move_path.clear()
-	for cell in first_move_path:
-		prepared_move_path.append(Vector2i(cell.x, cell.y))
-	for cell in second_move_path:
-		var position := Vector2i(cell.x, cell.y)
-		if prepared_move_path.is_empty() or prepared_move_path[-1] != position:
-			prepared_move_path.append(position)
-	if prepared_move_path.is_empty() or prepared_move_path[-1] != destination:
-		cancel_move_animation()
-
-func cancel_move_animation() -> void:
-	prepared_move_unit_id = 0
-	prepared_move_path.clear()
-
-func animate_unit_movement(unit_id: int, node: Node2D, destination: Vector2, unit: Dictionary) -> void:
-	stop_tween(movement_tweens, unit_id)
-	var tween := create_tween().bind_node(node)
-	if unit_id == prepared_move_unit_id and not prepared_move_path.is_empty():
-		for cell in prepared_move_path.slice(1):
-			var path_cell := Vector2i(cell)
-			var cell_center_position := cell_center(path_cell)
-			if unit.large:
-				var last_cell: Vector2i = path_cell + footprint_offset(unit)
-				cell_center_position = (cell_center_position + cell_center(last_cell)) * 0.5
-			tween.tween_property(node, "position", cell_center_position, BattleConfig.UNIT_MOVE_STEP_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		cancel_move_animation()
-	else:
-		tween.tween_property(node, "position", destination, BattleConfig.UNIT_MOVE_STEP_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	movement_tweens[unit_id] = tween
-
-func queue_new_combat_events(previous_state: Dictionary) -> void:
+func queue_new_combat_events() -> void:
 	var previous_log_count := received_log_count
-	var movements_changed: bool = previous_state.get("movements", []) != state.get("movements", [])
 	for offset in state.log.size():
 		queue_movements_before_log(previous_log_count + offset)
 		var event: Dictionary = state.log[offset]
@@ -198,8 +152,7 @@ func queue_new_combat_events(previous_state: Dictionary) -> void:
 				for collision_unit in event.collision_units:
 					if collision_unit.downed:
 						pending_death_ids[collision_unit.unit] = true
-	if not state.log.is_empty() or movements_changed:
-		queue_movements_before_log(previous_log_count + state.log.size())
+	queue_movements_before_log(previous_log_count + state.log.size())
 	received_log_count += state.log.size()
 
 func queue_movements_before_log(log_index: int) -> void:
@@ -378,12 +331,6 @@ func wait_for_unit_movement(unit_id: int) -> void:
 	if tween.is_valid() and tween.is_running():
 		await tween.finished
 
-func unit_has_movement_transition(unit_id: int) -> bool:
-	for movement in state.get("movements", []):
-		if movement.unit_id == unit_id:
-			return true
-	return false
-
 func animate_movement_event(event: Dictionary) -> void:
 	var unit_id: int = event.unit_id
 	if not unit_nodes.has(unit_id):
@@ -400,7 +347,6 @@ func animate_movement_event(event: Dictionary) -> void:
 			var last_cell := path_cell + footprint_offset(unit)
 			destination = (destination + cell_center(last_cell)) * 0.5
 		tween.tween_property(node, "position", destination, BattleConfig.UNIT_MOVE_STEP_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	pending_movement_ids.erase(unit_id)
 	movement_tweens[unit_id] = tween
 	await tween.finished
 
@@ -408,9 +354,6 @@ func stop_unit_tweens(unit_id: int) -> void:
 	stop_tween(movement_tweens, unit_id)
 	stop_tween(hit_tweens, unit_id)
 	stop_tween(attack_tweens, unit_id)
-
-func has_active_tween(tweens: Dictionary, unit_id: int) -> bool:
-	return tweens.has(unit_id) and tweens[unit_id].is_valid()
 
 func stop_tween(tweens: Dictionary, unit_id: int) -> void:
 	if tweens.has(unit_id):
@@ -520,11 +463,11 @@ func sync_attack_preview_ring() -> void:
 		var attack_preview_ring: Sprite2D = unit_nodes[unit_id].get_node("Visual/AttackPreviewRing")
 		attack_preview_ring.visible = unit_id == preview_unit_id
 
-func diamond(center: Vector2) -> PackedVector2Array:
-	return PackedVector2Array([center+Vector2(0,-16),center+Vector2(32,0),center+Vector2(0,16),center+Vector2(-32,0)])
-
 func draw_marker(cell: Vector2i, fill: Color, edge: Color, edge_width := 2.0) -> void:
-	var points := diamond(cell_center(cell)); draw_colored_polygon(points,fill); points.append(points[0]); draw_polyline(points,edge,edge_width,true)
+	var points := BattleVisuals.diamond(cell_center(cell))
+	draw_colored_polygon(points, fill)
+	points.append(points[0])
+	draw_polyline(points, edge, edge_width, true)
 
 func draw_move_path(path: Array, color: Color) -> void:
 	for index in range(1, path.size()):

@@ -1,7 +1,9 @@
 //! 空間、地形通行、路徑搜尋與移動。
 use crate::error::{self, GameError};
 use crate::game::Game;
-use crate::model::{Board, Footprint, GridPos, MovePreview, Phase, Pos, Turn, Unit};
+use crate::model::{
+    Board, Footprint, GridPos, Log, MovePreview, MovementTransition, Phase, Pos, Turn, Unit,
+};
 use crate::terrain::{
     TerrainEntry, footprint_movement_cost, footprint_on_impassable, terrain_ends_movement,
 };
@@ -148,6 +150,8 @@ impl Game {
             .world
             .get::<Footprint>(e)
             .expect("執行移動的單位應具有 Footprint 元件");
+        let before_log_index = self.world.resource::<Log>().0.len();
+        let mut actual_path = vec![*path.first().expect("已規劃的移動路徑應包含起點")];
         let mut spent = 0;
         for p in path.iter().copied().skip(1) {
             spent += footprint_movement_cost(&self.world, p, footprint);
@@ -155,11 +159,19 @@ impl Game {
                 .get_mut::<Pos>(e)
                 .expect("已建立的戰鬥單位應具有 Pos 元件")
                 .0 = p;
+            actual_path.push(p);
             let ends_movement = terrain_ends_movement(&self.world, p, footprint);
             let downed = self.apply_terrain_entry(e, a, TerrainEntry::Movement);
             if ends_movement || downed {
                 break;
             }
+        }
+        if actual_path.len() > 1 {
+            self.movements.push(MovementTransition {
+                unit_id: a,
+                path: actual_path,
+                before_log_index,
+            });
         }
         spent
     }

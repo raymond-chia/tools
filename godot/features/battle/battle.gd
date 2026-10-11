@@ -156,9 +156,7 @@ func _on_primary_clicked(unit_id: int, cell: Vector2i) -> void:
 			if unit.id == unit_id and unit.team == "player":
 				send({"type": "select_unit", "actor": unit_id})
 				return
-	world.prepare_move_animation(state.turn.actor, cell)
-	if not send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y}):
-		world.cancel_move_animation()
+	send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y})
 
 func _on_inspection_clicked(unit_id: int, cell: Vector2i) -> void:
 	if input_is_locked():

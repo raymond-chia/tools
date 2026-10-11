@@ -66,7 +66,7 @@ func test_push_then_terrain_damage_updates_health_in_order() -> void:
 	assert_bool(battle.world.is_presenting_combat_events()).is_false()
 	assert_array(battle.world.combat_event_queue).is_empty()
 	assert_int(battle.ui.presented_log_events.size()).is_equal(log_count + event_count)
-	assert_bool(battle.world.pending_movement_ids.has(TARGET_ID)).is_false()
+	assert_vector(node.position).is_equal(destination)
 
 # 驗證推擊受阻時，目標與被撞單位各自顯示核心決定的傷害與血條，且不播放位移。
 func test_collision_presents_both_units_without_movement() -> void:

@@ -1138,9 +1138,30 @@ y = 7
 kind = "chasm"
 
 [[units]]
+id = 1
+unit_type = "tank"
+team = "player"
+x = 15
+y = 5
+
+[[units]]
+id = 2
+unit_type = "archer"
+team = "player"
+x = 14
+y = 4
+
+[[units]]
+id = 3
+unit_type = "mage"
+team = "player"
+x = 12
+y = 5
+
+[[units]]
 id = 4
 unit_type = "wolf"
-x = 26
+x = 23
 y = 3
 
 [units.team]
@@ -1149,8 +1170,8 @@ enemy = "wild_animals"
 [[units]]
 id = 5
 unit_type = "wolf"
-x = 28
-y = 4
+x = 26
+y = 3
 
 [units.team]
 enemy = "wild_animals"
@@ -1167,7 +1188,7 @@ enemy = "wild_animals"
 [[units]]
 id = 7
 unit_type = "wolf"
-x = 23
+x = 28
 y = 3
 
 [units.team]
@@ -1181,24 +1202,3 @@ y = 3
 
 [units.team]
 enemy = "wild_animals"
-
-[[units]]
-id = 9
-unit_type = "mage"
-team = "player"
-x = 12
-y = 5
-
-[[units]]
-id = 3
-unit_type = "tank"
-team = "player"
-x = 15
-y = 5
-
-[[units]]
-id = 10
-unit_type = "archer"
-team = "player"
-x = 14
-y = 4

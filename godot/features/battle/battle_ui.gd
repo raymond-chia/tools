@@ -82,6 +82,8 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
 @onready var action_buttons_container: HBoxContainer = $Root/ActionBar/Margin/Layout/Actions/Buttons
 var action_buttons := {}
+var turn_order_slots := {}
+var turn_order_selecting_delay := false
 var inspected_unit_id: Variant = null
 var last_unit_detail_tab := DetailTab.ATTRIBUTES
 var showing_unit_tabs := false
@@ -260,45 +262,69 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	terrain_effect.text = "；".join(terrain_descriptions) if not terrain_descriptions.is_empty() else tr("TERRAIN_DESCRIPTION_NONE")
 
 func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
-	clear_turn_order()
+	turn_order_selecting_delay = selecting_delay
+	var current_ids := {}
+	var slot_index := 0
 	for index in range(snapshot.turn_order.size() - 1, -1, -1):
 		var unit := unit_with_id(snapshot.units, snapshot.turn_order[index])
 		if unit.is_empty():
 			continue
-		var slot := VBoxContainer.new()
-		slot.add_theme_constant_override("separation", 2)
-		var marker := ColorRect.new()
-		marker.custom_minimum_size = Vector2(112.0, 6.0)
-		marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		marker.color = BattleConfig.DELAY_SLOT_COLOR
-		slot.add_child(marker)
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(112.0, 72.0)
+		current_ids[unit.id] = true
+		if not turn_order_slots.has(unit.id):
+			turn_order_slots[unit.id] = create_turn_order_slot(unit.id)
+		var slot: VBoxContainer = turn_order_slots[unit.id]
+		var button: Button = slot.get_node("Button")
 		button.icon = load(BattleConfig.unit_art_path(unit.visual))
-		button.expand_icon = true
-		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 		button.tooltip_text = localized_unit_name(unit.unit_type)
-		button.mouse_filter = Control.MOUSE_FILTER_STOP
-		button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true, selecting_delay))
-		button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false, selecting_delay))
-		button.pressed.connect(_on_turn_order_pressed.bind(unit.id, selecting_delay))
-		slot.add_child(button)
-		turn_order.add_child(slot)
+		if slot.get_index() != slot_index:
+			turn_order.move_child(slot, slot_index)
+		slot_index += 1
+		_on_delay_target_hovered(slot.get_node("Marker"), button.is_hovered())
+	for unit_id in turn_order_slots.keys():
+		if not current_ids.has(unit_id):
+			var slot: VBoxContainer = turn_order_slots[unit_id]
+			turn_order.remove_child(slot)
+			slot.queue_free()
+			turn_order_slots.erase(unit_id)
+
+func create_turn_order_slot(unit_id: int) -> VBoxContainer:
+	var slot := VBoxContainer.new()
+	slot.add_theme_constant_override("separation", 2)
+	var marker := ColorRect.new()
+	marker.name = "Marker"
+	marker.custom_minimum_size = Vector2(112.0, 6.0)
+	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	marker.color = BattleConfig.DELAY_SLOT_COLOR
+	slot.add_child(marker)
+	var button := Button.new()
+	button.name = "Button"
+	button.custom_minimum_size = Vector2(112.0, 72.0)
+	button.expand_icon = true
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	button.mouse_filter = Control.MOUSE_FILTER_STOP
+	button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true))
+	button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false))
+	button.pressed.connect(_on_turn_order_pressed.bind(unit_id))
+	slot.add_child(button)
+	turn_order.add_child(slot)
+	return slot
 
 func clear_turn_order() -> void:
-	for child in turn_order.get_children():
-		turn_order.remove_child(child)
-		child.queue_free()
+	for slot in turn_order_slots.values():
+		turn_order.remove_child(slot)
+		slot.queue_free()
+	turn_order_slots.clear()
+	turn_order_selecting_delay = false
 
-func _on_turn_order_pressed(unit_id: int, selecting_delay: bool) -> void:
-	if selecting_delay:
+func _on_turn_order_pressed(unit_id: int) -> void:
+	if turn_order_selecting_delay:
 		delay_target_selected.emit(unit_id)
 		return
 	turn_order_focus_requested.emit(unit_id)
 
-func _on_delay_target_hovered(marker: ColorRect, highlighted: bool, selecting_delay: bool) -> void:
-	marker.color = BattleConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted and selecting_delay else BattleConfig.DELAY_SLOT_COLOR
+func _on_delay_target_hovered(marker: ColorRect, highlighted: bool) -> void:
+	marker.color = BattleConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted and turn_order_selecting_delay else BattleConfig.DELAY_SLOT_COLOR
 
 func present_status(message: String) -> void:
 	status.text = tr(message)

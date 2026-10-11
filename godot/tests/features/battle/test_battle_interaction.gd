@@ -71,16 +71,16 @@ func test_failed_skill_keeps_selection_until_valid_target() -> void:
 		assert_str(battle.status).is_empty()
 		assert_bool(battle.ui.action_buttons.has("presentation_push")).is_false()
 
-# 驗證移動到已占用格失敗後不殘留路徑或 Tween，接著仍可正常移動並抵達節點終點。
-func test_failed_move_clears_prepared_animation_and_recovers() -> void:
+# 驗證占用格移動失敗不新增事件或 Tween，後續正常點擊仍依核心路徑抵達終點。
+func test_failed_move_has_no_events_and_recovers() -> void:
 	var before: Dictionary = battle.state.duplicate(true)
 	var node: Node2D = battle.world.unit_nodes[1]
 	var original_position := node.position
 	battle.world.primary_clicked.emit(3, Vector2i(2, 1))
 	assert_dict(battle.state).is_equal(before)
 	assert_str(battle.status).is_not_empty()
-	assert_int(battle.world.prepared_move_unit_id).is_zero()
-	assert_array(battle.world.prepared_move_path).is_empty()
+	assert_array(battle.world.combat_event_queue).is_empty()
+	assert_bool(battle.world.is_presenting_combat_events()).is_false()
 	assert_bool(battle.world.movement_tweens.has(1)).is_false()
 	assert_vector(node.position).is_equal(original_position)
 	var destination := Vector2i(1, 0)
@@ -89,10 +89,13 @@ func test_failed_move_clears_prepared_animation_and_recovers() -> void:
 	assert_array(battle.world.first_move_path).is_not_empty()
 	battle.world.primary_clicked.emit(0, destination)
 	assert_str(battle.status).is_empty()
+	assert_array(battle.state.movements).has_size(1)
+	assert_int(battle.state.movements[0].unit_id).is_equal(1)
+	assert_bool(battle.world.is_presenting_combat_events()).is_true()
 	await wait_until_idle(battle, runner)
 	assert_vector(node.position).is_equal(battle.world.cell_center(destination))
-	assert_int(battle.world.prepared_move_unit_id).is_zero()
-	assert_array(battle.world.prepared_move_path).is_empty()
+	assert_array(battle.world.combat_event_queue).is_empty()
+	assert_bool(battle.world.is_presenting_combat_events()).is_false()
 
 # 驗證行動者切換後按鈕依技能組增刪，移除舊 hover 與查看內容，且重新整理後一次按下只送出一次技能選擇。
 func test_actor_change_updates_skill_buttons_and_clears_old_content() -> void:

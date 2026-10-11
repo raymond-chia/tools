@@ -29,6 +29,8 @@ var dragged_unit := 0
 var drag_offset := Vector2i.ZERO
 
 func _ready() -> void:
+	ground.z_index = BattleConfig.GROUND_Z_INDEX
+	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
 		finish_pointer(Vector2i(-1, -1))

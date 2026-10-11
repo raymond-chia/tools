@@ -94,7 +94,8 @@ static func health_bar_polygon(width: float, filled_width: float) -> PackedVecto
 	return PackedVector2Array([Vector2(left, 0), Vector2(left + filled_width, 0), Vector2(left + filled_width, BattleConfig.HEALTH_BAR_HEIGHT), Vector2(left, BattleConfig.HEALTH_BAR_HEIGHT)])
 
 static func diamond(center: Vector2) -> PackedVector2Array:
-	return PackedVector2Array([center + Vector2(0, -16), center + Vector2(32, 0), center + Vector2(0, 16), center + Vector2(-32, 0)])
+	var half_size := Vector2(TILE_SIZE) * 0.5
+	return PackedVector2Array([center + Vector2(0, -half_size.y), center + Vector2(half_size.x, 0), center + Vector2(0, half_size.y), center + Vector2(-half_size.x, 0)])
 
 static func footprint_center(ground: TileMapLayer, unit: Dictionary) -> Vector2:
 	var first := ground.position + ground.map_to_local(Vector2i(unit.x, unit.y))

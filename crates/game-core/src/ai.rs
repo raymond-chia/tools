@@ -3,8 +3,8 @@ use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
-    AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, MovementTransition, Pos,
-    SkillDef, SkillEffect, SkillPreview, Skills, Turn, Unit,
+    AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos, SkillDef, SkillEffect,
+    SkillPreview, Skills, Turn, Unit,
 };
 use crate::movement::{
     MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
@@ -125,11 +125,6 @@ impl Game {
                 cost: _,
             } = &positions[position_index];
             if path.len() > 1 {
-                self.movements.push(MovementTransition {
-                    unit_id: actor,
-                    path: path.clone(),
-                    before_log_index: self.world.resource::<crate::model::Log>().0.len(),
-                });
                 // 與玩家共用移動成本、階段、地形傷害及遭遇啟動流程。
                 self.move_along(actor, path.clone())?;
                 if self.world.get_entity(entity).is_err() {
