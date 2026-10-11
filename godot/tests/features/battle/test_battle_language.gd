@@ -1,19 +1,17 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/combat_presentation_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/combat_presentation_spikes_map.toml"
 const LANGUAGE_SETTINGS := "user://language.cfg"
 
 var battle
 var runner: GdUnitSceneRunner
-var original_locale: String
 var had_language_settings := false
 var original_settings := PackedByteArray()
 var test_translations: Array[Translation] = []
 
-func before_test() -> void:
-	original_locale = TranslationServer.get_locale()
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
 	had_language_settings = FileAccess.file_exists(LANGUAGE_SETTINGS)
 	if had_language_settings:
 		original_settings = FileAccess.get_file_as_bytes(LANGUAGE_SETTINGS)
@@ -28,12 +26,13 @@ func before_test() -> void:
 		translation.add_message(BattleConfig.skill_name_key("presentation_push"), test_case.skill)
 		TranslationServer.add_translation(translation)
 		test_translations.append(translation)
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP, BattleTestSetup.PRESENTATION_RANDOM_SEED)))
+	runner = scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP, PRESENTATION_RANDOM_SEED)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
 
-func after_test() -> void:
+# 清理本案例的專用資源與尚未完成的操作。
+func cleanup_test() -> void:
 	# 保留既有設定的原始位元組，避免測試改寫使用者偏好或遺失設定註解。
 	if had_language_settings:
 		var file := FileAccess.open(LANGUAGE_SETTINGS, FileAccess.WRITE)
@@ -47,15 +46,14 @@ func after_test() -> void:
 	for translation in test_translations:
 		TranslationServer.remove_translation(translation)
 	test_translations.clear()
-	TranslationServer.set_locale(original_locale)
 
 # 驗證選單切換中英文同步更新標題、日誌、技能與單位查看，保留展開狀態並關閉舊預覽。
 func test_language_menu_refreshes_existing_content() -> void:
 	# 先用真實攻擊產生可翻譯的戰鬥日誌，再回到下一輪玩家。
 	assert_bool(battle.send({"type": "skill", "actor": 1, "x": 2, "y": 1, "skill": "presentation_push"})).is_true()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 	assert_bool(battle.send({"type": "end_turn", "actor": 2})).is_true()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 	battle.ui.battle_log.meta_clicked.emit("log_entry:0")
 	var expansion: Dictionary = battle.ui.log_entry_expanded_states.duplicate(true)
 	var events: Array = battle.ui.presented_log_events.duplicate(true)
@@ -99,7 +97,7 @@ func test_language_preference_is_loaded_by_next_battle() -> void:
 		assert_int(settings.load(LANGUAGE_SETTINGS)).is_equal(OK)
 		assert_str(settings.get_value("language", "locale")).is_equal(test_case.locale)
 		TranslationServer.set_locale("zh_TW" if test_case.id == 1 else "en")
-		var next_battle = auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP, BattleTestSetup.PRESENTATION_RANDOM_SEED))
+		var next_battle = auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP, PRESENTATION_RANDOM_SEED))
 		var next_runner := scene_runner(next_battle)
 		await next_runner.simulate_frames(1)
 		assert_str(TranslationServer.get_locale()).is_equal(test_case.locale)

@@ -1,6 +1,4 @@
-extends GdUnitTestSuite
-
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
+extends "res://tests/features/battle/battle_test_suite.gd"
 
 const ARIA_ID := 1
 const WOLF_A_ID := 2
@@ -12,8 +10,9 @@ const TEST_MAP := "res://tests/features/battle/data/battle_targeting_regression_
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
@@ -113,7 +112,7 @@ func test_downed_unit_does_not_block_cell() -> void:
 	assert_int(int(actor.y)).is_equal(1)
 
 func load_test_documents() -> void:
-	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, TEST_MAP)
+	runner = await replace_battle(runner, TEST_DEFINITIONS, TEST_MAP)
 	battle = runner.scene()
 
 func wait_for_combat_events() -> void:

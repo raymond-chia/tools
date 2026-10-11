@@ -1,23 +1,24 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/combat_presentation_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/combat_presentation_spikes_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP, BattleTestSetup.PRESENTATION_RANDOM_SEED)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP, PRESENTATION_RANDOM_SEED)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
-	BattleTestSetup.reset_random_seed(battle.core, BattleTestSetup.PRESENTATION_RANDOM_SEED)
+	await wait_until_idle(battle, runner)
+	reset_random_seed(battle.core, PRESENTATION_RANDOM_SEED)
 
-func after_test() -> void:
+# 清理本案例的專用資源與尚未完成的操作。
+func cleanup_test() -> void:
 	runner.set_time_factor(9.0)
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 
 # 驗證攻擊與死亡演出期間所有戰鬥操作均被阻擋，且演出完成後技能與查看操作恢復。
 func test_combat_presentation_locks_inputs_and_restores_them() -> void:
@@ -38,7 +39,7 @@ func test_combat_presentation_locks_inputs_and_restores_them() -> void:
 				await runner.simulate_frames(1)
 			assert_bool(battle.world.unit_nodes.has(3)).is_false()
 		runner.set_time_factor(9.0)
-		await BattleTestSetup.wait_until_idle(battle, runner)
+		await wait_until_idle(battle, runner)
 		assert_bool(battle.input_is_locked()).is_false()
 		battle.ui.action_buttons.presentation_heal.pressed.emit()
 		assert_str(battle.pending_action).is_equal("presentation_heal")
@@ -66,7 +67,7 @@ func test_failed_skill_keeps_selection_until_valid_target() -> void:
 		assert_bool(battle.ui.action_buttons.presentation_push.button_pressed).is_true()
 		battle.world.primary_clicked.emit(3, Vector2i(2, 1))
 		assert_str(battle.pending_action).is_empty()
-		await BattleTestSetup.wait_until_idle(battle, runner)
+		await wait_until_idle(battle, runner)
 		assert_str(battle.status).is_empty()
 		assert_bool(battle.ui.action_buttons.has("presentation_push")).is_false()
 
@@ -88,7 +89,7 @@ func test_failed_move_clears_prepared_animation_and_recovers() -> void:
 	assert_array(battle.world.first_move_path).is_not_empty()
 	battle.world.primary_clicked.emit(0, destination)
 	assert_str(battle.status).is_empty()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 	assert_vector(node.position).is_equal(battle.world.cell_center(destination))
 	assert_int(battle.world.prepared_move_unit_id).is_zero()
 	assert_array(battle.world.prepared_move_path).is_empty()
@@ -105,7 +106,7 @@ func test_actor_change_updates_skill_buttons_and_clears_old_content() -> void:
 	assert_bool(battle.ui.hovered_skill_card.visible).is_true()
 	assert_bool(battle.ui.info_panel.visible).is_true()
 	battle.ui.get_node("Root/ActionBar/Margin/Layout/EndTurn").pressed.emit()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 	await runner.simulate_frames(1)
 	assert_int(battle.state.turn.actor).is_equal(2)
 	assert_array(battle.ui.action_buttons.keys()).contains_exactly(["presentation_heal"])
@@ -171,6 +172,6 @@ func push_map_input(button: MouseButton) -> void:
 		battle.get_viewport().push_input(event, true)
 
 func reload_battle() -> void:
-	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, TEST_MAP)
+	runner = await replace_battle(runner, TEST_DEFINITIONS, TEST_MAP)
 	battle = runner.scene()
-	BattleTestSetup.reset_random_seed(battle.core, BattleTestSetup.PRESENTATION_RANDOM_SEED)
+	reset_random_seed(battle.core, PRESENTATION_RANDOM_SEED)

@@ -1,6 +1,5 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/combat_presentation_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/combat_presentation_spikes_map.toml"
 const ACTOR_ID := 1
@@ -10,17 +9,19 @@ const TARGET_ID := 3
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP, BattleTestSetup.PRESENTATION_RANDOM_SEED)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP, PRESENTATION_RANDOM_SEED)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
-	BattleTestSetup.reset_random_seed(battle.core, BattleTestSetup.PRESENTATION_RANDOM_SEED)
+	await wait_until_idle(battle, runner)
+	reset_random_seed(battle.core, PRESENTATION_RANDOM_SEED)
 
-func after_test() -> void:
+# 清理本案例的專用資源與尚未完成的操作。
+func cleanup_test() -> void:
 	runner.set_time_factor(9.0)
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 
 # 驗證推擊命中與位移期間血量不變，抵達後才呈現地形傷害，且查詢不重複播放事件。
 func test_push_then_terrain_damage_updates_health_in_order() -> void:
@@ -88,7 +89,7 @@ func test_collision_presents_both_units_without_movement() -> void:
 			break
 		await runner.simulate_frames(1)
 	assert_bool(saw_collision).override_failure_message("應看到被撞單位的傷害浮字").is_true()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 	assert_vector(target.position).is_equal(start_position)
 
 # 驗證普通擊倒與推落懸崖都保留節點到死亡演出結束，之後清除節點並恢復操作。
@@ -107,7 +108,7 @@ func test_downed_unit_is_removed_after_death_presentation() -> void:
 		await runner.simulate_frames(1)
 		assert_bool(is_instance_valid(node)).override_failure_message("死亡演出不可立即移除節點").is_true()
 		runner.set_time_factor(9.0)
-		await BattleTestSetup.wait_until_idle(battle, runner)
+		await wait_until_idle(battle, runner)
 		await runner.simulate_frames(1)
 		assert_bool(is_instance_valid(node)).is_false()
 		assert_bool(battle.world.unit_nodes.has(TARGET_ID)).is_false()
@@ -118,13 +119,13 @@ func test_healing_preview_and_presentation() -> void:
 	for injured in [false, true]:
 		await load_map("spikes")
 		assert_bool(battle.send({"type": "end_turn", "actor": ACTOR_ID})).is_true()
-		await BattleTestSetup.wait_until_idle(battle, runner)
+		await wait_until_idle(battle, runner)
 		assert_int(battle.state.turn.actor).is_equal(HEALER_ID)
 		var cell := Vector2i(0, 3)
 		if injured:
 			cell = Vector2i(0, 2)
 			assert_bool(battle.send({"type": "move", "actor": HEALER_ID, "x": cell.x, "y": cell.y})).is_true()
-			await BattleTestSetup.wait_until_idle(battle, runner)
+			await wait_until_idle(battle, runner)
 		battle.world.hovered = cell
 		battle.ui.action_buttons.presentation_heal.pressed.emit()
 		var preview: Dictionary = battle.world.attack_preview
@@ -146,7 +147,7 @@ func test_healing_preview_and_presentation() -> void:
 			if child is Label and child.text == "+%d" % int(event.healing):
 				assert_bool(child.get_theme_color("font_color").is_equal_approx(BattleConfig.HEALING_TEXT_COLOR)).is_true()
 		runner.set_time_factor(9.0)
-		await BattleTestSetup.wait_until_idle(battle, runner)
+		await wait_until_idle(battle, runner)
 		var formatted: String = battle.ui.format_log(battle.ui.presented_log_events)
 		assert_str(formatted).contains(tr("結果：%s，回復 %d HP，HP %d/%d") % [battle.ui.RESULT_STYLE % tr("治療"), int(event.healing), int(event.remaining_hp), int(event.max_hp)])
 		var attack: Dictionary = battle.read_core_response(battle.core.preview_skill(ACTOR_ID, 2, 1, "presentation_push"))
@@ -155,9 +156,9 @@ func test_healing_preview_and_presentation() -> void:
 		assert_bool(battle.ui.attack_preview_critical.get_parent().visible).is_true()
 
 func load_map(variant: String) -> void:
-	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, "res://tests/features/battle/data/combat_presentation_%s_map.toml" % variant)
+	runner = await replace_battle(runner, TEST_DEFINITIONS, "res://tests/features/battle/data/combat_presentation_%s_map.toml" % variant)
 	battle = runner.scene()
-	BattleTestSetup.reset_random_seed(battle.core, BattleTestSetup.PRESENTATION_RANDOM_SEED)
+	reset_random_seed(battle.core, PRESENTATION_RANDOM_SEED)
 
 func skill_command(skill: String) -> Dictionary:
 	return {"type": "skill", "actor": ACTOR_ID, "x": 2, "y": 1, "skill": skill}

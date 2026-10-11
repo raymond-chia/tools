@@ -1,6 +1,4 @@
-extends GdUnitTestSuite
-
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
+extends "res://tests/features/battle/battle_test_suite.gd"
 
 const ARIA_ID := 1
 const OGRE_ID := 2
@@ -16,8 +14,9 @@ const ATTACK_VARIATIONS_MAP := "res://tests/features/battle/data/attack_preview_
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
@@ -352,7 +351,7 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 	assert_bool(loaded.has("error")).override_failure_message("預覽變化專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return {}
-	BattleTestSetup.reset_random_seed(preview_core)
+	reset_random_seed(preview_core)
 	var started: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "start"})))
 	assert_bool(started.has("error")).override_failure_message("預覽變化測試戰鬥應成功開始").is_false()
 	var target: Dictionary = {}
@@ -365,7 +364,7 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 		return {}
 	if not preparation_skill.is_empty():
 		# 固定亂數種子，讓建立缺血情境的攻擊穩定普通命中。
-		BattleTestSetup.reset_random_seed(preview_core)
+		reset_random_seed(preview_core)
 		var damaged: Dictionary = JSON.parse_string(preview_core.dispatch(JSON.stringify({"type": "skill", "actor": ARIA_ID, "x": int(target.x), "y": int(target.y), "skill": preparation_skill})))
 		assert_bool(damaged.has("error")).override_failure_message("建立缺血情境的真實攻擊應成功").is_false()
 		if damaged.has("error"):
@@ -381,7 +380,7 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 	return preview
 
 func prepare_case() -> void:
-	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, TEST_MAP)
+	runner = await replace_battle(runner, TEST_DEFINITIONS, TEST_MAP)
 	battle = runner.scene()
 
 func wait_for_combat_events(target_battle) -> void:

@@ -1,6 +1,4 @@
-extends GdUnitTestSuite
-
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
+extends "res://tests/features/battle/battle_test_suite.gd"
 
 const TEST_DEFINITIONS := "res://tests/features/battle/data/turn_order_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/turn_order_map.toml"
@@ -8,12 +6,13 @@ const TEST_MAP := "res://tests/features/battle/data/turn_order_map.toml"
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 
 # 驗證延後模式以橫棒標示插入位置，並將目前單位排到所選單位之後。
 func test_delay_uses_highlighted_slot_and_reorders_turns() -> void:

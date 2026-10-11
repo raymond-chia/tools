@@ -540,6 +540,7 @@ pub struct UnitView {
     pub magical_power: i32,
     pub block_reduction: i32,
     pub equipment: EquipmentView,
+    pub active_skills: Vec<ActiveSkillView>,
     pub passive_skills: Vec<PassiveSkillView>,
 }
 
@@ -596,6 +597,12 @@ pub struct EquipmentView {
     pub off_hand: String,
     pub armor: String,
     pub accessory: String,
+}
+
+#[derive(Serialize)]
+pub struct ActiveSkillView {
+    pub id: String,
+    pub details: SkillDetailsView,
 }
 
 /// 已由核心分類的被動技能資訊，顯示層只負責翻譯與排版。

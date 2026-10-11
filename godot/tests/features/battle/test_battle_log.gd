@@ -1,6 +1,4 @@
-extends GdUnitTestSuite
-
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
+extends "res://tests/features/battle/battle_test_suite.gd"
 
 const ARIA_ID := 1
 const WOLF_A_ID := 2
@@ -12,12 +10,13 @@ const TEST_MAP := "res://tests/features/battle/data/battle_log_map.toml"
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 
 # 驗證開始戰鬥會記錄新回合，並以整數顯示回合數。
 func test_new_round_log() -> void:

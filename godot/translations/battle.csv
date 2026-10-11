@@ -181,8 +181,9 @@ TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
 TERRAIN_EFFECT_MOVEMENT,移動消耗 +{value},Movement cost +{value}
 TERRAIN_EFFECT_DAMAGE,造成 {value} 點傷害,Deals {value} damage
 TERRAIN_EFFECT_DURATION,剩餘 {value} 回合,{value} rounds remaining
-DEFENSE_STATS,閃避／格擋／減傷,Dodge / Block / Reduction
-POWER_STATS,物理／魔法威力,Physical / Magical power
+DETAIL_BLOCK_REDUCTION,格擋減傷,Block reduction
+DETAIL_PHYSICAL_POWER,物理威力,Physical power
+DETAIL_MAGICAL_POWER,魔法威力,Magical power
 EQUIPMENT,裝備,Equipment
 EQUIPMENT_NONE,無,None
 EQUIPMENT_MAIN_HAND,主手,Main hand
@@ -204,3 +205,8 @@ SKILL_NAME_FLANKING,夾擊,Flanking
 SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
 SKILL_EFFECT_FLANKING,被動：近戰夾擊時攻擊加值 +%d,Passive: +%d attack modifier when flanking in melee
 ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；同一效果只能選一個版本,Invalid passive skills; select only one version of each effect
+DETAIL_ATTRIBUTES,屬性,Attributes
+DETAIL_ACTIVE_SKILLS,主動技能,Active
+DETAIL_PASSIVE_SKILLS,被動技能,Passive
+DETAIL_NO_ACTIVE_SKILLS,無主動技能,No active skills
+DETAIL_NO_PASSIVE_SKILLS,無被動技能,No passive skills

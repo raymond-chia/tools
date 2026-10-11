@@ -957,6 +957,7 @@ impl Game {
                 magical_power: f.magical_power,
                 block_reduction: f.block_reduction,
                 equipment: f.equipment.clone(),
+                active_skills: crate::skill::active_skill_views(&self.world, entity),
                 passive_skills: crate::skill::passive_skill_views(&self.world, entity),
             })
             .collect();

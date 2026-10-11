@@ -438,11 +438,11 @@ grow_vertical = 0
 text = "左鍵選擇與移動；右鍵查看單位或地面資訊。"
 vertical_alignment = 1
 
-[node name="InfoPanel" type="Panel" parent="UI/Root" unique_id=1260530961]
+[node name="InfoPanel" type="PanelContainer" parent="UI/Root" unique_id=1260530961]
 visible = false
 clip_contents = true
+custom_maximum_size = Vector2(480, 780)
 layout_mode = 1
-theme_type_variation = &"FloatingPanel"
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
@@ -453,16 +453,11 @@ offset_bottom = 816.0
 grow_horizontal = 0
 
 [node name="Margin" type="MarginContainer" parent="UI/Root/InfoPanel" unique_id=674436552]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 24.0
-offset_top = 12.0
-offset_right = -24.0
-offset_bottom = -24.0
-grow_horizontal = 2
-grow_vertical = 2
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 16
 
 [node name="Content" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin" unique_id=1059066980]
 layout_mode = 2
@@ -501,201 +496,275 @@ layout_mode = 2
 text = "技能說明"
 autowrap_mode = 2
 
-[node name="UnitDetails" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content" unique_id=1250347530]
+[node name="UnitName" type="Label" parent="UI/Root/InfoPanel/Margin/Content"]
 layout_mode = 2
-theme_override_constants/separation = 10
-
-[node name="UnitName" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails" unique_id=936751259]
+theme_type_variation = &"HeadingLabel"
 custom_maximum_size = Vector2(432, -1)
-layout_mode = 2
-theme_type_variation = &"HeadingLabel"
-text = "單位"
 autowrap_mode = 2
 
-[node name="PassiveSkills" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails"]
+[node name="DetailTabs" type="TabContainer" parent="UI/Root/InfoPanel/Margin/Content"]
 layout_mode = 2
-autowrap_mode = 2
+size_flags_vertical = 3
+clip_tabs = false
+theme_override_font_sizes/font_size = 20
+tab_0/title = "地形"
+tab_1/title = "DETAIL_ATTRIBUTES"
+tab_2/title = "DETAIL_ACTIVE_SKILLS"
+tab_3/title = "DETAIL_PASSIVE_SKILLS"
 
-[node name="Rows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails" unique_id=42214286]
+[node name="Terrain" type="ScrollContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 5
+
+[node name="Contents" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TerrainRows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents" unique_id=1551729434]
 layout_mode = 2
 theme_override_constants/h_separation = 24
 theme_override_constants/v_separation = 10
 columns = 2
 
-[node name="TeamLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1667310013]
-layout_mode = 2
-text = "陣營"
-
-[node name="TeamValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1460731533]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="HpLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=184161072]
-layout_mode = 2
-text = "生命"
-
-[node name="HpValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1179911450]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="SizeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1663230119]
-layout_mode = 2
-text = "體型"
-
-[node name="SizeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=359824839]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="MovementLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=351357159]
-layout_mode = 2
-text = "移動"
-
-[node name="MovementValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=360268508]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="InitiativeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=2026487544]
-layout_mode = 2
-text = "先攻"
-
-[node name="InitiativeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=131765223]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="DefenseLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1422269306]
-layout_mode = 2
-text = "DEFENSE_STATS"
-
-[node name="DefenseValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1356774818]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="AttackLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=2030797192]
-layout_mode = 2
-text = "攻擊"
-
-[node name="AttackValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1798711331]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="PowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=1902669502]
-layout_mode = 2
-text = "POWER_STATS"
-
-[node name="PowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows" unique_id=82172087]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="MainHandLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "EQUIPMENT_MAIN_HAND"
-
-[node name="MainHandValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="OffHandLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "EQUIPMENT_OFF_HAND"
-
-[node name="OffHandValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="ArmorLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "EQUIPMENT_ARMOR"
-
-[node name="ArmorValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="AccessoryLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-layout_mode = 2
-text = "EQUIPMENT_ACCESSORY"
-
-[node name="AccessoryValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/UnitDetails/Rows"]
-custom_maximum_size = Vector2(280, -1)
-layout_mode = 2
-size_flags_horizontal = 3
-text = "—"
-autowrap_mode = 2
-
-[node name="TerrainTitle" type="Label" parent="UI/Root/InfoPanel/Margin/Content" unique_id=641749960]
-layout_mode = 2
-theme_type_variation = &"HeadingLabel"
-text = "地面"
-
-[node name="TerrainRows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content" unique_id=1551729434]
-layout_mode = 2
-theme_override_constants/h_separation = 24
-theme_override_constants/v_separation = 10
-columns = 2
-
-[node name="TerrainLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=1760620082]
+[node name="TerrainLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=1760620082]
 layout_mode = 2
 text = "地形"
 
-[node name="TerrainValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=856038111]
+[node name="TerrainValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=856038111]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
 
-[node name="CostLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=187402672]
+[node name="CostLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=187402672]
 layout_mode = 2
 text = "移動消耗"
 
-[node name="CostValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=1573503191]
+[node name="CostValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=1573503191]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
 autowrap_mode = 2
 
-[node name="EffectLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=195611038]
+[node name="EffectLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=195611038]
 layout_mode = 2
 text = "地面效果"
 
-[node name="EffectValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/TerrainRows" unique_id=998091986]
+[node name="EffectValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows" unique_id=998091986]
 custom_maximum_size = Vector2(280, -1)
 layout_mode = 2
 size_flags_horizontal = 3
 text = "—"
+autowrap_mode = 2
+
+[node name="Attributes" type="ScrollContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 5
+
+[node name="Contents" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="UnitDetails" type="VBoxContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents" unique_id=1250347530]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Rows" type="GridContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails" unique_id=42214286]
+layout_mode = 2
+theme_override_constants/h_separation = 24
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="TeamLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1667310013]
+layout_mode = 2
+text = "陣營"
+
+[node name="TeamValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1460731533]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="HpLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "HP"
+
+[node name="HpValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="SizeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1663230119]
+layout_mode = 2
+text = "體型"
+
+[node name="SizeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=359824839]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="MovementLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=351357159]
+layout_mode = 2
+text = "移動"
+
+[node name="MovementValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=360268508]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="InitiativeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=2026487544]
+layout_mode = 2
+text = "先攻"
+
+[node name="InitiativeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=131765223]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="DodgeLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "閃避"
+
+[node name="DodgeValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="BlockLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "格擋"
+
+[node name="BlockValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="BlockReductionLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "DETAIL_BLOCK_REDUCTION"
+
+[node name="BlockReductionValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="AttackLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=2030797192]
+layout_mode = 2
+text = "攻擊"
+
+[node name="AttackValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows" unique_id=1798711331]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="PhysicalPowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "DETAIL_PHYSICAL_POWER"
+
+[node name="PhysicalPowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="MagicalPowerLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "DETAIL_MAGICAL_POWER"
+
+[node name="MagicalPowerValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="MainHandLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_MAIN_HAND"
+
+[node name="MainHandValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="OffHandLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_OFF_HAND"
+
+[node name="OffHandValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="ArmorLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_ARMOR"
+
+[node name="ArmorValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="AccessoryLabel" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+layout_mode = 2
+text = "EQUIPMENT_ACCESSORY"
+
+[node name="AccessoryValue" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows"]
+custom_maximum_size = Vector2(280, -1)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+autowrap_mode = 2
+
+[node name="ActiveSkills" type="ScrollContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 5
+
+[node name="Text" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/ActiveSkills"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_maximum_size = Vector2(416, -1)
+autowrap_mode = 2
+
+[node name="PassiveSkills" type="ScrollContainer" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 5
+
+[node name="Text" type="Label" parent="UI/Root/InfoPanel/Margin/Content/DetailTabs/PassiveSkills"]
+layout_mode = 2
+size_flags_horizontal = 3
+custom_maximum_size = Vector2(416, -1)
 autowrap_mode = 2
 
 [node name="Menu" type="MenuButton" parent="UI/Root"]

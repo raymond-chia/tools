@@ -1252,6 +1252,25 @@ pub(crate) fn flanking_attack_bonus<'a>(skills: impl Iterator<Item = &'a SkillDe
         .unwrap_or(0)
 }
 
+/// 單位查看只提供技能說明，不計算操作可用性與射程地格。
+pub(crate) fn active_skill_views(
+    world: &World,
+    entity: Entity,
+) -> Vec<crate::model::ActiveSkillView> {
+    let unit = world.get::<Unit>(entity).expect("戰鬥單位應具有 Unit");
+    let Skills { definitions } = world.resource::<Skills>();
+    let board = world.resource::<Board>();
+    unit.skills
+        .iter()
+        .map(|id| definitions.get(id).expect("單位技能已驗證"))
+        .filter(|skill| !matches!(skill.effect, SkillEffect::Flanking { .. }))
+        .map(|skill| crate::model::ActiveSkillView {
+            id: skill.id.clone(),
+            details: skill_details(skill, board),
+        })
+        .collect()
+}
+
 pub(crate) fn passive_skill_views(
     world: &World,
     entity: Entity,

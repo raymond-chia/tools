@@ -1,20 +1,21 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/battle_encounter_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/battle_encounter_map.toml"
 
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
+	await wait_until_idle(battle, runner)
 
-func after_test() -> void:
+# 清理本案例的專用資源與尚未完成的操作。
+func cleanup_test() -> void:
 	while battle.state.turn.can_continue or battle.world.is_presenting_combat_events():
 		await runner.simulate_frames(1)
 

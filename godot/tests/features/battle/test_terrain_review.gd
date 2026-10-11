@@ -1,6 +1,5 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const DATA := "res://tests/features/battle/data/terrain_review_"
 const DEFINITIONS := DATA + "definitions.toml"
 const ACTOR_ID := 1
@@ -8,19 +7,14 @@ const TARGET_ID := 2
 
 var battle
 var runner: GdUnitSceneRunner
-var original_locale: String
 
-func before_test() -> void:
-	original_locale = TranslationServer.get_locale()
-	TranslationServer.set_locale("zh_TW")
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(DEFINITIONS, DATA + "move_anchor_map.toml")))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(DEFINITIONS, DATA + "move_anchor_map.toml")))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
-
-func after_test() -> void:
-	TranslationServer.set_locale(original_locale)
+	await wait_until_idle(battle, runner)
 
 # 驗證大型單位進入地形時，左上角與其他佔用格均應受到相同傷害及防禦懲罰。
 func test_large_unit_terrain_damage_uses_occupied_cells() -> void:
@@ -63,7 +57,7 @@ func test_large_unit_pushed_terrain_uses_occupied_cells() -> void:
 	]
 	for test_case in cases:
 		load_case(test_case.map)
-		BattleTestSetup.reset_random_seed(battle.core)
+		reset_random_seed(battle.core)
 		var snapshot := dispatch({"type": "skill", "actor": ACTOR_ID, "x": 2, "y": 0, "skill": "shield_bash"})
 		var skill_events: Array = snapshot.log.filter(func(event): return event.type == "skill")
 		assert_int(skill_events.size()).is_equal(1)
@@ -112,7 +106,7 @@ func test_terrain_description_preserves_each_effect() -> void:
 
 func load_case(map_name: String) -> Dictionary:
 	decode(battle.core.load_documents(FileAccess.get_file_as_string(DEFINITIONS), FileAccess.get_file_as_string(DATA + map_name + "_map.toml")))
-	BattleTestSetup.reset_random_seed(battle.core)
+	reset_random_seed(battle.core)
 	return dispatch({"type": "start"})
 
 func dispatch(command: Dictionary) -> Dictionary:

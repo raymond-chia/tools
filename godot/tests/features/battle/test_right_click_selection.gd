@@ -1,6 +1,4 @@
-extends GdUnitTestSuite
-
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
+extends "res://tests/features/battle/battle_test_suite.gd"
 
 const ARIA_ID := 1
 const LYRA_ID := 2
@@ -12,8 +10,9 @@ const TEST_MAP := "res://tests/features/battle/data/right_click_selection_map.to
 var battle
 var runner: GdUnitSceneRunner
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
@@ -83,7 +82,7 @@ func test_ignored_right_click_inputs() -> void:
 # 驗證單位詳情可從標題列以左鍵拖曳，且放開左鍵後即停止移動。
 func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
 	await prepare_case("unit:%d" % ARIA_ID)
-	var info_panel: Panel = battle.ui.info_panel
+	var info_panel: PanelContainer = battle.ui.info_panel
 	var header: Control = info_panel.get_node("Margin/Content/Header")
 	var initial_position := info_panel.position
 	var drag_offset := Vector2(-120.0, 80.0)
@@ -96,14 +95,15 @@ func test_unit_details_can_be_dragged_with_left_mouse_button() -> void:
 	emit_mouse_motion(header, header_center + drag_offset * 2.0)
 	assert_vector(info_panel.position).override_failure_message("放開左鍵後詳情面板應停止移動").is_equal(released_position)
 
-# 驗證詳情面板遇到無斷點長文字時，所有可見內容仍留在左右邊界內。
+# 驗證地形分頁與單位標題遇到無斷點長文字時，所有可見內容仍留在左右邊界內。
 func test_inspection_content_stays_inside_panel_width() -> void:
 	await prepare_case("unit:%d" % ARIA_ID)
-	var info_panel: Panel = battle.ui.info_panel
-	var unit_name: Label = info_panel.get_node("Margin/Content/UnitDetails/UnitName")
-	var terrain_effect: Label = info_panel.get_node("Margin/Content/TerrainRows/EffectValue")
+	var info_panel: PanelContainer = battle.ui.info_panel
+	var unit_name: Label = info_panel.get_node("Margin/Content/UnitName")
+	var terrain_effect: Label = info_panel.get_node("Margin/Content/DetailTabs/Terrain/Contents/TerrainRows/EffectValue")
 	unit_name.text = "超長單位名稱".repeat(30)
 	terrain_effect.text = "超長地面效果".repeat(30)
+	battle.ui.detail_tabs.current_tab = battle.ui.DetailTab.TERRAIN
 	await runner.simulate_frames(2)
 	var panel_rect: Rect2 = info_panel.get_global_rect()
 	for control: Control in info_panel.find_children("*", "Control", true, false):
@@ -128,7 +128,7 @@ func test_close_inspection_clears_selection_but_keeps_pending_skill() -> void:
 # 驗證詳情面板往四個角落拖曳時完整限制在視窗內，放開後停止拖曳。
 func test_inspection_drag_clamps_to_viewport_edges() -> void:
 	await prepare_case("unit:%d" % ARIA_ID)
-	var panel: Panel = battle.ui.info_panel
+	var panel: PanelContainer = battle.ui.info_panel
 	var header: Control = panel.get_node("Margin/Content/Header")
 	var maximum: Vector2 = battle.ui.root.size - panel.size
 	for expected in [Vector2.ZERO, Vector2(maximum.x, 0), maximum, Vector2(0, maximum.y)]:
@@ -146,7 +146,7 @@ func prepare_case(initial_target: String) -> void:
 	battle.present()
 
 func load_test_documents() -> void:
-	runner = await BattleTestSetup.replace_battle(self, runner, TEST_DEFINITIONS, TEST_MAP)
+	runner = await replace_battle(runner, TEST_DEFINITIONS, TEST_MAP)
 	battle = runner.scene()
 
 func wait_for_combat_events(target_battle) -> void:

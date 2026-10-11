@@ -1,55 +1,49 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/equipment_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/equipment_map.toml"
 const ACTOR_ID := 1
 
 var battle
 var runner: GdUnitSceneRunner
-var original_locale: String
 
-func before_test() -> void:
-	original_locale = TranslationServer.get_locale()
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
-	await BattleTestSetup.wait_until_idle(battle, runner)
-	TranslationServer.set_locale("zh_TW")
+	await wait_until_idle(battle, runner)
 
-func after_test() -> void:
-	TranslationServer.set_locale(original_locale)
-
-# 驗證真實戰鬥面板顯示核心加總後的血量、雙威力、格擋減傷與四個配裝欄位。
+# 驗證真實戰鬥面板顯示核心加總後的現有／最大 HP、分開的物理與魔法威力、閃避、格擋及減傷與四個配裝欄位。
 func test_unit_details_show_equipment_and_resolved_stats() -> void:
 	var cases := [
 		# 劍盾重甲與戒指的各項能力加總後顯示在戰士詳情。
-		{"id": 1, "cell": Vector2i(1, 1), "hp": "16 / 16", "power": "5 / 3", "defense": "2 / 5 / 3", "equipment": ["單手劍", "盾牌", "重甲", "魔力戒指"]},
+		{"id": 1, "cell": Vector2i(1, 1), "hp": "16 / 16", "physical_power": "5", "magical_power": "3", "dodge": "2", "block": "5", "block_reduction": "3", "equipment": ["單手劍", "盾牌", "重甲", "魔力戒指"]},
 		# 輕甲法師保留單位閃避，但不具有格擋或減傷。
-		{"id": 2, "cell": Vector2i(0, 2), "hp": "14 / 14", "power": "1 / 11", "defense": "2 / 0 / 0", "equipment": ["法杖", "無", "輕甲", "魔力戒指"]},
+		{"id": 2, "cell": Vector2i(0, 2), "hp": "14 / 14", "physical_power": "1", "magical_power": "11", "dodge": "2", "block": "0", "block_reduction": "0", "equipment": ["法杖", "無", "輕甲", "魔力戒指"]},
 		# 無裝備單位明確顯示四個空欄位，格擋與減傷為零。
-		{"id": 3, "cell": Vector2i(2, 1), "hp": "50 / 50", "power": "0 / 0", "defense": "2 / 0 / 0", "equipment": ["無", "無", "無", "無"]},
+		{"id": 3, "cell": Vector2i(2, 1), "hp": "50 / 50", "physical_power": "0", "magical_power": "0", "dodge": "2", "block": "0", "block_reduction": "0", "equipment": ["無", "無", "無", "無"]},
 	]
 	for test_case in cases:
 		battle.world.inspection_clicked.emit(test_case.id, test_case.cell)
 		await runner.simulate_frames(1)
 		assert_bool(battle.ui.info_panel.visible).is_true()
 		assert_str(battle.ui.detail_values.hp.text).is_equal(test_case.hp)
-		assert_str(battle.ui.detail_values.power.text).is_equal(test_case.power)
-		assert_str(battle.ui.detail_values.defense.text).is_equal(test_case.defense)
+		for field in ["physical_power", "magical_power", "dodge", "block", "block_reduction"]:
+			assert_str(battle.ui.detail_values[field].text).override_failure_message("單位 %d：%s 應顯示核心加總值" % [test_case.id, field]).is_equal(test_case[field])
 		for index in 4:
 			var slot: String = ["main_hand", "off_hand", "armor", "accessory"][index]
 			assert_str(battle.ui.detail_values[slot].text).override_failure_message("單位 %d：%s 配裝應正確顯示" % [test_case.id, slot]).is_equal(test_case.equipment[index])
 
-# 驗證裝備名稱與雙威力／防禦欄位標題隨語系切換，裝備 ID 由顯示層翻譯。
+# 驗證裝備名稱、HP 與各項威力／防禦欄位標題隨語系切換，裝備 ID 由顯示層翻譯。
 func test_equipment_details_use_current_locale() -> void:
 	battle.world.inspection_clicked.emit(ACTOR_ID, Vector2i(1, 1))
 	var cases := [
 		# 繁體中文顯示裝備名稱與防禦欄位意義。
-		{"locale": "zh_TW", "sword": "單手劍", "shield": "盾牌", "armor": "重甲", "ring": "魔力戒指", "power": "物理／魔法威力", "defense": "閃避／格擋／減傷"},
+		{"locale": "zh_TW", "sword": "單手劍", "shield": "盾牌", "armor": "重甲", "ring": "魔力戒指", "labels": ["HP", "物理威力", "魔法威力", "閃避", "格擋", "格擋減傷"]},
 		# 英文顯示同一配裝與欄位語意。
-		{"locale": "en", "sword": "Sword", "shield": "Shield", "armor": "Heavy armor", "ring": "Magic ring", "power": "Physical / Magical power", "defense": "Dodge / Block / Reduction"},
+		{"locale": "en", "sword": "Sword", "shield": "Shield", "armor": "Heavy armor", "ring": "Magic ring", "labels": ["HP", "Physical power", "Magical power", "Dodge", "Block", "Block reduction"]},
 	]
 	for test_case in cases:
 		TranslationServer.set_locale(test_case.locale)
@@ -59,8 +53,9 @@ func test_equipment_details_use_current_locale() -> void:
 		assert_str(battle.ui.detail_values.armor.text).is_equal(test_case.armor)
 		assert_str(battle.ui.detail_values.accessory.text).is_equal(test_case.ring)
 		var rows: GridContainer = battle.ui.unit_details.get_node("Rows")
-		assert_str(tr(rows.get_node("PowerLabel").text)).is_equal(test_case.power)
-		assert_str(tr(rows.get_node("DefenseLabel").text)).is_equal(test_case.defense)
+		var label_names := ["HpLabel", "PhysicalPowerLabel", "MagicalPowerLabel", "DodgeLabel", "BlockLabel", "BlockReductionLabel"]
+		for index in label_names.size():
+			assert_str(tr(rows.get_node(label_names[index]).text)).is_equal(test_case.labels[index])
 
 # 驗證近距離物理與魔法技能呈現各自核心傷害，無裝備目標不顯示格擋結果或減傷血條。
 func test_melee_and_magic_previews_use_core_equipment_stats() -> void:

@@ -1,6 +1,5 @@
-extends GdUnitTestSuite
+extends "res://tests/features/battle/battle_test_suite.gd"
 
-const BattleTestSetup := preload("res://tests/features/battle/test_setup.gd")
 const TEST_DEFINITIONS := "res://tests/features/battle/data/combat_presentation_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/combat_presentation_exploration_map.toml"
 
@@ -8,8 +7,9 @@ var battle
 var runner: GdUnitSceneRunner
 var camera: MapCamera
 
-func before_test() -> void:
-	runner = scene_runner(auto_free(BattleTestSetup.create_battle(TEST_DEFINITIONS, TEST_MAP, BattleTestSetup.PRESENTATION_RANDOM_SEED)))
+# 準備本案例的真實戰鬥場景與專用資源。
+func setup_test() -> void:
+	runner = battle_scene_runner(auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP, PRESENTATION_RANDOM_SEED)))
 	runner.set_time_factor(9.0)
 	await runner.simulate_frames(1)
 	battle = runner.scene()
@@ -17,7 +17,8 @@ func before_test() -> void:
 	# 固定 delta 驗證輸入位移，避免場景 _process 同時累加相機位置。
 	battle.world.set_process(false)
 
-func after_test() -> void:
+# 清理本案例的專用資源與尚未完成的操作。
+func cleanup_test() -> void:
 	for key in [KEY_W, KEY_A, KEY_S, KEY_D]:
 		set_key(key, false)
 

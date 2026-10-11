@@ -9,6 +9,8 @@ signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
 signal language_changed
 
+enum DetailTab { TERRAIN, ATTRIBUTES, ACTIVE_SKILLS, PASSIVE_SKILLS }
+
 const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
 const LANGUAGE_SETTINGS := "user://language.cfg"
@@ -17,29 +19,33 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 
 @onready var root: Control = $Root
 @onready var menu_button: MenuButton = $Root/Menu
-@onready var info_panel: Panel = $Root/InfoPanel
+@onready var info_panel: PanelContainer = $Root/InfoPanel
 @onready var info_title: Label = $Root/InfoPanel/Margin/Content/Header/Title
-@onready var unit_details: VBoxContainer = $Root/InfoPanel/Margin/Content/UnitDetails
-@onready var unit_name: Label = $Root/InfoPanel/Margin/Content/UnitDetails/UnitName
+@onready var detail_tabs: TabContainer = $Root/InfoPanel/Margin/Content/DetailTabs
+@onready var active_skills_text: Label = $Root/InfoPanel/Margin/Content/DetailTabs/ActiveSkills/Text
+@onready var passive_skills_text: Label = $Root/InfoPanel/Margin/Content/DetailTabs/PassiveSkills/Text
+@onready var unit_details: VBoxContainer = $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails
+@onready var unit_name: Label = $Root/InfoPanel/Margin/Content/UnitName
 @onready var detail_values := {
-	"team": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/TeamValue,
-	"hp": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/HpValue,
-	"size": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/SizeValue,
-	"movement": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/MovementValue,
-	"initiative": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/InitiativeValue,
-	"defense": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/DefenseValue,
-	"attack": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/AttackValue,
-	"power": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/PowerValue,
-	"main_hand": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/MainHandValue,
-	"off_hand": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/OffHandValue,
-	"armor": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/ArmorValue,
-	"accessory": $Root/InfoPanel/Margin/Content/UnitDetails/Rows/AccessoryValue,
+	"team": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/TeamValue,
+	"hp": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/HpValue,
+	"size": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/SizeValue,
+	"movement": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/MovementValue,
+	"initiative": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/InitiativeValue,
+	"dodge": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/DodgeValue,
+	"block": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/BlockValue,
+	"block_reduction": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/BlockReductionValue,
+	"attack": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/AttackValue,
+	"physical_power": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/PhysicalPowerValue,
+	"magical_power": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/MagicalPowerValue,
+	"main_hand": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/MainHandValue,
+	"off_hand": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/OffHandValue,
+	"armor": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/ArmorValue,
+	"accessory": $Root/InfoPanel/Margin/Content/DetailTabs/Attributes/Contents/UnitDetails/Rows/AccessoryValue,
 }
-@onready var terrain_name: Label = $Root/InfoPanel/Margin/Content/TerrainRows/TerrainValue
-@onready var terrain_cost: Label = $Root/InfoPanel/Margin/Content/TerrainRows/CostValue
-@onready var terrain_effect: Label = $Root/InfoPanel/Margin/Content/TerrainRows/EffectValue
-@onready var terrain_title: Label = $Root/InfoPanel/Margin/Content/TerrainTitle
-@onready var terrain_rows: GridContainer = $Root/InfoPanel/Margin/Content/TerrainRows
+@onready var terrain_name: Label = $Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows/TerrainValue
+@onready var terrain_cost: Label = $Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows/CostValue
+@onready var terrain_effect: Label = $Root/InfoPanel/Margin/Content/DetailTabs/Terrain/Contents/TerrainRows/EffectValue
 @onready var inspected_skill_details: VBoxContainer = $Root/InfoPanel/Margin/Content/SkillDetails
 @onready var inspected_skill_name: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Name
 @onready var inspected_skill_description: Label = $Root/InfoPanel/Margin/Content/SkillDetails/Details
@@ -76,6 +82,9 @@ const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 @onready var hovered_skill_details: Label = $Root/HoveredSkill/Margin/Content/Details
 @onready var action_buttons_container: HBoxContainer = $Root/ActionBar/Margin/Layout/Actions/Buttons
 var action_buttons := {}
+var inspected_unit_id: Variant = null
+var last_unit_detail_tab := DetailTab.ATTRIBUTES
+var showing_unit_tabs := false
 var dragging_info_panel := false
 var drag_offset := Vector2.ZERO
 var log_entry_expanded_states: Dictionary = {}
@@ -85,6 +94,7 @@ var presented_skills: Array = []
 var hovered_skill_id := ""
 
 func _ready() -> void:
+	detail_tabs.tab_changed.connect(_on_detail_tab_changed)
 	var settings := ConfigFile.new()
 	if settings.load(LANGUAGE_SETTINGS) == OK:
 		TranslationServer.set_locale(settings.get_value("language", "locale", "zh_TW"))
@@ -106,6 +116,10 @@ func _ready() -> void:
 	log_visibility_button.toggled.connect(_on_log_visibility_toggled)
 	$Root/ActionBar/Margin/Layout/EndTurn.pressed.connect(func(): end_turn_requested.emit())
 	delay_button.pressed.connect(func(): delay_selection_requested.emit())
+
+func _on_detail_tab_changed(index: int) -> void:
+	if showing_unit_tabs:
+		last_unit_detail_tab = index
 
 func _on_language_selected(id: int) -> void:
 	TranslationServer.set_locale("zh_TW" if id == 0 else "en")
@@ -183,9 +197,9 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	if not inspected_skill.is_empty():
 		info_panel.visible = true
 		info_title.text = tr("技能")
+		detail_tabs.hide()
+		unit_name.hide()
 		unit_details.visible = false
-		terrain_title.visible = false
-		terrain_rows.visible = false
 		inspected_skill_details.visible = true
 		inspected_skill_name.text = localized_skill_name(inspected_skill)
 		inspected_skill_description.text = localized_skill_details(inspected_skill)
@@ -197,24 +211,40 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		return
 	info_title.text = tr("詳情")
 	inspected_skill_details.visible = false
-	terrain_title.visible = true
-	terrain_rows.visible = true
+	detail_tabs.show()
 	var unit := unit_with_id(snapshot.units, terrain.unit_id)
 	unit_details.visible = not unit.is_empty()
+	unit_name.visible = not unit.is_empty()
+	showing_unit_tabs = false
+	for index in [DetailTab.ATTRIBUTES, DetailTab.ACTIVE_SKILLS, DetailTab.PASSIVE_SKILLS]:
+		detail_tabs.set_tab_hidden(index, unit.is_empty())
+	detail_tabs.current_tab = DetailTab.TERRAIN if unit.is_empty() else last_unit_detail_tab
+	showing_unit_tabs = not unit.is_empty()
+	if inspected_unit_id != terrain.unit_id:
+		inspected_unit_id = terrain.unit_id
+		for page in detail_tabs.get_children():
+			page.scroll_vertical = 0
 	if not unit.is_empty():
 		unit_name.text = localized_unit_name(unit.unit_type)
 		var passive_lines: Array[String] = []
 		for passive in unit.passive_skills:
 			passive_lines.append("%s：%s" % [tr(BattleConfig.skill_name_key(passive.id)), tr("SKILL_EFFECT_FLANKING") % int(passive.attack_bonus)])
-		unit_details.get_node("PassiveSkills").text = "\n".join(passive_lines)
+		passive_skills_text.text = "\n\n".join(passive_lines) if not passive_lines.is_empty() else tr("DETAIL_NO_PASSIVE_SKILLS")
+		var active_lines: Array[String] = []
+		for skill in unit.active_skills:
+			active_lines.append("%s\n%s" % [localized_skill_name(skill), localized_skill_details(skill)])
+		active_skills_text.text = "\n\n".join(active_lines) if not active_lines.is_empty() else tr("DETAIL_NO_ACTIVE_SKILLS")
 		detail_values.team.text = tr("我方") if unit.team is String else tr("敵方") + "（%s）" % tr(BattleConfig.team_name_key(unit.team.enemy))
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
 		detail_values.size.text = tr("大型") if unit.large else tr("一般")
 		detail_values.movement.text = "%d" % int(unit.movement)
 		detail_values.initiative.text = "%d" % int(unit.initiative)
-		detail_values.defense.text = "%d / %d / %d" % [int(unit.dodge), int(unit.block), int(unit.block_reduction)]
+		detail_values.dodge.text = "%d" % int(unit.dodge)
+		detail_values.block.text = "%d" % int(unit.block)
+		detail_values.block_reduction.text = "%d" % int(unit.block_reduction)
 		detail_values.attack.text = "%d" % int(unit.attack)
-		detail_values.power.text = "%d / %d" % [int(unit.physical_power), int(unit.magical_power)]
+		detail_values.physical_power.text = "%d" % int(unit.physical_power)
+		detail_values.magical_power.text = "%d" % int(unit.magical_power)
 		for slot in ["main_hand", "off_hand", "armor", "accessory"]:
 			var equipment_id: String = unit.equipment[slot]
 			var key := "EQUIPMENT_NAME_%s" % equipment_id.to_upper()
