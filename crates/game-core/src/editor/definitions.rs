@@ -353,44 +353,44 @@ pub fn edit_definition_from_json(
             // ID 建立後不可更動；複製只設定新資料的 ID，因此不需要更新既有引用。
             match category {
                 DefinitionCategory::Equipment => {
-                    let mut entry = definitions
+                    let index = definitions
                         .equipment
                         .iter()
-                        .find(|entry| entry.id == source_id)
-                        .expect("已確認裝備來源存在")
-                        .clone();
+                        .position(|entry| entry.id == source_id)
+                        .expect("已確認裝備來源存在");
+                    let mut entry = definitions.equipment[index].clone();
                     entry.id = id;
-                    definitions.equipment.push(entry);
+                    definitions.equipment.insert(index + 1, entry);
                 }
                 DefinitionCategory::UnitTypes => {
-                    let mut unit = definitions
+                    let index = definitions
                         .unit_types
                         .iter()
-                        .find(|unit| unit.id == source_id)
-                        .expect("已確認複製來源的單位 ID 存在")
-                        .clone();
+                        .position(|unit| unit.id == source_id)
+                        .expect("已確認複製來源的單位 ID 存在");
+                    let mut unit = definitions.unit_types[index].clone();
                     unit.id = id;
-                    definitions.unit_types.push(unit);
+                    definitions.unit_types.insert(index + 1, unit);
                 }
                 DefinitionCategory::Skills => {
-                    let mut skill = definitions
+                    let index = definitions
                         .skills
                         .iter()
-                        .find(|skill| skill.id == source_id)
-                        .expect("已確認複製來源的技能 ID 存在")
-                        .clone();
+                        .position(|skill| skill.id == source_id)
+                        .expect("已確認複製來源的技能 ID 存在");
+                    let mut skill = definitions.skills[index].clone();
                     skill.id = id;
-                    definitions.skills.push(skill);
+                    definitions.skills.insert(index + 1, skill);
                 }
                 DefinitionCategory::TerrainTypes => {
-                    let mut terrain = definitions
+                    let index = definitions
                         .terrain_types
                         .iter()
-                        .find(|entry| entry.id == source_id)
-                        .expect("已確認複製來源的地形 ID 存在")
-                        .clone();
+                        .position(|entry| entry.id == source_id)
+                        .expect("已確認複製來源的地形 ID 存在");
+                    let mut terrain = definitions.terrain_types[index].clone();
                     terrain.id = id;
-                    definitions.terrain_types.push(terrain);
+                    definitions.terrain_types.insert(index + 1, terrain);
                 }
             }
         }

@@ -237,7 +237,7 @@ effect = "heal"
 power_bonus = 0
 
 [[unit_types]]
-id = "aria"
+id = "tank"
 ai_profile = "tank"
 visual = "fighter.svg"
 width = 1
@@ -258,9 +258,10 @@ skills = [
     "power_strike",
     "shield_bash",
 ]
+passive_skills = []
 
 [[unit_types]]
-id = "lyra"
+id = "archer"
 ai_profile = "archer"
 visual = "archer.svg"
 width = 1
@@ -280,14 +281,15 @@ skills = [
     "ranged_attack",
     "aimed_shot",
 ]
+passive_skills = []
 
 [[unit_types]]
-id = "mira"
+id = "mage"
 ai_profile = "healer"
 visual = "mage.svg"
 width = 1
 height = 1
-hp = 8
+hp = 5
 movement = 5
 initiative = 2
 dodge = 3
@@ -303,10 +305,10 @@ skills = [
     "mire",
     "heal",
 ]
+passive_skills = []
 
 [[unit_types]]
 id = "wolf"
-passive_skills = ["pack_flanking"]
 ai_profile = "wolf_pack"
 visual = "wolf.svg"
 width = 1
@@ -323,3 +325,4 @@ off_hand = ""
 armor = ""
 accessory = ""
 skills = ["melee_attack"]
+passive_skills = ["pack_flanking"]

@@ -477,6 +477,36 @@ fn editor_equipment_choices_enforce_slots_and_two_hands() {
     assert_eq!(error["error_id"], "invalid_equipment");
 }
 
+// 驗證複製裝備插入來源下一列，其餘裝備順序不變。
+#[cfg(feature = "editor")]
+#[test]
+fn editor_equipment_duplicate_is_inserted_after_source() {
+    let result = editor_command(
+        &definitions(),
+        json!({"action": "duplicate", "category": "equipment", "id": "heavy_copy", "source_id": "heavy_armor"}),
+    )
+    .expect("裝備應可複製");
+    let definitions = edited_definitions(&result);
+    assert_eq!(
+        definitions
+            .equipment
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "sword",
+            "shield",
+            "bow",
+            "staff",
+            "light_armor",
+            "heavy_armor",
+            "heavy_copy",
+            "power_ring",
+            "tower_shield"
+        ]
+    );
+}
+
 // 驗證裝備頁可新增、複製、修改、排序與刪除，且被配裝引用的裝備禁止刪除。
 #[cfg(feature = "editor")]
 #[test]
@@ -496,11 +526,26 @@ fn editor_equipment_operations_preserve_references() {
         let result = editor_command(&definitions, command).expect("合法裝備操作應成功");
         definitions = edited_definitions(&result);
     }
-    let entries = serde_json::to_value(&definitions.equipment).expect("裝備應可序列化");
     assert_eq!(
-        entries[entries.as_array().expect("裝備應為清單").len() - 2]["id"],
-        "heavy_copy"
+        definitions
+            .equipment
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "sword",
+            "shield",
+            "bow",
+            "staff",
+            "light_armor",
+            "heavy_copy",
+            "heavy_armor",
+            "power_ring",
+            "tower_shield",
+            "spare"
+        ]
     );
+    let entries = serde_json::to_value(&definitions.equipment).expect("裝備應可序列化");
     let spare = entries
         .as_array()
         .expect("裝備應為清單")
