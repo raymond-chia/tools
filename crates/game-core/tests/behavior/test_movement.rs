@@ -1,6 +1,8 @@
-use super::support::{ACTOR_ID, AsciiBoard, ascii_board};
-use crate::model::Exploration;
-use crate::*;
+use super::support::{ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, skill_test_data, unit};
+use game_core::{
+    Command, Game, GridPos, MovePreview, Phase, SkillEffect, Team, TerrainEntryRule, TerrainLayer,
+    TerrainTypeDef,
+};
 
 struct MovementPreviewCase {
     name: &'static str,
@@ -144,19 +146,19 @@ fn large_unit_movement_damages_existing_terrain_coverage() {
                 terrains,
             },
         );
-        let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
-        for (path, expected_hp, expected_events) in
-            [(vec![start, next], 97, 1), (vec![next, start], 94, 2)]
-        {
-            assert_eq!(game.execute_move_path(entity, ACTOR_ID, &path), 1, "{name}");
+        for (destination, expected_hp) in [(next, 97), (start, 94)] {
+            let snapshot = game
+                .command(Command::Move {
+                    actor: ACTOR_ID,
+                    x: destination.x,
+                    y: destination.y,
+                })
+                .expect("大型單位應可移動至指定格");
+            assert_eq!(unit(&snapshot, ACTOR_ID).hp, expected_hp, "{name}");
+            assert_eq!(snapshot.log.len(), 1, "{name}：每次移動應回傳一次地形傷害");
             assert_eq!(
-                game.world.get::<Hp>(entity).expect("玩家應有 HP").current,
-                expected_hp,
-                "{name}"
-            );
-            assert_eq!(
-                game.world.resource::<Log>().0.len(),
-                expected_events,
+                (unit(&snapshot, ACTOR_ID).x, unit(&snapshot, ACTOR_ID).y),
+                (destination.x, destination.y),
                 "{name}"
             );
         }
@@ -166,49 +168,35 @@ fn large_unit_movement_damages_existing_terrain_coverage() {
 // 驗證第二段分次移動會扣除剩餘額度，範圍、預覽與執行均不可重新取得完整預算。
 #[test]
 fn second_movement_segment_preserves_remaining_budget() {
-    #[derive(Debug)]
-    enum Check {
-        RemainingBudget,
-        MovementRange,
-        Preview,
-        Execution,
-    }
-    let mut failures = Vec::new();
-    for check in [
-        Check::RemainingBudget,
-        Check::MovementRange,
-        Check::Preview,
-        Check::Execution,
-    ] {
-        let layout = ascii_board("A....");
-        let mut game = movement_game(3, &layout);
-        let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
-        game.move_to(ACTOR_ID, GridPos { x: 4, y: 0 })
-            .expect("移動四格應跨入第二段並剩餘兩格");
-        game.move_to(ACTOR_ID, GridPos { x: 3, y: 0 })
-            .expect("第二段應可移動一格");
-        let beyond_budget = GridPos { x: 1, y: 0 };
-        let correct = match check {
-            Check::RemainingBudget => game.world.resource::<Turn>().movement_remaining == 1,
-            Check::MovementRange => {
-                let (_, second) = crate::movement::movement_ranges(
-                    &game.world,
-                    entity,
-                    game.world.resource::<Turn>(),
-                );
-                !second.contains(&beyond_budget)
-            }
-            Check::Preview => game.preview_move(ACTOR_ID, beyond_budget).is_err(),
-            Check::Execution => game.move_to(ACTOR_ID, beyond_budget).is_err(),
-        };
-        if !correct {
-            failures.push(check);
-        }
-    }
+    let layout = ascii_board("A....");
+    let mut game = movement_game(3, &layout);
+    game.command(Command::Move {
+        actor: ACTOR_ID,
+        x: 4,
+        y: 0,
+    })
+    .expect("移動四格應跨入第二段並剩餘兩格");
+    let snapshot = game
+        .command(Command::Move {
+            actor: ACTOR_ID,
+            x: 3,
+            y: 0,
+        })
+        .expect("第二段應可移動一格");
+    let beyond_budget = GridPos { x: 1, y: 0 };
+    assert_eq!(snapshot.turn.move_remaining, 1);
+    assert_eq!(snapshot.turn.can_move, true);
+    assert_eq!(snapshot.turn.can_skill, false);
+    assert_eq!(snapshot.second_reachable.contains(&beyond_budget), false);
+    assert_eq!(game.preview_move(ACTOR_ID, beyond_budget).is_err(), true);
     assert_eq!(
-        failures.is_empty(),
-        true,
-        "第二段預算未正確保留：{failures:?}"
+        game.command(Command::Move {
+            actor: ACTOR_ID,
+            x: beyond_budget.x,
+            y: beyond_budget.y
+        })
+        .is_err(),
+        true
     );
 }
 
@@ -220,33 +208,33 @@ fn second_movement_segment_starts_after_first_is_exhausted() {
     {
         let layout = ascii_board("A....");
         let mut game = movement_game(3, &layout);
-        let entity = game.entity(ACTOR_ID).expect("測試玩家應存在");
-        game.move_to(ACTOR_ID, GridPos { x: 3, y: 0 })
+        let snapshot = game
+            .command(Command::Move {
+                actor: ACTOR_ID,
+                x: 3,
+                y: 0,
+            })
             .expect("第一段應可剛好用完");
-        assert_eq!(
-            crate::skill::can_use_skill(game.world.resource::<Turn>()),
-            true
-        );
+        assert_eq!(snapshot.turn.can_skill, true);
+        assert_eq!(snapshot.turn.can_move, true);
         let destination = GridPos {
             x: destination_x,
             y: 0,
         };
-        let (_, second) =
-            crate::movement::movement_ranges(&game.world, entity, game.world.resource::<Turn>());
-        assert_eq!(second.contains(&destination), true);
+        assert_eq!(snapshot.second_reachable.contains(&destination), true);
         game.preview_move(ACTOR_ID, destination)
             .expect("第二段應可預覽");
-        game.move_to(ACTOR_ID, destination)
+        let snapshot = game
+            .command(Command::Move {
+                actor: ACTOR_ID,
+                x: destination.x,
+                y: destination.y,
+            })
             .expect("第一段用完後仍應可執行第二段移動");
-        let turn @ Turn {
-            actor: _,
-            phase,
-            movement_remaining,
-            movement_segments_used: _,
-        } = game.world.resource::<Turn>();
-        assert_eq!(*movement_remaining, remaining);
-        assert_eq!(*phase, expected_phase);
-        assert_eq!(crate::skill::can_use_skill(turn), false);
+        assert_eq!(snapshot.turn.move_remaining, remaining);
+        assert_eq!(snapshot.turn.phase, expected_phase);
+        assert_eq!(snapshot.turn.can_move, remaining > 0);
+        assert_eq!(snapshot.turn.can_skill, false);
     }
 }
 
@@ -272,10 +260,10 @@ fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
         x: target.0,
         y: target.1,
     };
-    let spikes = GridPos {
-        x: terrains[0].x,
-        y: terrains[0].y,
-    };
+    // 尖刺位置取自棋盤的 `^`，地形欄位不公開，透過公開序列化格式讀取。
+    let spikes: GridPos =
+        serde_json::from_value(serde_json::to_value(&terrains[0]).expect("地形配置應可序列化"))
+            .expect("地形配置應含座標");
     let game = movement_game(
         movement,
         &AsciiBoard {
@@ -293,96 +281,45 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
         markers,
         terrains,
     } = layout;
-    let (start, actor_size) = *markers.get(&'A').expect("棋盤應包含玩家");
-    let actor_position = GridPos {
-        x: start.0,
-        y: start.1,
-    };
-    let mut world = World::new();
-    world.insert_resource(Board {
-        width: board.0,
-        height: board.1,
-        terrains: terrains
-            .iter()
-            .cloned()
-            .map(|TerrainPlacement { x, y, kind }| (GridPos { x, y }, vec![kind]))
-            .collect(),
-        terrain_types: HashMap::from([
-            (
-                "spikes".into(),
-                TerrainTypeDef {
-                    blocks_sight: false,
-                    id: "spikes".into(),
-                    layer: TerrainLayer::Overlay,
-                    entry_rule: TerrainEntryRule::Walkable,
-                    damage: 3,
-                    extra_movement_cost: 0,
-                    dodge_penalty: 0,
-                    block_penalty: 0,
-                },
-            ),
-            (
-                "plain".into(),
-                TerrainTypeDef {
-                    blocks_sight: false,
-                    id: "plain".into(),
-                    layer: TerrainLayer::Ground,
-                    entry_rule: TerrainEntryRule::Walkable,
-                    damage: 0,
-                    extra_movement_cost: 0,
-                    dodge_penalty: 0,
-                    block_penalty: 0,
-                },
-            ),
-        ]),
-    });
-    world.insert_resource(Log::default());
-    world.insert_resource(TemporaryTerrains::default());
-    world.insert_resource(model::Encounter::default());
-    world.insert_resource(Exploration {
-        mode: BattleMode::Combat,
-        turns: HashMap::new(),
-    });
-    world.insert_resource(Turn {
-        actor: Some(ACTOR_ID),
-        phase: Phase::Ready,
-        movement_remaining: movement,
-        movement_segments_used: 0,
-    });
-    world.spawn((
-        Id(ACTOR_ID),
-        Pos(actor_position),
-        Hp {
-            current: 100,
-            maximum: 100,
+    let (_, actor_size) = *markers.get(&'A').expect("棋盤應包含玩家");
+    let (mut definitions, mut map) = skill_test_data(
+        0,
+        1,
+        SkillEffect::Attack {
+            hit_bonus: 100,
+            power_bonus: 0,
         },
-        Footprint {
-            width: actor_size.0,
-            height: actor_size.1,
-        },
-        Unit {
-            unit_type: "test_actor".into(),
-            visual: "test_actor".into(),
-            team: Team::Player,
-            movement,
-            initiative: 0,
-            dodge: 0,
-            block: 0,
-            hit: 0,
-            physical_power: 0,
-            magical_power: 0,
-            block_reduction: 0,
-            equipment: EquipmentView {
-                main_hand: String::new(),
-                off_hand: String::new(),
-                armor: String::new(),
-                accessory: String::new(),
-            },
-            skills: Vec::new(),
-        },
-    ));
-    Game {
-        world,
-        movements: Vec::new(),
-    }
+        Team::Enemy("test_enemy".into()),
+        "AT",
+    );
+    let actor = &mut definitions.unit_types[0];
+    actor.width = actor_size.0;
+    actor.height = actor_size.1;
+    actor.movement = movement;
+    definitions.terrain_types.push(
+        serde_json::from_value::<TerrainTypeDef>(serde_json::json!({
+            "id": "spikes",
+            "layer": TerrainLayer::Overlay,
+            "entry_rule": TerrainEntryRule::Walkable,
+            "damage": 3,
+            "blocks_sight": false,
+            "extra_movement_cost": 0,
+            "dodge_penalty": 0,
+            "block_penalty": 0
+        }))
+        .expect("測試地形資料應可載入"),
+    );
+    let ((x, y), _) = markers[&'A'];
+    map.width = board.0 + 1;
+    map.height = board.1;
+    map.terrains = terrains.clone();
+    map.units[0].x = x;
+    map.units[0].y = y;
+    map.units[1].id = TARGET_ID;
+    map.units[1].x = board.0;
+    map.units[1].y = 0;
+    let mut game = Game::from_authoring(definitions, map).expect("移動測試定義應有效");
+    game.set_random_seed(1);
+    game.command(Command::Start).expect("移動測試應可開始");
+    game
 }

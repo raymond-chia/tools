@@ -1,4 +1,8 @@
-use crate::*;
+use game_core::{
+    Game, PowerSource, SkillDef, SkillEffect, Team, TerrainEntryRule, TerrainLayer,
+    TerrainPlacement, TerrainTypeDef, UnitView, authoring,
+};
+use std::collections::HashMap;
 
 pub(super) const ACTOR_ID: i64 = 1;
 pub(super) const TARGET_ID: i64 = 2;
@@ -17,24 +21,25 @@ pub(super) fn tank_ai_profile() -> authoring::AiProfile {
     }
 }
 
-// 單技能測試共用建局：A 為施放者，T 的陣營由案例指定、B 為敵人，各自尺寸與起點由 ASCII 決定。
-pub(super) fn game_with_skill_on_ascii_map(
+// 單技能測試建局資料只透過公開作者格式建立，可供單元與外部整合測試共用。
+pub(super) fn skill_test_data(
     min_range: i32,
     max_range: i32,
     effect: SkillEffect,
     target_team: Team,
     diagram: &str,
-) -> Game {
-    let terrain = TerrainTypeDef {
-        blocks_sight: false,
-        id: "plain".into(),
-        layer: TerrainLayer::Ground,
-        entry_rule: TerrainEntryRule::Walkable,
-        damage: 0,
-        extra_movement_cost: 0,
-        dodge_penalty: 0,
-        block_penalty: 0,
-    };
+) -> (authoring::Definitions, authoring::Map) {
+    let terrain = serde_json::from_value::<TerrainTypeDef>(serde_json::json!({
+        "blocks_sight": false,
+        "id": "plain",
+        "layer": TerrainLayer::Ground,
+        "entry_rule": TerrainEntryRule::Walkable,
+        "damage": 0,
+        "extra_movement_cost": 0,
+        "dodge_penalty": 0,
+        "block_penalty": 0
+    }))
+    .expect("測試地形資料應可載入");
     let layout = ascii_board(diagram);
     let units: Vec<_> = [
         ('A', ACTOR_ID, "test_actor", Team::Player),
@@ -56,42 +61,41 @@ pub(super) fn game_with_skill_on_ascii_map(
             test_unit_type(kind, if *marker == 'A' { 100 } else { 0 }, size)
         })
         .collect();
+    let power_source = if matches!(&effect, SkillEffect::Heal { .. }) {
+        PowerSource::Magical
+    } else {
+        PowerSource::Physical
+    };
+    let mut skill = serde_json::to_value(effect).expect("測試技能效果應可序列化");
+    skill["id"] = TEST_SKILL_ID.into();
+    skill["power_source"] = serde_json::to_value(power_source).expect("威力來源應可序列化");
+    skill["ranged"] = false.into();
+    skill["min_range"] = min_range.into();
+    skill["max_range"] = max_range.into();
+    let skill: SkillDef = serde_json::from_value(skill).expect("測試技能資料應可載入");
     let definitions = authoring::Definitions {
         equipment: Vec::new(),
         default_passive_skills: Vec::new(),
         ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![
             terrain,
-            TerrainTypeDef {
-                id: "wall".into(),
-                layer: TerrainLayer::Overlay,
-                entry_rule: TerrainEntryRule::Blocked,
-                blocks_sight: true,
-                damage: 0,
-                extra_movement_cost: 0,
-                dodge_penalty: 0,
-                block_penalty: 0,
-            },
+            serde_json::from_value::<TerrainTypeDef>(serde_json::json!({
+                "id": "wall",
+                "layer": TerrainLayer::Overlay,
+                "entry_rule": TerrainEntryRule::Blocked,
+                "blocks_sight": true,
+                "damage": 0,
+                "extra_movement_cost": 0,
+                "dodge_penalty": 0,
+                "block_penalty": 0
+            }))
+            .expect("測試地形資料應可載入"),
         ],
-        skills: vec![SkillDef {
-            power_source: if matches!(&effect, SkillEffect::Heal { .. }) {
-                PowerSource::Magical
-            } else {
-                PowerSource::Physical
-            },
-            id: TEST_SKILL_ID.into(),
-            ranged: false,
-            min_range,
-            max_range,
-            effect,
-        }],
+        skills: vec![skill],
         unit_types,
     };
     let map = map_from_ascii_board("test_map", &layout, &units);
-    match Game::from_authoring(definitions, map) {
-        Ok(game) => game,
-        Err(error) => panic!("測試戰鬥定義應有效：{}", error.message()),
-    }
+    (definitions, map)
 }
 
 fn test_unit_type(id: &str, initiative: i32, (width, height): (i32, i32)) -> authoring::UnitType {
@@ -142,11 +146,14 @@ pub(super) fn ascii_board(diagram: &str) -> AsciiBoard {
                         '~' => "rough",
                         _ => unreachable!("已限定地形符號"),
                     };
-                    terrains.push(TerrainPlacement {
-                        x: position.0,
-                        y: position.1,
-                        kind: kind.into(),
-                    });
+                    terrains.push(
+                        serde_json::from_value::<TerrainPlacement>(serde_json::json!({
+                            "x": position.0,
+                            "y": position.1,
+                            "kind": kind
+                        }))
+                        .expect("測試地形資料應可載入"),
+                    );
                 }
                 '.' => {}
                 _ => panic!("未知棋盤符號：{cell}"),
@@ -232,4 +239,59 @@ pub(super) fn map_from_ascii_board(
         terrains: terrains.clone(),
         units: placements,
     }
+}
+
+// 從公開快照查詢單位，避免讓行為測試依賴 ECS 元件。
+pub(super) fn unit(snapshot: &game_core::Snapshot, id: i64) -> &UnitView {
+    snapshot
+        .units
+        .iter()
+        .find(|unit| unit.id == id)
+        .expect("快照應包含測試單位")
+}
+
+// 驗證公開快照的當前與後續行動者；在遭遇開始或新一輪開始時涵蓋整批參戰者。
+pub(super) fn assert_turn_order(game: &Game, markers: &[(char, i64)], expected: &str, name: &str) {
+    let snapshot = game.snapshot(None);
+    let mut actual: Vec<_> = snapshot
+        .turn
+        .actor
+        .iter()
+        .chain(snapshot.turn_order.iter())
+        .map(|id| {
+            markers
+                .iter()
+                .find(|(_, unit_id)| unit_id == id)
+                .expect("行動單位應有對應的地圖代號")
+                .0
+        })
+        .collect();
+    actual.sort();
+    let mut expected: Vec<_> = expected.chars().collect();
+    expected.sort();
+    assert_eq!(actual, expected, "{name}");
+}
+
+pub(super) fn sight_game_in_range(
+    diagram: &str,
+    effect: SkillEffect,
+    target_team: Team,
+    min_range: i32,
+    max_range: i32,
+) -> Game {
+    let needs_enemy = target_team == Team::Player;
+    let (definitions, mut map) =
+        skill_test_data(min_range, max_range, effect, target_team, diagram);
+    // 治療案例也保留敵人，避免公開命令因已獲勝而略過施放。
+    if needs_enemy {
+        map.units.push(authoring::UnitPlacement {
+            id: BLOCKER_ID,
+            unit_type: "test_target".into(),
+            team: Team::Enemy("test_enemy".into()),
+            x: map.width,
+            y: 0,
+        });
+        map.width += 1;
+    }
+    Game::from_authoring(definitions, map).expect("視線測試應可載入")
 }

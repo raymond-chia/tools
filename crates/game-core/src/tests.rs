@@ -1,11 +1,6 @@
+#[path = "../tests/support/mod.rs"]
 mod support;
 
 mod test_attack;
-mod test_authoring;
-mod test_encounter;
-mod test_equipment;
-mod test_movement;
-mod test_skill;
-mod test_utility_ai;
-
 mod test_sight;
+mod test_utility_ai;

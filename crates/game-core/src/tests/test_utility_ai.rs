@@ -1,10 +1,11 @@
 //! 先定義共用傾向設定與可見行為；不實作測試專用評分器或 AI 替身。
 use super::support::{
-    ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map, map_from_ascii_board,
+    ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map, assert_turn_order,
+    map_from_ascii_board,
 };
 use crate::*;
 
-const DEFINITIONS: &str = include_str!("data/utility_ai_definitions.toml");
+const DEFINITIONS: &str = include_str!("../../tests/data/utility_ai_definitions.toml");
 const ALLY_ID: i64 = 3;
 const SECOND_ALLY_ID: i64 = 4;
 
@@ -93,26 +94,6 @@ fn actor_x(snapshot: &serde_json::Value) -> i64 {
         .expect("AI 行動後施放者應仍存在")["x"]
         .as_i64()
         .expect("單位快照應包含 x 座標")
-}
-
-// 驗證 TOML 轉 JSON 保留完整共用傾向與各單位種類的引用，避免設定被靜默忽略。
-#[test]
-fn shared_profiles_survive_authoring_conversion() {
-    let source = definitions();
-    let json = authoring::definitions_to_json(DEFINITIONS).expect("測試定義應可轉為 JSON");
-    let actual: serde_json::Value = serde_json::from_str(&json).expect("輸出應為有效 JSON");
-    let expected = serde_json::to_value(&source).expect("測試 TOML 應可轉為 JSON");
-    assert_eq!(actual["ai_profiles"], expected["ai_profiles"]);
-    for kind in ["tank", "other_tank", "archer", "healer"] {
-        let unit = actual["unit_types"]
-            .as_array()
-            .expect("輸出應包含單位種類")
-            .iter()
-            .find(|unit| unit["id"] == kind)
-            .expect("輸出應保留測試單位種類");
-        let expected_profile = if kind == "other_tank" { "tank" } else { kind };
-        assert_eq!(unit["ai_profile"], expected_profile, "{kind}");
-    }
 }
 
 // 驗證共用肉盾傾向會在第一段移動後近戰，無法攻擊時則利用兩段額度接敵。
@@ -1289,4 +1270,48 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
             }
         }
     }
+}
+
+// 驗證 AI 治癒者移動接近受傷待機同伴後，下一輪公開行動順序加入十格連鎖範圍內的敵人。
+#[test]
+fn encounter_enemy_movement_activates_connected_enemies() {
+    let definitions = toml::from_str(DEFINITIONS).expect("測試定義應為有效 TOML");
+    let units = [
+        ('A', ACTOR_ID, "target", Team::Player),
+        ('T', TARGET_ID, "healer", Team::Enemy("test_enemy".into())),
+        ('L', 3, "target", Team::Enemy("test_enemy".into())),
+        ('S', 4, "target", Team::Enemy("test_enemy".into())),
+        ('F', 5, "target", Team::Enemy("test_enemy".into())),
+    ];
+    let markers: Vec<_> = units
+        .iter()
+        .map(|(marker, id, _, _)| (*marker, *id))
+        .collect();
+    let map = ascii_map(
+        "enemy_movement_encounter",
+        "A.........T..........L.........S..........F.......",
+        &units,
+    );
+    let mut game = Game::from_authoring(definitions, map).expect("敵人移動遭遇測試應可載入");
+    game.set_random_seed(1);
+    let ally = game.entity(3).expect("測試待機同伴應存在");
+    game.world
+        .get_mut::<Hp>(ally)
+        .expect("同伴應具有 HP")
+        .current = 20;
+    game.command(Command::Start).expect("戰鬥應可開始");
+    assert_turn_order(&game, &markers, "AT", "同伴尚在十一格外");
+    assert_eq!(game.snapshot(None).turn.actor, Some(TARGET_ID));
+    game.command(Command::Continue)
+        .expect("治癒者應可移向受傷同伴");
+    let snapshot = game.snapshot(None);
+    let healer = super::support::unit(&snapshot, TARGET_ID);
+    assert_eq!((healer.x, healer.y), (14, 0));
+    // 新參戰者從下一輪加入公開行動順序；只推進回合，不執行額外 AI 行動。
+    for actor in [TARGET_ID, ACTOR_ID] {
+        game.command(Command::EndTurn { actor })
+            .expect("應可結束當前回合");
+        game.command(Command::Continue).expect("應可推進到下一回合");
+    }
+    assert_turn_order(&game, &markers, "ATLS", "移動後啟動同伴並連鎖十格");
 }

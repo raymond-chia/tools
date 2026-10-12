@@ -1,10 +1,14 @@
-use super::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID};
-use crate::*;
+use super::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, ascii_map};
 use authoring::{Definitions, Map, UnitType};
+#[cfg(feature = "editor")]
+use game_core::editor;
+use game_core::{
+    Command, Game, GridPos, Team, TerrainEntryRule, TerrainLayer, TerrainTypeDef, authoring,
+};
 use serde_json::{Value, json};
 
-const DEFINITIONS: &str = include_str!("data/equipment_definitions.toml");
-const MAP: &str = include_str!("data/equipment_map.toml");
+const DEFINITIONS: &str = include_str!("../data/equipment_definitions.toml");
+const MAP: &str = include_str!("../data/equipment_map.toml");
 
 fn definitions() -> Definitions {
     toml::from_str(DEFINITIONS).expect("裝備專用測試定義應為有效 TOML")
@@ -82,7 +86,12 @@ fn equipment_stats_are_resolved_in_the_snapshot() {
         assert_eq!(actor["dodge"], 2, "{name}：裝備不改變閃避");
         assert_eq!(
             actor["equipment"],
-            json!({"main_hand": loadout[0], "off_hand": loadout[1], "armor": loadout[2], "accessory": loadout[3]}),
+            json!({
+                "main_hand": loadout[0],
+                "off_hand": loadout[1],
+                "armor": loadout[2],
+                "accessory": loadout[3]
+            }),
             "{name}"
         );
     }
@@ -187,7 +196,7 @@ fn invalid_equipment_is_rejected_on_load() {
     }
 }
 
-// 驗證相同近距離下戰士與法師依技能指定的物理／魔法威力計算，預覽與實際傷害或治療一致。
+// 驗證公開移動造成受傷後，戰士與法師的技能預覽、施放日誌與 HP 快照均使用指定威力來源。
 #[test]
 fn skill_power_sources_apply_to_preview_and_resolution() {
     let cases = [
@@ -268,16 +277,63 @@ fn skill_power_sources_apply_to_preview_and_resolution() {
         ),
     ];
     for (name, kind, skill, target, cell, preview_field, log_field, expected) in cases {
-        let mut map = map();
-        map.units[0].unit_type = kind.into();
-        let mut game = Game::from_authoring(definitions(), map).expect("威力測試應可載入");
-        game.start().expect("威力測試應可開始");
+        let mut definitions = definitions();
+        let wounded = unit_type_mut(&mut definitions, "target");
+        wounded.movement = 2;
+        wounded.initiative = 200;
+        definitions.terrain_types.push(
+            serde_json::from_value::<TerrainTypeDef>(serde_json::json!({
+                "id": "spikes",
+                "layer": TerrainLayer::Overlay,
+                "entry_rule": TerrainEntryRule::Walkable,
+                "damage": 30,
+                "blocks_sight": false,
+                "extra_movement_cost": 0,
+                "dodge_penalty": 0,
+                "block_penalty": 0
+            }))
+            .expect("測試地形資料應可載入"),
+        );
+        // 先從相鄰格移動到測試落點，透過地形傷害建立剩餘 20 HP 的目標。
+        let diagram = if target == TARGET_ID {
+            "
+            ..T..
+            .A^..
+            .B...
+            "
+        } else {
+            "
+            .....
+            .AT..
+            B^...
+            "
+        };
+        let map = ascii_map(
+            "power_source_test",
+            diagram,
+            &[
+                ('A', ACTOR_ID, kind, Team::Player),
+                ('T', TARGET_ID, "target", Team::Enemy("targets".into())),
+                ('B', BLOCKER_ID, "target", Team::Player),
+            ],
+        );
+        let mut game = Game::from_authoring(definitions, map).expect("威力測試應可載入");
+        game.command(Command::Start).expect("威力測試應可開始");
+        advance_to(&mut game, target);
+        let wounded = game
+            .command(Command::Move {
+                actor: target,
+                x: cell.x,
+                y: cell.y,
+            })
+            .expect("測試目標應可移動至尖刺受傷");
+        assert_eq!(
+            super::support::unit(&wounded, target).hp,
+            20,
+            "{name}：受傷情境"
+        );
+        advance_to(&mut game, ACTOR_ID);
         game.set_random_seed(1);
-        let entity = game.entity(target).expect("測試目標應存在");
-        game.world
-            .get_mut::<Hp>(entity)
-            .expect("目標應有生命值")
-            .current = 20;
         assert_eq!(
             preview(&game, skill, cell)[preview_field],
             expected,
@@ -379,7 +435,7 @@ fn equipment_block_chance_matches_loadout() {
         target.off_hand = shield.into();
         target.armor = armor.into();
         let mut game = game(definitions);
-        game.start().expect("格擋機率測試應可開始");
+        game.command(Command::Start).expect("格擋機率測試應可開始");
         let preview = preview(&game, "melee", GridPos { x: 2, y: 1 });
         assert_eq!(preview["dodge_chance"], 30, "{name}");
         assert_eq!(preview["block_chance"], block_chance, "{name}");
@@ -475,7 +531,7 @@ fn equipment_block_damage_matches_preview_and_resolution() {
         target.off_hand = shield.into();
         target.armor = armor.into();
         let mut game = game(definitions);
-        game.start().expect("格擋減傷測試應可開始");
+        game.command(Command::Start).expect("格擋減傷測試應可開始");
         let before = snapshot(&game);
         let hp_before = unit(&before, TARGET_ID)["hp"]
             .as_i64()
@@ -537,7 +593,9 @@ fn editor_command(
     command: Value,
 ) -> Result<String, editor::EditorError> {
     let source = serde_json::to_string(definitions).expect("編輯器測試定義應可轉為 JSON");
-    let maps = json!({ "equipment_map": map() });
+    let maps = json!({
+        "equipment_map": map()
+    });
     editor::edit_definition_from_json(&source, &maps.to_string(), &command.to_string())
 }
 
@@ -552,8 +610,13 @@ fn edited_definitions(result: &str) -> Definitions {
 #[test]
 fn editor_equipment_choices_enforce_slots_and_two_hands() {
     let mut definitions = definitions();
-    let result = editor_command(&definitions, json!({"action": "skill_effect_options"}))
-        .expect("應可查詢配裝選項");
+    let result = editor_command(
+        &definitions,
+        json!({
+            "action": "skill_effect_options"
+        }),
+    )
+    .expect("應可查詢配裝選項");
     let result: Value = serde_json::from_str(&result).expect("配裝選項應為有效 JSON");
     let choices = &result["equipment_choices"]["fighter"];
     assert_eq!(
@@ -566,17 +629,42 @@ fn editor_equipment_choices_enforce_slots_and_two_hands() {
     assert_eq!(choices["armor"], json!(["", "heavy_armor", "light_armor"]));
     assert_eq!(choices["accessory"], json!(["", "power_ring"]));
     for (key, value) in [("off_hand", ""), ("main_hand", "bow")] {
-        let result = editor_command(&definitions, json!({"action": "update_field", "category": "unit_types", "id": "fighter", "key": key, "value": value})).expect("依序卸盾、裝弓應合法");
+        let result = editor_command(
+            &definitions,
+            json!({
+                "action": "update_field",
+                "category": "unit_types",
+                "id": "fighter",
+                "key": key,
+                "value": value
+            }),
+        )
+        .expect("依序卸盾、裝弓應合法");
         definitions = edited_definitions(&result);
     }
-    let result = editor_command(&definitions, json!({"action": "skill_effect_options"}))
-        .expect("裝弓後應可查詢選項");
+    let result = editor_command(
+        &definitions,
+        json!({
+            "action": "skill_effect_options"
+        }),
+    )
+    .expect("裝弓後應可查詢選項");
     let result: Value = serde_json::from_str(&result).expect("配裝選項應為有效 JSON");
     assert_eq!(
         result["equipment_choices"]["fighter"]["off_hand"],
         json!([""])
     );
-    let error = editor_command(&definitions, json!({"action": "update_field", "category": "unit_types", "id": "fighter", "key": "off_hand", "value": "shield"})).expect_err("直接提交弓盾衝突也應拒絕");
+    let error = editor_command(
+        &definitions,
+        json!({
+            "action": "update_field",
+            "category": "unit_types",
+            "id": "fighter",
+            "key": "off_hand",
+            "value": "shield"
+        }),
+    )
+    .expect_err("直接提交弓盾衝突也應拒絕");
     let error: Value = serde_json::from_str(&error.response_json()).expect("錯誤應可序列化");
     assert_eq!(error["error_id"], "invalid_equipment");
 }
@@ -587,7 +675,12 @@ fn editor_equipment_choices_enforce_slots_and_two_hands() {
 fn editor_equipment_duplicate_is_inserted_after_source() {
     let result = editor_command(
         &definitions(),
-        json!({"action": "duplicate", "category": "equipment", "id": "heavy_copy", "source_id": "heavy_armor"}),
+        json!({
+            "action": "duplicate",
+            "category": "equipment",
+            "id": "heavy_copy",
+            "source_id": "heavy_armor"
+        }),
     )
     .expect("裝備應可複製");
     let definitions = edited_definitions(&result);
@@ -618,13 +711,33 @@ fn editor_equipment_operations_preserve_references() {
     let mut definitions = definitions();
     let commands = [
         // 建立空白單手裝備，沿用作者資料型別。
-        json!({"action": "add", "category": "equipment", "id": "spare"}),
+        json!({
+            "action": "add",
+            "category": "equipment",
+            "id": "spare"
+        }),
         // 複製裝備保留能力，只變更 ID。
-        json!({"action": "duplicate", "category": "equipment", "id": "heavy_copy", "source_id": "heavy_armor"}),
+        json!({
+            "action": "duplicate",
+            "category": "equipment",
+            "id": "heavy_copy",
+            "source_id": "heavy_armor"
+        }),
         // 修改未配裝裝備的能力。
-        json!({"action": "update_field", "category": "equipment", "id": "spare", "key": "physical_power", "value": 7}),
+        json!({
+            "action": "update_field",
+            "category": "equipment",
+            "id": "spare",
+            "key": "physical_power",
+            "value": 7
+        }),
         // 裝備清單依作者操作調整順序。
-        json!({"action": "move", "category": "equipment", "id": "heavy_copy", "offset": -1}),
+        json!({
+            "action": "move",
+            "category": "equipment",
+            "id": "heavy_copy",
+            "offset": -1
+        }),
     ];
     for command in commands {
         let result = editor_command(&definitions, command).expect("合法裝備操作應成功");
@@ -670,7 +783,11 @@ fn editor_equipment_operations_preserve_references() {
     for action in ["check_remove", "remove"] {
         let error = editor_command(
             &definitions,
-            json!({"action": action, "category": "equipment", "id": "shield"}),
+            json!({
+                "action": action,
+                "category": "equipment",
+                "id": "shield"
+            }),
         )
         .expect_err("被引用裝備不可刪除");
         let error: Value =
@@ -683,14 +800,22 @@ fn editor_equipment_operations_preserve_references() {
     }
     let checked = editor_command(
         &definitions,
-        json!({"action": "check_remove", "category": "equipment", "id": "heavy_copy"}),
+        json!({
+            "action": "check_remove",
+            "category": "equipment",
+            "id": "heavy_copy"
+        }),
     )
     .expect("未引用裝備應允許刪除");
     let checked: Value = serde_json::from_str(&checked).expect("刪除預檢應為有效 JSON");
     assert_eq!(checked["can_remove"], true);
     let result = editor_command(
         &definitions,
-        json!({"action": "remove", "category": "equipment", "id": "heavy_copy"}),
+        json!({
+            "action": "remove",
+            "category": "equipment",
+            "id": "heavy_copy"
+        }),
     )
     .expect("未引用裝備應可刪除");
     definitions = edited_definitions(&result);
@@ -714,7 +839,11 @@ fn editor_skill_power_sources_survive_document_saving() {
     for (effect, source) in [("heal", "magical"), ("attack", "physical")] {
         let result = editor_command(
             &definitions(),
-            json!({"action": "change_skill_effect", "id": "melee", "effect": effect}),
+            json!({
+                "action": "change_skill_effect",
+                "id": "melee",
+                "effect": effect
+            }),
         )
         .expect("切換技能效果應成功");
         let definitions = edited_definitions(&result);
@@ -728,8 +857,33 @@ fn editor_skill_power_sources_survive_document_saving() {
             Game::from_documents(&definitions_toml, &map_toml).expect("儲存文件應可執行");
         assert_eq!(
             unit(&snapshot(&reloaded), ACTOR_ID)["equipment"],
-            json!({"main_hand": "sword", "off_hand": "shield", "armor": "heavy_armor", "accessory": "power_ring"})
+            json!({
+                "main_hand": "sword",
+                "off_hand": "shield",
+                "armor": "heavy_armor",
+                "accessory": "power_ring"
+            })
         );
         assert_eq!(unit(&snapshot(&reloaded), ACTOR_ID)["magical_power"], 3);
     }
+}
+
+// 只結束回合與推進，不執行 AI；最多一輪便應輪到指定單位。
+fn advance_to(game: &mut Game, id: i64) {
+    let limit = game.snapshot(None).units.len();
+    for _ in 0..limit {
+        let snapshot = game.snapshot(None);
+        if snapshot.turn.actor == Some(id) {
+            return;
+        }
+        let actor = snapshot.turn.actor.expect("應有當前單位");
+        game.command(Command::EndTurn { actor })
+            .expect("應可結束準備回合");
+        game.command(Command::Continue).expect("應可推進準備回合");
+    }
+    assert_eq!(
+        game.snapshot(None).turn.actor,
+        Some(id),
+        "一輪內應輪到指定單位"
+    );
 }

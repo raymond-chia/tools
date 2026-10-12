@@ -15,6 +15,8 @@ mod sight;
 mod skill;
 mod terrain;
 #[cfg(test)]
+extern crate self as game_core;
+#[cfg(test)]
 mod tests;
 
 #[cfg(test)]
@@ -30,7 +32,7 @@ pub use model::{
     TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef, TurnView, UnitView,
 };
 #[cfg(test)]
-use model::{Board, Footprint, Hp, Id, Log, Pos, Skills, TemporaryTerrains, Turn, Unit};
+use model::{Board, Footprint, Hp, Pos, Skills, TemporaryTerrains, Turn, Unit};
 pub use skill::degree;
 #[cfg(test)]
 use skill::{attack_damage, hit};
