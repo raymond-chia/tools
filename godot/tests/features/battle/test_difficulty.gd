@@ -15,17 +15,23 @@ func test_battle_uses_selected_difficulty() -> void:
 		ids.sort()
 		assert_array(ids).is_equal(test_case.ids)
 
-# 驗證 menu 保存各難度，開局從設定讀取並交給真實戰鬥場景。
+# 驗證難度子選單的單選標記與主選單文字，保存後僅於新遊戲套用。
 func test_game_reads_difficulty_setting() -> void:
 	var battle = auto_free(create_battle(DATA + "definitions.toml", DATA + "maps/prelude.toml"))
 	var runner := battle_scene_runner(battle)
 	await runner.simulate_frames(1)
-	for test_case in [{"id": 2, "difficulty": "easy"}, {"id": 3, "difficulty": "normal"}, {"id": 4, "difficulty": "hard"}]:
-		battle.ui.menu_button.get_popup().id_pressed.emit(test_case.id)
+	var popup: PopupMenu = battle.ui.menu_button.get_popup()
+	var submenu: PopupMenu = popup.get_item_submenu_node(1)
+	assert_int(popup.item_count).is_equal(2)
+	for test_case in [{"id": 0, "difficulty": "easy", "label": "難度：簡單"}, {"id": 1, "difficulty": "normal", "label": "難度：普通"}, {"id": 2, "difficulty": "hard", "label": "難度：困難"}]:
+		submenu.id_pressed.emit(test_case.id)
 		var settings := ConfigFile.new()
 		assert_int(settings.load(GameSettings.PATH)).is_equal(OK)
 		assert_str(settings.get_value("game", "difficulty")).is_equal(test_case.difficulty)
-		assert_bool(battle.ui.menu_button.get_popup().is_item_checked(battle.ui.menu_button.get_popup().get_item_index(test_case.id))).is_true()
+		for id in range(3):
+			assert_bool(submenu.is_item_checked(submenu.get_item_index(id))).is_equal(id == test_case.id)
+		assert_str(popup.get_item_text(1)).is_equal(test_case.label)
+		assert_str(battle.difficulty).is_equal("easy")
 		var game = auto_free(GAME_SCENE.instantiate())
 		game.data_dir = DATA
 		var next_battle = auto_free(game.create_battle())

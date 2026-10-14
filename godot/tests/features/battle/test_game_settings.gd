@@ -14,18 +14,18 @@ func test_defaults_are_saved() -> void:
 	assert_str(settings.get_value("game", "difficulty")).is_equal("normal")
 	assert_int(settings.get_value("presentation", "playback_speed")).is_equal(1)
 
-# 驗證真實 UI 保存三項偏好，修改其中一項保留其他項目，重建場景讀回語言與速度。
+# 驗證真實子選單與速度按鈕保存三項偏好，保留其他項目並於重建場景讀回。
 func test_ui_preserves_and_reloads_preferences() -> void:
 	var battle = auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP))
 	var runner := scene_runner(battle)
 	await runner.simulate_frames(1)
 	for test_case in [
-		{"locale_id": 1, "locale": "en", "difficulty_id": 4, "difficulty": "hard", "speed": 2},
-		{"locale_id": 0, "locale": "zh_TW", "difficulty_id": 2, "difficulty": "easy", "speed": 4},
-		{"locale_id": 1, "locale": "en", "difficulty_id": 3, "difficulty": "normal", "speed": 1},
+		{"locale_id": 1, "locale": "en", "difficulty_id": 2, "difficulty": "hard", "speed": 2},
+		{"locale_id": 0, "locale": "zh_TW", "difficulty_id": 0, "difficulty": "easy", "speed": 4},
+		{"locale_id": 1, "locale": "en", "difficulty_id": 1, "difficulty": "normal", "speed": 1},
 	]:
-		battle.ui.menu_button.get_popup().id_pressed.emit(test_case.locale_id)
-		battle.ui.menu_button.get_popup().id_pressed.emit(test_case.difficulty_id)
+		battle.ui.menu_button.get_popup().get_item_submenu_node(0).id_pressed.emit(test_case.locale_id)
+		battle.ui.menu_button.get_popup().get_item_submenu_node(1).id_pressed.emit(test_case.difficulty_id)
 		battle.ui.playback_speed_button.pressed.emit()
 		var settings := ConfigFile.new()
 		assert_int(settings.load(GameSettings.PATH)).is_equal(OK)

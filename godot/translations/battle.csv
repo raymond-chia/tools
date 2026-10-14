@@ -73,6 +73,8 @@ DETAIL_TERRAIN_EFFECTS,地面效果,Ground effect
 DETAIL_TITLE,詳情,Details
 DIFFICULTY_EASY,簡單,Easy
 DIFFICULTY_HARD,困難,Hard
+DIFFICULTY_MENU,難度：%s,Difficulty: %s
+LANGUAGE_MENU,語言：%s,Language: %s
 DIFFICULTY_MINIMUM,%s開始出現,Appears from %s
 DIFFICULTY_NORMAL,普通,Normal
 DIFFICULTY_SELECT,請選擇難度,Select difficulty

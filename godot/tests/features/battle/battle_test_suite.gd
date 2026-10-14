@@ -39,12 +39,13 @@ func setup_test() -> void:
 func cleanup_test() -> void:
 	pass
 
-# 真實場景完成初始化後恢復測試語系，並同步刷新語言選單與所有動態文字。
+# 真實場景完成初始化後恢復測試語系，同步刷新兩列設定選單與動態文字。
 func battle_scene_runner(scene: Node) -> GdUnitSceneRunner:
 	var locale := TranslationServer.get_locale()
 	var next_runner := scene_runner(scene)
 	TranslationServer.set_locale(locale)
 	next_runner.scene().ui.update_language_menu()
+	next_runner.scene().ui.update_difficulty_menu()
 	next_runner.scene().ui.language_changed.emit()
 	return next_runner
 

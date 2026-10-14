@@ -16,6 +16,9 @@ const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
 const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
+const LANGUAGE_MENU_ID := 0
+const DIFFICULTY_MENU_ID := 1
+const LANGUAGE_LABELS := ["繁體中文", "English"]
 
 @onready var root: Control = $Root
 @onready var playback_speed_button: Button = $Root/PlaybackSpeed
@@ -96,6 +99,8 @@ var dragging_battle_log := false
 var presented_skills: Array = []
 var hovered_skill_id := ""
 var playback_speed_index := 0
+var language_menu: PopupMenu
+var difficulty_menu: PopupMenu
 
 func _ready() -> void:
 	detail_tabs.tab_changed.connect(_on_detail_tab_changed)
@@ -104,12 +109,17 @@ func _ready() -> void:
 	playback_speed_index = GameSettings.PLAYBACK_SPEEDS.find(GameSettings.load_playback_speed())
 	playback_speed_button.text = "×%d" % GameSettings.PLAYBACK_SPEEDS[playback_speed_index]
 	var popup := menu_button.get_popup()
-	popup.add_radio_check_item("繁體中文", 0)
-	popup.add_radio_check_item("English", 1)
-	popup.add_separator("DIFFICULTY_SETTING")
+	language_menu = PopupMenu.new()
+	for index in GameSettings.LOCALES.size():
+		language_menu.add_radio_check_item(LANGUAGE_LABELS[index], index)
+	popup.add_submenu_node_item("", language_menu, LANGUAGE_MENU_ID)
+	difficulty_menu = PopupMenu.new()
+	difficulty_menu.add_separator("DIFFICULTY_SETTING", DifficultyOptions.IDS.size())
 	for index in DifficultyOptions.IDS.size():
-		popup.add_radio_check_item(DifficultyOptions.LABEL_KEYS[index], index + 2)
-	popup.id_pressed.connect(_on_menu_selected)
+		difficulty_menu.add_radio_check_item(DifficultyOptions.LABEL_KEYS[index], index)
+	popup.add_submenu_node_item("", difficulty_menu, DIFFICULTY_MENU_ID)
+	language_menu.id_pressed.connect(_on_language_selected)
+	difficulty_menu.id_pressed.connect(_on_difficulty_selected)
 	update_difficulty_menu()
 	update_language_menu()
 	apply_ui_z_order()
@@ -137,11 +147,8 @@ func _on_detail_tab_changed(index: int) -> void:
 	if showing_unit_tabs:
 		last_unit_detail_tab = index
 
-func _on_menu_selected(id: int) -> void:
-	if id < 2:
-		_on_language_selected(id)
-		return
-	if not GameSettings.save_difficulty(DifficultyOptions.IDS[id - 2]):
+func _on_difficulty_selected(id: int) -> void:
+	if not GameSettings.save_difficulty(DifficultyOptions.IDS[id]):
 		return
 	update_difficulty_menu()
 
@@ -149,7 +156,10 @@ func update_difficulty_menu() -> void:
 	var difficulty := GameSettings.load_difficulty()
 	var popup := menu_button.get_popup()
 	for index in DifficultyOptions.IDS.size():
-		popup.set_item_checked(popup.get_item_index(index + 2), DifficultyOptions.IDS[index] == difficulty)
+		var selected: bool = DifficultyOptions.IDS[index] == difficulty
+		difficulty_menu.set_item_checked(difficulty_menu.get_item_index(index), selected)
+		if selected:
+			popup.set_item_text(popup.get_item_index(DIFFICULTY_MENU_ID), tr("DIFFICULTY_MENU") % tr(DifficultyOptions.LABEL_KEYS[index]))
 
 func _on_language_selected(id: int) -> void:
 	var locale: String = GameSettings.LOCALES[id]
@@ -157,14 +167,18 @@ func _on_language_selected(id: int) -> void:
 		return
 	TranslationServer.set_locale(locale)
 	update_language_menu()
+	update_difficulty_menu()
 	move_cost_popup.hide()
 	attack_preview_panel.hide()
 	language_changed.emit()
 
 func update_language_menu() -> void:
 	var popup := menu_button.get_popup()
-	popup.set_item_checked(0, TranslationServer.get_locale().begins_with("zh"))
-	popup.set_item_checked(1, TranslationServer.get_locale().begins_with("en"))
+	for index in GameSettings.LOCALES.size():
+		var selected: bool = TranslationServer.get_locale() == GameSettings.LOCALES[index]
+		language_menu.set_item_checked(language_menu.get_item_index(index), selected)
+		if selected:
+			popup.set_item_text(popup.get_item_index(LANGUAGE_MENU_ID), tr("LANGUAGE_MENU") % LANGUAGE_LABELS[index])
 
 func apply_ui_z_order() -> void:
 	menu_button.z_index = BattleConfig.MENU_Z_INDEX
