@@ -42,7 +42,8 @@ fn game(definitions: &toml::Value, diagram: &str, units: &[(char, i64, &str, Tea
 fn game_on_map(definitions: &toml::Value, map: authoring::Map) -> Game {
     let source = toml::to_string(definitions).expect("測試定義應可序列化");
     let map = toml::to_string(&map).expect("測試地圖應可序列化");
-    let mut game = Game::from_documents(&source, &map).expect("測試戰鬥應可載入");
+    let mut game = Game::from_documents(&source, &map, crate::authoring::Difficulty::Easy)
+        .expect("測試戰鬥應可載入");
     game.set_random_seed(1);
     game
 }
@@ -1292,7 +1293,8 @@ fn encounter_enemy_movement_activates_connected_enemies() {
         "A.........T..........L.........S..........F.......",
         &units,
     );
-    let mut game = Game::from_authoring(definitions, map).expect("敵人移動遭遇測試應可載入");
+    let mut game = Game::from_authoring(definitions, map, crate::authoring::Difficulty::Easy)
+        .expect("敵人移動遭遇測試應可載入");
     game.set_random_seed(1);
     let ally = game.entity(3).expect("測試待機同伴應存在");
     game.world

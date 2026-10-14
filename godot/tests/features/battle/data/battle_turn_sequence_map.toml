@@ -12,6 +12,7 @@ y=0
 [[units]]
 id=2
 unit_type="wolf"
+min_difficulty = "easy"
 team={ enemy="wolves" }
 x=2
 y=0

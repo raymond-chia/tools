@@ -34,7 +34,11 @@ pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, Stri
         .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let map: Map = json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
-    Game::from_authoring(definitions.clone(), map.clone())?;
+    Game::from_authoring(
+        definitions.clone(),
+        map.clone(),
+        crate::authoring::Difficulty::Hard,
+    )?;
     // 單位的技能依技能頁籤排列存檔，不沿用勾選的先後順序。
     for unit in &mut definitions.unit_types {
         unit.skills.sort_by_key(|id| {
@@ -68,7 +72,7 @@ pub fn inspected_preview_from_json(
         .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let map: Map = json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
-    let game = Game::from_authoring(definitions, map)?;
+    let game = Game::from_authoring(definitions, map, crate::authoring::Difficulty::Hard)?;
     serde_json::to_string(&game.snapshot(inspected_actor))
         .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }

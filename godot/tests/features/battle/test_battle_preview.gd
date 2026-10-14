@@ -347,7 +347,7 @@ func query_attack_preview(target_id: int, skill_id: String, preparation_skill :=
 	var preview_core := TacticalGame.new()
 	var definitions := FileAccess.get_file_as_string(ATTACK_VARIATIONS_DEFINITIONS)
 	var map := FileAccess.get_file_as_string(ATTACK_VARIATIONS_MAP)
-	var loaded: Dictionary = JSON.parse_string(preview_core.load_documents(definitions, map))
+	var loaded: Dictionary = JSON.parse_string(preview_core.load_documents(definitions, map, "easy"))
 	assert_bool(loaded.has("error")).override_failure_message("預覽變化專用 TOML 應成功載入").is_false()
 	if loaded.has("error"):
 		return {}

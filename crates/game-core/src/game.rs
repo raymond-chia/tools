@@ -2,14 +2,12 @@
 use crate::error::GameError;
 use crate::model::{
     BattleMode, Board, CombatLogEvent, Command, Encounter, Exploration, Footprint, GridPos, Hp, Id,
-    InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState, SkillDef,
-    SkillEffect, SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
+    InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
+    SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
     TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainLayer, Turn,
     TurnView, Unit, UnitView,
 };
-use crate::movement::{
-    can_move, entity_distance, fits, footprint_cells, movement_ranges, unit_at_cell,
-};
+use crate::movement::{can_move, entity_distance, footprint_cells, movement_ranges, unit_at_cell};
 use crate::skill::{can_use_skill, effective_block, effective_dodge, skill_ranges, target_kind};
 use crate::terrain::{
     footprint_on_impassable, ground_at, movement_cost, temporary_remaining_rounds, terrain_damage,
@@ -31,308 +29,25 @@ pub(crate) struct DamageResult {
 }
 
 impl Game {
-    pub fn from_documents(definitions: &str, map: &str) -> Result<Self, GameError> {
+    pub fn from_documents(
+        definitions: &str,
+        map: &str,
+        difficulty: authoring::Difficulty,
+    ) -> Result<Self, GameError> {
         let definitions: authoring::Definitions = toml::from_str(definitions)
             .map_err(|e| error::definitions_toml_parse(e.to_string()))?;
         let map: authoring::Map =
             toml::from_str(map).map_err(|e| error::map_toml_parse(e.to_string()))?;
-        Self::from_authoring(definitions, map)
+        Self::from_authoring(definitions, map, difficulty)
     }
-    /// 驗證作者資料並建立戰鬥；所有載入驗證集中於此。
+    /// 委派共用作者輸入驗證與建局準備，執行期直接使用已驗證的世界。
     pub fn from_authoring(
         definitions: authoring::Definitions,
         map: authoring::Map,
+        difficulty: authoring::Difficulty,
     ) -> Result<Self, GameError> {
-        let authoring::Definitions {
-            equipment,
-            default_passive_skills,
-            ai_profiles,
-            terrain_types,
-            skills,
-            unit_types,
-        } = definitions;
-        let authoring::Map {
-            name,
-            width,
-            height,
-            terrains: terrain_placements,
-            units: placements,
-        } = map;
-        if name.trim().is_empty() {
-            return Err(error::empty_map_name());
-        }
-        if placements
-            .iter()
-            .any(|unit| matches!(&unit.team, Team::Enemy(name) if name.trim().is_empty()))
-        {
-            return Err(error::empty_enemy_faction());
-        }
-        let mut terrains = HashMap::new();
-        for terrain in terrain_types {
-            if terrains.insert(terrain.id.clone(), terrain).is_some() {
-                return Err(error::duplicate_terrain_type_id());
-            }
-        }
-        let terrain_types = terrains;
-        // 地形數值不以負值反轉成治療或加成。
-        if let Some(kind) = terrain_types
-            .iter()
-            .filter(|(_, terrain)| {
-                terrain.damage < 0 || terrain.dodge_penalty < 0 || terrain.block_penalty < 0
-            })
-            .map(|(kind, _)| kind)
-            .min()
-        {
-            return Err(error::invalid_terrain_values(kind));
-        }
-        if terrain_types
-            .get(gameplay_config::DEFAULT_GROUND_TERRAIN)
-            .is_none_or(|terrain| terrain.layer != TerrainLayer::Ground)
-        {
-            return Err(error::missing_default_ground_terrain());
-        }
-        let skill_ids: HashSet<_> = skills.iter().map(|skill| skill.id.as_str()).collect();
-        let ai_profiles = crate::ai::resolve_profiles(ai_profiles, &unit_types)?;
-        let equipment = crate::equipment::definitions(equipment)?;
-        let mut equipment_stats = HashMap::new();
-        let mut types = HashMap::new();
-        crate::skill::validate_passive_skills(&default_passive_skills, &skills, "全體預設")?;
-        for mut kind in unit_types {
-            kind.skills =
-                crate::skill::resolve_unit_skills(&kind, &default_passive_skills, &skills)?;
-            if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
-                return Err(error::invalid_unit_type(&kind.id));
-            }
-            if let Some(unknown) = kind
-                .skills
-                .iter()
-                .find(|skill| !skill_ids.contains(skill.as_str()))
-            {
-                return Err(error::unknown_unit_skill(&kind.id, unknown));
-            }
-            let mut unit_skills = HashSet::new();
-            if let Some(duplicate) = kind
-                .skills
-                .iter()
-                .find(|skill| !unit_skills.insert(skill.as_str()))
-            {
-                return Err(error::duplicate_unit_skill(&kind.id, duplicate));
-            }
-            equipment_stats.insert(
-                kind.id.clone(),
-                crate::equipment::resolve(&kind, &equipment)?,
-            );
-            if types.insert(kind.id.clone(), kind).is_some() {
-                return Err(error::duplicate_unit_type_id());
-            }
-        }
-        let mut used_ids = HashSet::new();
-        for placement in &placements {
-            if placement.id <= 0 {
-                return Err(error::invalid_unit_placement_id());
-            }
-            if !used_ids.insert(placement.id) {
-                return Err(error::duplicate_unit_placement_id(placement.id));
-            }
-            let kind = types
-                .get(&placement.unit_type)
-                .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
-            // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
-            if matches!(placement.team, Team::Enemy(_))
-                && !kind.skills.iter().any(|id| {
-                    skills.iter().any(|skill| {
-                        skill.id == *id && target_kind(&skill.effect) != SkillTargetKind::Passive
-                    })
-                })
-            {
-                return Err(error::missing_ai_skill(placement.id));
-            }
-        }
-        if width <= 0
-            || height <= 0
-            || width.checked_mul(height).is_none()
-            || width.checked_add(height).is_none()
-        {
-            return Err(error::invalid_map_dimensions());
-        }
-        validate_numeric_ranges(
-            &terrain_types,
-            &skills,
-            &types,
-            &equipment_stats,
-            width,
-            height,
-        )?;
-        if terrain_placements.iter().any(|terrain| {
-            terrain.x < 0 || terrain.y < 0 || terrain.x >= width || terrain.y >= height
-        }) {
-            return Err(error::terrain_out_of_bounds());
-        }
-        for terrain in &terrain_placements {
-            if !terrain_types.contains_key(&terrain.kind) {
-                return Err(error::unknown_terrain_type(&terrain.kind));
-            }
-        }
-        let mut terrain_positions = HashSet::new();
-        let mut ground_positions = HashSet::new();
-        for terrain in &terrain_placements {
-            if !terrain_positions.insert((terrain.x, terrain.y, terrain.kind.as_str())) {
-                return Err(error::duplicate_terrain(terrain.x, terrain.y));
-            }
-            if terrain_types[&terrain.kind].layer == TerrainLayer::Ground
-                && !ground_positions.insert((terrain.x, terrain.y))
-            {
-                return Err(error::multiple_ground_terrains(terrain.x, terrain.y));
-            }
-        }
-        let mut skill_definitions = HashMap::new();
-        for skill in skills {
-            if matches!(skill.effect, SkillEffect::Flanking { hit_bonus } if hit_bonus < 0) {
-                return Err(error::invalid_passive_skills(&skill.id));
-            }
-            if skill.min_range < 0 || skill.max_range < skill.min_range {
-                return Err(error::invalid_skill_range(&skill.id));
-            }
-            if let SkillEffect::Mire { terrain, duration } = &skill.effect {
-                if *duration == 0 {
-                    return Err(error::invalid_duration(&skill.id));
-                }
-                let definition = terrain_types
-                    .get(terrain)
-                    .ok_or_else(|| error::invalid_skill_terrain(&skill.id))?;
-                // 暫時地形疊在既有地形上，不能是 ground，否則同格會有兩個 ground。
-                if definition.layer != TerrainLayer::Overlay {
-                    return Err(error::skill_terrain_not_overlay(&skill.id));
-                }
-            }
-            if skill_definitions.insert(skill.id.clone(), skill).is_some() {
-                return Err(error::duplicate_skill_id());
-            }
-        }
-        let mut terrains: HashMap<GridPos, Vec<String>> = HashMap::new();
-        for terrain in terrain_placements {
-            terrains
-                .entry(GridPos {
-                    x: terrain.x,
-                    y: terrain.y,
-                })
-                .or_default()
-                .push(terrain.kind);
-        }
-        for kinds in terrains.values_mut() {
-            kinds.sort();
-        }
-        let mut w = World::new();
-        w.insert_resource(Board {
-            width,
-            height,
-            terrains,
-            terrain_types,
-        });
-        w.insert_resource(ai_profiles);
-        w.insert_resource(Encounter::default());
-        w.insert_resource(Exploration {
-            mode: BattleMode::Exploring,
-            turns: HashMap::new(),
-        });
-        w.insert_resource(TemporaryTerrains::default());
-        w.insert_resource(Turn {
-            actor: None,
-            phase: Phase::Ended,
-            movement_remaining: 0,
-            movement_segments_used: 0,
-        });
-        w.insert_resource(Random(0xc0ffee));
-        w.insert_resource(Log::default());
-        w.insert_resource(ResultState(Outcome::Ongoing));
-        w.insert_resource(Skills {
-            definitions: skill_definitions,
-        });
-        // 佔用格判斷需要已建立的棋盤，因此在建立 Board 後驗證。
-        let mut occupied = HashSet::new();
-        for placement in placements {
-            let authoring::UnitPlacement {
-                id,
-                unit_type,
-                team,
-                x,
-                y,
-            } = placement;
-            let authoring::UnitType {
-                id: _,
-                ai_profile: _,
-                visual,
-                width,
-                height,
-                hp: _,
-                movement,
-                initiative,
-                dodge,
-                hit,
-                physical_power: _,
-                magical_power: _,
-                main_hand: _,
-                off_hand: _,
-                armor: _,
-                accessory: _,
-                skills,
-                passive_skills: _,
-            } = types
-                .get(&unit_type)
-                .expect("單位配置的類型已在上方驗證")
-                .clone();
-            let crate::equipment::EquipmentStats {
-                hp,
-                physical_power,
-                magical_power,
-                block,
-                block_reduction,
-                equipment,
-            } = equipment_stats.get(&unit_type).expect("配裝已驗證").clone();
-            if x.checked_add(width).is_none() || y.checked_add(height).is_none() {
-                return Err(error::unit_out_of_bounds(id));
-            }
-            let f = Footprint { width, height };
-            let p = GridPos { x, y };
-            if !fits(w.resource::<Board>(), p, f) {
-                return Err(error::unit_out_of_bounds(id));
-            }
-            if footprint_on_impassable(&w, p, f) {
-                return Err(error::unit_on_impassable(id));
-            }
-            if footprint_cells(p, f)
-                .iter()
-                .any(|cell| !occupied.insert(*cell))
-            {
-                return Err(error::overlapping_unit(id));
-            }
-            w.spawn((
-                Id(id),
-                Pos(p),
-                f,
-                Hp {
-                    current: hp,
-                    maximum: hp,
-                },
-                Unit {
-                    unit_type,
-                    visual,
-                    team,
-                    movement,
-                    initiative,
-                    dodge,
-                    block,
-                    hit,
-                    physical_power,
-                    magical_power,
-                    block_reduction,
-                    equipment,
-                    skills,
-                },
-            ));
-        }
         Ok(Self {
-            world: w,
+            world: authoring::validation::load_world(definitions, map, difficulty)?,
             movements: Vec::new(),
         })
     }
@@ -1192,100 +907,4 @@ pub(crate) fn die(w: &mut World, s: u32) -> u32 {
     let mut r = w.resource_mut::<Random>();
     r.0 = r.0.wrapping_mul(6364136223846793005).wrapping_add(1);
     ((r.0 >> 32) as u32 % s) + 1
-}
-
-/// 載入時建立座標、地形疊加與戰鬥數值可安全運算的不變量。
-fn validate_numeric_ranges(
-    terrains: &HashMap<String, crate::model::TerrainTypeDef>,
-    skills: &[SkillDef],
-    units: &HashMap<String, authoring::UnitType>,
-    equipment_stats: &HashMap<String, crate::equipment::EquipmentStats>,
-    width: i32,
-    height: i32,
-) -> Result<(), GameError> {
-    // 同格最多一種 ground，overlay 與技能建立的地形都按種類去重。
-    let maximum_cell_value = |value: fn(&crate::model::TerrainTypeDef) -> i128| {
-        let ground = terrains
-            .values()
-            .filter(|terrain| terrain.layer == TerrainLayer::Ground)
-            .map(value)
-            .max()
-            .unwrap_or(0);
-        ground
-            + terrains
-                .values()
-                .filter(|terrain| terrain.layer == TerrainLayer::Overlay)
-                .map(value)
-                .sum::<i128>()
-    };
-    let cost = 1 + maximum_cell_value(|terrain| i128::from(terrain.extra_movement_cost));
-    let cells = i128::from(width) * i128::from(height);
-    if cost * (cells + 1) > i128::from(u32::MAX)
-        || maximum_cell_value(|terrain| i128::from(terrain.damage)) > i128::from(i32::MAX)
-        || maximum_cell_value(|terrain| i128::from(terrain.dodge_penalty)) > i128::from(i32::MAX)
-        || maximum_cell_value(|terrain| i128::from(terrain.block_penalty)) > i128::from(i32::MAX)
-    {
-        return Err(error::numeric_range("terrain_types"));
-    }
-    let maximum_hp = equipment_stats
-        .values()
-        .map(|unit| unit.hp)
-        .max()
-        .unwrap_or(0);
-    let dodge_penalty = maximum_cell_value(|terrain| i128::from(terrain.dodge_penalty));
-    let block_penalty = maximum_cell_value(|terrain| i128::from(terrain.block_penalty));
-    for unit in units.values() {
-        let stats = equipment_stats.get(&unit.id).expect("配裝已驗證");
-        if i128::from(unit.dodge) - dodge_penalty < i128::from(i32::MIN)
-            || i128::from(stats.block) - block_penalty < i128::from(i32::MIN)
-            || i128::from(unit.movement) * 2 + cost > i128::from(u32::MAX)
-            || width.checked_add(unit.width).is_none()
-            || height.checked_add(unit.height).is_none()
-            || unit
-                .initiative
-                .checked_add(gameplay_config::INITIATIVE_DIE_SIDES as i32)
-                .is_none()
-            || i64::from(unit.dodge.max(0)) + i64::from(stats.block.max(0)) > i64::from(i32::MAX)
-        {
-            return Err(error::numeric_range(&unit.id));
-        }
-        for skill in skills
-            .iter()
-            .filter(|skill| unit.skills.contains(&skill.id))
-        {
-            let (hit_bonus, power_bonus) = match skill.effect {
-                SkillEffect::Attack {
-                    hit_bonus,
-                    power_bonus,
-                } => (hit_bonus, Some(power_bonus)),
-                SkillEffect::Push { hit_bonus } => (hit_bonus, None),
-                SkillEffect::Heal { power_bonus } => (0, Some(power_bonus)),
-                SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } => continue,
-            };
-            let hit = i64::from(unit.hit) + i64::from(hit_bonus);
-            let power = power_bonus.map_or(0, |bonus| {
-                i64::from(match skill.power_source {
-                    crate::PowerSource::Physical => stats.physical_power,
-                    crate::PowerSource::Magical => stats.magical_power,
-                }) + i64::from(bonus)
-            });
-            if hit < i64::from(i32::MIN)
-                || hit
-                    + i64::from(crate::skill::flanking_hit_bonus(
-                        unit.skills
-                            .iter()
-                            .filter_map(|id| skills.iter().find(|skill| skill.id == *id)),
-                    ))
-                    + i64::from(gameplay_config::HIT_DIE_SIDES)
-                    > i64::from(i32::MAX)
-                || power < i64::from(i32::MIN)
-                || power.max(0) * 2 > i64::from(i32::MAX)
-                || matches!(skill.effect, SkillEffect::Heal { .. })
-                    && power.max(0) + i64::from(maximum_hp) > i64::from(i32::MAX)
-            {
-                return Err(error::numeric_range(&unit.id));
-            }
-        }
-    }
-    Ok(())
 }

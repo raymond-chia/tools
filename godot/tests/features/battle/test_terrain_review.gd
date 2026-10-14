@@ -105,7 +105,7 @@ func test_terrain_description_preserves_each_effect() -> void:
 			assert_str(battle.ui.terrain_effect.text).not_contains("回合")
 
 func load_case(map_name: String) -> Dictionary:
-	decode(battle.core.load_documents(FileAccess.get_file_as_string(DEFINITIONS), FileAccess.get_file_as_string(DATA + map_name + "_map.toml")))
+	decode(battle.core.load_documents(FileAccess.get_file_as_string(DEFINITIONS), FileAccess.get_file_as_string(DATA + map_name + "_map.toml"), "easy"))
 	reset_random_seed(battle.core)
 	return dispatch({"type": "start"})
 

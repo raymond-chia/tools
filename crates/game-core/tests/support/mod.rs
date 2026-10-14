@@ -225,6 +225,11 @@ pub(super) fn map_from_ascii_board(
             let ((x, y), _) = *markers.get(marker).expect("地圖應包含案例指定的單位符號");
             authoring::UnitPlacement {
                 id: *id,
+                min_difficulty: if matches!(team, Team::Enemy(_)) {
+                    Some(authoring::Difficulty::Easy)
+                } else {
+                    None
+                },
                 unit_type: (*kind).into(),
                 team: team.clone(),
                 x,
@@ -286,6 +291,7 @@ pub(super) fn sight_game_in_range(
     if needs_enemy {
         map.units.push(authoring::UnitPlacement {
             id: BLOCKER_ID,
+            min_difficulty: Some(authoring::Difficulty::Easy),
             unit_type: "test_target".into(),
             team: Team::Enemy("test_enemy".into()),
             x: map.width,
@@ -293,5 +299,6 @@ pub(super) fn sight_game_in_range(
         });
         map.width += 1;
     }
-    Game::from_authoring(definitions, map).expect("視線測試應可載入")
+    Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
+        .expect("視線測試應可載入")
 }

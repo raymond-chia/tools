@@ -318,7 +318,8 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
     map.units[1].id = TARGET_ID;
     map.units[1].x = board.0;
     map.units[1].y = 0;
-    let mut game = Game::from_authoring(definitions, map).expect("移動測試定義應有效");
+    let mut game = Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
+        .expect("移動測試定義應有效");
     game.set_random_seed(1);
     game.command(Command::Start).expect("移動測試應可開始");
     game

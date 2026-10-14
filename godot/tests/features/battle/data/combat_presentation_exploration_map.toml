@@ -25,12 +25,14 @@ y=3
 [[units]]
 id=3
 unit_type="presentation_target"
+min_difficulty = "easy"
 team={enemy="targets"}
 x=21
 y=1
 [[units]]
 id=4
 unit_type="presentation_target"
+min_difficulty = "easy"
 team={enemy="targets"}
 x=23
 y=3

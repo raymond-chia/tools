@@ -1,0 +1,33 @@
+name = "difficulty_test"
+width = 4
+height = 2
+[[units]]
+id = 1
+unit_type = "aria"
+team = "player"
+x = 0
+y = 0
+[[units]]
+id = 2
+unit_type = "wolf"
+min_difficulty = "easy"
+x = 1
+y = 0
+[units.team]
+enemy = "test_enemy"
+[[units]]
+id = 3
+unit_type = "wolf"
+min_difficulty = "normal"
+x = 2
+y = 0
+[units.team]
+enemy = "test_enemy"
+[[units]]
+id = 4
+unit_type = "wolf"
+min_difficulty = "hard"
+x = 3
+y = 0
+[units.team]
+enemy = "test_enemy"

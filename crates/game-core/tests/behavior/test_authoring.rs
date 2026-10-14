@@ -52,13 +52,15 @@ fn enemy_without_skill_rejected_on_load() {
         terrains: Vec::new(),
         units: vec![authoring::UnitPlacement {
             id: TARGET_ID,
+            min_difficulty: Some(authoring::Difficulty::Easy),
             unit_type: "test_unit".into(),
             team: Team::Enemy("test_enemy".into()),
             x: 0,
             y: 0,
         }],
     };
-    let error = match Game::from_authoring(definitions, map) {
+    let error = match Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
+    {
         Ok(_) => panic!("沒有技能的敵方應在載入時被拒絕"),
         Err(error) => error,
     };
@@ -84,4 +86,124 @@ fn shared_profiles_survive_authoring_conversion() {
         let expected_profile = if kind == "other_tank" { "tank" } else { kind };
         assert_eq!(unit["ai_profile"], expected_profile, "{kind}");
     }
+}
+
+// 驗證怪物最低出現難度為必填，玩家不需填寫，未知難度也會拒絕。
+#[test]
+fn enemy_difficulty_is_required_at_authoring_boundary() {
+    for (team, setting, accepted) in [
+        ("[units.team]\nenemy = \"test_enemy\"", "", false),
+        (
+            "[units.team]\nenemy = \"test_enemy\"",
+            "min_difficulty = \"easy\"",
+            true,
+        ),
+        (
+            "[units.team]\nenemy = \"test_enemy\"",
+            "min_difficulty = \"invalid\"",
+            false,
+        ),
+        ("team = \"player\"", "", true),
+    ] {
+        let source = format!(
+            "name = \"difficulty_test\"\nwidth = 1\nheight = 1\n[[units]]\nid = 1\nunit_type = \"tank\"\nx = 0\ny = 0\n{setting}\n{team}"
+        );
+        assert_eq!(
+            authoring::map_to_json(&source).is_ok(),
+            accepted,
+            "{source}"
+        );
+        assert_eq!(
+            Game::from_documents(AI_DEFINITIONS, &source, authoring::Difficulty::Easy).is_ok(),
+            accepted,
+            "正式載入：{source}"
+        );
+    }
+}
+
+// 驗證 TOML 轉換保留怪物的最低出現難度，不靜默忽略作者設定。
+#[test]
+fn enemy_difficulty_survives_map_conversion() {
+    for difficulty in ["easy", "normal", "hard"] {
+        let source = format!(
+            "name = \"difficulty_test\"\n[[units]]\nid = 2\nunit_type = \"tank\"\nmin_difficulty = \"{difficulty}\"\n[units.team]\nenemy = \"test_enemy\""
+        );
+        let json = authoring::map_to_json(&source).expect("明確設定難度的地圖應可轉換");
+        let actual: serde_json::Value = serde_json::from_str(&json).expect("轉換結果應為 JSON");
+        assert_eq!(actual["units"][0]["min_difficulty"], difficulty);
+    }
+}
+
+// 驗證編輯器儲存與重載保留各怪物的出現難度，缺少設定時禁止儲存。
+#[cfg(feature = "editor")]
+#[test]
+fn editor_saving_preserves_required_enemy_difficulty() {
+    let definitions = authoring::definitions_to_json(AI_DEFINITIONS).expect("測試定義應可轉換");
+    let mut map = difficulty_map();
+    let (_, saved) =
+        editor::documents_from_json(&definitions, &map.to_string()).expect("有效地圖應可儲存");
+    let actual: serde_json::Value =
+        serde_json::from_str(&authoring::map_to_json(&saved).expect("儲存地圖應可重載"))
+            .expect("重載應為 JSON");
+    for index in 1..=3 {
+        assert_eq!(
+            actual["units"][index]["min_difficulty"],
+            map["units"][index]["min_difficulty"]
+        );
+    }
+    map["units"][2]
+        .as_object_mut()
+        .expect("單位應為物件")
+        .remove("min_difficulty");
+    assert_eq!(
+        editor::documents_from_json(&definitions, &map.to_string()).is_err(),
+        true
+    );
+}
+
+// 驗證開局依最低出現難度篩選怪物，玩家在所有難度保留。
+#[test]
+fn selected_difficulty_filters_enemy_placements() {
+    let map = difficulty_map();
+    let map: toml::Value = serde_json::from_value(map).expect("測試地圖應可轉 TOML");
+    let map = toml::to_string(&map).expect("測試地圖應可序列化");
+    for (difficulty, expected) in [
+        ("easy", vec![1, 2]),
+        ("normal", vec![1, 2, 3]),
+        ("hard", vec![1, 2, 3, 4]),
+    ] {
+        let selected = serde_json::from_value(serde_json::json!(difficulty)).expect("難度應可解析");
+        let game = Game::from_documents(AI_DEFINITIONS, &map, selected).expect("難度戰鬥應可載入");
+        let mut actual: Vec<_> = game
+            .snapshot(None)
+            .units
+            .iter()
+            .map(|unit| unit.id)
+            .collect();
+        actual.sort();
+        assert_eq!(actual, expected, "{difficulty}");
+    }
+}
+
+// 簡單、普通、困難各一隻怪物，所有難度共用同一份作者配置。
+fn difficulty_map() -> serde_json::Value {
+    use super::support::ascii_map;
+    let map = ascii_map(
+        "difficulty_test",
+        "
+        ATUV
+        ....
+    ",
+        &[
+            ('A', 1, "archer", Team::Player),
+            ('T', 2, "target", Team::Enemy("test_enemy".into())),
+            ('U', 3, "target", Team::Enemy("test_enemy".into())),
+            ('V', 4, "target", Team::Enemy("test_enemy".into())),
+        ],
+    );
+    let mut map = serde_json::to_value(map).expect("測試地圖應可轉換");
+    for (index, difficulty) in ["easy", "normal", "hard"].into_iter().enumerate() {
+        map["units"][index + 1]["min_difficulty"] = difficulty.into();
+    }
+    map
 }

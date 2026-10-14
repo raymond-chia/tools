@@ -1,5 +1,6 @@
 //! 原始資料格式，供編輯器與正式遊戲載入文件時使用。
-//! 由 Game::from_authoring 驗證並建立戰鬥；本檔宣告的格式不作為戰鬥運行時資料。
+//! 驗證與建局準備集中於 validation；本檔宣告的格式不作為戰鬥運行時資料。
+pub(crate) mod validation;
 use super::{SkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
 use crate::model::default_one;
@@ -105,9 +106,20 @@ pub struct Map {
     pub units: Vec<UnitPlacement>,
 }
 
+/// 出現門檻依簡單、普通、困難排序；沒有隱含預設難度。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Difficulty {
+    Easy,
+    Normal,
+    Hard,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitPlacement {
     pub id: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_difficulty: Option<Difficulty>,
     #[serde(default)]
     pub unit_type: String,
     #[serde(default)]
@@ -127,6 +139,7 @@ pub fn definitions_to_json(text: &str) -> Result<String, GameError> {
 
 pub fn map_to_json(text: &str) -> Result<String, GameError> {
     let value: Map = toml::from_str(text).map_err(|e| error::map_toml_parse(e.to_string()))?;
+    validation::validate_map(&value)?;
     serde_json::to_string(&value).map_err(|e| error::json_serialize(e.to_string()))
 }
 

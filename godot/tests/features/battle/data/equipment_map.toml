@@ -20,6 +20,7 @@ y = 2
 [[units]]
 id = 3
 unit_type = "target"
+min_difficulty = "easy"
 team = { enemy = "targets" }
 x = 2
 y = 1

@@ -31,7 +31,8 @@ fn encounter_game(diagram: &str, reverse: bool) -> (Game, Vec<(char, i64)>) {
     }
     let definitions = toml::to_string(&definitions).expect("測試定義應可序列化");
     let map = toml::to_string(&map).expect("測試地圖應可序列化");
-    let mut game = Game::from_documents(&definitions, &map).expect("測試遭遇應可載入");
+    let mut game = Game::from_documents(&definitions, &map, game_core::authoring::Difficulty::Easy)
+        .expect("測試遭遇應可載入");
     game.set_random_seed(1);
     let markers = units
         .iter()

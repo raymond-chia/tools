@@ -13,6 +13,9 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var terrain_grids: Array[GridContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Tiles, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Tiles]
 @onready var brush_label: Label = $Layout/Pages/MapPage/Materials/Brush
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
+@onready var placement_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/MinimumDifficulty
+@onready var inspected_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/InspectedDifficulty
+@onready var play_difficulty: OptionButton = $Layout/Toolbar/PlayDifficulty
 @onready var team_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Team
 @onready var faction_field: LineEdit = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Faction
 @onready var existing_factions: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/ExistingFactions
@@ -49,6 +52,10 @@ func _process(delta: float) -> void:
 
 func _ready() -> void:
 	core = TacticalGame.new()
+	DifficultyOptions.populate(placement_difficulty, true)
+	DifficultyOptions.populate(inspected_difficulty, true)
+	DifficultyOptions.populate(play_difficulty)
+	inspected_difficulty.item_selected.connect(update_unit_difficulty)
 	for i in range(2, MODES.size()):
 		mode_list.add_item(MODES[i])
 	for index in 3:
@@ -286,12 +293,15 @@ func delete_map() -> void:
 func play_map() -> void:
 	if map_data.is_empty(): return
 	if not commit_pending_fields(): return
+	if play_difficulty.selected <= 0:
+		show_error("請選擇試玩難度。")
+		return
 	var result := serialize_documents()
 	if result.is_empty():
 		return
 	get_tree().root.set_meta("editor_session", {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "history": history, "stroke_id": stroke_id, "page": pages.current_tab, "selections": definition_pages.map(func(page): return page.selected_id())})
 	var battle := BATTLE_SCENE.instantiate()
-	battle.configure(result.definitions, result.map, true)
+	battle.configure(result.definitions, result.map, play_difficulty.get_selected_metadata(), true)
 	get_tree().change_scene_to_node(battle)
 
 func serialize_documents() -> Dictionary:
@@ -313,6 +323,7 @@ func validate_current() -> void:
 		pending_edit = {}
 	update_history_controls()
 	map_view.present(map_data, snapshot, selected_cell)
+	refresh_inspected_difficulty()
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
 # 自製編輯器顯示核心原始診斷；正式遊戲維持共用讀取函式的翻譯訊息。
@@ -475,6 +486,7 @@ func refresh_grid() -> void:
 	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
 	if snapshot.is_empty(): return
 	map_view.present(map_data, snapshot, selected_cell)
+	refresh_inspected_difficulty()
 
 func refresh_tools_visibility() -> void:
 	# 工具切換只更新介面狀態；資料修改的驗證與預覽由 validate_current 統一處理。
@@ -484,6 +496,7 @@ func refresh_tools_visibility() -> void:
 	team_list.visible = mode == 2
 	faction_field.visible = mode == 2 and team_list.selected != 0
 	existing_factions.visible = faction_field.visible
+	placement_difficulty.visible = faction_field.visible
 
 func refresh_existing_factions() -> void:
 	var result := read_core_response(core.enemy_factions_from_json(JSON.stringify(map_data)))
@@ -542,7 +555,10 @@ func edit_cell(cell: Vector2i) -> void:
 		while map_data.units.any(func(u: Dictionary): return u.id == id):
 			id += 1
 		var team: Variant = "player" if team_list.selected == 0 else {"enemy": faction_field.text.strip_edges()}
-		map_data.units.append({"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y})
+		var placement := {"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y}
+		if team_list.selected != 0:
+			placement.min_difficulty = placement_difficulty.get_selected_metadata()
+		map_data.units.append(placement)
 	elif mode == 3:
 		if current.is_empty(): return
 		map_view.begin_unit_drag(current, cell)
@@ -682,3 +698,25 @@ func change_terrain_effect(id: String, terrain: String) -> void:
 	if not edit_definition({"action": "change_skill_effect", "id": id, "effect": "mire", "terrain": terrain}): return
 	for page in definition_pages:
 		if page.category == "skills": page.finish_effect_change()
+
+# 直接呈現作者設定，不從戰鬥快照重建難度規則。
+func refresh_inspected_difficulty() -> void:
+	inspected_difficulty.visible = false
+	for unit in map_data.get("units", []):
+		if unit.id != map_view.inspected_unit or not unit.has("min_difficulty"): continue
+		inspected_difficulty.visible = true
+		for index in range(1, inspected_difficulty.item_count):
+			if inspected_difficulty.get_item_metadata(index) == unit.min_difficulty:
+				inspected_difficulty.select(index)
+				return
+
+func update_unit_difficulty(index: int) -> void:
+	if index <= 0: return
+	for unit in map_data.units:
+		if unit.id != map_view.inspected_unit: continue
+		var selected: String = inspected_difficulty.get_item_metadata(index)
+		if unit.min_difficulty == selected: return
+		checkpoint()
+		unit.min_difficulty = selected
+		validate_current()
+		return

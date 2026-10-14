@@ -71,6 +71,13 @@ DETAIL_TEAM,陣營,Team
 DETAIL_TERRAIN,地形,Terrain
 DETAIL_TERRAIN_EFFECTS,地面效果,Ground effect
 DETAIL_TITLE,詳情,Details
+DIFFICULTY_EASY,簡單,Easy
+DIFFICULTY_HARD,困難,Hard
+DIFFICULTY_MINIMUM,%s開始出現,Appears from %s
+DIFFICULTY_NORMAL,普通,Normal
+DIFFICULTY_SELECT,請選擇難度,Select difficulty
+DIFFICULTY_SELECT_MINIMUM,請選擇最低出現難度,Select minimum difficulty
+DIFFICULTY_SETTING,難度（重新開遊戲後生效）,Difficulty (applies after restarting)
 EQUIPMENT_ACCESSORY,飾品,Accessory
 EQUIPMENT_ARMOR,護具,Armor
 EQUIPMENT_MAIN_HAND,主手,Main hand
@@ -103,6 +110,7 @@ ERROR_EMPTY_MAP_NAME,地圖名稱不可為空,Map name cannot be empty
 ERROR_GAME_NOT_LOADED,尚未載入戰鬥資料,Battle data is not loaded
 ERROR_HEAL_ALLIES_ONLY,只能治療自己或友軍,Can only heal yourself or allies
 ERROR_INVALID_DELAY_TARGET,只能延後到尚未行動的單位之後,Can only delay after a unit that has not acted
+ERROR_INVALID_DIFFICULTY,請選擇有效的難度,Select a valid difficulty
 ERROR_INVALID_DURATION,技能持續時間必須大於 0,Skill duration must be greater than zero
 ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy
 ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be positive
@@ -117,6 +125,7 @@ ERROR_MISSING_ACTOR,找不到行動角色,Acting unit not found
 ERROR_MISSING_AI_SKILL,敵方單位沒有技能,Enemy unit has no skills
 ERROR_MISSING_DEFAULT_GROUND_TERRAIN,必須定義地面地形 plain,The ground terrain plain must be defined
 ERROR_MISSING_DELAY_TARGET,找不到延後目標,Delay target not found
+ERROR_MISSING_ENEMY_DIFFICULTY,怪物必須設定最低出現難度,Enemies require a minimum difficulty
 ERROR_MISSING_INITIATIVE_UNIT,找不到先攻單位,Initiative unit not found
 ERROR_MISSING_MOVE_UNIT,找不到移動單位,Moving unit not found
 ERROR_MISSING_TARGET,找不到目標,Target not found
@@ -139,6 +148,7 @@ ERROR_UNKNOWN_UNIT_SKILL,單位使用了未知技能,A unit uses an unknown skil
 ERROR_UNKNOWN_UNIT_TYPE,找不到單位定義,Unit type not found
 ERROR_UNREACHABLE_DESTINATION,目的地不可達,Destination is unreachable
 ERROR_WRONG_TURN,現在不是該單位的回合,It is not this unit's turn
+GAME_DATA_READ_ERROR,無法讀取戰鬥資料：%s,Unable to read battle data: %s
 HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
 HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
 SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit modifier when flanking in melee

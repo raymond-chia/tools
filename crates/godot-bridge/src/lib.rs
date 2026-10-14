@@ -24,8 +24,14 @@ impl IRefCounted for TacticalGame {
 #[godot_api]
 impl TacticalGame {
     #[func]
-    fn load_documents(&self, definitions: GString, map: GString) -> GString {
-        match Game::from_documents(&definitions.to_string(), &map.to_string()) {
+    fn load_documents(&self, definitions: GString, map: GString, difficulty: GString) -> GString {
+        let difficulty = match serde_json::from_value::<authoring::Difficulty>(
+            serde_json::Value::String(difficulty.to_string()),
+        ) {
+            Ok(value) => value,
+            Err(e) => return bridge_error("invalid_difficulty", e.to_string()),
+        };
+        match Game::from_documents(&definitions.to_string(), &map.to_string(), difficulty) {
             Ok(game) => {
                 let out = json_response(serde_json::to_string(&game.snapshot(None)));
                 *self.game.lock().expect("核心鎖不應中毒") = Some(game);

@@ -343,3 +343,10 @@ pub(crate) fn invalid_passive_skills(owner: &str) -> GameError {
         format!("{owner} 的被動技能必須引用已定義的非負夾擊加成，且同一效果只能選一個版本"),
     )
 }
+
+pub(crate) fn missing_enemy_difficulty(id: i64) -> GameError {
+    GameError::new(
+        "missing_enemy_difficulty",
+        format!("敵方單位 {id} 必須設定最低出現難度"),
+    )
+}

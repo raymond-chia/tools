@@ -6,16 +6,29 @@ const RANDOM_SEED := 1
 const PRESENTATION_RANDOM_SEED := 2
 
 var _original_locale: String
+var _original_settings: Variant
 
-# 每個案例保存原本語系，再以繁體中文執行測試初始化。
+# 每個案例備份並隔離統一設定檔，再以繁體中文執行測試初始化。
 func before_test() -> void:
 	_original_locale = TranslationServer.get_locale()
 	TranslationServer.set_locale("zh_TW")
+	_original_settings = FileAccess.get_file_as_bytes(GameSettings.PATH) if FileAccess.file_exists(GameSettings.PATH) else null
+	if FileAccess.file_exists(GameSettings.PATH):
+		assert_int(DirAccess.remove_absolute(ProjectSettings.globalize_path(GameSettings.PATH))).is_equal(OK)
 	await setup_test()
 
-# 完成案例專用清理後，統一還原原本語系。
+# 完成案例專用清理後，還原統一設定檔的原始位元組與語系。
 func after_test() -> void:
 	await cleanup_test()
+	if _original_settings != null:
+		var file := FileAccess.open(GameSettings.PATH, FileAccess.WRITE)
+		assert_object(file).is_not_null()
+		if file != null:
+			file.store_buffer(_original_settings)
+			file.close()
+	elif FileAccess.file_exists(GameSettings.PATH):
+		assert_int(DirAccess.remove_absolute(ProjectSettings.globalize_path(GameSettings.PATH))).is_equal(OK)
+	_original_settings = null
 	TranslationServer.set_locale(_original_locale)
 
 # 子類別提供案例專用初始化，語系生命週期由共用基底負責。
@@ -38,7 +51,7 @@ func battle_scene_runner(scene: Node) -> GdUnitSceneRunner:
 # 使用專用文件與固定種子建立尚未進入場景樹的戰鬥場景，涵蓋初始先攻擲骰。
 func create_battle(definitions_path: String, map_path: String, seed := RANDOM_SEED) -> Node:
 	var battle := BATTLE_SCENE.instantiate()
-	battle.configure(FileAccess.get_file_as_string(definitions_path), FileAccess.get_file_as_string(map_path), false, seed)
+	battle.configure(FileAccess.get_file_as_string(definitions_path), FileAccess.get_file_as_string(map_path), "easy", false, seed)
 	return battle
 
 # 直接建立核心或準備特定操作時，使用與場景相同的預設種子。

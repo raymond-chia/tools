@@ -324,11 +324,14 @@ pub fn edit_definition_from_json(
         return Err(EditorError::operation("missing_map", "", Vec::new()));
     }
     for (path, map) in &maps {
-        Game::from_authoring(definitions.clone(), map.clone()).map_err(|error| {
-            EditorError::Map {
-                path: path.clone(),
-                error,
-            }
+        Game::from_authoring(
+            definitions.clone(),
+            map.clone(),
+            crate::authoring::Difficulty::Hard,
+        )
+        .map_err(|error| EditorError::Map {
+            path: path.clone(),
+            error,
         })?;
     }
     serde_json::to_string(&EditedDocuments { definitions })

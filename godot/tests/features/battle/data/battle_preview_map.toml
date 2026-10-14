@@ -20,6 +20,7 @@ y=3
 [[units]]
 id=2
 unit_type="ogre"
+min_difficulty = "easy"
 team={ enemy="ogres" }
 x=3
 y=1

@@ -19,6 +19,7 @@ y=2
 [[units]]
 id=3
 unit_type="wolf"
+min_difficulty = "easy"
 team={ enemy="wolves" }
 x=13
 y=1

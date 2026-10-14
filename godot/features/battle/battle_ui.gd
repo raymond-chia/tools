@@ -12,11 +12,8 @@ signal playback_speed_changed(speed: float)
 
 enum DetailTab { TERRAIN, ATTRIBUTES, ACTIVE_SKILLS, PASSIVE_SKILLS }
 
-const PLAYBACK_SPEEDS := [1, 2, 4]
-
 const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
-const LANGUAGE_SETTINGS := "user://language.cfg"
 const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
 
@@ -103,15 +100,17 @@ var playback_speed_index := 0
 func _ready() -> void:
 	detail_tabs.tab_changed.connect(_on_detail_tab_changed)
 	playback_speed_button.pressed.connect(_on_playback_speed_pressed)
-	var settings := ConfigFile.new()
-	if settings.load(LANGUAGE_SETTINGS) == OK:
-		TranslationServer.set_locale(settings.get_value("language", "locale", "zh_TW"))
-	else:
-		TranslationServer.set_locale("zh_TW")
+	TranslationServer.set_locale(GameSettings.load_locale())
+	playback_speed_index = GameSettings.PLAYBACK_SPEEDS.find(GameSettings.load_playback_speed())
+	playback_speed_button.text = "×%d" % GameSettings.PLAYBACK_SPEEDS[playback_speed_index]
 	var popup := menu_button.get_popup()
 	popup.add_radio_check_item("繁體中文", 0)
 	popup.add_radio_check_item("English", 1)
-	popup.id_pressed.connect(_on_language_selected)
+	popup.add_separator("DIFFICULTY_SETTING")
+	for index in DifficultyOptions.IDS.size():
+		popup.add_radio_check_item(DifficultyOptions.LABEL_KEYS[index], index + 2)
+	popup.id_pressed.connect(_on_menu_selected)
+	update_difficulty_menu()
 	update_language_menu()
 	apply_ui_z_order()
 	$Root/AttackPreview/Margin/Content/HealthImpactBar.resized.connect(func(): position_health_markers.call_deferred())
@@ -126,8 +125,11 @@ func _ready() -> void:
 	delay_button.pressed.connect(func(): delay_selection_requested.emit())
 
 func _on_playback_speed_pressed() -> void:
-	playback_speed_index = (playback_speed_index + 1) % PLAYBACK_SPEEDS.size()
-	var speed: int = PLAYBACK_SPEEDS[playback_speed_index]
+	var next_index := (playback_speed_index + 1) % GameSettings.PLAYBACK_SPEEDS.size()
+	var speed: int = GameSettings.PLAYBACK_SPEEDS[next_index]
+	if not GameSettings.save_playback_speed(speed):
+		return
+	playback_speed_index = next_index
 	playback_speed_button.text = "×%d" % speed
 	playback_speed_changed.emit(float(speed))
 
@@ -135,11 +137,25 @@ func _on_detail_tab_changed(index: int) -> void:
 	if showing_unit_tabs:
 		last_unit_detail_tab = index
 
+func _on_menu_selected(id: int) -> void:
+	if id < 2:
+		_on_language_selected(id)
+		return
+	if not GameSettings.save_difficulty(DifficultyOptions.IDS[id - 2]):
+		return
+	update_difficulty_menu()
+
+func update_difficulty_menu() -> void:
+	var difficulty := GameSettings.load_difficulty()
+	var popup := menu_button.get_popup()
+	for index in DifficultyOptions.IDS.size():
+		popup.set_item_checked(popup.get_item_index(index + 2), DifficultyOptions.IDS[index] == difficulty)
+
 func _on_language_selected(id: int) -> void:
-	TranslationServer.set_locale("zh_TW" if id == 0 else "en")
-	var settings := ConfigFile.new()
-	settings.set_value("language", "locale", TranslationServer.get_locale())
-	settings.save(LANGUAGE_SETTINGS)
+	var locale: String = GameSettings.LOCALES[id]
+	if not GameSettings.save_locale(locale):
+		return
+	TranslationServer.set_locale(locale)
 	update_language_menu()
 	move_cost_popup.hide()
 	attack_preview_panel.hide()

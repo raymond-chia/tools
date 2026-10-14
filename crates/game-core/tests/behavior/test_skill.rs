@@ -129,7 +129,8 @@ fn zero_range_heal_targets_self() {
         }))
         .expect("測試地形資料應可載入"),
     );
-    let mut game = Game::from_authoring(definitions, map).expect("治療測試應可載入");
+    let mut game = Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
+        .expect("治療測試應可載入");
     game.command(Command::Start).expect("測試戰鬥應可開始");
     let snapshot = game
         .command(Command::Move {
@@ -178,5 +179,6 @@ fn game_with_skill_on_ascii_map(
     diagram: &str,
 ) -> Game {
     let (definitions, map) = skill_test_data(min_range, max_range, effect, target_team, diagram);
-    Game::from_authoring(definitions, map).expect("測試戰鬥定義應有效")
+    Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
+        .expect("測試戰鬥定義應有效")
 }

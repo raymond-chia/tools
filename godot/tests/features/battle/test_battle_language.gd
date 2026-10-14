@@ -2,19 +2,13 @@ extends "res://tests/features/battle/battle_test_suite.gd"
 
 const TEST_DEFINITIONS := "res://tests/features/battle/data/combat_presentation_definitions.toml"
 const TEST_MAP := "res://tests/features/battle/data/combat_presentation_spikes_map.toml"
-const LANGUAGE_SETTINGS := "user://language.cfg"
 
 var battle
 var runner: GdUnitSceneRunner
-var had_language_settings := false
-var original_settings := PackedByteArray()
 var test_translations: Array[Translation] = []
 
 # 準備本案例的真實戰鬥場景與專用資源。
 func setup_test() -> void:
-	had_language_settings = FileAccess.file_exists(LANGUAGE_SETTINGS)
-	if had_language_settings:
-		original_settings = FileAccess.get_file_as_bytes(LANGUAGE_SETTINGS)
 	for test_case in [
 		{"locale": "zh_TW", "actor": "測試戰士", "skill": "測試推擊"},
 		{"locale": "en", "actor": "Test Fighter", "skill": "Test Push"},
@@ -32,16 +26,6 @@ func setup_test() -> void:
 
 # 清理本案例的專用資源與尚未完成的操作。
 func cleanup_test() -> void:
-	# 保留既有設定的原始位元組，避免測試改寫使用者偏好或遺失設定註解。
-	if had_language_settings:
-		var file := FileAccess.open(LANGUAGE_SETTINGS, FileAccess.WRITE)
-		assert_object(file).is_not_null()
-		if file != null:
-			file.store_buffer(original_settings)
-			file.close()
-	else:
-		if FileAccess.file_exists(LANGUAGE_SETTINGS):
-			assert_int(DirAccess.remove_absolute(ProjectSettings.globalize_path(LANGUAGE_SETTINGS))).is_equal(OK)
 	for translation in test_translations:
 		TranslationServer.remove_translation(translation)
 	test_translations.clear()
@@ -92,7 +76,7 @@ func test_language_preference_is_loaded_by_next_battle() -> void:
 	for test_case in [{"id": 1, "locale": "en"}, {"id": 0, "locale": "zh_TW"}]:
 		battle.ui.menu_button.get_popup().id_pressed.emit(test_case.id)
 		var settings := ConfigFile.new()
-		assert_int(settings.load(LANGUAGE_SETTINGS)).is_equal(OK)
+		assert_int(settings.load(GameSettings.PATH)).is_equal(OK)
 		assert_str(settings.get_value("language", "locale")).is_equal(test_case.locale)
 		TranslationServer.set_locale("zh_TW" if test_case.id == 1 else "en")
 		var next_battle = auto_free(create_battle(TEST_DEFINITIONS, TEST_MAP, PRESENTATION_RANDOM_SEED))

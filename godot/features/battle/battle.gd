@@ -17,10 +17,12 @@ var back_button: Button
 var definitions_document := ""
 var map_document := ""
 var random_seed: Variant = null
+var difficulty := ""
 
-func configure(definitions_text: String, map_text: String, from_editor := false, seed: Variant = null) -> void:
+func configure(definitions_text: String, map_text: String, selected_difficulty: String, from_editor := false, seed: Variant = null) -> void:
 	definitions_document = definitions_text
 	map_document = map_text
+	difficulty = selected_difficulty
 	editor_preview = from_editor
 	random_seed = seed
 
@@ -40,6 +42,7 @@ func _ready() -> void:
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	ui.language_changed.connect(_on_language_changed)
 	ui.playback_speed_changed.connect(world.set_playback_speed)
+	world.set_playback_speed(float(GameSettings.PLAYBACK_SPEEDS[ui.playback_speed_index]))
 	core = TacticalGame.new()
 	if editor_preview:
 		back_button = Button.new()
@@ -47,7 +50,7 @@ func _ready() -> void:
 		back_button.position = Vector2(900, 20)
 		back_button.pressed.connect(return_to_editor)
 		ui.get_node("Root").add_child(back_button)
-	state = read_core_response(core.load_documents(definitions_document, map_document))
+	state = read_core_response(core.load_documents(definitions_document, map_document, difficulty))
 	if state.is_empty():
 		present()
 		return

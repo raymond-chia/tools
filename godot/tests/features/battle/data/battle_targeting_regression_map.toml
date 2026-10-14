@@ -12,6 +12,7 @@ y=1
 [[units]]
 id=2
 unit_type="wolf_a"
+min_difficulty = "easy"
 team={ enemy="targets" }
 x=2
 y=1
@@ -19,6 +20,7 @@ y=1
 [[units]]
 id=3
 unit_type="ogre"
+min_difficulty = "easy"
 team={ enemy="ogres" }
 x=4
 y=1

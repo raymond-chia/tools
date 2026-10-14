@@ -27,7 +27,8 @@ fn unit_type_mut<'a>(definitions: &'a mut Definitions, id: &str) -> &'a mut Unit
 }
 
 fn game(definitions: Definitions) -> Game {
-    Game::from_authoring(definitions, map()).expect("裝備專用測試戰鬥應可載入")
+    Game::from_authoring(definitions, map(), game_core::authoring::Difficulty::Easy)
+        .expect("裝備專用測試戰鬥應可載入")
 }
 
 fn snapshot(game: &Game) -> Value {
@@ -188,7 +189,11 @@ fn invalid_equipment_is_rejected_on_load() {
     for (name, change, expected) in cases {
         let mut definitions = definitions();
         change(&mut definitions);
-        let error = match Game::from_authoring(definitions, map()) {
+        let error = match Game::from_authoring(
+            definitions,
+            map(),
+            game_core::authoring::Difficulty::Easy,
+        ) {
             Ok(_) => panic!("{name} 應拒絕載入"),
             Err(error) => error,
         };
@@ -317,7 +322,9 @@ fn skill_power_sources_apply_to_preview_and_resolution() {
                 ('B', BLOCKER_ID, "target", Team::Player),
             ],
         );
-        let mut game = Game::from_authoring(definitions, map).expect("威力測試應可載入");
+        let mut game =
+            Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
+                .expect("威力測試應可載入");
         game.command(Command::Start).expect("威力測試應可開始");
         advance_to(&mut game, target);
         let wounded = game
@@ -853,8 +860,12 @@ fn editor_skill_power_sources_survive_document_saving() {
         let map_json = serde_json::to_string(&map()).expect("地圖應可序列化");
         let (definitions_toml, map_toml) =
             editor::documents_from_json(&definitions_json, &map_json).expect("編輯器文件應可儲存");
-        let reloaded =
-            Game::from_documents(&definitions_toml, &map_toml).expect("儲存文件應可執行");
+        let reloaded = Game::from_documents(
+            &definitions_toml,
+            &map_toml,
+            game_core::authoring::Difficulty::Easy,
+        )
+        .expect("儲存文件應可執行");
         assert_eq!(
             unit(&snapshot(&reloaded), ACTOR_ID)["equipment"],
             json!({

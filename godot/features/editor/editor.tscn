@@ -42,6 +42,9 @@ layout_mode = 2
 focus_mode = 0
 text = "重做"
 
+[node name="PlayDifficulty" type="OptionButton" parent="Layout/Toolbar"]
+layout_mode = 2
+
 [node name="Play" type="Button" parent="Layout/Toolbar"]
 layout_mode = 2
 text = "▶ 試玩"
@@ -181,6 +184,10 @@ layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 
+[node name="MinimumDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
+layout_mode = 2
+tooltip_text = "新怪物的最低出現難度"
+
 [node name="Team" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 layout_mode = 2
 
@@ -198,9 +205,15 @@ allow_reselect = true
 custom_minimum_size = Vector2(145, 0)
 layout_mode = 2
 
+[node name="InspectedDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials"]
+visible = false
+layout_mode = 2
+tooltip_text = "右鍵選取怪物後，修改最低出現難度"
+
 [node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials"]
 layout_mode = 2
-text = "選取素材後，在地圖點擊或拖曳繪製"
+text = "選取素材後，在地圖點擊或拖曳繪製
+右鍵選取怪物，可修改最低出現難度"
 autowrap_mode = 2
 
 [node name="UnitPage" parent="Layout/Pages" instance=ExtResource("5")]
