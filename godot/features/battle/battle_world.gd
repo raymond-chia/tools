@@ -33,7 +33,10 @@ var pending_death_ids := {}
 var playback_speed := 1.0
 var presentation_tweens: Array[Tween] = []
 
+var terrain_overlay: Node2D
+
 func _ready() -> void:
+	terrain_overlay = BattleVisuals.create_terrain_overlay(self, ground, func(): return [] if state.is_empty() else state.terrain_effects)
 	ground.z_index = BattleConfig.GROUND_Z_INDEX
 	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
 
@@ -511,4 +514,4 @@ func _draw() -> void:
 			draw_marker(Vector2i(interrupted_path[-1].x,interrupted_path[-1].y),Color(0.9,0.05,0.02,0.34),Color("ff4938"),4.0)
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
-	BattleVisuals.draw_terrain_effects(self, ground, state.terrain_effects)
+	terrain_overlay.queue_redraw()

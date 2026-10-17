@@ -1,7 +1,7 @@
 //! 地形筆刷的替換、清除與合法性判斷集中於核心編輯器。
 use super::EditorError;
 use crate::authoring::{Definitions, Map};
-use crate::{Game, GridPos, TerrainLayer, TerrainPlacement};
+use crate::{Game, GridPos, TerrainEntryRule, TerrainLayer, TerrainPlacement};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -65,7 +65,7 @@ pub fn paint_terrain_from_json(
     if cells.is_empty() {
         return Err(EditorError::operation("invalid_cell", "", Vec::new()));
     }
-    if kind.is_empty() {
+    let blocks_units = if kind.is_empty() {
         if layer != TerrainLayer::Overlay {
             return Err(EditorError::operation(
                 "cannot_clear_ground",
@@ -73,6 +73,7 @@ pub fn paint_terrain_from_json(
                 Vec::new(),
             ));
         }
+        false
     } else {
         let terrain = definitions
             .terrain_types
@@ -82,9 +83,34 @@ pub fn paint_terrain_from_json(
         if terrain.layer != layer {
             return Err(EditorError::operation("wrong_layer", &kind, Vec::new()));
         }
-    }
+        terrain.entry_rule != TerrainEntryRule::Walkable
+    };
     let mut changed = false;
     for GridPos { x, y } in cells {
+        // 只略過會讓單位無法站立的格子，其他筆刷覆蓋格仍正常套用。
+        if blocks_units {
+            let mut occupied = false;
+            for unit in &map.units {
+                let unit_type = definitions
+                    .unit_types
+                    .iter()
+                    .find(|entry| entry.id == unit.unit_type)
+                    .ok_or_else(|| crate::error::unknown_unit_type(&unit.unit_type))?;
+                let offset_x = i64::from(x) - i64::from(unit.x);
+                let offset_y = i64::from(y) - i64::from(unit.y);
+                if offset_x >= 0
+                    && offset_x < i64::from(unit_type.width)
+                    && offset_y >= 0
+                    && offset_y < i64::from(unit_type.height)
+                {
+                    occupied = true;
+                    break;
+                }
+            }
+            if occupied {
+                continue;
+            }
+        }
         let replaces = |terrain: &TerrainPlacement| {
             terrain.x == x
                 && terrain.y == y

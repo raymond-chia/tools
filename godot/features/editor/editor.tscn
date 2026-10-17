@@ -217,6 +217,8 @@ layout_mode = 2
 [node name="InspectedDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials"]
 visible = false
 layout_mode = 2
+autowrap_mode = 3
+fit_to_longest_item = false
 tooltip_text = "右鍵選取怪物後，修改最低出現難度"
 
 [node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials"]

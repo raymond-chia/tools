@@ -103,6 +103,15 @@ static func footprint_center(ground: TileMapLayer, unit: Dictionary) -> Vector2:
 	var last := ground.position + ground.map_to_local(Vector2i(last_cell.x, last_cell.y))
 	return (first + last) * 0.5
 
+# Overlay 使用獨立繪圖節點，讓地形外觀層級與地面、操作標記分開設定。
+static func create_terrain_overlay(parent: CanvasItem, ground: TileMapLayer, effects: Callable) -> Node2D:
+	var overlay := Node2D.new()
+	overlay.name = "TerrainOverlay"
+	overlay.z_index = BattleConfig.OVERLAY_Z_INDEX
+	overlay.draw.connect(func(): draw_terrain_effects(overlay, ground, effects.call()))
+	parent.add_child(overlay)
+	return overlay
+
 static func draw_terrain_effects(canvas: CanvasItem, ground: TileMapLayer, effects: Array) -> void:
 	for effect in effects:
 		var center := ground.position + ground.map_to_local(Vector2i(effect.x, effect.y))

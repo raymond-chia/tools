@@ -29,7 +29,10 @@ var drag_visual_offset := Vector2.ZERO
 var dragged_unit := 0
 var drag_offset := Vector2i.ZERO
 
+var terrain_overlay: Node2D
+
 func _ready() -> void:
+	terrain_overlay = BattleVisuals.create_terrain_overlay(self, ground, func(): return snapshot.get("terrain_effects", []))
 	ground.z_index = BattleConfig.GROUND_Z_INDEX
 	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
 	mouse_exited.connect(func():
@@ -159,7 +162,7 @@ func marker(cell: Vector2i, fill: Color, edge: Color) -> void:
 func _draw() -> void:
 	if map_data.is_empty(): return
 	BattleVisuals.draw_movement_range(self, ground, snapshot.get("inspected_reachable", []), snapshot.get("inspected_second_reachable", []), true)
-	BattleVisuals.draw_terrain_effects(self, ground, snapshot.get("terrain_effects", []))
+	terrain_overlay.queue_redraw()
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))
