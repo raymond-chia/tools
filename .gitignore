@@ -1,7 +1,7 @@
 /target/
 /ignore-tmp/
 /godot/.godot/
-/godot/data-private/
+/godot/data/
 /godot/bin/*.dll
 /godot/bin/*.so
 /godot/bin/*.dylib

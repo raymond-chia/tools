@@ -15,7 +15,7 @@ func test_battle_uses_selected_difficulty() -> void:
 		ids.sort()
 		assert_array(ids).is_equal(test_case.ids)
 
-# 驗證難度子選單的單選標記與主選單文字，保存後僅於新遊戲套用。
+# 驗證難度選單保存設定後，真實遊戲入口以測試目錄組合相對地圖路徑並套用難度。
 func test_game_reads_difficulty_setting() -> void:
 	var battle = auto_free(create_battle(DATA + "definitions.toml", DATA + "maps/prelude.toml"))
 	var runner := battle_scene_runner(battle)
@@ -34,6 +34,7 @@ func test_game_reads_difficulty_setting() -> void:
 		assert_str(battle.difficulty).is_equal("easy")
 		var game = auto_free(GAME_SCENE.instantiate())
 		game.data_dir = DATA
+		game.map_path = "maps/prelude.toml"
 		var next_battle = auto_free(game.create_battle())
 		assert_str(next_battle.difficulty).is_equal(test_case.difficulty)
 
