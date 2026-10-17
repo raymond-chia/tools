@@ -1,7 +1,7 @@
 //! 原始資料格式，供編輯器與正式遊戲載入文件時使用。
-//! 驗證與建局準備集中於 validation；本檔宣告的格式不作為戰鬥運行時資料。
+//! 驗證與建局準備集中於 validation；單位與地形配置會轉成執行期資料，勝敗條件組則由核心直接使用。
 pub(crate) mod validation;
-use super::{SkillDef, Team, TerrainPlacement, TerrainTypeDef};
+use super::{GridPos, SkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
 use crate::model::default_one;
 use serde::{Deserialize, Serialize};
@@ -94,6 +94,10 @@ pub enum DistancePreference {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Map {
+    pub victory: OutcomeGroup,
+    pub defeat: OutcomeGroup,
+    #[serde(default)]
+    pub cargo: Option<CargoObjective>,
     #[serde(default)]
     pub name: String,
     #[serde(default = "default_one")]
@@ -104,6 +108,34 @@ pub struct Map {
     pub terrains: Vec<TerrainPlacement>,
     #[serde(default)]
     pub units: Vec<UnitPlacement>,
+}
+
+/// 勝敗各自指定條件組，條件本身不決定結果分類。
+#[derive(Clone, Deserialize, Serialize)]
+pub struct OutcomeGroup {
+    pub mode: ConditionMode,
+    pub conditions: Vec<OutcomeCondition>,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConditionMode {
+    All,
+    Any,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OutcomeCondition {
+    AllEnemiesDefeated,
+    AllPlayersDefeated,
+    CargoEscaped,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct CargoObjective {
+    pub positions: Vec<GridPos>,
+    pub exits: Vec<GridPos>,
 }
 
 /// 出現門檻依簡單、普通、困難排序；沒有隱含預設難度。
@@ -118,7 +150,6 @@ pub enum Difficulty {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitPlacement {
     pub id: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub min_difficulty: Option<Difficulty>,
     #[serde(default)]
     pub unit_type: String,

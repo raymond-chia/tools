@@ -45,6 +45,9 @@ impl Game {
         skill: SkillDef,
     ) -> Result<(), GameError> {
         let ae = self.skill_caster(actor)?;
+        if matches!(skill.effect, SkillEffect::Loot) {
+            return self.loot_cargo(ae, actor, position, &skill);
+        }
         if target_kind(&skill.effect) == SkillTargetKind::Cell {
             return self.use_cell_skill(ae, actor, position, skill);
         }
@@ -611,7 +614,7 @@ pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
     match effect {
         SkillEffect::Attack { .. } | SkillEffect::Push { .. } => SkillTargetKind::Enemy,
         SkillEffect::Heal { .. } => SkillTargetKind::Ally,
-        SkillEffect::Mire { .. } => SkillTargetKind::Cell,
+        SkillEffect::Mire { .. } | SkillEffect::Loot => SkillTargetKind::Cell,
         SkillEffect::Flanking { .. } => SkillTargetKind::Passive,
     }
 }
@@ -716,7 +719,7 @@ fn validate_unit_skill_target_from_position(
         SkillEffect::Heal { power_bonus } => UnitSkillEffect::Heal {
             power_bonus: *power_bonus,
         },
-        SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } => {
+        SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } | SkillEffect::Loot => {
             return Err(error::unit_cannot_use_skill());
         }
     };
@@ -1132,7 +1135,19 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
             SkillRangeView {
                 id: id.clone(),
                 details: skill_details(skill, board),
-                usable: can_use_skill(w.resource::<Turn>()),
+                usable: can_use_skill(w.resource::<Turn>())
+                    && (!matches!(effect, SkillEffect::Loot)
+                        || w.get_resource::<crate::model::Cargo>()
+                            .is_some_and(|cargo| {
+                                cargo.items.iter().any(|item| match item {
+                                    crate::model::CargoState::Ground(target) => {
+                                        crate::cargo::validate_loot(w, e, position, *target, skill)
+                                            .is_ok()
+                                    }
+                                    crate::model::CargoState::Carried(_)
+                                    | crate::model::CargoState::Escaped => false,
+                                })
+                            })),
                 cells,
             }
         })
@@ -1175,6 +1190,7 @@ fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
             },
         ),
         SkillEffect::Heal { power_bonus } => (None, Some(*power_bonus), SkillDetailEffect::Heal),
+        SkillEffect::Loot => (None, None, SkillDetailEffect::Loot),
         SkillEffect::Flanking { .. } => unreachable!("被動技能不建立主動技能範圍"),
     };
     SkillDetailsView {

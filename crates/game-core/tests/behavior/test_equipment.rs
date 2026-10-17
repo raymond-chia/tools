@@ -1,4 +1,4 @@
-use super::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, ascii_map};
+use super::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, ascii_map, end_turn_and_continue};
 use authoring::{Definitions, Map, UnitType};
 #[cfg(feature = "editor")]
 use game_core::editor;
@@ -887,10 +887,7 @@ fn advance_to(game: &mut Game, id: i64) {
         if snapshot.turn.actor == Some(id) {
             return;
         }
-        let actor = snapshot.turn.actor.expect("應有當前單位");
-        game.command(Command::EndTurn { actor })
-            .expect("應可結束準備回合");
-        game.command(Command::Continue).expect("應可推進準備回合");
+        end_turn_and_continue(game);
     }
     assert_eq!(
         game.snapshot(None).turn.actor,

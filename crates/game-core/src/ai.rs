@@ -3,8 +3,9 @@ use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
-    AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos, SkillDef, SkillEffect,
-    SkillPreview, SkillTargetKind, Skills, TemporaryTerrains, Turn, Unit,
+    AiProfiles, AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos,
+    PreviousAttackTarget, SkillDef, SkillEffect, SkillPreview, SkillTargetKind, Skills,
+    TemporaryTerrains, Turn, Unit,
 };
 use crate::movement::{
     MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
@@ -15,13 +16,8 @@ use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
 };
 use crate::terrain::{footprint_on_impassable, terrain_ends_movement, terrain_type, terrains_at};
-use bevy_ecs::prelude::{Component, Entity, Resource, World};
+use bevy_ecs::prelude::{Entity, World};
 use std::collections::HashMap;
-
-#[derive(Resource)]
-pub(crate) struct AiProfiles {
-    by_unit_type: HashMap<String, AiProfile>,
-}
 
 /// 只在作者輸入邊界解析引用與驗證設定，執行期直接使用已解析的傾向。
 pub(crate) fn resolve_profiles(
@@ -56,10 +52,6 @@ struct SkillPlan {
     target_id: i64,
     utility: f64,
 }
-
-/// 僅記錄上一個 AI 回合實際攻擊的目標，站位仍逐回合重新評估。
-#[derive(Component)]
-struct PreviousAttackTarget(i64);
 
 impl Game {
     pub(crate) fn run_ai_turn(&mut self) -> Result<(), GameError> {
@@ -555,7 +547,7 @@ fn relevant_positioning_skill(profile: &AiProfile, skill: &SkillDef, healing: bo
             !healing && profile.damage_weight > 0
         }
         SkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
-        SkillEffect::Flanking { .. } => false,
+        SkillEffect::Flanking { .. } | SkillEffect::Loot => false,
     }
 }
 

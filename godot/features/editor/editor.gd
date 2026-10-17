@@ -238,7 +238,11 @@ func submit_map() -> void:
 		map_data = map_data.duplicate(true)
 		map_data.name += " 副本"
 	else:
-		map_data = {"name": filename, "width": 10, "height": 8, "terrains": [], "units": []}
+		map_data = {
+			"name": filename, "width": 10, "height": 8, "terrains": [], "units": [],
+			"victory": {"mode": "all", "conditions": [{"type": "all_enemies_defeated"}]},
+			"defeat": {"mode": "any", "conditions": [{"type": "all_players_defeated"}]},
+		}
 	map_file = path
 	map_view.camera_initialized = false
 	history.reset(document_state())
@@ -555,7 +559,7 @@ func edit_cell(cell: Vector2i) -> void:
 		while map_data.units.any(func(u: Dictionary): return u.id == id):
 			id += 1
 		var team: Variant = "player" if team_list.selected == 0 else {"enemy": faction_field.text.strip_edges()}
-		var placement := {"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y}
+		var placement := {"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y,"min_difficulty":null}
 		if team_list.selected != 0:
 			placement.min_difficulty = placement_difficulty.get_selected_metadata()
 		map_data.units.append(placement)
@@ -699,14 +703,15 @@ func change_terrain_effect(id: String, terrain: String) -> void:
 	for page in definition_pages:
 		if page.category == "skills": page.finish_effect_change()
 
-# 直接呈現作者設定，不從戰鬥快照重建難度規則。
+# 呈現作者設定；未設定的玩家以簡單顯示，不改寫資料。
 func refresh_inspected_difficulty() -> void:
 	inspected_difficulty.visible = false
 	for unit in map_data.get("units", []):
-		if unit.id != map_view.inspected_unit or not unit.has("min_difficulty"): continue
+		if unit.id != map_view.inspected_unit: continue
 		inspected_difficulty.visible = true
+		var displayed_difficulty: String = "easy" if unit.min_difficulty == null else unit.min_difficulty
 		for index in range(1, inspected_difficulty.item_count):
-			if inspected_difficulty.get_item_metadata(index) == unit.min_difficulty:
+			if inspected_difficulty.get_item_metadata(index) == displayed_difficulty:
 				inspected_difficulty.select(index)
 				return
 

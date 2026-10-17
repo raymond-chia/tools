@@ -474,6 +474,7 @@ impl Game {
         result
     }
     pub(crate) fn remove_unit(&mut self, entity: Entity, id: i64) {
+        self.drop_cargo(entity, id);
         self.world.resource_mut::<Exploration>().turns.remove(&id);
         let is_actor = self.world.resource::<Turn>().actor == Some(id);
         let Encounter {
@@ -598,23 +599,37 @@ impl Game {
             .map(|e| e.id())
     }
     fn outcome(&mut self) {
-        let mut p = false;
-        let mut e = false;
-        for q in self.world.iter_entities() {
-            if let Some(f) = q.get::<Unit>() {
-                match &f.team {
-                    Team::Player => p = true,
-                    Team::Enemy(_) => e = true,
-                }
+        use authoring::{ConditionMode, OutcomeCondition, OutcomeGroup};
+        let crate::model::OutcomeRules { victory, defeat } =
+            self.world.resource::<crate::model::OutcomeRules>();
+        let matches = |OutcomeGroup { mode, conditions }: &OutcomeGroup| {
+            let evaluate = |condition: &OutcomeCondition| match condition {
+                OutcomeCondition::AllPlayersDefeated => !self
+                    .world
+                    .iter_entities()
+                    .any(|e| e.get::<Unit>().is_some_and(|u| u.team == Team::Player)),
+                OutcomeCondition::AllEnemiesDefeated => !self.world.iter_entities().any(|e| {
+                    e.get::<Unit>()
+                        .is_some_and(|u| matches!(u.team, Team::Enemy(_)))
+                }),
+                OutcomeCondition::CargoEscaped => self
+                    .world
+                    .get_resource::<crate::model::Cargo>()
+                    .is_some_and(|cargo| cargo.items.contains(&crate::model::CargoState::Escaped)),
+            };
+            match mode {
+                ConditionMode::All => conditions.iter().all(evaluate),
+                ConditionMode::Any => conditions.iter().any(evaluate),
             }
-        }
-        self.world.resource_mut::<ResultState>().0 = if !p {
+        };
+        let outcome = if matches(defeat) {
             Outcome::Defeat
-        } else if !e {
+        } else if matches(victory) {
             Outcome::Victory
         } else {
             Outcome::Ongoing
-        }
+        };
+        self.world.resource_mut::<ResultState>().0 = outcome;
     }
     /// 唯讀顯示查詢；事件只由 command 回傳，查看單位不儲存在核心。
     pub fn snapshot(&self, inspected_actor: Option<i64>) -> Snapshot {
@@ -651,6 +666,14 @@ impl Game {
                 ))
             })
             .map(|(entity, i, p, fp, h, f)| UnitView {
+                carrying_cargo: self
+                    .world
+                    .get_resource::<crate::model::Cargo>()
+                    .is_some_and(|cargo| {
+                        cargo
+                            .items
+                            .contains(&crate::model::CargoState::Carried(i.0))
+                    }),
                 id: i.0,
                 unit_type: f.unit_type.clone(),
                 visual: f.visual.clone(),
@@ -823,6 +846,16 @@ impl Game {
             })
             .collect();
         Snapshot {
+            cargo: self
+                .world
+                .get_resource::<crate::model::Cargo>()
+                .map(|cargo| {
+                    let crate::model::Cargo { items, exits } = cargo;
+                    crate::model::CargoView {
+                        items: items.clone(),
+                        exits: exits.clone(),
+                    }
+                }),
             width: *width,
             height: *height,
             terrain_effects: {

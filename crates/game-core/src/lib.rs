@@ -3,6 +3,7 @@
 
 mod ai;
 pub mod authoring;
+mod cargo;
 #[cfg(feature = "editor")]
 pub mod editor;
 mod equipment;
@@ -24,12 +25,13 @@ use bevy_ecs::prelude::{Entity, World};
 pub use error::GameError;
 pub use game::Game;
 pub use model::{
-    AttackPreview, AttackResult, BattleMode, CollisionUnitLog, CombatLogEvent, Command,
-    EquipmentView, GridPos, HealingPreview, HealthSegmentsView, InitiativeRollLog, MovePreview,
-    MovementTransition, Outcome, PassiveSkillView, Phase, PowerSource, RollDegree, SkillDef,
-    SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview, SkillRangeView,
-    SkillTargetKind, Snapshot, Team, TerrainCellView, TerrainDescriptionView, TerrainEffectView,
-    TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef, TurnView, UnitView,
+    AttackPreview, AttackResult, BattleMode, CargoState, CargoView, CollisionUnitLog,
+    CombatLogEvent, Command, EquipmentView, GridPos, HealingPreview, HealthSegmentsView,
+    InitiativeRollLog, MovePreview, MovementTransition, Outcome, PassiveSkillView, Phase,
+    PowerSource, RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect,
+    SkillPreview, SkillRangeView, SkillTargetKind, Snapshot, Team, TerrainCellView,
+    TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainLayer, TerrainPlacement,
+    TerrainTypeDef, TurnView, UnitView,
 };
 #[cfg(test)]
 use model::{Board, Footprint, Hp, Pos, Skills, TemporaryTerrains, Turn, Unit};

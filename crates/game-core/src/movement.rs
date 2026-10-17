@@ -121,6 +121,9 @@ impl Game {
         if self.world.get_entity(e).is_err() {
             return Ok(());
         }
+        if self.escape_with_cargo(e, a) {
+            return Ok(());
+        }
         self.activate_enemies_near(&[e]);
         let Turn {
             actor: _,

@@ -1,4 +1,6 @@
-use super::support::{ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, skill_test_data, unit};
+use super::support::{
+    ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, marked_cell, skill_test_data, unit,
+};
 use game_core::{
     Command, Game, GridPos, MovePreview, Phase, SkillEffect, Team, TerrainEntryRule, TerrainLayer,
     TerrainTypeDef,
@@ -90,21 +92,14 @@ fn large_unit_movement_damages_existing_terrain_coverage() {
         AA..
         AA..
     ";
-    let AsciiBoard {
-        board: destination_board,
-        markers: destination_markers,
-        terrains: _,
-    } = ascii_board(
+    let destination_layout = ascii_board(
         "
         .T..
         ....
     ",
     );
-    let (next, _) = *destination_markers.get(&'T').expect("落點圖應包含 T");
-    let next = GridPos {
-        x: next.0,
-        y: next.1,
-    };
+    let destination_board = destination_layout.board;
+    let next = marked_cell(&destination_layout, 'T');
     for (name, terrain_diagram) in [
         (
             "左上角所在列",
@@ -121,11 +116,13 @@ fn large_unit_movement_damages_existing_terrain_coverage() {
         ",
         ),
     ] {
+        let unit_layout = ascii_board(units);
+        let start = marked_cell(&unit_layout, 'A');
         let AsciiBoard {
             board: unit_board,
             markers,
             terrains: _,
-        } = ascii_board(units);
+        } = unit_layout;
         let AsciiBoard {
             board,
             markers: _,
@@ -133,11 +130,6 @@ fn large_unit_movement_damages_existing_terrain_coverage() {
         } = ascii_board(terrain_diagram);
         assert_eq!(unit_board, board, "單位圖與地形圖尺寸應相同");
         assert_eq!(unit_board, destination_board, "單位圖與落點圖尺寸應相同");
-        let (start, _) = *markers.get(&'A').expect("單位圖應包含 A");
-        let start = GridPos {
-            x: start.0,
-            y: start.1,
-        };
         let mut game = movement_game(
             4,
             &AsciiBoard {
@@ -239,39 +231,21 @@ fn second_movement_segment_starts_after_first_is_exhausted() {
 }
 
 fn movement_preview_game(movement: u32) -> (Game, GridPos, GridPos, GridPos) {
-    let AsciiBoard {
-        board,
-        markers,
-        terrains,
-    } = ascii_board(
+    let layout = ascii_board(
         "
         ...
         A^T
         ...
     ",
     );
-    let (start, _) = *markers.get(&'A').expect("棋盤應包含玩家");
-    let (target, _) = *markers.get(&'T').expect("棋盤應包含目的地");
-    let actor_position = GridPos {
-        x: start.0,
-        y: start.1,
-    };
-    let destination = GridPos {
-        x: target.0,
-        y: target.1,
-    };
+    let actor_position = marked_cell(&layout, 'A');
+    let destination = marked_cell(&layout, 'T');
     // 尖刺位置取自棋盤的 `^`，地形欄位不公開，透過公開序列化格式讀取。
-    let spikes: GridPos =
-        serde_json::from_value(serde_json::to_value(&terrains[0]).expect("地形配置應可序列化"))
-            .expect("地形配置應含座標");
-    let game = movement_game(
-        movement,
-        &AsciiBoard {
-            board,
-            markers,
-            terrains,
-        },
-    );
+    let spikes: GridPos = serde_json::from_value(
+        serde_json::to_value(&layout.terrains[0]).expect("地形配置應可序列化"),
+    )
+    .expect("地形配置應含座標");
+    let game = movement_game(movement, &layout);
     (game, actor_position, spikes, destination)
 }
 
@@ -309,7 +283,7 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
         }))
         .expect("測試地形資料應可載入"),
     );
-    let ((x, y), _) = markers[&'A'];
+    let GridPos { x, y } = marked_cell(layout, 'A');
     map.width = board.0 + 1;
     map.height = board.1;
     map.terrains = terrains.clone();

@@ -1207,3 +1207,10 @@ y = 3
 
 [units.team]
 enemy = "wild_animals"
+
+[victory]
+mode = "all"
+conditions = [{ type = "all_enemies_defeated" }]
+[defeat]
+mode = "any"
+conditions = [{ type = "all_players_defeated" }]

@@ -31,3 +31,10 @@ x = 3
 y = 0
 [units.team]
 enemy = "test_enemy"
+
+[victory]
+mode = "all"
+conditions = [{ type = "all_enemies_defeated" }]
+[defeat]
+mode = "any"
+conditions = [{ type = "all_players_defeated" }]

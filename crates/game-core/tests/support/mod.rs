@@ -1,6 +1,6 @@
 use game_core::{
-    Game, PowerSource, SkillDef, SkillEffect, Team, TerrainEntryRule, TerrainLayer,
-    TerrainPlacement, TerrainTypeDef, UnitView, authoring,
+    Command, Game, GridPos, Phase, PowerSource, SkillDef, SkillEffect, Snapshot, Team,
+    TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef, UnitView, authoring,
 };
 use std::collections::HashMap;
 
@@ -127,6 +127,25 @@ pub(super) struct AsciiBoard {
     pub terrains: Vec<TerrainPlacement>,
 }
 
+// 從棋盤符號取得左上角座標，單格目的地與多格單位共用同一入口。
+pub(super) fn marked_cell(layout: &AsciiBoard, marker: char) -> GridPos {
+    let ((x, y), _) = layout.markers.get(&marker).expect("棋盤應包含指定符號");
+    GridPos { x: *x, y: *y }
+}
+
+// 結束目前行動並推進一次；已結束的回合只推進，不執行 AI。
+pub(super) fn end_turn_and_continue(game: &mut Game) -> Snapshot {
+    let snapshot = game.snapshot(None);
+    if snapshot.turn.phase != Phase::Ended {
+        game.command(Command::EndTurn {
+            actor: snapshot.turn.actor.expect("進行中的戰鬥應有行動者"),
+        })
+        .expect("目前單位應可結束回合");
+    }
+    game.command(Command::Continue)
+        .expect("結束回合後應可推進戰鬥")
+}
+
 // 共用 ASCII 棋盤：大寫字母標示單位或目的地，同字母填滿矩形表示佔用範圍；# 牆、^ 尖刺、~ 粗糙地面、. 空地。
 pub(super) fn ascii_board(diagram: &str) -> AsciiBoard {
     let rows: Vec<_> = diagram.trim().lines().map(str::trim).collect();
@@ -238,6 +257,15 @@ pub(super) fn map_from_ascii_board(
         })
         .collect();
     authoring::Map {
+        victory: authoring::OutcomeGroup {
+            mode: authoring::ConditionMode::All,
+            conditions: vec![authoring::OutcomeCondition::AllEnemiesDefeated],
+        },
+        defeat: authoring::OutcomeGroup {
+            mode: authoring::ConditionMode::Any,
+            conditions: vec![authoring::OutcomeCondition::AllPlayersDefeated],
+        },
+        cargo: None,
         name: name.into(),
         width: board.0,
         height: board.1,

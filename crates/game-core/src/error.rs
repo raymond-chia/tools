@@ -350,3 +350,19 @@ pub(crate) fn missing_enemy_difficulty(id: i64) -> GameError {
         format!("敵方單位 {id} 必須設定最低出現難度"),
     )
 }
+
+pub(crate) fn invalid_outcome_conditions() -> GameError {
+    GameError::new("invalid_outcome_conditions", "勝敗條件組不可為空".into())
+}
+pub(crate) fn invalid_cargo_objective() -> GameError {
+    GameError::new(
+        "invalid_cargo_objective",
+        "貨物目標需有地圖內的貨物位置與邊界撤離格".into(),
+    )
+}
+pub(crate) fn cannot_loot() -> GameError {
+    GameError::new(
+        "cannot_loot",
+        "必須由尚未攜貨的敵方單位掠奪仍有貨物的位置".into(),
+    )
+}

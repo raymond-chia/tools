@@ -1,0 +1,55 @@
+# 貨物防守專用資料：先攻固定錯開，攻擊必定命中且一次擊倒。
+[[ai_profiles]]
+id = "guard"
+distance_preference = "near"
+
+[[terrain_types]]
+id = "plain"
+layer = "ground"
+entry_rule = "walkable"
+
+[[skills]]
+id = "strike"
+power_source = "physical"
+ranged = false
+min_range = 1
+max_range = 1
+effect = "attack"
+hit_bonus = 100
+power_bonus = 1000
+
+# 掠奪沿用普通技能入口與行動限制，目標為相鄰貨物位置。
+[[skills]]
+id = "loot"
+power_source = "physical"
+ranged = false
+min_range = 1
+max_range = 1
+effect = "loot"
+
+[[unit_types]]
+id = "guard"
+ai_profile = "guard"
+visual = "test.svg"
+hp = 10
+movement = 5
+initiative = 0
+skills = ["strike"]
+
+[[unit_types]]
+id = "raider"
+ai_profile = "guard"
+visual = "test.svg"
+hp = 10
+movement = 5
+initiative = 100
+skills = ["strike", "loot"]
+
+[[unit_types]]
+id = "second_raider"
+ai_profile = "guard"
+visual = "test.svg"
+hp = 10
+movement = 5
+initiative = 50
+skills = ["strike", "loot"]

@@ -3,7 +3,7 @@ use game_core::*;
 
 const AI_DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
 
-// 驗證載入時拒絕沒有技能的敵方單位，空技能清單不會自動取得所有技能。
+// 驗證明確設定勝敗的地圖仍拒絕無技能敵方，空技能清單不會自動取得所有技能。
 #[test]
 fn enemy_without_skill_rejected_on_load() {
     let definitions = authoring::Definitions {
@@ -46,6 +46,15 @@ fn enemy_without_skill_rejected_on_load() {
         }],
     };
     let map = authoring::Map {
+        victory: authoring::OutcomeGroup {
+            mode: authoring::ConditionMode::All,
+            conditions: vec![authoring::OutcomeCondition::AllEnemiesDefeated],
+        },
+        defeat: authoring::OutcomeGroup {
+            mode: authoring::ConditionMode::Any,
+            conditions: vec![authoring::OutcomeCondition::AllPlayersDefeated],
+        },
+        cargo: None,
         name: "test_map".into(),
         width: 2,
         height: 1,
@@ -88,7 +97,7 @@ fn shared_profiles_survive_authoring_conversion() {
     }
 }
 
-// 驗證怪物最低出現難度為必填，玩家不需填寫，未知難度也會拒絕。
+// 驗證明確設定勝敗的地圖要求怪物最低出現難度，玩家免填，未知難度拒絕。
 #[test]
 fn enemy_difficulty_is_required_at_authoring_boundary() {
     for (team, setting, accepted) in [
@@ -108,6 +117,7 @@ fn enemy_difficulty_is_required_at_authoring_boundary() {
         let source = format!(
             "name = \"difficulty_test\"\nwidth = 1\nheight = 1\n[[units]]\nid = 1\nunit_type = \"tank\"\nx = 0\ny = 0\n{setting}\n{team}"
         );
+        let source = format!("{source}{OUTCOME_SETTINGS}");
         assert_eq!(
             authoring::map_to_json(&source).is_ok(),
             accepted,
@@ -121,13 +131,14 @@ fn enemy_difficulty_is_required_at_authoring_boundary() {
     }
 }
 
-// 驗證 TOML 轉換保留怪物的最低出現難度，不靜默忽略作者設定。
+// 驗證含明確勝敗設定的 TOML 轉換保留怪物最低出現難度。
 #[test]
 fn enemy_difficulty_survives_map_conversion() {
     for difficulty in ["easy", "normal", "hard"] {
         let source = format!(
             "name = \"difficulty_test\"\n[[units]]\nid = 2\nunit_type = \"tank\"\nmin_difficulty = \"{difficulty}\"\n[units.team]\nenemy = \"test_enemy\""
         );
+        let source = format!("{source}{OUTCOME_SETTINGS}");
         let json = authoring::map_to_json(&source).expect("明確設定難度的地圖應可轉換");
         let actual: serde_json::Value = serde_json::from_str(&json).expect("轉換結果應為 JSON");
         assert_eq!(actual["units"][0]["min_difficulty"], difficulty);
@@ -161,11 +172,11 @@ fn editor_saving_preserves_required_enemy_difficulty() {
     );
 }
 
-// 驗證開局依最低出現難度篩選怪物，玩家在所有難度保留。
+// 驗證作者地圖轉為 TOML 後，開局依最低出現難度篩選怪物，玩家在所有難度保留。
 #[test]
 fn selected_difficulty_filters_enemy_placements() {
     let map = difficulty_map();
-    let map: toml::Value = serde_json::from_value(map).expect("測試地圖應可轉 TOML");
+    let map: authoring::Map = serde_json::from_value(map).expect("測試地圖應符合作者格式");
     let map = toml::to_string(&map).expect("測試地圖應可序列化");
     for (difficulty, expected) in [
         ("easy", vec![1, 2]),
@@ -207,3 +218,13 @@ fn difficulty_map() -> serde_json::Value {
     }
     map
 }
+
+// 作者格式案例明確提供殲滅戰勝敗設定。
+const OUTCOME_SETTINGS: &str = r#"
+[victory]
+mode = "all"
+conditions = [{ type = "all_enemies_defeated" }]
+[defeat]
+mode = "any"
+conditions = [{ type = "all_players_defeated" }]
+"#;

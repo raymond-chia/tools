@@ -1,5 +1,6 @@
 use super::support::{
-    ACTOR_ID, AsciiBoard, TARGET_ID, TEST_SKILL_ID, ascii_board, sight_game_in_range, unit,
+    ACTOR_ID, TARGET_ID, TEST_SKILL_ID, ascii_board, end_turn_and_continue, marked_cell,
+    sight_game_in_range, unit,
 };
 use game_core::{Command, Game, GridPos, Phase, SkillEffect, Team};
 
@@ -169,16 +170,6 @@ fn skill_range_and_sight_require_the_same_origin_cell() {
     }
 }
 
-fn marked_cell(diagram: &str, marker: char) -> GridPos {
-    let AsciiBoard {
-        board: _,
-        markers,
-        terrains: _,
-    } = ascii_board(diagram);
-    let ((x, y), _) = markers[&marker];
-    GridPos { x, y }
-}
-
 // 驗證公開土牆命令施放後當輪不能再用技能，之後後方格移出技能範圍、牆格仍可瞄準，到期後恢復範圍。
 #[test]
 fn temporary_terrain_blocks_sight_until_removed() {
@@ -192,8 +183,9 @@ fn temporary_terrain_blocks_sight_until_removed() {
         Team::Enemy("test_enemy".into()),
     );
     game.command(Command::Start).expect("戰鬥應可開始");
-    let middle = marked_cell(diagram, 'X');
-    let target = marked_cell(diagram, 'T');
+    let layout = ascii_board(diagram);
+    let middle = marked_cell(&layout, 'X');
+    let target = marked_cell(&layout, 'T');
     game.command(Command::Skill {
         actor: ACTOR_ID,
         x: middle.x,
@@ -223,11 +215,7 @@ fn temporary_terrain_blocks_sight_until_removed() {
     }
     for (round, target_visible) in [(2, false), (3, true)] {
         for _ in 0..2 {
-            let actor = game.snapshot(None).turn.actor.expect("應有當前單位");
-            game.command(Command::EndTurn { actor })
-                .expect("當前單位應可結束回合");
-            game.command(Command::Continue)
-                .expect("結束回合後應可推進戰鬥");
+            end_turn_and_continue(&mut game);
         }
         let snapshot = game.snapshot(None);
         assert_eq!(snapshot.round, round);

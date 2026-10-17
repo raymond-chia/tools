@@ -20,6 +20,9 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
         height,
         terrains,
         units,
+        victory,
+        defeat,
+        cargo,
     } = map;
     if name.trim().is_empty() {
         return Err(error::empty_map_name());
@@ -30,6 +33,31 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
         || width.checked_add(*height).is_none()
     {
         return Err(error::invalid_map_dimensions());
+    }
+    for group in [victory, defeat] {
+        if group.conditions.is_empty() {
+            return Err(error::invalid_outcome_conditions());
+        }
+        if cargo.is_none()
+            && group
+                .conditions
+                .iter()
+                .any(|condition| matches!(condition, authoring::OutcomeCondition::CargoEscaped))
+        {
+            return Err(error::invalid_cargo_objective());
+        }
+    }
+    if let Some(authoring::CargoObjective { positions, exits }) = cargo {
+        let inside = |p: crate::GridPos| p.x >= 0 && p.y >= 0 && p.x < *width && p.y < *height;
+        if positions.is_empty()
+            || positions.iter().any(|position| !inside(*position))
+            || exits.is_empty()
+            || exits.iter().any(|p| {
+                !inside(*p) || (p.x != 0 && p.y != 0 && p.x != *width - 1 && p.y != *height - 1)
+            })
+        {
+            return Err(error::invalid_cargo_objective());
+        }
     }
     let mut used_ids = HashSet::new();
     for unit in units {
@@ -77,6 +105,9 @@ pub(crate) fn load_world(
         height,
         terrains: terrain_placements,
         units: placements,
+        victory,
+        defeat,
+        cargo,
     } = map;
     let mut terrains = HashMap::new();
     for terrain in terrain_types {
@@ -220,6 +251,16 @@ pub(crate) fn load_world(
         terrains,
         terrain_types,
     });
+    w.insert_resource(crate::model::OutcomeRules { victory, defeat });
+    if let Some(authoring::CargoObjective { positions, exits }) = cargo {
+        w.insert_resource(crate::model::Cargo {
+            items: positions
+                .into_iter()
+                .map(crate::model::CargoState::Ground)
+                .collect(),
+            exits,
+        });
+    }
     w.insert_resource(ai_profiles);
     w.insert_resource(Encounter::default());
     w.insert_resource(Exploration {
@@ -397,7 +438,9 @@ fn validate_numeric_ranges(
                 } => (hit_bonus, Some(power_bonus)),
                 SkillEffect::Push { hit_bonus } => (hit_bonus, None),
                 SkillEffect::Heal { power_bonus } => (0, Some(power_bonus)),
-                SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } => continue,
+                SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } | SkillEffect::Loot => {
+                    continue;
+                }
             };
             let hit = i64::from(unit.hit) + i64::from(hit_bonus);
             let power = power_bonus.map_or(0, |bonus| {

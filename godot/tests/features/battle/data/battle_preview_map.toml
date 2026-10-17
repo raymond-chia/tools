@@ -24,3 +24,10 @@ min_difficulty = "easy"
 team={ enemy="ogres" }
 x=3
 y=1
+
+[victory]
+mode = "all"
+conditions = [{ type = "all_enemies_defeated" }]
+[defeat]
+mode = "any"
+conditions = [{ type = "all_players_defeated" }]

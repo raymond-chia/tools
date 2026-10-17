@@ -1,4 +1,5 @@
 //! 戰鬥資料格式、ECS 元件與輸出資料型別。
+use crate::authoring::AiProfile;
 use bevy_ecs::prelude::{Component, Resource};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -42,6 +43,10 @@ pub enum AttackResult {
 
 #[derive(Component)]
 pub(crate) struct Id(pub(crate) i64);
+
+/// 僅記錄上一個 AI 回合實際攻擊的目標，站位仍逐回合重新評估。
+#[derive(Component)]
+pub(crate) struct PreviousAttackTarget(pub(crate) i64);
 
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Pos(pub(crate) GridPos);
@@ -154,6 +159,11 @@ pub(crate) struct Skills {
     pub(crate) definitions: HashMap<String, SkillDef>,
 }
 
+#[derive(Resource)]
+pub(crate) struct AiProfiles {
+    pub(crate) by_unit_type: HashMap<String, AiProfile>,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct SkillDef {
     #[serde(default)]
@@ -172,6 +182,7 @@ pub struct SkillDef {
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum SkillEffect {
+    Loot,
     Attack {
         #[serde(default)]
         hit_bonus: i32,
@@ -275,6 +286,7 @@ pub enum Command {
 
 #[derive(Serialize)]
 pub struct Snapshot {
+    pub cargo: Option<CargoView>,
     pub width: i32,
     pub height: i32,
     pub terrain_effects: Vec<TerrainEffectView>,
@@ -426,6 +438,7 @@ pub enum SkillTargetKind {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SkillDetailEffect {
+    Loot,
     Attack,
     Push {
         distance: i32,
@@ -519,6 +532,7 @@ pub struct AttackPreview {
 
 #[derive(Serialize)]
 pub struct UnitView {
+    pub carrying_cargo: bool,
     pub id: i64,
     pub unit_type: String,
     pub visual: String,
@@ -628,4 +642,31 @@ where
         .entry("effect".to_owned())
         .or_insert_with(|| serde_json::Value::String("attack".to_owned()));
     serde_json::from_value(serde_json::Value::Object(fields)).map_err(serde::de::Error::custom)
+}
+
+/// 每份貨物只保存一個狀態，取貨、死亡與撤離直接轉換該狀態。
+#[derive(Resource)]
+pub(crate) struct Cargo {
+    pub(crate) items: Vec<CargoState>,
+    pub(crate) exits: Vec<GridPos>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CargoState {
+    Ground(GridPos),
+    Carried(i64),
+    Escaped,
+}
+
+#[derive(Resource)]
+pub(crate) struct OutcomeRules {
+    pub(crate) victory: crate::authoring::OutcomeGroup,
+    pub(crate) defeat: crate::authoring::OutcomeGroup,
+}
+
+#[derive(Serialize)]
+pub struct CargoView {
+    pub items: Vec<CargoState>,
+    pub exits: Vec<GridPos>,
 }
