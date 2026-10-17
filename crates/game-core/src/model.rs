@@ -558,6 +558,8 @@ pub struct UnitView {
 
 #[derive(Serialize)]
 pub struct TerrainEffectView {
+    /// 此 overlay 本身阻擋步行，外觀與單位共用世界物件排序。
+    pub blocks_movement: bool,
     pub x: i32,
     pub y: i32,
     pub effect: String,

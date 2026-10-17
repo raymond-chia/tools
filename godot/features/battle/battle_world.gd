@@ -9,7 +9,7 @@ signal combat_events_finished
 const UI_FONT := preload("res://assets/fonts/NotoSans.ttf")
 
 @onready var ground: TileMapLayer = $Ground
-@onready var units_layer: Node2D = $Units
+@onready var world_objects: Node2D = $WorldObjects
 @onready var camera: MapCamera = get_node("../Camera2D")
 var state: Dictionary = {}
 var pending_action := ""
@@ -34,11 +34,12 @@ var playback_speed := 1.0
 var presentation_tweens: Array[Tween] = []
 
 var terrain_overlay: Node2D
+var terrain_object_nodes := {}
 
 func _ready() -> void:
 	terrain_overlay = BattleVisuals.create_terrain_overlay(self, ground, func(): return [] if state.is_empty() else state.terrain_effects)
 	ground.z_index = BattleConfig.GROUND_Z_INDEX
-	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
+	world_objects.z_index = BattleConfig.WORLD_OBJECT_Z_INDEX
 
 # 集中管理戰鬥演出的倍率，包含已開始的動畫與等待。
 func set_playback_speed(speed: float) -> void:
@@ -76,6 +77,7 @@ func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_cor
 	inspected_cell = inspected
 	core = game_core
 	if not state.is_empty():
+		BattleVisuals.sync_terrain_objects(world_objects, ground, state.terrain_effects, terrain_object_nodes)
 		if new_snapshot:
 			queue_new_combat_events()
 		sync_unit_sprites()
@@ -149,7 +151,7 @@ func sync_unit_sprites() -> void:
 		var node: Node2D
 		var is_new := not unit_nodes.has(unit.id)
 		if is_new:
-			node = BattleVisuals.create_unit_node(unit.id, unit.visual, units_layer)
+			node = BattleVisuals.create_unit_node(unit.id, unit.visual, world_objects)
 			unit_nodes[unit.id] = node
 		else:
 			node = unit_nodes[unit.id]

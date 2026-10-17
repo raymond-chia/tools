@@ -4,8 +4,8 @@ use crate::model::{
     BattleMode, Board, CombatLogEvent, Command, Encounter, Exploration, Footprint, GridPos, Hp, Id,
     InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
     SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
-    TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainLayer, Turn,
-    TurnView, Unit, UnitView,
+    TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainEntryRule,
+    TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
 use crate::movement::{can_move, entity_distance, footprint_cells, movement_ranges, unit_at_cell};
 use crate::skill::{can_use_skill, effective_block, effective_dodge, skill_ranges, target_kind};
@@ -867,6 +867,8 @@ impl Game {
                         .filter(|kind| terrain_type(b, kind).layer == TerrainLayer::Overlay)
                     {
                         effects.push(TerrainEffectView {
+                            blocks_movement: terrain_type(b, kind).entry_rule
+                                != TerrainEntryRule::Walkable,
                             x: position.x,
                             y: position.y,
                             damage: terrain_damage(b, kind),
@@ -885,6 +887,8 @@ impl Game {
                             continue;
                         }
                         effects.push(TerrainEffectView {
+                            blocks_movement: terrain_type(b, kind).entry_rule
+                                != TerrainEntryRule::Walkable,
                             x: position.x,
                             y: position.y,
                             damage: terrain_damage(b, kind),

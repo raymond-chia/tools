@@ -134,7 +134,7 @@ script = ExtResource("3")
 
 [node name="Ground" type="TileMapLayer" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map"]
 
-[node name="Units" type="Node2D" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map"]
+[node name="WorldObjects" type="Node2D" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map"]
 y_sort_enabled = true
 
 [node name="Camera2D" type="Camera2D" parent="Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport"]

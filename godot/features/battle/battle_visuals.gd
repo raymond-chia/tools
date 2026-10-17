@@ -27,7 +27,7 @@ static func paint_ground(ground: TileMapLayer, terrain_cells: Array) -> void:
 		var atlas_cell: Vector2i = GROUND_TILES.get(terrain.ground_visual, GROUND_TILES.plain)
 		ground.set_cell(Vector2i(terrain.x, terrain.y), 0, atlas_cell)
 
-static func create_unit_node(unit_id: int, visual_name: String, units_layer: Node2D) -> Node2D:
+static func create_unit_node(unit_id: int, visual_name: String, world_objects: Node2D) -> Node2D:
 	var node := Node2D.new()
 	node.name = str(unit_id)
 	var visual := Node2D.new()
@@ -61,7 +61,7 @@ static func create_unit_node(unit_id: int, visual_name: String, units_layer: Nod
 		bar.color = Color("281e25") if bar_name == "Background" else Color("62d27c")
 		health.add_child(bar)
 	node.add_child(health)
-	units_layer.add_child(node)
+	world_objects.add_child(node)
 	return node
 
 static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: bool) -> void:
@@ -106,7 +106,7 @@ static func footprint_center(ground: TileMapLayer, unit: Dictionary) -> Vector2:
 	var last := ground.position + ground.map_to_local(Vector2i(last_cell.x, last_cell.y))
 	return (first + last) * 0.5
 
-# Overlay 使用獨立繪圖節點，讓地形外觀層級與地面、操作標記分開設定。
+# 可通行的 overlay 集中繪製，位於世界物件下方。
 static func create_terrain_overlay(parent: CanvasItem, ground: TileMapLayer, effects: Callable) -> Node2D:
 	var overlay := Node2D.new()
 	overlay.name = "TerrainOverlay"
@@ -117,8 +117,33 @@ static func create_terrain_overlay(parent: CanvasItem, ground: TileMapLayer, eff
 
 static func draw_terrain_effects(canvas: CanvasItem, ground: TileMapLayer, effects: Array) -> void:
 	for effect in effects:
+		if effect.blocks_movement:
+			continue
 		var center := ground.position + ground.map_to_local(Vector2i(effect.x, effect.y))
 		draw_terrain_effect(canvas, effect.visual, center)
+
+# 每個障礙物使用獨立節點，原點位於格子中心，與單位腳底共用 Y sorting。
+static func sync_terrain_objects(world_objects: Node2D, ground: TileMapLayer, effects: Array, nodes: Dictionary) -> void:
+	var active := {}
+	for effect in effects:
+		if not effect.blocks_movement:
+			continue
+		var key := "%s:%s:%s" % [effect.x, effect.y, effect.effect]
+		active[key] = true
+		if not nodes.has(key):
+			var node := Node2D.new()
+			var visual: String = effect.visual
+			node.draw.connect(func(): draw_terrain_effect(node, visual, Vector2.ZERO))
+			world_objects.add_child(node)
+			nodes[key] = node
+		var node: Node2D = nodes[key]
+		node.position = ground.position + ground.map_to_local(Vector2i(effect.x, effect.y))
+	for key in nodes.keys():
+		if not active.has(key):
+			var node: Node2D = nodes[key]
+			world_objects.remove_child(node)
+			node.queue_free()
+			nodes.erase(key)
 
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
 	match visual:

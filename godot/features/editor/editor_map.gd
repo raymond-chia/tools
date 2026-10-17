@@ -7,7 +7,7 @@ signal stroke_started()
 signal unit_dropped(id: int, cell: Vector2i)
 
 @onready var ground: TileMapLayer = $Ground
-@onready var units_layer: Node2D = $Units
+@onready var world_objects: Node2D = $WorldObjects
 @onready var camera: MapCamera = get_node("../Camera2D")
 
 var map_data: Dictionary = {}
@@ -30,11 +30,12 @@ var dragged_unit := 0
 var drag_offset := Vector2i.ZERO
 
 var terrain_overlay: Node2D
+var terrain_object_nodes := {}
 
 func _ready() -> void:
 	terrain_overlay = BattleVisuals.create_terrain_overlay(self, ground, func(): return snapshot.get("terrain_effects", []))
 	ground.z_index = BattleConfig.GROUND_Z_INDEX
-	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
+	world_objects.z_index = BattleConfig.WORLD_OBJECT_Z_INDEX
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
 		cell_hovered.emit(hovered)
@@ -54,17 +55,18 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 		BattleVisuals.setup_ground(ground, snapshot.get("terrain_cells", []))
 	else:
 		BattleVisuals.paint_ground(ground, snapshot.get("terrain_cells", []))
+	BattleVisuals.sync_terrain_objects(world_objects, ground, snapshot.get("terrain_effects", []), terrain_object_nodes)
 	camera.configure_board(self, ground, map_data.width, map_data.height)
 	if not camera_initialized:
 		camera.center_on_board()
 		camera_initialized = true
 	var units: Array = snapshot.get("units", [])
 	if ground_moved or units != presented_units:
+		for node in unit_nodes.values(): node.queue_free()
 		unit_nodes.clear()
-		for child in units_layer.get_children(): child.queue_free()
 		for unit in units:
 			var point := BattleVisuals.footprint_center(ground, unit)
-			var node := BattleVisuals.create_unit_node(unit.id, unit.visual, units_layer)
+			var node := BattleVisuals.create_unit_node(unit.id, unit.visual, world_objects)
 			unit_nodes[unit.id] = node
 			node.position = point
 		presented_units = units.duplicate(true)

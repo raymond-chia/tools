@@ -35,8 +35,8 @@ const UI_Z_INSPECTION := 10
 const UI_Z_TOOLTIP := 20
 const MENU_Z_INDEX := 30
 const GROUND_Z_INDEX := -10
-const OVERLAY_Z_INDEX := 1
-const UNITS_Z_INDEX := 1
+const OVERLAY_Z_INDEX := -9
+const WORLD_OBJECT_Z_INDEX := 1
 const HEALTH_BAR_Z_INDEX := 2
 
 # 目前行動單位的移動範圍填色與外框。
