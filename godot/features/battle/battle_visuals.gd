@@ -52,6 +52,9 @@ static func create_unit_node(unit_id: int, visual_name: String, units_layer: Nod
 	visual.add_child(body)
 	var health := Node2D.new()
 	health.name = "Health"
+	# 血條固定畫在場景物件上方，彼此仍沿用所屬單位的 Y 排序。
+	health.z_as_relative = false
+	health.z_index = BattleConfig.HEALTH_BAR_Z_INDEX
 	for bar_name in ["Background", "Fill"]:
 		var bar := Polygon2D.new()
 		bar.name = bar_name
