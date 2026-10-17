@@ -11,6 +11,7 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var mode_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Mode
 @onready var palette_tabs: TabContainer = $Layout/Pages/MapPage/Materials/PaletteTabs
 @onready var terrain_grids: Array[GridContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Tiles, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Tiles]
+@onready var brush_size: SpinBox = $Layout/Pages/MapPage/Materials/BrushSize
 @onready var brush_label: Label = $Layout/Pages/MapPage/Materials/Brush
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
 @onready var placement_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/MinimumDifficulty
@@ -75,6 +76,8 @@ func _ready() -> void:
 		page.remove_requested.connect(request_remove_definition)
 		page.remove_confirmed.connect(remove_definition)
 		page.input_error.connect(show_error)
+	map_view.cell_hovered.connect(func(_cell: Vector2i): refresh_brush_preview())
+	brush_size.value_changed.connect(func(_value: float): refresh_brush_preview())
 	map_view.cell_pressed.connect(edit_cell)
 	map_view.inspection_clicked.connect(inspect_unit)
 	map_view.stroke_started.connect(func(): stroke_id += 1)
@@ -475,6 +478,7 @@ func update_editing_mode() -> void:
 	update_brush_label()
 
 func update_brush_label() -> void:
+	refresh_brush_preview()
 	if editing_mode > 1:
 		brush_label.text = MODES[editing_mode]
 		return
@@ -496,6 +500,7 @@ func refresh_tools_visibility() -> void:
 	# 工具切換只更新介面狀態；資料修改的驗證與預覽由 validate_current 統一處理。
 	var mode := editing_mode
 	map_view.drag_paint = mode <= 1
+	brush_size.visible = mode <= 1
 	unit_list.visible = mode == 2
 	team_list.visible = mode == 2
 	faction_field.visible = mode == 2 and team_list.selected != 0
@@ -512,9 +517,21 @@ func refresh_existing_factions() -> void:
 	for faction in factions:
 		existing_factions.add_item(faction)
 
+# 預覽只繪製核心回傳的覆蓋格子，不在顯示層重算筆刷範圍。
+func refresh_brush_preview() -> void:
+	if editing_mode > 1 or map_data.is_empty() or map_view.hovered.x < 0:
+		map_view.present_brush([])
+		return
+	if editing_mode == 0 and terrain_brushes.ground.is_empty():
+		map_view.present_brush([])
+		return
+	var command := {"x": map_view.hovered.x, "y": map_view.hovered.y, "size": int(brush_size.value)}
+	var result := read_core_response(core.terrain_brush_cells_from_json(JSON.stringify(map_data), JSON.stringify(command)))
+	map_view.present_brush([] if result.is_empty() else result.cells)
+
 # 筆刷只傳遞作者選擇；圖層替換、清除與合法性由 Rust 決定。
 func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
-	var command := {"x": cell.x, "y": cell.y, "layer": layer, "kind": kind}
+	var command := {"x": cell.x, "y": cell.y, "layer": layer, "kind": kind, "size": int(brush_size.value)}
 	var result := read_core_response(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)))
 	if result.is_empty() or not result.changed: return
 	var previous := document_state()

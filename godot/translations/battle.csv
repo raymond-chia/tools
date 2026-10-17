@@ -33,11 +33,11 @@ COMBAT_LOG_ATTACK_RESULT,結果：%s%s,Result: %s%s
 COMBAT_LOG_BLOCK_DAMAGE,傷害：原始 %d − 格擋 %d = %d，HP %d/%d,Damage: raw %d − block %d = %d; HP %d/%d
 COMBAT_LOG_COLLISION_DAMAGE,"%s 被撞擊，受到 %d 點碰撞傷害，HP %d/%d","%s is struck and takes %d collision damage; HP %d/%d"
 COMBAT_LOG_CRITICAL_SUFFIX,，%s,", %s"
-COMBAT_LOG_DAMAGE_RESULT,結果：%s%s，%d 傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
-COMBAT_LOG_FLANKING_MODIFIER,包抄,Flanking
+COMBAT_LOG_DAMAGE_RESULT,結果：%s%s，%d 點傷害，HP %d/%d,"Result: %s%s, %d damage; HP %d/%d"
+COMBAT_LOG_FLANKING_MODIFIER,夾擊,Flanking
 COMBAT_LOG_HEAL_RESULT,結果：%s，回復 %d HP，HP %d/%d,"Result: %s, restores %d HP; HP %d/%d"
 COMBAT_LOG_HIDE,隱藏紀錄,Hide Log
-COMBAT_LOG_HIT,命中加值：%d%s%s = %d,Hit modifier: %d%s%s = %d
+COMBAT_LOG_HIT,基礎命中 %d%s%s = %d,Hit modifier: %d%s%s = %d
 COMBAT_LOG_HIT_ROLL,D%d 擲骰 %d + 命中加值 %d = 命中總值 %d,D%d roll %d + hit modifier %d = hit total %d
 COMBAT_LOG_INITIATIVE_ROLL,%s：D%d 擲骰 %d + 先攻加值 %d = 先攻總值 %d,%s: D%d roll %d + initiative %d = %d
 COMBAT_LOG_PUSH,%s 被沿攻擊方向推動 %d 格,%s is pushed %d tiles in the attack direction

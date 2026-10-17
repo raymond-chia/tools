@@ -94,6 +94,14 @@ impl TacticalGame {
     }
     #[cfg(feature = "editor")]
     #[func]
+    fn terrain_brush_cells_from_json(&self, map: GString, command: GString) -> GString {
+        editor_response(game_core::editor::terrain_brush_cells_from_json(
+            &map.to_string(),
+            &command.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
+    #[func]
     fn preview_from_json(&self, definitions: GString, map: GString) -> GString {
         editor_response(game_core::editor::preview_from_json(
             &definitions.to_string(),

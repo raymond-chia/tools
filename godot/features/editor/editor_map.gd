@@ -12,6 +12,7 @@ signal unit_dropped(id: int, cell: Vector2i)
 
 var map_data: Dictionary = {}
 var snapshot: Dictionary = {}
+var brush_cells: Array = []
 var hovered := Vector2i(-1, -1)
 var inspected_unit := 0
 var selected := Vector2i(-1, -1)
@@ -33,6 +34,7 @@ func _ready() -> void:
 	units_layer.z_index = BattleConfig.UNITS_Z_INDEX
 	mouse_exited.connect(func():
 		hovered = Vector2i(-1, -1)
+		cell_hovered.emit(hovered)
 		finish_pointer(Vector2i(-1, -1))
 		queue_redraw())
 
@@ -68,6 +70,11 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 	for unit in units:
 		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == inspected_unit)
 		BattleVisuals.update_unit_health(unit_nodes[unit.id], unit)
+	cell_hovered.emit(hovered)
+	queue_redraw()
+
+func present_brush(cells: Array) -> void:
+	brush_cells = cells
 	queue_redraw()
 
 func move_camera(delta: float) -> void:
@@ -156,4 +163,8 @@ func _draw() -> void:
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))
-	if hovered.x >= 0: marker(hovered, Color(1, 1, 1, 0.1), Color(1, 1, 1, 0.75))
+	if drag_paint:
+		for cell in brush_cells:
+			marker(Vector2i(cell.x, cell.y), Color(1, 1, 1, 0.16), Color(1, 1, 1, 0.75))
+	elif hovered.x >= 0:
+		marker(hovered, Color(1, 1, 1, 0.1), Color(1, 1, 1, 0.75))

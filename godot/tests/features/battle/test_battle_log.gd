@@ -91,7 +91,7 @@ func test_skill_resolution_log() -> void:
 	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「%s」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_ARIA"), tr(BattleConfig.skill_name_key("precise_strike")), tr("UNIT_NAME_WOLF_A")])
 	assert_str(log_text).contains("D20 擲骰 %d + 命中加值 104 = 命中總值 %d" % [int(event.roll), int(event.hit_total)])
 	assert_str(log_text).contains("目標防禦：閃避門檻 12／格擋門檻 15")
-	assert_str(log_text).contains("結果：%s%s，%d 傷害，HP %d/10000" % [result_names[event.result], critical_text, expected_damage, 10000 - expected_damage])
+	assert_str(log_text).contains("結果：%s%s，%d 點傷害，HP %d/10000" % [result_names[event.result], critical_text, expected_damage, 10000 - expected_damage])
 
 # 驗證技能使生命歸零時會記錄倒下狀態，並翻譯倒下單位名稱。
 func test_downed_unit_log() -> void:

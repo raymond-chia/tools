@@ -1,15 +1,53 @@
 //! 地形筆刷的替換、清除與合法性判斷集中於核心編輯器。
 use super::EditorError;
 use crate::authoring::{Definitions, Map};
-use crate::{Game, TerrainLayer, TerrainPlacement};
+use crate::{Game, GridPos, TerrainLayer, TerrainPlacement};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-struct TerrainBrush {
+struct BrushArea {
     x: i32,
     y: i32,
+    size: i32,
+}
+
+#[derive(Deserialize)]
+struct TerrainBrush {
+    #[serde(flatten)]
+    area: BrushArea,
     layer: TerrainLayer,
     kind: String,
+}
+
+// 預覽與實際塗抹共用定位與裁切，偶數邊長向座標正方向多延伸一格。
+fn brush_cells(map: &Map, area: BrushArea) -> Result<Vec<GridPos>, EditorError> {
+    let BrushArea { x, y, size } = area;
+    if size < 1 {
+        return Err(EditorError::operation("invalid_brush_size", "", Vec::new()));
+    }
+    if x < 0 || y < 0 || x >= map.width || y >= map.height {
+        return Ok(Vec::new());
+    }
+    let before = (size - 1) / 2;
+    let after = size / 2;
+    let mut cells = Vec::new();
+    // 先裁切延伸量，再與起點相加，避免過大的作者輸入造成溢位。
+    for y in (y - before).max(0)..=y + after.min(map.height - 1 - y) {
+        for x in (x - before).max(0)..=x + after.min(map.width - 1 - x) {
+            cells.push(GridPos { x, y });
+        }
+    }
+    Ok(cells)
+}
+
+/// 只查詢筆刷覆蓋格子，不修改地圖，也不建立遊戲預覽。
+pub fn terrain_brush_cells_from_json(map: &str, command: &str) -> Result<String, EditorError> {
+    let map: Map = super::json::from_str(map)
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
+    let area: BrushArea = super::json::from_str(command)
+        .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
+    let cells = brush_cells(&map, area)?;
+    Ok(serde_json::json!({"cells": cells}).to_string())
 }
 
 pub fn paint_terrain_from_json(
@@ -21,9 +59,10 @@ pub fn paint_terrain_from_json(
         .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let mut map: Map = super::json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
-    let TerrainBrush { x, y, layer, kind } = super::json::from_str(command)
+    let TerrainBrush { area, layer, kind } = super::json::from_str(command)
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
-    if x < 0 || y < 0 || x >= map.width || y >= map.height {
+    let cells = brush_cells(&map, area)?;
+    if cells.is_empty() {
         return Err(EditorError::operation("invalid_cell", "", Vec::new()));
     }
     if kind.is_empty() {
@@ -44,29 +83,37 @@ pub fn paint_terrain_from_json(
             return Err(EditorError::operation("wrong_layer", &kind, Vec::new()));
         }
     }
-    let replaces = |terrain: &TerrainPlacement| {
-        terrain.x == x
-            && terrain.y == y
-            && definitions
-                .terrain_types
-                .iter()
-                .find(|entry| entry.id == terrain.kind)
-                .is_some_and(|definition| definition.layer == layer)
-    };
-    let current: Vec<_> = map
-        .terrains
-        .iter()
-        .filter(|terrain| replaces(terrain))
-        .collect();
-    let changed = if kind.is_empty() {
-        !current.is_empty()
-    } else {
-        current.len() != 1 || current[0].kind != kind
-    };
-    if changed {
-        map.terrains.retain(|terrain| !replaces(terrain));
-        if !kind.is_empty() {
-            map.terrains.push(TerrainPlacement { x, y, kind });
+    let mut changed = false;
+    for GridPos { x, y } in cells {
+        let replaces = |terrain: &TerrainPlacement| {
+            terrain.x == x
+                && terrain.y == y
+                && definitions
+                    .terrain_types
+                    .iter()
+                    .find(|entry| entry.id == terrain.kind)
+                    .is_some_and(|definition| definition.layer == layer)
+        };
+        let current: Vec<_> = map
+            .terrains
+            .iter()
+            .filter(|terrain| replaces(terrain))
+            .collect();
+        let cell_changed = if kind.is_empty() {
+            !current.is_empty()
+        } else {
+            current.len() != 1 || current[0].kind != kind
+        };
+        if cell_changed {
+            changed = true;
+            map.terrains.retain(|terrain| !replaces(terrain));
+            if !kind.is_empty() {
+                map.terrains.push(TerrainPlacement {
+                    x,
+                    y,
+                    kind: kind.clone(),
+                });
+            }
         }
     }
     // 同時產生預覽，Godot 不再重做已通過的驗證。

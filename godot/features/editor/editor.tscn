@@ -152,6 +152,15 @@ text = "素材面板"
 layout_mode = 2
 text = ""
 
+[node name="BrushSize" type="SpinBox" parent="Layout/Pages/MapPage/Materials"]
+layout_mode = 2
+min_value = 1.0
+max_value = 40.0
+step = 1.0
+value = 1.0
+prefix = "筆刷大小 "
+tooltip_text = "數字 N 代表 N×N 格，以滑鼠所在格為中心，偶數大小向座標正方向多延伸一格；超出地圖的部分略過。"
+
 [node name="PaletteTabs" type="TabContainer" parent="Layout/Pages/MapPage/Materials"]
 layout_mode = 2
 size_flags_vertical = 3
