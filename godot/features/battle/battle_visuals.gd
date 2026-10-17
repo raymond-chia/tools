@@ -110,6 +110,35 @@ static func draw_terrain_effects(canvas: CanvasItem, ground: TileMapLayer, effec
 
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
 	match visual:
+		"tree":
+			canvas.draw_set_transform(center)
+			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-5, 4), Vector2(5, 4), Vector2(4, -17), Vector2(-4, -17)]), Color("785039"))
+			canvas.draw_circle(Vector2(-9, -19), 11, Color("28543c"))
+			canvas.draw_circle(Vector2(9, -21), 12, Color("346c46"))
+			canvas.draw_circle(Vector2(0, -29), 12, Color("448653"))
+			canvas.draw_circle(Vector2(-4, -32), 5, Color("66a465"))
+			canvas.draw_set_transform(Vector2.ZERO)
+		"broken_log":
+			canvas.draw_set_transform(center)
+			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-23, -3), Vector2(10, -9), Vector2(15, -6), Vector2(10, -2), Vector2(17, 1), Vector2(12, 5), Vector2(-20, 10)]), Color("805035"))
+			canvas.draw_line(Vector2(-17, -1), Vector2(6, -5), Color("b17c4b"), 2.0, true)
+			canvas.draw_line(Vector2(-15, 5), Vector2(8, 1), Color("503626"), 2.0, true)
+			canvas.draw_set_transform(Vector2(-21, 3) + center, 0, Vector2(0.55, 1))
+			canvas.draw_circle(Vector2.ZERO, 7, Color("d2ab70"))
+			canvas.draw_circle(Vector2.ZERO, 4, Color("93683e"), false, 1.0, true)
+			canvas.draw_set_transform(Vector2.ZERO)
+		"wagon":
+			canvas.draw_set_transform(center)
+			canvas.draw_line(Vector2(16, -1), Vector2(29, -4), Color("805536"), 3.0, true)
+			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-24, -17), Vector2(6, -23), Vector2(22, -14), Vector2(-8, -8)]), Color("c49658"))
+			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-24, -17), Vector2(-8, -8), Vector2(-8, 3), Vector2(-24, -6)]), Color("805536"))
+			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-8, -8), Vector2(22, -14), Vector2(22, -3), Vector2(-8, 3)]), Color("a47543"))
+			canvas.draw_line(Vector2(-6, -3), Vector2(20, -9), Color("69452e"), 1.5, true)
+			for wheel in [Vector2(-14, 1), Vector2(15, 1)]:
+				canvas.draw_circle(wheel, 7, Color("40352d"))
+				canvas.draw_circle(wheel, 4.5, Color("b68a52"), false, 1.5, true)
+				canvas.draw_circle(wheel, 1.5, Color("d8b67b"))
+			canvas.draw_set_transform(Vector2.ZERO)
 		"spikes":
 			for offset_x in [-18.0, -6.0, 6.0, 18.0]:
 				var base := center + Vector2(offset_x, 5.0)

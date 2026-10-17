@@ -189,6 +189,9 @@ TERRAIN_EFFECT_DODGE,閃避 −{value},Dodge −{value}
 TERRAIN_EFFECT_DURATION,剩餘 {value} 回合,{value} rounds remaining
 TERRAIN_EFFECT_INSTANT_DOWN,無法通行；被推入時立即死亡,Impassable; units pushed in are defeated
 TERRAIN_EFFECT_MOVEMENT,移動消耗 +{value},Movement cost +{value}
+TERRAIN_NAME_TREE,樹木,Tree
+TERRAIN_NAME_BROKEN_LOG,斷木,Broken log
+TERRAIN_NAME_WAGON,馬車,Wagon
 TERRAIN_NAME_CHASM,懸崖,Chasm
 TERRAIN_NAME_CLIFF,峭壁,Cliff wall
 TERRAIN_NAME_MIRE,泥沼,Mire
