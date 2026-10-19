@@ -83,6 +83,13 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	var health: Node2D = node.get_node("Health")
 	health.position = Vector2(0, body.position.y + body.get_rect().position.y * body.scale.y - BattleConfig.HEALTH_BAR_HEAD_GAP - BattleConfig.HEALTH_BAR_HEIGHT)
 
+static func face_unit_toward(node: Node2D, destination: Vector2) -> void:
+	var horizontal_distance := destination.x - node.position.x
+	if is_zero_approx(horizontal_distance):
+		return
+	var body: Sprite2D = node.get_node("Visual/Body")
+	body.flip_h = horizontal_distance < 0.0
+
 static func update_unit_health(node: Node2D, unit: Dictionary) -> void:
 	var width: float = BattleConfig.LARGE_UNIT_HEALTH_BAR_WIDTH if unit.large else BattleConfig.UNIT_HEALTH_BAR_WIDTH
 	var health: Node2D = node.get_node("Health")

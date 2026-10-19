@@ -203,6 +203,7 @@ func play_combat_event_queue() -> void:
 					movement = combat_event_queue.pop_front()
 				await present_skill_result(event, movement)
 			"healing":
+				BattleVisuals.face_unit_toward(unit_nodes[event.actor], unit_nodes[event.target].position)
 				present_event_health(event.target, event.remaining_hp, event.max_hp)
 				present_unit_text(event.target, "+%d" % int(event.healing), BattleConfig.HEALING_TEXT_COLOR)
 				await wait_for_presentation(BattleConfig.COMBAT_RESULT_HOLD)
@@ -316,6 +317,7 @@ func animate_unit_attack(actor_id: int, target_id: int) -> Tween:
 		return null
 	var actor_visual: Node2D = unit_nodes[actor_id].get_node("Visual")
 	var direction: Vector2 = unit_nodes[actor_id].position.direction_to(unit_nodes[target_id].position)
+	BattleVisuals.face_unit_toward(unit_nodes[actor_id], unit_nodes[target_id].position)
 	stop_tween(attack_tweens, actor_id)
 	actor_visual.position = Vector2.ZERO
 	actor_visual.modulate = Color.WHITE
@@ -368,6 +370,7 @@ func animate_movement_event(event: Dictionary) -> void:
 		if unit.large:
 			var last_cell := path_cell + footprint_offset(unit)
 			destination = (destination + cell_center(last_cell)) * 0.5
+		tween.tween_callback(BattleVisuals.face_unit_toward.bind(node, destination))
 		tween.tween_property(node, "position", destination, BattleConfig.UNIT_MOVE_STEP_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	movement_tweens[unit_id] = tween
 	await tween.finished

@@ -155,6 +155,60 @@ func test_healing_preview_and_presentation() -> void:
 		assert_bool(battle.ui.healing_preview_segment.visible).is_false()
 		assert_bool(battle.ui.attack_preview_critical.get_parent().visible).is_true()
 
+# 驗證向左移動時立即轉身並保留朝向，再向右移動時轉回右方。
+func test_movement_faces_travel_direction() -> void:
+	await load_map("facing")
+	runner.set_time_factor(1.0)
+	var node: Node2D = battle.world.unit_nodes[ACTOR_ID]
+	var body: Sprite2D = node.get_node("Visual/Body")
+	for test_case in [
+		{"cell": Vector2i(2, 1), "flip_h": true},
+		{"cell": Vector2i(3, 1), "flip_h": false},
+	]:
+		var destination: Vector2 = battle.world.cell_center(test_case.cell)
+		var start_position := node.position
+		assert_bool(battle.send({"type": "move", "actor": ACTOR_ID, "x": test_case.cell.x, "y": test_case.cell.y})).is_true()
+		for _frame in 10:
+			await runner.simulate_frames(1, 16)
+			if not node.position.is_equal_approx(start_position):
+				break
+		assert_bool(battle.world.is_presenting_combat_events()).is_true()
+		assert_bool(node.position.is_equal_approx(start_position)).is_false()
+		assert_bool(body.flip_h).override_failure_message("移動演出期間應朝向行進方向 %s" % test_case.cell).is_equal(test_case.flip_h)
+		await wait_until_idle(battle, runner)
+		assert_vector(node.position).is_equal(destination)
+		assert_bool(body.flip_h).override_failure_message("移動結束後應保持行進朝向 %s" % test_case.cell).is_equal(test_case.flip_h)
+
+# 驗證同一單位先向左施法，正常推進回合後向右施法，兩次演出開始與結束皆朝向目標。
+func test_skill_faces_target_direction() -> void:
+	await load_map("facing")
+	runner.set_time_factor(1.0)
+	var node: Node2D = battle.world.unit_nodes[ACTOR_ID]
+	var body: Sprite2D = node.get_node("Visual/Body")
+	for test_case in [
+		{"target": TARGET_ID, "cell": Vector2i(1, 1), "flip_h": true, "direction": "左"},
+		{"target": 4, "cell": Vector2i(7, 3), "flip_h": false, "direction": "右"},
+	]:
+		assert_int(battle.state.turn.actor).is_equal(ACTOR_ID)
+		assert_object(battle.world.unit_nodes[ACTOR_ID]).is_same(node)
+		var target: Node2D = battle.world.unit_nodes[test_case.target]
+		assert_bool(target.position.x < node.position.x).is_equal(test_case.flip_h)
+		battle.ui.action_buttons.presentation_push.pressed.emit()
+		battle.world.primary_clicked.emit(test_case.target, test_case.cell)
+		assert_bool(battle.world.is_presenting_combat_events()).is_true()
+		assert_bool(body.flip_h).override_failure_message("向%s施放技能的前衝開始前應已轉向目標" % test_case.direction).is_equal(test_case.flip_h)
+		await wait_until_idle(battle, runner)
+		assert_bool(body.flip_h).override_failure_message("向%s施放技能結束後應保持朝向" % test_case.direction).is_equal(test_case.flip_h)
+		if test_case.flip_h:
+			var previous_round: int = battle.state.round
+			for _turn in 4:
+				battle.ui.end_turn_requested.emit()
+				await wait_until_idle(battle, runner)
+				if int(battle.state.turn.actor) == ACTOR_ID:
+					break
+			assert_int(int(battle.state.round)).is_greater(previous_round)
+			assert_bool(body.flip_h).override_failure_message("正常推進回合後應保留左側技能留下的朝向").is_true()
+
 func load_map(variant: String) -> void:
 	runner = await replace_battle(runner, TEST_DEFINITIONS, "res://tests/features/battle/data/combat_presentation_%s_map.toml" % variant)
 	battle = runner.scene()

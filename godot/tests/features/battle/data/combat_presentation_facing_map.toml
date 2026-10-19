@@ -1,0 +1,41 @@
+# 朝向測試專用：玩家右側起步，可向左走再折返，並向左側敵人施放技能。
+name="combat_presentation_facing"
+width=8
+height=4
+
+[[units]]
+id=1
+unit_type="presentation_actor"
+team="player"
+x=3
+y=1
+
+[[units]]
+id=2
+unit_type="presentation_healer"
+team="player"
+x=0
+y=3
+
+[[units]]
+id=3
+unit_type="presentation_target"
+min_difficulty = "easy"
+team={enemy="targets"}
+x=1
+y=1
+
+[[units]]
+id=4
+unit_type="presentation_target"
+min_difficulty = "easy"
+team={enemy="targets"}
+x=7
+y=3
+
+[victory]
+mode = "all"
+conditions = [{ type = "all_enemies_defeated" }]
+[defeat]
+mode = "any"
+conditions = [{ type = "all_players_defeated" }]
