@@ -49,9 +49,24 @@ layout_mode = 2
 layout_mode = 2
 text = "▶ 試玩"
 
+[node name="Navigation" type="HBoxContainer" parent="Layout"]
+layout_mode = 2
+theme_override_constants/separation = 108
+
+[node name="PageTabs" type="TabBar" parent="Layout/Navigation"]
+layout_mode = 2
+size_flags_vertical = 0
+clip_tabs = false
+
+[node name="PaletteTabs" type="HFlowContainer" parent="Layout/Navigation"]
+layout_mode = 2
+size_flags_horizontal = 3
+layout_direction = 3
+
 [node name="Pages" type="TabContainer" parent="Layout"]
 layout_mode = 2
 size_flags_vertical = 3
+tabs_visible = false
 
 [node name="MapPage" type="HBoxContainer" parent="Layout/Pages"]
 layout_mode = 2
@@ -148,11 +163,21 @@ layout_mode = 2
 layout_mode = 2
 text = "素材面板"
 
-[node name="Brush" type="Label" parent="Layout/Pages/MapPage/Materials"]
+[node name="PaletteTabs" type="TabContainer" parent="Layout/Pages/MapPage/Materials"]
+layout_mode = 2
+size_flags_vertical = 3
+tabs_visible = false
+use_hidden_tabs_for_min_size = true
+
+[node name="Ground" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
+layout_mode = 2
+
+[node name="Brush" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Ground"]
 layout_mode = 2
 text = ""
+autowrap_mode = 2
 
-[node name="BrushSize" type="SpinBox" parent="Layout/Pages/MapPage/Materials"]
+[node name="BrushSize" type="SpinBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Ground"]
 layout_mode = 2
 min_value = 1.0
 max_value = 40.0
@@ -161,24 +186,39 @@ value = 1.0
 prefix = "筆刷大小 "
 tooltip_text = "數字 N 代表 N×N 格，以滑鼠所在格為中心，偶數大小向座標正方向多延伸一格；超出地圖的部分略過。"
 
-[node name="PaletteTabs" type="TabContainer" parent="Layout/Pages/MapPage/Materials"]
+[node name="Scroll" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Ground"]
 layout_mode = 2
 size_flags_vertical = 3
-
-[node name="Ground" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
-layout_mode = 2
 horizontal_scroll_mode = 0
 
-[node name="Tiles" type="GridContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Ground"]
+[node name="Tiles" type="GridContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 columns = 2
 
-[node name="Overlay" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
+[node name="Overlay" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
 layout_mode = 2
+
+[node name="Brush" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+text = ""
+autowrap_mode = 2
+
+[node name="BrushSize" type="SpinBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+min_value = 1.0
+max_value = 40.0
+step = 1.0
+value = 1.0
+prefix = "筆刷大小 "
+tooltip_text = "數字 N 代表 N×N 格，以滑鼠所在格為中心，偶數大小向座標正方向多延伸一格；超出地圖的部分略過。"
+
+[node name="Scroll" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="Tiles" type="GridContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+[node name="Tiles" type="GridContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 columns = 2
@@ -214,17 +254,86 @@ allow_reselect = true
 custom_minimum_size = Vector2(145, 0)
 layout_mode = 2
 
-[node name="InspectedDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials"]
+[node name="InspectionSpacing" type="Control" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
+custom_minimum_size = Vector2(0, 108)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
+layout_mode = 2
+text = "右鍵選取怪物，可修改最低出現難度"
+autowrap_mode = 2
+
+[node name="InspectedUnitType" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
+visible = false
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="InspectedDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
 visible = false
 layout_mode = 2
 autowrap_mode = 3
 fit_to_longest_item = false
 tooltip_text = "右鍵選取怪物後，修改最低出現難度"
 
-[node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials"]
+[node name="Outcomes" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
 layout_mode = 2
-text = "選取素材後，在地圖點擊或拖曳繪製
-右鍵選取怪物，可修改最低出現難度"
+horizontal_scroll_mode = 0
+
+[node name="Groups" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="Victory" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+text = "獲勝條件"
+
+[node name="Mode" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+
+[node name="all_enemies_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+text = "敵方全滅"
+
+[node name="all_players_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+text = "玩家全滅"
+
+[node name="cargo_escaped" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+text = "貨物離場"
+
+[node name="Defeat" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+text = "失敗條件"
+
+[node name="Mode" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+
+[node name="all_enemies_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+text = "敵方全滅"
+
+[node name="all_players_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+text = "玩家全滅"
+
+[node name="cargo_escaped" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+text = "貨物離場"
+
+[node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups"]
+layout_mode = 2
+text = "每組至少勾選一個條件。
+貨物離場需先有貨物與出口設定。
+勝敗條件同時成立時，判定失敗。"
 autowrap_mode = 2
 
 [node name="UnitPage" parent="Layout/Pages" instance=ExtResource("5")]

@@ -10,18 +10,22 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var height_box: SpinBox = $Layout/Pages/MapPage/MapPanel/MapFields/Height
 @onready var mode_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Mode
 @onready var palette_tabs: TabContainer = $Layout/Pages/MapPage/Materials/PaletteTabs
-@onready var terrain_grids: Array[GridContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Tiles, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Tiles]
-@onready var brush_size: SpinBox = $Layout/Pages/MapPage/Materials/BrushSize
-@onready var brush_label: Label = $Layout/Pages/MapPage/Materials/Brush
+@onready var terrain_grids: Array[GridContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Scroll/Tiles, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Scroll/Tiles]
+@onready var outcome_groups: Array[VBoxContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory, $Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat]
+@onready var brush_size: SpinBox = $Layout/Pages/MapPage/Materials/PaletteTabs/Ground/BrushSize
+@onready var brush_labels: Array[Label] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Brush, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Brush]
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
 @onready var placement_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/MinimumDifficulty
-@onready var inspected_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/InspectedDifficulty
+@onready var inspected_unit_type: Label = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedUnitType
+@onready var inspected_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedDifficulty
 @onready var play_difficulty: OptionButton = $Layout/Toolbar/PlayDifficulty
 @onready var team_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Team
 @onready var faction_field: LineEdit = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Faction
 @onready var existing_factions: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/ExistingFactions
 @onready var map_view = $Layout/Pages/MapPage/MapPanel/MapViewportContainer/MapViewport/Map
 @onready var pages: TabContainer = $Layout/Pages
+@onready var page_tabs: TabBar = $Layout/Navigation/PageTabs
+@onready var palette_navigation: HFlowContainer = $Layout/Navigation/PaletteTabs
 @onready var definition_pages: Array = [$Layout/Pages/UnitPage, $Layout/Pages/SkillPage, $Layout/Pages/TerrainPage, $Layout/Pages/EquipmentPage]
 @onready var status_label: Label = $Layout/Status
 
@@ -59,14 +63,25 @@ func _ready() -> void:
 	inspected_difficulty.item_selected.connect(update_unit_difficulty)
 	for i in range(2, MODES.size()):
 		mode_list.add_item(MODES[i])
-	for index in 3:
-		palette_tabs.set_tab_title(index, ["地面", "上層", "單位"][index])
+	for index in 4:
+		palette_tabs.set_tab_title(index, ["地面", "上層", "單位", "勝敗條件"][index])
+	for index in outcome_groups.size():
+		var group := outcome_groups[index]
+		var key: String = ["victory", "defeat"][index]
+		var mode: OptionButton = group.get_node("Mode")
+		mode.add_item("全部成立")
+		mode.add_item("任一成立")
+		mode.item_selected.connect(func(_selected: int): update_outcome_group(key, group))
+		for child in group.get_children():
+			if child is CheckBox:
+				child.toggled.connect(func(_pressed: bool): update_outcome_group(key, group))
 	for value in ["player", "enemy"]:
 		team_list.add_item(value)
 	mode_list.select(0)
 	team_list.select(0)
 	for index in [0, 1, 2, 3, 4]:
 		pages.set_tab_title(index, ["地圖與單位配置", "單位", "技能", "地形", "裝備"][index])
+	setup_navigation()
 	for page in definition_pages:
 		page.field_changed.connect(update_definition)
 		page.default_passive_skills_changed.connect(update_default_passive_skills)
@@ -77,6 +92,7 @@ func _ready() -> void:
 		page.remove_confirmed.connect(remove_definition)
 		page.input_error.connect(show_error)
 	map_view.cell_hovered.connect(func(_cell: Vector2i): refresh_brush_preview())
+	brush_size.share($Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/BrushSize)
 	brush_size.value_changed.connect(func(_value: float): refresh_brush_preview())
 	map_view.cell_pressed.connect(edit_cell)
 	map_view.inspection_clicked.connect(inspect_unit)
@@ -137,6 +153,32 @@ func _ready() -> void:
 	else:
 		refresh_ui()
 		new_map()
+
+# 切換列獨立於內容面板；右側素材分類由右向左排列並自動換行。
+func setup_navigation() -> void:
+	for index in pages.get_tab_count():
+		page_tabs.add_tab(pages.get_tab_title(index))
+	page_tabs.current_tab = pages.current_tab
+	page_tabs.tab_changed.connect(func(index: int): pages.current_tab = index)
+	pages.tab_changed.connect(func(index: int):
+		page_tabs.current_tab = index
+		palette_navigation.visible = index == 0
+	)
+	palette_navigation.visible = pages.current_tab == 0
+	var group := ButtonGroup.new()
+	for index in palette_tabs.get_tab_count():
+		var button := Button.new()
+		button.text = palette_tabs.get_tab_title(index)
+		button.layout_direction = Control.LAYOUT_DIRECTION_LTR
+		button.toggle_mode = true
+		button.button_group = group
+		button.button_pressed = palette_tabs.current_tab == index
+		button.pressed.connect(func(): palette_tabs.current_tab = index)
+		palette_navigation.add_child(button)
+	palette_tabs.tab_changed.connect(func(index: int):
+		var button: Button = palette_navigation.get_child(index)
+		button.set_pressed_no_signal(true)
+	)
 
 func read_file(path: String) -> String:
 	var file := FileAccess.open(path, FileAccess.READ)
@@ -330,7 +372,7 @@ func validate_current() -> void:
 		pending_edit = {}
 	update_history_controls()
 	map_view.present(map_data, snapshot, selected_cell)
-	refresh_inspected_difficulty()
+	refresh_inspected_unit()
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
 # 自製編輯器顯示核心原始診斷；正式遊戲維持共用讀取函式的翻譯訊息。
@@ -414,12 +456,36 @@ func refresh_ui() -> void:
 	map_name.text = map_data.get("name", "")
 	width_box.value = map_data.get("width", 10)
 	height_box.value = map_data.get("height", 8)
+	refresh_outcome_groups()
 	refreshing = false
 	refresh_map_list()
 	select_map(map_file)
 	refresh_tools()
 	refresh_tools_visibility()
 	refresh_definitions()
+
+# 介面只編輯作者文件；空條件與貨物需求交由核心既有驗證決定。
+func refresh_outcome_groups() -> void:
+	if map_data.is_empty(): return
+	for index in outcome_groups.size():
+		var group := outcome_groups[index]
+		var rule: Dictionary = map_data[["victory", "defeat"][index]]
+		var mode: OptionButton = group.get_node("Mode")
+		mode.select(0 if rule.mode == "all" else 1)
+		for child in group.get_children():
+			if child is CheckBox:
+				child.set_pressed_no_signal(rule.conditions.any(func(condition: Dictionary): return condition.type == str(child.name)))
+
+func update_outcome_group(key: String, group: VBoxContainer) -> void:
+	if refreshing or map_data.is_empty(): return
+	var conditions: Array = []
+	for child in group.get_children():
+		if child is CheckBox and child.button_pressed:
+			conditions.append({"type": str(child.name)})
+	var mode: OptionButton = group.get_node("Mode")
+	checkpoint()
+	map_data[key] = {"mode": "all" if mode.selected == 0 else "any", "conditions": conditions}
+	validate_current()
 
 func refresh_tools() -> void:
 	refresh_terrain_list()
@@ -473,18 +539,19 @@ func refresh_terrain_list() -> void:
 	update_brush_label()
 
 func update_editing_mode() -> void:
-	editing_mode = palette_tabs.current_tab if palette_tabs.current_tab < 2 else mode_list.selected + 2
+	match palette_tabs.current_tab:
+		0, 1: editing_mode = palette_tabs.current_tab
+		2: editing_mode = mode_list.selected + 2
+		3: editing_mode = -1
 	refresh_tools_visibility()
 	update_brush_label()
 
 func update_brush_label() -> void:
 	refresh_brush_preview()
-	if editing_mode > 1:
-		brush_label.text = MODES[editing_mode]
-		return
-	var layer := "ground" if editing_mode == 0 else "overlay"
-	var kind: String = terrain_brushes[layer]
-	brush_label.text = "目前筆刷：" + (kind if not kind.is_empty() else "橡皮擦" if editing_mode == 1 else "無素材")
+	for index in brush_labels.size():
+		var layer := "ground" if index == 0 else "overlay"
+		var kind: String = terrain_brushes[layer]
+		brush_labels[index].text = "目前筆刷：" + (kind if not kind.is_empty() else "橡皮擦" if index == 1 else "無素材")
 
 func terrain_kinds(layer: String) -> Array:
 	var kinds: Array = definitions.terrain_types.filter(func(terrain: Dictionary): return terrain.layer == layer).map(func(terrain: Dictionary): return terrain.id)
@@ -494,13 +561,12 @@ func refresh_grid() -> void:
 	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
 	if snapshot.is_empty(): return
 	map_view.present(map_data, snapshot, selected_cell)
-	refresh_inspected_difficulty()
+	refresh_inspected_unit()
 
 func refresh_tools_visibility() -> void:
 	# 工具切換只更新介面狀態；資料修改的驗證與預覽由 validate_current 統一處理。
 	var mode := editing_mode
-	map_view.drag_paint = mode <= 1
-	brush_size.visible = mode <= 1
+	map_view.drag_paint = mode in [0, 1]
 	unit_list.visible = mode == 2
 	team_list.visible = mode == 2
 	faction_field.visible = mode == 2 and team_list.selected != 0
@@ -519,7 +585,7 @@ func refresh_existing_factions() -> void:
 
 # 預覽只繪製核心回傳的覆蓋格子，不在顯示層重算筆刷範圍。
 func refresh_brush_preview() -> void:
-	if editing_mode > 1 or map_data.is_empty() or map_view.hovered.x < 0:
+	if editing_mode not in [0, 1] or map_data.is_empty() or map_view.hovered.x < 0:
 		map_view.present_brush([])
 		return
 	if editing_mode == 0 and terrain_brushes.ground.is_empty():
@@ -559,6 +625,7 @@ func inspect_unit(cell: Vector2i) -> void:
 	refresh_grid()
 
 func edit_cell(cell: Vector2i) -> void:
+	if editing_mode == -1: return
 	selected_cell = cell
 	var mode := editing_mode
 	var current := unit_at(cell)
@@ -591,6 +658,7 @@ func edit_cell(cell: Vector2i) -> void:
 	validate_current()
 
 func move_unit(id: int, cell: Vector2i) -> void:
+	if editing_mode != 3: return
 	selected_cell = cell
 	for unit in map_data.units:
 		if unit.id != id: continue
@@ -721,10 +789,13 @@ func change_terrain_effect(id: String, terrain: String) -> void:
 		if page.category == "skills": page.finish_effect_change()
 
 # 呈現作者設定；未設定的玩家以簡單顯示，不改寫資料。
-func refresh_inspected_difficulty() -> void:
+func refresh_inspected_unit() -> void:
+	inspected_unit_type.visible = false
 	inspected_difficulty.visible = false
 	for unit in map_data.get("units", []):
 		if unit.id != map_view.inspected_unit: continue
+		inspected_unit_type.text = "單位：" + unit.unit_type
+		inspected_unit_type.visible = true
 		inspected_difficulty.visible = true
 		var displayed_difficulty: String = "easy" if unit.min_difficulty == null else unit.min_difficulty
 		for index in range(1, inspected_difficulty.item_count):
