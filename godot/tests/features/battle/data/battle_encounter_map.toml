@@ -3,6 +3,7 @@ width=16
 height=3
 
 [[units]]
+facing = "right"
 id=1
 unit_type="aria"
 team="player"
@@ -10,6 +11,7 @@ x=1
 y=1
 
 [[units]]
+facing = "right"
 id=2
 unit_type="aria"
 team="player"
@@ -17,6 +19,7 @@ x=1
 y=2
 
 [[units]]
+facing = "right"
 id=3
 unit_type="wolf"
 min_difficulty = "easy"

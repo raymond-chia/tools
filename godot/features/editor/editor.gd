@@ -16,6 +16,8 @@ const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 @onready var brush_labels: Array[Label] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Brush, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Brush]
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
 @onready var placement_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/MinimumDifficulty
+@onready var placement_facing: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Facing
+@onready var inspected_facing: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedFacing
 @onready var inspected_unit_type: Label = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedUnitType
 @onready var inspected_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedDifficulty
 @onready var play_difficulty: OptionButton = $Layout/Toolbar/PlayDifficulty
@@ -61,6 +63,11 @@ func _ready() -> void:
 	DifficultyOptions.populate(inspected_difficulty, true)
 	DifficultyOptions.populate(play_difficulty)
 	inspected_difficulty.item_selected.connect(update_unit_difficulty)
+	for options in [placement_facing, inspected_facing]:
+		for direction in ["right", "left"]:
+			options.add_item("初始朝向：右" if direction == "right" else "初始朝向：左")
+			options.set_item_metadata(options.item_count - 1, direction)
+	inspected_facing.item_selected.connect(update_unit_facing)
 	for i in range(2, MODES.size()):
 		mode_list.add_item(MODES[i])
 	for index in 4:
@@ -568,6 +575,7 @@ func refresh_tools_visibility() -> void:
 	var mode := editing_mode
 	map_view.drag_paint = mode in [0, 1]
 	unit_list.visible = mode == 2
+	placement_facing.visible = mode == 2
 	team_list.visible = mode == 2
 	faction_field.visible = mode == 2 and team_list.selected != 0
 	existing_factions.visible = faction_field.visible
@@ -643,7 +651,7 @@ func edit_cell(cell: Vector2i) -> void:
 		while map_data.units.any(func(u: Dictionary): return u.id == id):
 			id += 1
 		var team: Variant = "player" if team_list.selected == 0 else {"enemy": faction_field.text.strip_edges()}
-		var placement := {"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y,"min_difficulty":null}
+		var placement := {"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y,"min_difficulty":null,"facing":placement_facing.get_selected_metadata()}
 		if team_list.selected != 0:
 			placement.min_difficulty = placement_difficulty.get_selected_metadata()
 		map_data.units.append(placement)
@@ -791,11 +799,16 @@ func change_terrain_effect(id: String, terrain: String) -> void:
 # 呈現作者設定；未設定的玩家以簡單顯示，不改寫資料。
 func refresh_inspected_unit() -> void:
 	inspected_unit_type.visible = false
+	inspected_facing.visible = false
 	inspected_difficulty.visible = false
 	for unit in map_data.get("units", []):
 		if unit.id != map_view.inspected_unit: continue
 		inspected_unit_type.text = "單位：" + unit.unit_type
 		inspected_unit_type.visible = true
+		inspected_facing.visible = true
+		for index in inspected_facing.item_count:
+			if inspected_facing.get_item_metadata(index) == unit.facing:
+				inspected_facing.select(index)
 		inspected_difficulty.visible = true
 		var displayed_difficulty: String = "easy" if unit.min_difficulty == null else unit.min_difficulty
 		for index in range(1, inspected_difficulty.item_count):
@@ -811,5 +824,15 @@ func update_unit_difficulty(index: int) -> void:
 		if unit.min_difficulty == selected: return
 		checkpoint()
 		unit.min_difficulty = selected
+		validate_current()
+		return
+
+func update_unit_facing(index: int) -> void:
+	for unit in map_data.units:
+		if unit.id != map_view.inspected_unit: continue
+		var selected: String = inspected_facing.get_item_metadata(index)
+		if unit.facing == selected: return
+		checkpoint()
+		unit.facing = selected
 		validate_current()
 		return

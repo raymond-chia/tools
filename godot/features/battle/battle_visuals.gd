@@ -83,6 +83,14 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	var health: Node2D = node.get_node("Health")
 	health.position = Vector2(0, body.position.y + body.get_rect().position.y * body.scale.y - BattleConfig.HEALTH_BAR_HEAD_GAP - BattleConfig.HEALTH_BAR_HEIGHT)
 
+# 只執行核心發出的顯示指令，不從單位狀態重建方向。
+static func present_events(unit_nodes: Dictionary, events: Array) -> void:
+	for event in events:
+		match event.type:
+			"unit_faced":
+				var body: Sprite2D = unit_nodes[event.unit_id].get_node("Visual/Body")
+				body.flip_h = event.facing == "left"
+
 static func face_unit_toward(node: Node2D, destination: Vector2) -> void:
 	var horizontal_distance := destination.x - node.position.x
 	if is_zero_approx(horizontal_distance):

@@ -5,6 +5,7 @@ name="attack_preview_variations"
 width=9
 height=7
 [[units]]
+facing = "right"
 id=1
 unit_type="aria"
 team="player"
@@ -12,6 +13,7 @@ x=1
 y=3
 
 [[units]]
+facing = "right"
 id=2
 unit_type="ogre"
 min_difficulty = "easy"
@@ -20,6 +22,7 @@ x=3
 y=1
 
 [[units]]
+facing = "right"
 id=3
 unit_type="wolf_a"
 min_difficulty = "easy"
@@ -28,6 +31,7 @@ x=3
 y=3
 
 [[units]]
+facing = "right"
 id=4
 unit_type="wolf_b"
 min_difficulty = "easy"
@@ -36,6 +40,7 @@ x=4
 y=3
 
 [[units]]
+facing = "right"
 id=5
 unit_type="lyra"
 min_difficulty = "easy"

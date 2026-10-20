@@ -147,8 +147,17 @@ pub enum Difficulty {
     Hard,
 }
 
+/// 單位在畫面上的水平方向，不影響戰鬥規則。
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Facing {
+    Left,
+    Right,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 pub struct UnitPlacement {
+    pub facing: Facing,
     pub id: i64,
     pub min_difficulty: Option<Difficulty>,
     #[serde(default)]

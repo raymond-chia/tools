@@ -3,6 +3,7 @@ name="right_click_selection"
 width=5
 height=4
 [[units]]
+facing = "right"
 id=1
 unit_type="aria"
 team="player"
@@ -10,6 +11,7 @@ x=1
 y=1
 
 [[units]]
+facing = "right"
 id=2
 unit_type="lyra"
 team="player"
@@ -17,6 +19,7 @@ x=3
 y=3
 
 [[units]]
+facing = "right"
 id=3
 unit_type="ogre"
 min_difficulty = "easy"

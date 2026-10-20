@@ -243,6 +243,7 @@ pub(super) fn map_from_ascii_board(
         .map(|(marker, id, kind, team)| {
             let ((x, y), _) = *markers.get(marker).expect("地圖應包含案例指定的單位符號");
             authoring::UnitPlacement {
+                facing: authoring::Facing::Right,
                 id: *id,
                 min_difficulty: if matches!(team, Team::Enemy(_)) {
                     Some(authoring::Difficulty::Easy)
@@ -318,6 +319,7 @@ pub(super) fn sight_game_in_range(
     // 治療案例也保留敵人，避免公開命令因已獲勝而略過施放。
     if needs_enemy {
         map.units.push(authoring::UnitPlacement {
+            facing: authoring::Facing::Right,
             id: BLOCKER_ID,
             min_difficulty: Some(authoring::Difficulty::Easy),
             unit_type: "test_target".into(),

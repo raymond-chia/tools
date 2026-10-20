@@ -233,6 +233,10 @@ layout_mode = 2
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
 
+[node name="Facing" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
+layout_mode = 2
+tooltip_text = "新單位的初始朝向"
+
 [node name="MinimumDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools"]
 layout_mode = 2
 tooltip_text = "新怪物的最低出現難度"
@@ -261,13 +265,18 @@ mouse_filter = 2
 
 [node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
 layout_mode = 2
-text = "右鍵選取怪物，可修改最低出現難度"
+text = "右鍵選取單位，可修改初始朝向與最低出現難度"
 autowrap_mode = 2
 
 [node name="InspectedUnitType" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
 visible = false
 layout_mode = 2
 autowrap_mode = 2
+
+[node name="InspectedFacing" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
+visible = false
+layout_mode = 2
+tooltip_text = "右鍵選取單位後，修改初始朝向"
 
 [node name="InspectedDifficulty" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Units"]
 visible = false

@@ -72,7 +72,7 @@ pub fn inspected_preview_from_json(
         .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let map: Map = json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
-    let game = Game::from_authoring(definitions, map, crate::authoring::Difficulty::Hard)?;
-    serde_json::to_string(&game.snapshot(inspected_actor))
+    let mut game = Game::from_authoring(definitions, map, crate::authoring::Difficulty::Hard)?;
+    serde_json::to_string(&game.take_snapshot(inspected_actor))
         .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }

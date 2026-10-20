@@ -106,6 +106,7 @@ func present(new_snapshot := false) -> void:
 			# 查詢只更新顯示資料；保留本次命令待呈現的事件。
 			value.log = state.log
 			value.movements = state.movements
+			value.presentation_events = state.presentation_events if new_snapshot else []
 			state = value
 	world.present(state, pending_action, inspected_cell, core, new_snapshot)
 	if not world.is_presenting_combat_events():

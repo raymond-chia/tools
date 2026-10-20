@@ -84,12 +84,17 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
     Ok(())
 }
 
+pub(crate) struct LoadedMap {
+    pub(crate) world: World,
+    pub(crate) presentation_events: Vec<crate::model::PresentationEvent>,
+}
+
 /// 在作者輸入邊界驗證完整資料並建立世界；所有難度先驗證完整配置，再篩選生成。
-pub(crate) fn load_world(
+pub(crate) fn load_map(
     definitions: authoring::Definitions,
     map: authoring::Map,
     difficulty: authoring::Difficulty,
-) -> Result<World, GameError> {
+) -> Result<LoadedMap, GameError> {
     validate_map(&map)?;
     let authoring::Definitions {
         equipment,
@@ -282,8 +287,10 @@ pub(crate) fn load_world(
     });
     // 佔用格判斷需要已建立的棋盤，因此在建立 Board 後驗證。
     let mut occupied = HashSet::new();
+    let mut presentation_events = Vec::new();
     for placement in placements {
         let authoring::UnitPlacement {
+            facing,
             id,
             min_difficulty,
             unit_type,
@@ -344,6 +351,10 @@ pub(crate) fn load_world(
         {
             continue;
         }
+        presentation_events.push(crate::model::PresentationEvent::UnitFaced {
+            unit_id: id,
+            facing,
+        });
         w.spawn((
             Id(id),
             Pos(p),
@@ -369,7 +380,10 @@ pub(crate) fn load_world(
             },
         ));
     }
-    Ok(w)
+    Ok(LoadedMap {
+        world: w,
+        presentation_events,
+    })
 }
 
 /// 載入時建立座標、地形疊加與戰鬥數值可安全運算的不變量。

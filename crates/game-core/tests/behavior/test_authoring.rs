@@ -60,6 +60,7 @@ fn enemy_without_skill_rejected_on_load() {
         height: 1,
         terrains: Vec::new(),
         units: vec![authoring::UnitPlacement {
+            facing: authoring::Facing::Right,
             id: TARGET_ID,
             min_difficulty: Some(authoring::Difficulty::Easy),
             unit_type: "test_unit".into(),
@@ -115,7 +116,7 @@ fn enemy_difficulty_is_required_at_authoring_boundary() {
         ("team = \"player\"", "", true),
     ] {
         let source = format!(
-            "name = \"difficulty_test\"\nwidth = 1\nheight = 1\n[[units]]\nid = 1\nunit_type = \"tank\"\nx = 0\ny = 0\n{setting}\n{team}"
+            "name = \"difficulty_test\"\nwidth = 1\nheight = 1\n[[units]]\nfacing = \"right\"\nid = 1\nunit_type = \"tank\"\nx = 0\ny = 0\n{setting}\n{team}"
         );
         let source = format!("{source}{OUTCOME_SETTINGS}");
         assert_eq!(
@@ -136,7 +137,7 @@ fn enemy_difficulty_is_required_at_authoring_boundary() {
 fn enemy_difficulty_survives_map_conversion() {
     for difficulty in ["easy", "normal", "hard"] {
         let source = format!(
-            "name = \"difficulty_test\"\n[[units]]\nid = 2\nunit_type = \"tank\"\nmin_difficulty = \"{difficulty}\"\n[units.team]\nenemy = \"test_enemy\""
+            "name = \"difficulty_test\"\n[[units]]\nfacing = \"right\"\nid = 2\nunit_type = \"tank\"\nmin_difficulty = \"{difficulty}\"\n[units.team]\nenemy = \"test_enemy\""
         );
         let source = format!("{source}{OUTCOME_SETTINGS}");
         let json = authoring::map_to_json(&source).expect("明確設定難度的地圖應可轉換");

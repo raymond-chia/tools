@@ -62,6 +62,8 @@ func wait_for_presentation(duration: float) -> void:
 func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
 	BattleVisuals.setup_ground(ground, state.terrain_cells)
+	sync_unit_sprites()
+	BattleVisuals.present_events(unit_nodes, state.presentation_events)
 	camera.configure_board(self, ground, state.width, state.height)
 	for unit in state.units:
 		if unit.team == "player":
@@ -81,6 +83,8 @@ func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_cor
 		if new_snapshot:
 			queue_new_combat_events()
 		sync_unit_sprites()
+		if new_snapshot:
+			BattleVisuals.present_events(unit_nodes, state.presentation_events)
 		start_combat_event_queue()
 	update_move_preview()
 	update_attack_preview()

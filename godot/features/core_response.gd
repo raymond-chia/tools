@@ -36,6 +36,8 @@ static func convert_unit_ids(value: Dictionary) -> void:
 		value.turn_order[index] = int(value.turn_order[index])
 	for movement in value.get("movements", []):
 		movement.unit_id = int(movement.unit_id)
+	for event in value.get("presentation_events", []):
+		event.unit_id = int(event.unit_id)
 	for event in value.get("log", []):
 		for key in ["actor", "target"]:
 			if event.has(key):

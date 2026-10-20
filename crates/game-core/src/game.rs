@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 pub struct Game {
     pub(crate) world: World,
     pub(crate) movements: Vec<MovementTransition>,
+    presentation_events: Vec<crate::model::PresentationEvent>,
 }
 
 pub(crate) struct DamageResult {
@@ -46,18 +47,28 @@ impl Game {
         map: authoring::Map,
         difficulty: authoring::Difficulty,
     ) -> Result<Self, GameError> {
+        let authoring::validation::LoadedMap {
+            world,
+            presentation_events,
+        } = authoring::validation::load_map(definitions, map, difficulty)?;
         Ok(Self {
-            world: authoring::validation::load_world(definitions, map, difficulty)?,
+            world,
             movements: Vec::new(),
+            presentation_events,
         })
     }
     // 每次只執行一個命令或一段自動回合，讓畫面先完成呈現再推進。
     pub fn command(&mut self, c: Command) -> Result<Snapshot, GameError> {
         self.apply_command(c)?;
-        let mut snapshot = self.snapshot(None);
+        Ok(self.take_snapshot(None))
+    }
+    /// 輸出狀態並取走待送事件；純查詢 snapshot 不消耗、也不重送事件。
+    pub fn take_snapshot(&mut self, inspected_actor: Option<i64>) -> Snapshot {
+        let mut snapshot = self.snapshot(inspected_actor);
+        snapshot.presentation_events = std::mem::take(&mut self.presentation_events);
         snapshot.log = std::mem::take(&mut self.world.resource_mut::<Log>().0);
         snapshot.movements = std::mem::take(&mut self.movements);
-        Ok(snapshot)
+        snapshot
     }
     fn apply_command(&mut self, c: Command) -> Result<(), GameError> {
         self.movements.clear();
@@ -922,9 +933,10 @@ impl Game {
             round: *round,
             battle_mode: *mode,
             outcome: self.world.resource::<ResultState>().0,
-            // 查詢不重送事件；command 負責附上尚未送出的紀錄與移動。
+            // 純查詢不重送事件；載入與 command 透過 take_snapshot 取走待送內容。
             log: Vec::new(),
             movements: Vec::new(),
+            presentation_events: Vec::new(),
         }
     }
 }

@@ -70,6 +70,7 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 			unit_nodes[unit.id] = node
 			node.position = point
 		presented_units = units.duplicate(true)
+	BattleVisuals.present_events(unit_nodes, snapshot.presentation_events)
 	if not units.any(func(unit: Dictionary): return unit.id == inspected_unit):
 		inspected_unit = 0
 	for unit in units:

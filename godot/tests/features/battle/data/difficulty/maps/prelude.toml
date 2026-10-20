@@ -2,12 +2,14 @@ name = "difficulty_test"
 width = 4
 height = 2
 [[units]]
+facing = "left"
 id = 1
 unit_type = "aria"
 team = "player"
 x = 0
 y = 0
 [[units]]
+facing = "right"
 id = 2
 unit_type = "wolf"
 min_difficulty = "easy"
@@ -16,6 +18,7 @@ y = 0
 [units.team]
 enemy = "test_enemy"
 [[units]]
+facing = "right"
 id = 3
 unit_type = "wolf"
 min_difficulty = "normal"
@@ -24,6 +27,7 @@ y = 0
 [units.team]
 enemy = "test_enemy"
 [[units]]
+facing = "right"
 id = 4
 unit_type = "wolf"
 min_difficulty = "hard"

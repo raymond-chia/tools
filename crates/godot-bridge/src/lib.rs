@@ -32,8 +32,8 @@ impl TacticalGame {
             Err(e) => return bridge_error("invalid_difficulty", e.to_string()),
         };
         match Game::from_documents(&definitions.to_string(), &map.to_string(), difficulty) {
-            Ok(game) => {
-                let out = json_response(serde_json::to_string(&game.snapshot(None)));
+            Ok(mut game) => {
+                let out = json_response(serde_json::to_string(&game.take_snapshot(None)));
                 *self.game.lock().expect("核心鎖不應中毒") = Some(game);
                 out
             }

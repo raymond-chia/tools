@@ -28,8 +28,8 @@ pub use model::{
     AttackPreview, AttackResult, BattleMode, CargoState, CargoView, CollisionUnitLog,
     CombatLogEvent, Command, EquipmentView, GridPos, HealingPreview, HealthSegmentsView,
     InitiativeRollLog, MovePreview, MovementTransition, Outcome, PassiveSkillView, Phase,
-    PowerSource, RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect,
-    SkillPreview, SkillRangeView, SkillTargetKind, Snapshot, Team, TerrainCellView,
+    PowerSource, PresentationEvent, RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView,
+    SkillEffect, SkillPreview, SkillRangeView, SkillTargetKind, Snapshot, Team, TerrainCellView,
     TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainLayer, TerrainPlacement,
     TerrainTypeDef, TurnView, UnitView,
 };

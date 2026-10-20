@@ -305,6 +305,17 @@ pub struct Snapshot {
     pub outcome: Outcome,
     pub log: Vec<CombatLogEvent>,
     pub movements: Vec<MovementTransition>,
+    pub presentation_events: Vec<PresentationEvent>,
+}
+
+/// 不寫入 combat log、由核心發出的呈現事件。
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PresentationEvent {
+    UnitFaced {
+        unit_id: i64,
+        facing: crate::authoring::Facing,
+    },
 }
 
 #[derive(Clone, Serialize)]

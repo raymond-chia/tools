@@ -3,6 +3,7 @@ name="battle_turn_sequence"
 width=3
 height=2
 [[units]]
+facing = "right"
 id=1
 unit_type="aria"
 team="player"
@@ -10,6 +11,7 @@ x=0
 y=0
 
 [[units]]
+facing = "right"
 id=2
 unit_type="wolf"
 min_difficulty = "easy"
