@@ -167,7 +167,6 @@ text = "素材面板"
 layout_mode = 2
 size_flags_vertical = 3
 tabs_visible = false
-use_hidden_tabs_for_min_size = true
 
 [node name="Ground" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
 layout_mode = 2
