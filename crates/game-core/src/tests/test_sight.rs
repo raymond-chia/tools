@@ -1,7 +1,8 @@
 use super::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, TEST_SKILL_ID, ascii_board, sight_game_in_range,
 };
-use crate::*;
+use crate::model::{Footprint, Pos, Skills};
+use crate::{Command, Game, GridPos, SkillEffect, Team};
 
 fn sight_game(diagram: &str, effect: SkillEffect, target_team: Team) -> Game {
     sight_game_in_range(diagram, effect, target_team, 0, 20)

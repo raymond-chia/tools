@@ -28,10 +28,10 @@ fn group(mode: &str, conditions: &[&str]) -> Value {
     })
 }
 
-// 以作者地圖序列化 TOML，保留各案例指定的勝敗條件。
-fn document(victory: Value, defeat: Value) -> String {
+// 直接建立作者地圖，保留各案例指定的勝敗條件。
+fn map_data(victory: Value, defeat: Value) -> authoring::Map {
     let layout = ascii_board(DIAGRAM);
-    let map = map_from_ascii_board(
+    let mut map = map_from_ascii_board(
         "outcome_conditions",
         &layout,
         &[
@@ -44,11 +44,9 @@ fn document(victory: Value, defeat: Value) -> String {
             ),
         ],
     );
-    let mut map = serde_json::to_value(map).expect("測試地圖應可序列化");
-    map["victory"] = victory;
-    map["defeat"] = defeat;
-    let map: authoring::Map = serde_json::from_value(map).expect("勝敗地圖應符合作者格式");
-    toml::to_string(&map).expect("勝敗地圖應可序列化為 TOML")
+    map.victory = serde_json::from_value(victory).expect("勝利條件應符合作者格式");
+    map.defeat = serde_json::from_value(defeat).expect("失敗條件應符合作者格式");
+    map
 }
 
 fn game(victory: Value, defeat: Value, attacker: i64) -> Game {
@@ -64,10 +62,9 @@ fn game(victory: Value, defeat: Value, attacker: i64) -> Game {
             0
         };
     }
-    let definitions = toml::to_string(&definitions).expect("測試定義應可序列化");
-    let mut game = Game::from_documents(
-        &definitions,
-        &document(victory, defeat),
+    let mut game = Game::from_authoring(
+        definitions,
+        map_data(victory, defeat),
         authoring::Difficulty::Easy,
     )
     .expect("明確指定勝敗條件的地圖應可載入");
@@ -187,8 +184,9 @@ fn independent_outcome_groups_survive_authoring_conversion() {
     ] {
         let victory = group(victory_mode, &[ENEMIES]);
         let defeat = group(defeat_mode, &[PLAYERS]);
-        let output = authoring::map_to_json(&document(victory.clone(), defeat.clone()))
-            .expect("設定應可轉成 JSON");
+        let document = toml::to_string(&map_data(victory.clone(), defeat.clone()))
+            .expect("測試地圖應可序列化為 TOML");
+        let output = authoring::map_to_json(&document).expect("設定應可轉成 JSON");
         let output: Value = serde_json::from_str(&output).expect("結果應為有效 JSON");
         assert_eq!(output["victory"], victory, "勝利 {victory_mode}");
         assert_eq!(output["defeat"], defeat, "失敗 {defeat_mode}");
@@ -263,7 +261,7 @@ fn cargo_escape_resolves_the_configured_outcome() {
             Outcome::Defeat,
         ),
     ] {
-        let map = map_from_ascii_board(
+        let mut map = map_from_ascii_board(
             "cargo_escape_outcome",
             &layout,
             &[
@@ -272,26 +270,24 @@ fn cargo_escape_resolves_the_configured_outcome() {
                 ('U', 3, "second_raider", Team::Enemy("bandits".into())),
             ],
         );
-        let mut map = serde_json::to_value(map).expect("測試地圖應可序列化");
         let GridPos { x, y } = marked_cell(&layout, 'C');
         let GridPos {
             x: exit_x,
             y: exit_y,
         } = marked_cell(&layout, 'E');
-        map["cargo"] = json!({
-            "positions": [{"x": x, "y": y}],
-            "exits": [{"x": exit_x, "y": exit_y}]
+        map.cargo = Some(authoring::CargoObjective {
+            positions: vec![GridPos { x, y }],
+            exits: vec![GridPos {
+                x: exit_x,
+                y: exit_y,
+            }],
         });
-        map["victory"] = victory;
-        map["defeat"] = defeat;
-        let map: authoring::Map = serde_json::from_value(map).expect("測試地圖應符合作者格式");
-        let document = toml::to_string(&map).expect("測試地圖應可序列化為 TOML");
-        let mut game = Game::from_documents(
-            include_str!("../data/cargo_objective_definitions.toml"),
-            &document,
-            authoring::Difficulty::Easy,
-        )
-        .expect("貨物勝敗條件地圖應可載入");
+        map.victory = serde_json::from_value(victory).expect("勝利條件應符合作者格式");
+        map.defeat = serde_json::from_value(defeat).expect("失敗條件應符合作者格式");
+        let definitions = toml::from_str(include_str!("../data/cargo_objective_definitions.toml"))
+            .expect("測試定義應可載入");
+        let mut game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+            .expect("貨物勝敗條件地圖應可載入");
         game.set_random_seed(1);
         let snapshot = game.command(Command::Start).expect("戰鬥應可開始");
         assert_eq!(snapshot.turn.actor, Some(TARGET_ID), "{name}");

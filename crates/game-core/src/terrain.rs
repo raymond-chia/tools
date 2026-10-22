@@ -7,6 +7,7 @@ use crate::model::{
 };
 use crate::movement::footprint_cells;
 use bevy_ecs::prelude::{Entity, World};
+use std::collections::HashMap;
 
 pub(crate) fn terrain_type<'a>(board: &'a Board, kind: &str) -> &'a TerrainTypeDef {
     let Board {
@@ -32,24 +33,45 @@ pub(crate) fn terrain_damage(board: &Board, kind: &str) -> i32 {
     *damage
 }
 
+/// 作者驗證與執行期共用固定地形查詢；未放置 ground 時補上預設地面。
+pub(crate) fn fixed_terrains_at<'a>(
+    terrain_types: &HashMap<String, TerrainTypeDef>,
+    terrains: &'a HashMap<GridPos, Vec<String>>,
+    position: GridPos,
+) -> Vec<&'a str> {
+    let mut kinds: Vec<_> = terrains
+        .get(&position)
+        .into_iter()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    if !kinds
+        .iter()
+        .any(|kind| terrain_types[*kind].layer == TerrainLayer::Ground)
+    {
+        kinds.push(DEFAULT_GROUND_TERRAIN);
+    }
+    kinds
+}
+
 /// 回傳此格所有地形；未放置 ground 時補上預設地面。
 pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
-    let board @ Board {
+    let Board {
         width: _,
         height: _,
         terrains,
-        terrain_types: _,
+        terrain_types,
     } = w.resource::<Board>();
-    let mut kinds = terrains.get(&position).cloned().unwrap_or_default();
+    let mut kinds: Vec<_> = fixed_terrains_at(terrain_types, terrains, position)
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
     if let Some(temporary) = w.resource::<TemporaryTerrains>().0.get(&position) {
         for kind in temporary.keys() {
             if !kinds.contains(kind) {
                 kinds.push(kind.clone());
             }
         }
-    }
-    if ground_at(board, &kinds).is_none() {
-        kinds.push(DEFAULT_GROUND_TERRAIN.to_owned());
     }
     kinds.sort();
     kinds

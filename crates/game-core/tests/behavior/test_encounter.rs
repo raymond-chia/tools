@@ -1,5 +1,5 @@
 use crate::support::{ACTOR_ID, TARGET_ID, ascii_map, assert_turn_order, unit};
-use game_core::{BattleMode, Command, Game, Team};
+use game_core::{BattleMode, Command, Game, Team, authoring};
 
 // 沿用測試目錄內的單位、技能與地形定義，不載入正式遊戲資料。
 const DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
@@ -29,9 +29,9 @@ fn encounter_game(diagram: &str, reverse: bool) -> (Game, Vec<(char, i64)>) {
     if reverse {
         map.units.reverse();
     }
-    let definitions = toml::to_string(&definitions).expect("測試定義應可序列化");
-    let map = toml::to_string(&map).expect("測試地圖應可序列化");
-    let mut game = Game::from_documents(&definitions, &map, game_core::authoring::Difficulty::Easy)
+    let definitions: authoring::Definitions =
+        definitions.try_into().expect("測試定義應符合作者格式");
+    let mut game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
         .expect("測試遭遇應可載入");
     game.set_random_seed(1);
     let markers = units

@@ -3,7 +3,9 @@ use super::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map, assert_turn_order,
     map_from_ascii_board,
 };
-use crate::*;
+use crate::model::{Hp, Pos, TemporaryTerrain, TemporaryTerrains, Turn};
+use crate::{Command, Game, GridPos, Phase, Team, TerrainPlacement, authoring};
+use std::collections::HashMap;
 
 const DEFINITIONS: &str = include_str!("../../tests/data/utility_ai_definitions.toml");
 const ALLY_ID: i64 = 3;
@@ -40,9 +42,11 @@ fn game(definitions: &toml::Value, diagram: &str, units: &[(char, i64, &str, Tea
 }
 
 fn game_on_map(definitions: &toml::Value, map: authoring::Map) -> Game {
-    let source = toml::to_string(definitions).expect("測試定義應可序列化");
-    let map = toml::to_string(&map).expect("測試地圖應可序列化");
-    let mut game = Game::from_documents(&source, &map, crate::authoring::Difficulty::Easy)
+    let definitions: authoring::Definitions = definitions
+        .clone()
+        .try_into()
+        .expect("測試定義應符合作者格式");
+    let mut game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
         .expect("測試戰鬥應可載入");
     game.set_random_seed(1);
     game
@@ -1159,7 +1163,7 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
                 GridPos { x: *x, y: *y },
                 HashMap::from([(
                     "wall".into(),
-                    model::TemporaryTerrain {
+                    TemporaryTerrain {
                         expires_after_round: 10,
                     },
                 )]),

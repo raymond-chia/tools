@@ -8,9 +8,9 @@ use serde_json::{Value, json};
 const DEFINITIONS: &str = include_str!("../data/cargo_objective_definitions.toml");
 const SECOND_RAIDER: i64 = 3;
 
-// 以作者地圖序列化貨物防守 TOML，逐份提供貨物位置、撤離格及勝敗條件。
+// 直接建立貨物防守作者資料，提供貨物位置、撤離格及勝敗條件。
 // C/F 是貨物位置、E 是撤離格、A 是護衛、T/U 是強盜、D 是移動目的地。
-fn map_document(layout: &AsciiBoard) -> String {
+fn map_data(layout: &AsciiBoard) -> authoring::Map {
     let AsciiBoard {
         board: _,
         markers,
@@ -28,45 +28,28 @@ fn map_document(layout: &AsciiBoard) -> String {
             Team::Enemy("bandits".into()),
         ));
     }
-    let mut document = serde_json::to_value(map_from_ascii_board("cargo_defense", layout, &units))
-        .expect("測試地圖應可序列化");
+    let mut map = map_from_ascii_board("cargo_defense", layout, &units);
     let positions: Vec<_> = ['C', 'F']
         .into_iter()
         .filter(|marker| markers.contains_key(marker))
         .map(|marker| marked_cell(layout, marker))
         .collect();
-    let GridPos {
-        x: exit_x,
-        y: exit_y,
-    } = marked_cell(layout, 'E');
-    document["cargo"] = json!({
-        "positions": positions,
-        "exits": [{"x": exit_x, "y": exit_y}]
+    map.cargo = Some(authoring::CargoObjective {
+        positions,
+        exits: vec![marked_cell(layout, 'E')],
     });
-    document["victory"] = json!({
-        "mode": "all",
-        "conditions": [{"type": "all_enemies_defeated"}]
-    });
-    document["defeat"] = json!({
-        "mode": "any",
-        "conditions": [
-            {"type": "all_players_defeated"},
-            {"type": "cargo_escaped"}
-        ]
-    });
-    let document: authoring::Map =
-        serde_json::from_value(document).expect("測試地圖應符合作者格式");
-    toml::to_string(&document).expect("測試地圖應可序列化為 TOML")
+    map.defeat
+        .conditions
+        .push(authoring::OutcomeCondition::CargoEscaped);
+    map
 }
 
 fn game(diagram: &str) -> (Game, AsciiBoard) {
     let layout = ascii_board(diagram);
-    let mut game = Game::from_documents(
-        DEFINITIONS,
-        &map_document(&layout),
-        authoring::Difficulty::Easy,
-    )
-    .expect("貨物防守地圖應可載入");
+    let definitions = toml::from_str(DEFINITIONS).expect("測試定義應可載入");
+    let mut game =
+        Game::from_authoring(definitions, map_data(&layout), authoring::Difficulty::Easy)
+            .expect("貨物防守地圖應可載入");
     game.set_random_seed(1);
     let snapshot = game.command(Command::Start).expect("防守戰應可開始");
     assert_eq!(snapshot.turn.actor, Some(TARGET_ID));
@@ -84,15 +67,8 @@ fn loot(game: &mut Game, GridPos { x, y }: GridPos) {
     .expect("相鄰強盜應可花一次行動取得貨物");
 }
 
-fn carrying(game: &Game, id: i64) -> Value {
-    let snapshot = serde_json::to_value(game.snapshot(None)).expect("快照應可序列化");
-    snapshot["units"]
-        .as_array()
-        .expect("快照應包含單位")
-        .iter()
-        .find(|unit| unit["id"] == id)
-        .expect("攜貨者應仍在地圖內")["carrying_cargo"]
-        .clone()
+fn carrying(game: &Game, id: i64) -> bool {
+    unit(&game.snapshot(None), id).carrying_cargo
 }
 
 fn move_to(game: &mut Game, actor: i64, GridPos { x, y }: GridPos) {
@@ -138,7 +114,7 @@ fn cargo_objective_survives_authoring_conversion() {
         .....
     ",
     );
-    let source = map_document(&layout);
+    let source = toml::to_string(&map_data(&layout)).expect("測試地圖應可序列化為 TOML");
     let GridPos { x, y } = marked_cell(&layout, 'C');
     let GridPos {
         x: exit_x,
@@ -337,7 +313,7 @@ fn raider_movement_resolves_cargo_escape() {
                 .expect("結束後命令應維持結果");
             assert_eq!(snapshot.outcome, Outcome::Defeat, "{name}");
         } else if should_loot {
-            assert_eq!(carrying(&game, TARGET_ID), json!(true), "{name}");
+            assert_eq!(carrying(&game, TARGET_ID), true, "{name}");
         }
     }
 }
@@ -431,7 +407,7 @@ fn cargo_remains_at_the_carriers_death_position() {
         skill: "loot".into(),
     })
     .expect("另一名強盜應可從攜貨者陣亡格取得掉落貨物");
-    assert_eq!(carrying(&game, SECOND_RAIDER), json!(true));
+    assert_eq!(carrying(&game, SECOND_RAIDER), true);
     assert_eq!(game.snapshot(None).outcome, Outcome::Ongoing);
 }
 
@@ -460,6 +436,6 @@ fn defeating_carrier_does_not_replenish_the_initial_cargo_position() {
         skill: "loot".into(),
     });
     assert_eq!(result.is_err(), true);
-    assert_eq!(carrying(&game, SECOND_RAIDER), json!(false));
+    assert_eq!(carrying(&game, SECOND_RAIDER), false);
     assert_eq!(game.snapshot(None).outcome, Outcome::Ongoing);
 }

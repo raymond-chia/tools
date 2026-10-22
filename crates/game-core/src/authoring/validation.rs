@@ -5,9 +5,9 @@ use crate::model::{
     Pos, Random, ResultState, SkillDef, SkillEffect, SkillTargetKind, Skills, Team,
     TemporaryTerrains, TerrainLayer, Turn, Unit,
 };
-use crate::movement::{fits, footprint_cells};
+use crate::movement::footprint_cells;
 use crate::skill::target_kind;
-use crate::terrain::footprint_on_impassable;
+use crate::terrain::fixed_terrains_at;
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::World;
 use std::collections::{HashMap, HashSet};
@@ -89,13 +89,18 @@ pub(crate) struct LoadedMap {
     pub(crate) presentation_events: Vec<crate::model::PresentationEvent>,
 }
 
-/// 在作者輸入邊界驗證完整資料並建立世界；所有難度先驗證完整配置，再篩選生成。
-pub(crate) fn load_map(
+/// 定義只解析一次，供各地圖驗證與正式建局共用。
+pub(crate) struct PreparedDefinitions {
+    terrain_types: HashMap<String, crate::model::TerrainTypeDef>,
+    skills: HashMap<String, SkillDef>,
+    unit_types: HashMap<String, authoring::UnitType>,
+    equipment_stats: HashMap<String, crate::equipment::EquipmentStats>,
+    ai_profiles: crate::model::AiProfiles,
+}
+
+pub(crate) fn prepare_definitions(
     definitions: authoring::Definitions,
-    map: authoring::Map,
-    difficulty: authoring::Difficulty,
-) -> Result<LoadedMap, GameError> {
-    validate_map(&map)?;
+) -> Result<PreparedDefinitions, GameError> {
     let authoring::Definitions {
         equipment,
         default_passive_skills,
@@ -104,16 +109,6 @@ pub(crate) fn load_map(
         skills,
         unit_types,
     } = definitions;
-    let authoring::Map {
-        name: _,
-        width,
-        height,
-        terrains: terrain_placements,
-        units: placements,
-        victory,
-        defeat,
-        cargo,
-    } = map;
     let mut terrains = HashMap::new();
     for terrain in terrain_types {
         if terrains.insert(terrain.id.clone(), terrain).is_some() {
@@ -172,46 +167,6 @@ pub(crate) fn load_map(
             return Err(error::duplicate_unit_type_id());
         }
     }
-    for placement in &placements {
-        let kind = types
-            .get(&placement.unit_type)
-            .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
-        // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
-        if matches!(placement.team, Team::Enemy(_))
-            && !kind.skills.iter().any(|id| {
-                skills.iter().any(|skill| {
-                    skill.id == *id && target_kind(&skill.effect) != SkillTargetKind::Passive
-                })
-            })
-        {
-            return Err(error::missing_ai_skill(placement.id));
-        }
-    }
-    validate_numeric_ranges(
-        &terrain_types,
-        &skills,
-        &types,
-        &equipment_stats,
-        width,
-        height,
-    )?;
-    for terrain in &terrain_placements {
-        if !terrain_types.contains_key(&terrain.kind) {
-            return Err(error::unknown_terrain_type(&terrain.kind));
-        }
-    }
-    let mut terrain_positions = HashSet::new();
-    let mut ground_positions = HashSet::new();
-    for terrain in &terrain_placements {
-        if !terrain_positions.insert((terrain.x, terrain.y, terrain.kind.as_str())) {
-            return Err(error::duplicate_terrain(terrain.x, terrain.y));
-        }
-        if terrain_types[&terrain.kind].layer == TerrainLayer::Ground
-            && !ground_positions.insert((terrain.x, terrain.y))
-        {
-            return Err(error::multiple_ground_terrains(terrain.x, terrain.y));
-        }
-    }
     let mut skill_definitions = HashMap::new();
     for skill in skills {
         if matches!(skill.effect, SkillEffect::Flanking { hit_bonus } if hit_bonus < 0) {
@@ -236,6 +191,78 @@ pub(crate) fn load_map(
             return Err(error::duplicate_skill_id());
         }
     }
+    Ok(PreparedDefinitions {
+        terrain_types,
+        skills: skill_definitions,
+        unit_types: types,
+        equipment_stats,
+        ai_profiles,
+    })
+}
+
+/// 驗證完整配置並整理固定地形；不建立 ECS world，也不依難度略過驗證。
+pub(crate) fn validate_map_with_definitions(
+    definitions: &PreparedDefinitions,
+    map: &authoring::Map,
+) -> Result<HashMap<GridPos, Vec<String>>, GameError> {
+    validate_map(map)?;
+    let PreparedDefinitions {
+        terrain_types,
+        skills,
+        unit_types: types,
+        equipment_stats,
+        ai_profiles: _,
+    } = definitions;
+    let authoring::Map {
+        name: _,
+        width,
+        height,
+        terrains: terrain_placements,
+        units: placements,
+        victory: _,
+        defeat: _,
+        cargo: _,
+    } = map;
+    for placement in placements {
+        let kind = types
+            .get(&placement.unit_type)
+            .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
+        // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
+        if matches!(placement.team, Team::Enemy(_))
+            && !kind.skills.iter().any(|id| {
+                skills
+                    .get(id)
+                    .is_some_and(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
+            })
+        {
+            return Err(error::missing_ai_skill(placement.id));
+        }
+    }
+    validate_numeric_ranges(
+        terrain_types,
+        skills,
+        types,
+        equipment_stats,
+        *width,
+        *height,
+    )?;
+    for terrain in terrain_placements {
+        if !terrain_types.contains_key(&terrain.kind) {
+            return Err(error::unknown_terrain_type(&terrain.kind));
+        }
+    }
+    let mut terrain_positions = HashSet::new();
+    let mut ground_positions = HashSet::new();
+    for terrain in terrain_placements {
+        if !terrain_positions.insert((terrain.x, terrain.y, terrain.kind.as_str())) {
+            return Err(error::duplicate_terrain(terrain.x, terrain.y));
+        }
+        if terrain_types[&terrain.kind].layer == TerrainLayer::Ground
+            && !ground_positions.insert((terrain.x, terrain.y))
+        {
+            return Err(error::multiple_ground_terrains(terrain.x, terrain.y));
+        }
+    }
     let mut terrains: HashMap<GridPos, Vec<String>> = HashMap::new();
     for terrain in terrain_placements {
         terrains
@@ -244,11 +271,97 @@ pub(crate) fn load_map(
                 y: terrain.y,
             })
             .or_default()
-            .push(terrain.kind);
+            .push(terrain.kind.clone());
     }
     for kinds in terrains.values_mut() {
         kinds.sort();
     }
+    let mut occupied = HashSet::new();
+    for placement in placements {
+        let authoring::UnitPlacement {
+            facing: _,
+            id,
+            min_difficulty: _,
+            unit_type,
+            team: _,
+            x,
+            y,
+        } = placement;
+        let authoring::UnitType {
+            id: _,
+            ai_profile: _,
+            visual: _,
+            width: unit_width,
+            height: unit_height,
+            hp: _,
+            movement: _,
+            initiative: _,
+            dodge: _,
+            hit: _,
+            physical_power: _,
+            magical_power: _,
+            main_hand: _,
+            off_hand: _,
+            armor: _,
+            accessory: _,
+            skills: _,
+            passive_skills: _,
+        } = types.get(unit_type).expect("單位配置的類型已在上方驗證");
+        if *x < 0
+            || *y < 0
+            || x.checked_add(*unit_width)
+                .is_none_or(|right| right > *width)
+            || y.checked_add(*unit_height)
+                .is_none_or(|bottom| bottom > *height)
+        {
+            return Err(error::unit_out_of_bounds(*id));
+        }
+        let cells = footprint_cells(
+            GridPos { x: *x, y: *y },
+            Footprint {
+                width: *unit_width,
+                height: *unit_height,
+            },
+        );
+        if cells.iter().any(|cell| {
+            fixed_terrains_at(terrain_types, &terrains, *cell)
+                .iter()
+                .any(|kind| terrain_types[*kind].entry_rule != crate::TerrainEntryRule::Walkable)
+        }) {
+            return Err(error::unit_on_impassable(*id));
+        }
+        if cells.iter().any(|cell| !occupied.insert(*cell)) {
+            return Err(error::overlapping_unit(*id));
+        }
+    }
+    Ok(terrains)
+}
+
+/// 驗證完成後才建立世界並依難度生成單位。
+pub(crate) fn load_map(
+    definitions: authoring::Definitions,
+    map: authoring::Map,
+    difficulty: authoring::Difficulty,
+) -> Result<LoadedMap, GameError> {
+    let definitions = prepare_definitions(definitions)?;
+    let terrains = validate_map_with_definitions(&definitions, &map)?;
+    let PreparedDefinitions {
+        terrain_types,
+        skills: skill_definitions,
+        unit_types: types,
+        equipment_stats,
+        ai_profiles,
+    } = definitions;
+    let authoring::Map {
+        name: _,
+        width,
+        height,
+        terrains: _,
+        units: placements,
+        victory,
+        defeat,
+        cargo,
+    } = map;
     let mut w = World::new();
     w.insert_resource(Board {
         width,
@@ -285,8 +398,6 @@ pub(crate) fn load_map(
     w.insert_resource(Skills {
         definitions: skill_definitions,
     });
-    // 佔用格判斷需要已建立的棋盤，因此在建立 Board 後驗證。
-    let mut occupied = HashSet::new();
     let mut presentation_events = Vec::new();
     for placement in placements {
         let authoring::UnitPlacement {
@@ -329,23 +440,8 @@ pub(crate) fn load_map(
             block_reduction,
             equipment,
         } = equipment_stats.get(&unit_type).expect("配裝已驗證").clone();
-        if x.checked_add(width).is_none() || y.checked_add(height).is_none() {
-            return Err(error::unit_out_of_bounds(id));
-        }
         let f = Footprint { width, height };
         let p = GridPos { x, y };
-        if !fits(w.resource::<Board>(), p, f) {
-            return Err(error::unit_out_of_bounds(id));
-        }
-        if footprint_on_impassable(&w, p, f) {
-            return Err(error::unit_on_impassable(id));
-        }
-        if footprint_cells(p, f)
-            .iter()
-            .any(|cell| !occupied.insert(*cell))
-        {
-            return Err(error::overlapping_unit(id));
-        }
         if matches!(team, Team::Enemy(_))
             && min_difficulty.expect("作者輸入邊界已確認每隻怪物都有出現難度") > difficulty
         {
@@ -389,7 +485,7 @@ pub(crate) fn load_map(
 /// 載入時建立座標、地形疊加與戰鬥數值可安全運算的不變量。
 fn validate_numeric_ranges(
     terrains: &HashMap<String, crate::model::TerrainTypeDef>,
-    skills: &[SkillDef],
+    skills: &HashMap<String, SkillDef>,
     units: &HashMap<String, authoring::UnitType>,
     equipment_stats: &HashMap<String, crate::equipment::EquipmentStats>,
     width: i32,
@@ -442,7 +538,7 @@ fn validate_numeric_ranges(
             return Err(error::numeric_range(&unit.id));
         }
         for skill in skills
-            .iter()
+            .values()
             .filter(|skill| unit.skills.contains(&skill.id))
         {
             let (hit_bonus, power_bonus) = match skill.effect {
@@ -466,9 +562,7 @@ fn validate_numeric_ranges(
             if hit < i64::from(i32::MIN)
                 || hit
                     + i64::from(crate::skill::flanking_hit_bonus(
-                        unit.skills
-                            .iter()
-                            .filter_map(|id| skills.iter().find(|skill| skill.id == *id)),
+                        unit.skills.iter().filter_map(|id| skills.get(id)),
                     ))
                     + i64::from(gameplay_config::HIT_DIE_SIDES)
                     > i64::from(i32::MAX)

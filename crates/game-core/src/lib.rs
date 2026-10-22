@@ -20,8 +20,6 @@ extern crate self as game_core;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
-use bevy_ecs::prelude::{Entity, World};
 pub use error::GameError;
 pub use game::Game;
 pub use model::{
@@ -33,10 +31,4 @@ pub use model::{
     TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainLayer, TerrainPlacement,
     TerrainTypeDef, TurnView, UnitView,
 };
-#[cfg(test)]
-use model::{Board, Footprint, Hp, Pos, Skills, TemporaryTerrains, Turn, Unit};
 pub use skill::degree;
-#[cfg(test)]
-use skill::{attack_damage, hit};
-#[cfg(test)]
-use std::collections::HashMap;

@@ -1,10 +1,10 @@
 //! 編輯器的欄位修改、新增、複製、刪除與引用檢查；不參與遊戲執行期規則運算。
 use super::EditorError;
-use crate::authoring::{Definitions, EquipmentDef, EquipmentSlot, Map, UnitType};
+use crate::authoring::{Definitions, EquipmentDef, EquipmentSlot, Map, UnitType, validation};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::skill::target_kind;
 use crate::{
-    Game, SkillDef, SkillEffect, SkillTargetKind, TerrainEntryRule, TerrainLayer, TerrainTypeDef,
+    SkillDef, SkillEffect, SkillTargetKind, TerrainEntryRule, TerrainLayer, TerrainTypeDef,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -319,19 +319,21 @@ pub fn edit_definition_from_json(
         }
     }
 
-    // 定義的合法性由每張地圖的完整載入檢查。
     if maps.is_empty() {
         return Err(EditorError::operation("missing_map", "", Vec::new()));
     }
-    for (path, map) in &maps {
-        Game::from_authoring(
-            definitions.clone(),
-            map.clone(),
-            crate::authoring::Difficulty::Hard,
-        )
-        .map_err(|error| EditorError::Map {
-            path: path.clone(),
+    // 定義只準備一次；所有地圖共用同一份結果，錯誤仍標示對應地圖。
+    let prepared =
+        validation::prepare_definitions(definitions.clone()).map_err(|error| EditorError::Map {
+            path: maps.keys().next().expect("已確認至少有一張地圖").clone(),
             error,
+        })?;
+    for (path, map) in &maps {
+        validation::validate_map_with_definitions(&prepared, map).map_err(|error| {
+            EditorError::Map {
+                path: path.clone(),
+                error,
+            }
         })?;
     }
     serde_json::to_string(&EditedDocuments { definitions })

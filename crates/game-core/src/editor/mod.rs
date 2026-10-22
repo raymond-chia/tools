@@ -6,7 +6,7 @@ mod json;
 mod map;
 
 use crate::Game;
-use crate::authoring::{Definitions, Map};
+use crate::authoring::{Definitions, Map, validation};
 pub use definitions::edit_definition_from_json;
 pub use error::EditorError;
 pub use map::{paint_terrain_from_json, terrain_brush_cells_from_json};
@@ -34,11 +34,8 @@ pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, Stri
         .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let map: Map = json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
-    Game::from_authoring(
-        definitions.clone(),
-        map.clone(),
-        crate::authoring::Difficulty::Hard,
-    )?;
+    let prepared = validation::prepare_definitions(definitions.clone())?;
+    validation::validate_map_with_definitions(&prepared, &map)?;
     // 單位的技能依技能頁籤排列存檔，不沿用勾選的先後順序。
     for unit in &mut definitions.unit_types {
         unit.skills.sort_by_key(|id| {
@@ -55,11 +52,6 @@ pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, Stri
         toml::to_string_pretty(&map)
             .map_err(|e| EditorError::conversion("toml_serialize", e.to_string()))?,
     ))
-}
-
-/// 編輯器預覽使用真實遊戲核心的 presentation snapshot，不另行推導規則。
-pub fn preview_from_json(definitions: &str, map: &str) -> Result<String, EditorError> {
-    inspected_preview_from_json(definitions, map, None)
 }
 
 /// 依編輯器選取的單位產生範圍；移動規則沿用遊戲 snapshot。

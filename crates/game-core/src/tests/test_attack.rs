@@ -1,5 +1,12 @@
 use super::support::{AsciiBoard, ascii_board};
-use crate::*;
+use crate::model::{Board, Footprint, Pos, Skills, TemporaryTerrains, Unit};
+use crate::skill::{attack_damage, hit};
+use crate::{
+    AttackResult, EquipmentView, GridPos, PowerSource, SkillDef, SkillEffect, Team,
+    TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef,
+};
+use bevy_ecs::prelude::{Entity, World};
+use std::collections::HashMap;
 
 // 驗證命中結果、不同裝備格擋減傷與暴擊順序均符合傷害公式。
 #[test]
