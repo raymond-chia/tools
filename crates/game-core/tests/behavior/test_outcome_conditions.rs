@@ -1,4 +1,4 @@
-use super::support::{
+use crate::support::{
     ACTOR_ID, TARGET_ID, ascii_board, end_turn_and_continue, map_from_ascii_board, marked_cell,
 };
 use game_core::{Command, Game, GridPos, Outcome, Team, authoring};
@@ -11,6 +11,14 @@ const DIAGRAM: &str = "
     ....
     .AT.
     ....
+";
+
+const TEAM_MEMBER_ID: i64 = 4;
+const SECOND_TEAM_MEMBER_ID: i64 = 5;
+const CARGO_DIAGRAM: &str = "
+    .......
+    .BATCUE
+    ..D....
 ";
 
 fn group(mode: &str, conditions: &[&str]) -> Value {
@@ -81,6 +89,86 @@ fn eliminate_opponent(game: &mut Game, attacker: i64) -> Outcome {
         skill: "melee".into(),
     })
     .expect("相鄰攻擊應擊倒唯一對手")
+    .outcome
+}
+
+// B、D 屬於指定的 sentries team；T、U 屬於 bandits，T 取貨而 U 持續存活。
+fn team_cargo_document(conditions: Vec<Value>) -> String {
+    let layout = ascii_board(CARGO_DIAGRAM);
+    let map = map_from_ascii_board(
+        "team_cargo_outcome",
+        &layout,
+        &[
+            ('A', ACTOR_ID, "guard", Team::Player),
+            (
+                'B',
+                TEAM_MEMBER_ID,
+                "second_raider",
+                Team::Enemy("sentries".into()),
+            ),
+            ('T', TARGET_ID, "raider", Team::Enemy("bandits".into())),
+            ('U', 3, "guard", Team::Enemy("bandits".into())),
+            (
+                'D',
+                SECOND_TEAM_MEMBER_ID,
+                "guard",
+                Team::Enemy("sentries".into()),
+            ),
+        ],
+    );
+    let map = toml::Value::try_from(&map).expect("測試地圖應可轉成 TOML 資料");
+    let mut map = serde_json::to_value(map).expect("測試地圖應可序列化");
+    map["cargo"] = json!({
+        "positions": [marked_cell(&layout, 'C')],
+        "exits": [marked_cell(&layout, 'E')]
+    });
+    map["victory"] = json!({"mode": "all", "conditions": conditions});
+    map["defeat"] = group("any", &[PLAYERS]);
+    // 直接序列化輸入，讓正式載入入口驗證尚待實作的新條件。
+    toml::to_string(&map).expect("測試地圖應可序列化為 TOML")
+}
+
+fn team_cargo_game(conditions: Vec<Value>) -> Game {
+    let mut game = Game::from_documents(
+        include_str!("../data/cargo_objective_definitions.toml"),
+        &team_cargo_document(conditions),
+        authoring::Difficulty::Easy,
+    )
+    .expect("指定 team 全滅與無人攜貨條件應可載入");
+    game.set_random_seed(1);
+    game
+}
+
+fn team_defeated_condition() -> Value {
+    json!({"type": "team_defeated", "team": {"enemy": "sentries"}})
+}
+
+fn no_cargo_carried_condition() -> Value {
+    json!({"type": "no_cargo_carried"})
+}
+
+fn advance_to_guard(game: &mut Game) {
+    for _ in 0..8 {
+        let snapshot = game.snapshot(None);
+        if snapshot.turn.actor == Some(ACTOR_ID) && snapshot.turn.phase != game_core::Phase::Ended {
+            return;
+        }
+        assert_eq!(snapshot.outcome, Outcome::Ongoing);
+        end_turn_and_continue(game);
+    }
+    panic!("護衛應在有限回合內取得行動權");
+}
+
+fn defeat_marked_enemy(game: &mut Game, marker: char) -> Outcome {
+    advance_to_guard(game);
+    let GridPos { x, y } = marked_cell(&ascii_board(CARGO_DIAGRAM), marker);
+    game.command(Command::Skill {
+        actor: ACTOR_ID,
+        x,
+        y,
+        skill: "strike".into(),
+    })
+    .expect("護衛應可擊倒相鄰敵人")
     .outcome
 }
 
@@ -247,5 +335,112 @@ fn defeat_has_priority_when_both_groups_match() {
             .command(Command::Continue)
             .expect("戰鬥結束後結果應保持");
         assert_eq!(snapshot.outcome, Outcome::Defeat, "{mode}");
+    }
+}
+
+// 驗證指定 team 與無人攜貨條件在公開作者格式轉換後完整保留。
+#[test]
+fn team_cargo_conditions_survive_authoring_conversion() {
+    let conditions = vec![team_defeated_condition(), no_cargo_carried_condition()];
+    let output = authoring::map_to_json(&team_cargo_document(conditions.clone()))
+        .expect("新勝利條件應可轉成 JSON");
+    let output: Value = serde_json::from_str(&output).expect("結果應為有效 JSON");
+    assert_eq!(
+        output["victory"],
+        json!({"mode": "all", "conditions": conditions})
+    );
+}
+
+// 驗證其他 team 的死亡不算，指定 team 須全滅才勝利，其他 team 可繼續存活。
+#[test]
+fn only_the_specified_teams_elimination_satisfies_the_condition() {
+    let mut game = team_cargo_game(vec![team_defeated_condition()]);
+    let snapshot = game.command(Command::Start).expect("戰鬥應可開始");
+    assert_eq!(snapshot.outcome, Outcome::Ongoing);
+    assert_eq!(defeat_marked_enemy(&mut game, 'T'), Outcome::Ongoing);
+    assert_eq!(defeat_marked_enemy(&mut game, 'B'), Outcome::Ongoing);
+    assert_eq!(defeat_marked_enemy(&mut game, 'D'), Outcome::Victory);
+    assert_eq!(
+        game.snapshot(None).units.iter().any(|unit| unit.id == 3),
+        true
+    );
+}
+
+// 驗證單獨要求無人攜貨時，貨物仍在地上且敵人皆存活也會立即勝利。
+#[test]
+fn uncarried_ground_cargo_satisfies_the_condition_at_start() {
+    let mut game = team_cargo_game(vec![no_cargo_carried_condition()]);
+    let snapshot = game.command(Command::Start).expect("戰鬥應可開始");
+    assert_eq!(snapshot.outcome, Outcome::Victory);
+    assert_eq!(snapshot.units.len(), 5);
+    assert_eq!(
+        snapshot.cargo.expect("地圖應有貨物").items,
+        vec![game_core::CargoState::Ground(marked_cell(
+            &ascii_board(CARGO_DIAGRAM),
+            'C'
+        ))],
+    );
+}
+
+// 驗證先消滅指定 team 或先擊倒攜貨者，都須等兩條件同時滿足才勝利。
+#[test]
+fn team_elimination_and_no_carriers_must_both_be_satisfied() {
+    for (name, first, second) in [
+        // 指定 team 全滅時仍有攜貨者，最後擊倒攜貨者才勝利。
+        ("指定 team 先全滅", 'B', 'T'),
+        // 無人攜貨時指定 team 仍有人存活，最後消滅指定 team 才勝利。
+        ("攜貨者先倒", 'T', 'B'),
+    ] {
+        let mut game = team_cargo_game(vec![
+            team_defeated_condition(),
+            no_cargo_carried_condition(),
+        ]);
+        let snapshot = game.command(Command::Start).expect("戰鬥應可開始");
+        assert_eq!(snapshot.outcome, Outcome::Ongoing, "{name}");
+        assert_eq!(snapshot.turn.actor, Some(TARGET_ID), "{name}");
+        let GridPos { x, y } = marked_cell(&ascii_board(CARGO_DIAGRAM), 'C');
+        let snapshot = game
+            .command(Command::Skill {
+                actor: TARGET_ID,
+                x,
+                y,
+                skill: "loot".into(),
+            })
+            .expect("強盜應可取得貨物");
+        assert_eq!(snapshot.outcome, Outcome::Ongoing, "{name}");
+        assert_eq!(
+            snapshot.cargo.expect("地圖應有貨物").items,
+            vec![game_core::CargoState::Carried(TARGET_ID)],
+            "{name}"
+        );
+        assert_eq!(
+            defeat_marked_enemy(&mut game, 'D'),
+            Outcome::Ongoing,
+            "{name}"
+        );
+        assert_eq!(
+            defeat_marked_enemy(&mut game, first),
+            Outcome::Ongoing,
+            "{name}"
+        );
+        assert_eq!(
+            defeat_marked_enemy(&mut game, second),
+            Outcome::Victory,
+            "{name}"
+        );
+        let snapshot = game.snapshot(None);
+        assert_eq!(
+            snapshot.units.iter().any(|unit| unit.id == 3),
+            true,
+            "{name}"
+        );
+        assert_eq!(
+            snapshot.cargo.expect("地圖應有貨物").items,
+            vec![game_core::CargoState::Ground(marked_cell(
+                &ascii_board(CARGO_DIAGRAM),
+                'T'
+            ))],
+            "{name}"
+        );
     }
 }

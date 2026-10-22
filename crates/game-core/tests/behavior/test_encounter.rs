@@ -1,4 +1,4 @@
-use super::support::{ACTOR_ID, TARGET_ID, ascii_map, assert_turn_order, unit};
+use crate::support::{ACTOR_ID, TARGET_ID, ascii_map, assert_turn_order, unit};
 use game_core::{BattleMode, Command, Game, Team};
 
 // 沿用測試目錄內的單位、技能與地形定義，不載入正式遊戲資料。

@@ -1,4 +1,4 @@
-use super::support::{TARGET_ID, tank_ai_profile};
+use crate::support::{TARGET_ID, tank_ai_profile};
 use game_core::*;
 
 const AI_DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
@@ -199,7 +199,7 @@ fn selected_difficulty_filters_enemy_placements() {
 
 // 簡單、普通、困難各一隻怪物，所有難度共用同一份作者配置。
 fn difficulty_map() -> serde_json::Value {
-    use super::support::ascii_map;
+    use crate::support::ascii_map;
     let map = ascii_map(
         "difficulty_test",
         "

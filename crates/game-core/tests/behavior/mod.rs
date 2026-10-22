@@ -1,0 +1,9 @@
+mod test_alliances;
+mod test_authoring;
+mod test_cargo_objective;
+mod test_encounter;
+mod test_equipment;
+mod test_movement;
+mod test_outcome_conditions;
+mod test_sight;
+mod test_skill;

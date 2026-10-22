@@ -1,4 +1,4 @@
-use super::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, ascii_map, end_turn_and_continue};
+use crate::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, ascii_map, end_turn_and_continue};
 use authoring::{Definitions, Map, UnitType};
 #[cfg(feature = "editor")]
 use game_core::editor;
@@ -335,7 +335,7 @@ fn skill_power_sources_apply_to_preview_and_resolution() {
             })
             .expect("測試目標應可移動至尖刺受傷");
         assert_eq!(
-            super::support::unit(&wounded, target).hp,
+            crate::support::unit(&wounded, target).hp,
             20,
             "{name}：受傷情境"
         );
