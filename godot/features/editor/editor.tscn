@@ -307,7 +307,7 @@ layout_mode = 2
 layout_mode = 2
 text = "敵方全滅"
 
-[node name="all_players_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+[node name="player_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
 layout_mode = 2
 text = "玩家全滅"
 
@@ -329,7 +329,7 @@ layout_mode = 2
 layout_mode = 2
 text = "敵方全滅"
 
-[node name="all_players_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+[node name="player_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
 layout_mode = 2
 text = "玩家全滅"
 

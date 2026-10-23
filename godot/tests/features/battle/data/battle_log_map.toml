@@ -37,4 +37,4 @@ mode = "all"
 conditions = [{ type = "all_enemies_defeated" }]
 [defeat]
 mode = "any"
-conditions = [{ type = "all_players_defeated" }]
+conditions = [{ type = "team_defeated", team = "player" }]

@@ -615,14 +615,23 @@ impl Game {
             self.world.resource::<crate::model::OutcomeRules>();
         let matches = |OutcomeGroup { mode, conditions }: &OutcomeGroup| {
             let evaluate = |condition: &OutcomeCondition| match condition {
-                OutcomeCondition::AllPlayersDefeated => !self
-                    .world
-                    .iter_entities()
-                    .any(|e| e.get::<Unit>().is_some_and(|u| u.team == Team::Player)),
                 OutcomeCondition::AllEnemiesDefeated => !self.world.iter_entities().any(|e| {
                     e.get::<Unit>()
                         .is_some_and(|u| matches!(u.team, Team::Enemy(_)))
                 }),
+                OutcomeCondition::TeamDefeated { team } => !self
+                    .world
+                    .iter_entities()
+                    .any(|e| e.get::<Unit>().is_some_and(|unit| &unit.team == team)),
+                OutcomeCondition::NoCargoCarried => self
+                    .world
+                    .get_resource::<crate::model::Cargo>()
+                    .is_none_or(|cargo| {
+                        !cargo
+                            .items
+                            .iter()
+                            .any(|item| matches!(item, crate::model::CargoState::Carried(_)))
+                    }),
                 OutcomeCondition::CargoEscaped => self
                     .world
                     .get_resource::<crate::model::Cargo>()

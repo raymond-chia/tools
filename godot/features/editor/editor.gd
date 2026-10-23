@@ -4,6 +4,13 @@ const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
 const MODES := ["繪製地面", "繪製上層", "放置單位", "移動單位", "刪除單位"]
 const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 
+# 勾選項對應作者資料；條件是否成立由核心判定。
+const OUTCOME_CONDITIONS: Dictionary = {
+	"all_enemies_defeated": {"type": "all_enemies_defeated"},
+	"player_defeated": {"type": "team_defeated", "team": "player"},
+	"cargo_escaped": {"type": "cargo_escaped"},
+}
+
 @onready var map_list: ItemList = $Layout/Pages/MapPage/MapListPanel/Maps
 @onready var map_name: LineEdit = $Layout/Pages/MapPage/MapPanel/MapFields/MapName
 @onready var width_box: SpinBox = $Layout/Pages/MapPage/MapPanel/MapFields/Width
@@ -293,7 +300,7 @@ func submit_map() -> void:
 		map_data = {
 			"name": filename, "width": 10, "height": 8, "terrains": [], "units": [],
 			"victory": {"mode": "all", "conditions": [{"type": "all_enemies_defeated"}]},
-			"defeat": {"mode": "any", "conditions": [{"type": "all_players_defeated"}]},
+			"defeat": {"mode": "any", "conditions": [{"type": "team_defeated", "team": "player"}]},
 		}
 	map_file = path
 	map_view.camera_initialized = false
@@ -481,14 +488,14 @@ func refresh_outcome_groups() -> void:
 		mode.select(0 if rule.mode == "all" else 1)
 		for child in group.get_children():
 			if child is CheckBox:
-				child.set_pressed_no_signal(rule.conditions.any(func(condition: Dictionary): return condition.type == str(child.name)))
+				child.set_pressed_no_signal(rule.conditions.any(func(condition: Dictionary): return condition == OUTCOME_CONDITIONS[str(child.name)]))
 
 func update_outcome_group(key: String, group: VBoxContainer) -> void:
 	if refreshing or map_data.is_empty(): return
 	var conditions: Array = []
 	for child in group.get_children():
 		if child is CheckBox and child.button_pressed:
-			conditions.append({"type": str(child.name)})
+			conditions.append(OUTCOME_CONDITIONS[str(child.name)].duplicate(true))
 	var mode: OptionButton = group.get_node("Mode")
 	checkpoint()
 	map_data[key] = {"mode": "all" if mode.selected == 0 else "any", "conditions": conditions}

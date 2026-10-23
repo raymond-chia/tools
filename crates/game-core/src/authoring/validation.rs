@@ -23,6 +23,7 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
         victory,
         defeat,
         cargo,
+        alliances: _,
     } = map;
     if name.trim().is_empty() {
         return Err(error::empty_map_name());
@@ -222,6 +223,7 @@ pub(crate) fn validate_map_with_definitions(
         victory: _,
         defeat: _,
         cargo: _,
+        alliances: _,
     } = map;
     for placement in placements {
         let kind = types
@@ -361,8 +363,10 @@ pub(crate) fn load_map(
         victory,
         defeat,
         cargo,
+        alliances,
     } = map;
     let mut w = World::new();
+    w.insert_resource(crate::model::Alliances(alliances));
     w.insert_resource(Board {
         width,
         height,

@@ -94,6 +94,8 @@ pub enum DistancePreference {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Map {
+    #[serde(default)]
+    pub alliances: Vec<Alliance>,
     pub victory: OutcomeGroup,
     pub defeat: OutcomeGroup,
     #[serde(default)]
@@ -110,6 +112,12 @@ pub struct Map {
     pub units: Vec<UnitPlacement>,
 }
 
+/// 同一組內的隊伍互為同盟；隊伍身分仍各自保留。
+#[derive(Clone, Deserialize, Serialize)]
+pub struct Alliance {
+    pub teams: Vec<Team>,
+}
+
 /// 勝敗各自指定條件組，條件本身不決定結果分類。
 #[derive(Clone, Deserialize, Serialize)]
 pub struct OutcomeGroup {
@@ -124,12 +132,13 @@ pub enum ConditionMode {
     Any,
 }
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutcomeCondition {
+    TeamDefeated { team: Team },
     AllEnemiesDefeated,
-    AllPlayersDefeated,
     CargoEscaped,
+    NoCargoCarried,
 }
 
 #[derive(Clone, Deserialize, Serialize)]

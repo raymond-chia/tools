@@ -273,7 +273,11 @@ fn skill_utility(
         }
         let target = unit_at_cell(world, cell)?;
         let actor_team = &world.get::<Unit>(actor).expect("施放者應具有 Unit").team;
-        if &world.get::<Unit>(target).expect("目標應具有 Unit").team == actor_team {
+        if crate::teams::are_allied(
+            world,
+            &world.get::<Unit>(target).expect("目標應具有 Unit").team,
+            actor_team,
+        ) {
             return None;
         }
         let (terrain, _) =
@@ -379,7 +383,11 @@ fn healing_focus(
     let team = &world.get::<Unit>(actor).expect("AI 單位應具有 Unit").team;
     world
         .iter_entities()
-        .filter(|target| target.get::<Unit>().is_some_and(|unit| &unit.team == team))
+        .filter(|target| {
+            target
+                .get::<Unit>()
+                .is_some_and(|unit| crate::teams::are_allied(world, &unit.team, team))
+        })
         .filter(|target| target.get::<Hp>().is_some_and(|hp| hp.current < hp.maximum))
         .min_by(|a, b| {
             let Hp {
@@ -421,7 +429,11 @@ fn fallback_position(
         None => {
             let mut targets: Vec<_> = world
                 .iter_entities()
-                .filter(|target| target.get::<Unit>().is_some_and(|unit| &unit.team != team))
+                .filter(|target| {
+                    target
+                        .get::<Unit>()
+                        .is_some_and(|unit| !crate::teams::are_allied(world, &unit.team, team))
+                })
                 .map(|target| target.id())
                 .collect();
             targets.sort_by_key(|target| {

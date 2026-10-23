@@ -14,6 +14,7 @@ mod model;
 mod movement;
 mod sight;
 mod skill;
+mod teams;
 mod terrain;
 #[cfg(test)]
 extern crate self as game_core;

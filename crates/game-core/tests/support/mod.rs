@@ -258,13 +258,14 @@ pub(super) fn map_from_ascii_board(
         })
         .collect();
     authoring::Map {
+        alliances: Vec::new(),
         victory: authoring::OutcomeGroup {
             mode: authoring::ConditionMode::All,
             conditions: vec![authoring::OutcomeCondition::AllEnemiesDefeated],
         },
         defeat: authoring::OutcomeGroup {
             mode: authoring::ConditionMode::Any,
-            conditions: vec![authoring::OutcomeCondition::AllPlayersDefeated],
+            conditions: vec![authoring::OutcomeCondition::TeamDefeated { team: Team::Player }],
         },
         cargo: None,
         name: name.into(),

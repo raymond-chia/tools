@@ -5,8 +5,8 @@ use game_core::{Command, Game, GridPos, Outcome, Team, authoring};
 use serde_json::{Value, json};
 
 const DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
-const ENEMIES: &str = "all_enemies_defeated";
-const PLAYERS: &str = "all_players_defeated";
+const ALL_ENEMIES_DEFEATED: &str = "all_enemies_defeated";
+const PLAYER_TEAM_DEFEATED: &str = "team_defeated";
 const DIAGRAM: &str = "
     ....
     .AT.
@@ -24,7 +24,13 @@ const CARGO_DIAGRAM: &str = "
 fn group(mode: &str, conditions: &[&str]) -> Value {
     json!({
         "mode": mode,
-        "conditions": conditions.iter().map(|kind| json!({"type": kind})).collect::<Vec<_>>()
+        "conditions": conditions.iter().map(|kind| {
+            if *kind == PLAYER_TEAM_DEFEATED {
+                json!({"type": kind, "team": "player"})
+            } else {
+                json!({"type": kind})
+            }
+        }).collect::<Vec<_>>()
     })
 }
 
@@ -120,7 +126,7 @@ fn team_cargo_document(conditions: Vec<Value>) -> String {
         "exits": [marked_cell(&layout, 'E')]
     });
     map["victory"] = json!({"mode": "all", "conditions": conditions});
-    map["defeat"] = group("any", &[PLAYERS]);
+    map["defeat"] = group("any", &[PLAYER_TEAM_DEFEATED]);
     // 直接序列化輸入，讓正式載入入口驗證尚待實作的新條件。
     toml::to_string(&map).expect("測試地圖應可序列化為 TOML")
 }
@@ -182,8 +188,8 @@ fn independent_outcome_groups_survive_authoring_conversion() {
         // 勝敗都採任意成立。
         ("any", "any"),
     ] {
-        let victory = group(victory_mode, &[ENEMIES]);
-        let defeat = group(defeat_mode, &[PLAYERS]);
+        let victory = group(victory_mode, &[ALL_ENEMIES_DEFEATED]);
+        let defeat = group(defeat_mode, &[PLAYER_TEAM_DEFEATED]);
         let document = toml::to_string(&map_data(victory.clone(), defeat.clone()))
             .expect("測試地圖應可序列化為 TOML");
         let output = authoring::map_to_json(&document).expect("設定應可轉成 JSON");
@@ -200,32 +206,32 @@ fn partially_satisfied_groups_respect_each_match_mode() {
         // 敵人全滅但玩家未全滅，勝利 all 尚未滿足，不套用固定勝利。
         (
             "勝利 all 未齊",
-            group("all", &[ENEMIES, PLAYERS]),
-            group("any", &[PLAYERS]),
+            group("all", &[ALL_ENEMIES_DEFEATED, PLAYER_TEAM_DEFEATED]),
+            group("any", &[PLAYER_TEAM_DEFEATED]),
             ACTOR_ID,
             Outcome::Ongoing,
         ),
         // 相同戰況改成勝利 any，任一條件成立即勝利。
         (
             "勝利 any 成立",
-            group("any", &[ENEMIES, PLAYERS]),
-            group("any", &[PLAYERS]),
+            group("any", &[ALL_ENEMIES_DEFEATED, PLAYER_TEAM_DEFEATED]),
+            group("any", &[PLAYER_TEAM_DEFEATED]),
             ACTOR_ID,
             Outcome::Victory,
         ),
         // 玩家全滅但敵人未全滅，失敗 all 尚未滿足，不套用固定敗北。
         (
             "失敗 all 未齊",
-            group("any", &[ENEMIES]),
-            group("all", &[PLAYERS, ENEMIES]),
+            group("any", &[ALL_ENEMIES_DEFEATED]),
+            group("all", &[PLAYER_TEAM_DEFEATED, ALL_ENEMIES_DEFEATED]),
             TARGET_ID,
             Outcome::Ongoing,
         ),
         // 相同戰況改成失敗 any，任一條件成立即敗北。
         (
             "失敗 any 成立",
-            group("any", &[ENEMIES]),
-            group("any", &[PLAYERS, ENEMIES]),
+            group("any", &[ALL_ENEMIES_DEFEATED]),
+            group("any", &[PLAYER_TEAM_DEFEATED, ALL_ENEMIES_DEFEATED]),
             TARGET_ID,
             Outcome::Defeat,
         ),
@@ -250,13 +256,13 @@ fn cargo_escape_resolves_the_configured_outcome() {
         (
             "貨物離場判勝",
             group("all", &["cargo_escaped"]),
-            group("any", &[PLAYERS]),
+            group("any", &[PLAYER_TEAM_DEFEATED]),
             Outcome::Victory,
         ),
         // 貨物離場設定於失敗組，攜貨者離場後應敗北。
         (
             "貨物離場判敗",
-            group("all", &[ENEMIES]),
+            group("all", &[ALL_ENEMIES_DEFEATED]),
             group("any", &["cargo_escaped"]),
             Outcome::Defeat,
         ),
@@ -321,7 +327,11 @@ fn cargo_escape_resolves_the_configured_outcome() {
 #[test]
 fn defeat_has_priority_when_both_groups_match() {
     for mode in ["all", "any"] {
-        let mut game = game(group(mode, &[ENEMIES]), group(mode, &[ENEMIES]), ACTOR_ID);
+        let mut game = game(
+            group(mode, &[ALL_ENEMIES_DEFEATED]),
+            group(mode, &[ALL_ENEMIES_DEFEATED]),
+            ACTOR_ID,
+        );
         assert_eq!(
             eliminate_opponent(&mut game, ACTOR_ID),
             Outcome::Defeat,

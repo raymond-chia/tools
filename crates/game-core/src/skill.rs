@@ -724,10 +724,14 @@ fn validate_unit_skill_target_from_position(
         }
     };
     match effect {
-        UnitSkillEffect::Heal { .. } if attacker_team != target_team => {
+        UnitSkillEffect::Heal { .. }
+            if !crate::teams::are_allied(world, attacker_team, target_team) =>
+        {
             return Err(error::heal_allies_only());
         }
-        UnitSkillEffect::Attack { .. } if attacker_team == target_team => {
+        UnitSkillEffect::Attack { .. }
+            if crate::teams::are_allied(world, attacker_team, target_team) =>
+        {
             return Err(error::cannot_attack_ally());
         }
         UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
@@ -879,7 +883,7 @@ fn flanking_bonus(
             Some(unit) => unit,
             None => return false,
         };
-        if *team != attacker_team {
+        if !crate::teams::are_allied(world, team, &attacker_team) {
             return false;
         }
         skills

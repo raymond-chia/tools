@@ -683,3 +683,7 @@ pub struct CargoView {
     pub items: Vec<CargoState>,
     pub exits: Vec<GridPos>,
 }
+
+/// 地圖宣告的同盟關係，由核心規則共用。
+#[derive(Resource)]
+pub(crate) struct Alliances(pub(crate) Vec<crate::authoring::Alliance>);
