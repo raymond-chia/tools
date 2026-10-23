@@ -236,10 +236,22 @@ fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
     assert_eq!(snapshot.outcome, Outcome::Ongoing);
 }
 
-// 驗證是否攜貨、移動落點與其他敵人是否存活，共同決定逃離是否判敗。
+// 驗證邊界與內部出口皆可離場，是否攜貨、移動落點與其他敵人是否存活共同決定判敗。
 #[test]
 fn raider_movement_resolves_cargo_escape() {
     for (name, diagram, should_loot, destination, expected_outcome) in [
+        // 攜貨者抵達地圖內部的 E，同樣離場並立即判敗。
+        (
+            "攜貨抵達內部出口",
+            "
+            ......
+            .ACTE.
+            ......
+            ",
+            true,
+            'E',
+            Outcome::Defeat,
+        ),
         // 最後一名攜貨強盜抵達 E 仍判敗，不能因敵人清空而獲勝。
         (
             "最後一名攜貨者逃離",

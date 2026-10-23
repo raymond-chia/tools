@@ -39,6 +39,15 @@ const OVERLAY_Z_INDEX := -9
 const WORLD_OBJECT_Z_INDEX := 1
 const HEALTH_BAR_Z_INDEX := 2
 
+# 出口光點與拖尾；線寬以繪圖像素計，尾端漸變成尾色並淡出。
+const EXIT_HEAD_COLOR := Color("82caff")
+const EXIT_HEAD_WIDTH := 2.0
+const EXIT_HEAD_GLOW_WIDTH := 2.0
+const EXIT_TRAIL_WIDTH := 2.0
+const EXIT_TRAIL_COLOR := Color("4863a0")
+# 淡出強度為 0～1：0 不淡出，1 尾端完全透明；不改變顏色漸層。
+const EXIT_TRAIL_FADE_STRENGTH := 0.7
+
 # 目前行動單位的移動範圍填色與外框。
 const FIRST_MOVE_COLOR := Color(0.5, 0.7, 1.0)
 const SECOND_MOVE_COLOR := Color(0.35, 0.5, 1.0)

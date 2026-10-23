@@ -32,6 +32,7 @@ var drag_offset := Vector2i.ZERO
 
 var terrain_overlay: Node2D
 var terrain_object_nodes := {}
+var exit_nodes := {}
 
 func _ready() -> void:
 	terrain_overlay = BattleVisuals.create_terrain_overlay(self, ground, func(): return snapshot.get("terrain_effects", []))
@@ -52,6 +53,7 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 	var ground_position := Vector2(16, (int(map_data.width) - 1) * 16 + 48)
 	var ground_moved := ground.position != ground_position
 	ground.position = ground_position
+	BattleVisuals.sync_exit_markers(world_objects, ground, cargo_layout.exits, exit_nodes)
 	if ground.tile_set == null:
 		BattleVisuals.setup_ground(ground, snapshot.get("terrain_cells", []))
 	else:
@@ -82,6 +84,7 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 
 func present_cargo(layout: Dictionary) -> void:
 	cargo_layout = layout.duplicate(true)
+	BattleVisuals.sync_exit_markers(world_objects, ground, cargo_layout.exits, exit_nodes)
 	queue_redraw()
 
 func present_brush(cells: Array) -> void:
@@ -167,14 +170,23 @@ func marker(cell: Vector2i, fill: Color, edge: Color) -> void:
 	points.append(points[0])
 	draw_polyline(points, edge, 2.0, true)
 
+func cargo_marker(point: Vector2, color: Color, symbol: PackedVector2Array) -> void:
+	draw_circle(point, 14.0, Color("182332"), true, -1.0, true)
+	draw_arc(point, 12.0, 0, TAU, 32, color, 3.0, true)
+	var points := PackedVector2Array()
+	for offset in symbol:
+		points.append(point + offset)
+	draw_polyline(points, color, 2.0, true)
+
 func _draw() -> void:
 	if map_data.is_empty(): return
 	BattleVisuals.draw_movement_range(self, ground, snapshot.get("inspected_reachable", []), snapshot.get("inspected_second_reachable", []), true)
 	terrain_overlay.queue_redraw()
-	for exit in cargo_layout.exits:
-		draw_arc(center(Vector2i(exit.x, exit.y)), 12.0, 0, TAU, 32, Color("65e894"), 3.0, true)
 	for cargo in cargo_layout.positions:
-		draw_rect(Rect2(center(Vector2i(cargo.x, cargo.y)) - Vector2(7, 7), Vector2(14, 14)), Color("ffbc60"), false, 3.0)
+		cargo_marker(center(Vector2i(cargo.x, cargo.y)), Color("ffbc60"), PackedVector2Array([
+			Vector2(-5, -5), Vector2(5, -5), Vector2(5, 5), Vector2(-5, 5),
+			Vector2(-5, -5), Vector2(0, -5), Vector2(0, 0),
+		]))
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))

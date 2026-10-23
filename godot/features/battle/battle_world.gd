@@ -35,6 +35,7 @@ var presentation_tweens: Array[Tween] = []
 
 var terrain_overlay: Node2D
 var terrain_object_nodes := {}
+var exit_nodes := {}
 
 func _ready() -> void:
 	terrain_overlay = BattleVisuals.create_terrain_overlay(self, ground, func(): return [] if state.is_empty() else state.terrain_effects)
@@ -62,6 +63,7 @@ func wait_for_presentation(duration: float) -> void:
 func setup_map(snapshot: Dictionary) -> void:
 	state = snapshot
 	BattleVisuals.setup_ground(ground, state.terrain_cells)
+	BattleVisuals.sync_exit_markers(world_objects, ground, [] if state.cargo == null else state.cargo.exits, exit_nodes)
 	sync_unit_sprites()
 	BattleVisuals.present_events(unit_nodes, state.presentation_events)
 	camera.configure_board(self, ground, state.width, state.height)
@@ -79,6 +81,7 @@ func present(snapshot: Dictionary, action: String, inspected: Vector2i, game_cor
 	inspected_cell = inspected
 	core = game_core
 	if not state.is_empty():
+		BattleVisuals.sync_exit_markers(world_objects, ground, [] if state.cargo == null else state.cargo.exits, exit_nodes)
 		BattleVisuals.sync_terrain_objects(world_objects, ground, state.terrain_effects, terrain_object_nodes)
 		if new_snapshot:
 			queue_new_combat_events()

@@ -84,7 +84,7 @@ func _ready() -> void:
 	for i in range(2, MODES.size()):
 		mode_list.add_item(MODES[i])
 	for index in 5:
-		palette_tabs.set_tab_title(index, ["地面", "上層", "單位", "勝敗條件", "貨物"][index])
+		palette_tabs.set_tab_title(index, ["地面", "上層", "單位", "貨物", "勝敗條件"][index])
 	for tool in ["放置貨物", "刪除貨物", "放置出口", "刪除出口"]:
 		cargo_tool.add_item(tool)
 	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Apply.pressed.connect(apply_cargo)

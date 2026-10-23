@@ -52,9 +52,7 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
         if positions.is_empty()
             || positions.iter().any(|position| !inside(*position))
             || exits.is_empty()
-            || exits.iter().any(|p| {
-                !inside(*p) || (p.x != 0 && p.y != 0 && p.x != *width - 1 && p.y != *height - 1)
-            })
+            || exits.iter().any(|position| !inside(*position))
         {
             return Err(error::invalid_cargo_objective());
         }

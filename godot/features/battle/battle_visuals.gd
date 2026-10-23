@@ -160,6 +160,58 @@ static func sync_terrain_objects(world_objects: Node2D, ground: TileMapLayer, ef
 			node.queue_free()
 			nodes.erase(key)
 
+# 編輯器與戰鬥共用地面出口光圈，節點原點位於格子中心。
+static func sync_exit_markers(world_objects: Node2D, ground: TileMapLayer, exits: Array, nodes: Dictionary) -> void:
+	var active := {}
+	for exit in exits:
+		var cell := Vector2i(exit.x, exit.y)
+		active[cell] = true
+		if not nodes.has(cell):
+			var node := preload("res://features/battle/exit_marker.gd").new()
+			# 光圈貼地，固定在角色與場景物件下方。
+			node.z_index = -1
+			world_objects.add_child(node)
+			nodes[cell] = node
+		var node: Node2D = nodes[cell]
+		node.position = ground.position + ground.map_to_local(cell)
+	for cell in nodes.keys():
+		if not active.has(cell):
+			var node: Node2D = nodes[cell]
+			world_objects.remove_child(node)
+			node.queue_free()
+			nodes.erase(cell)
+
+static func draw_exit_marker(canvas: CanvasItem, progress: float) -> void:
+	var ring := diamond(Vector2.ZERO)
+	ring.append(ring[0])
+	canvas.draw_polyline(ring, Color("258eff30"), 6.0, true)
+	canvas.draw_polyline(ring, Color("65baff70"), 1.5, true)
+	var trail := PackedVector2Array()
+	var colors := PackedColorArray()
+	# 尾巴繞滿一圈接回光點；插入轉角，避免線段切過格子內側。
+	var start := (progress - 1.0) * 4.0
+	var finish := progress * 4.0
+	var samples: Array[float] = [start, finish]
+	for index in range(int(floor(start)) + 1, int(ceil(finish))):
+		samples.append(float(index))
+	for index in range(1, 25):
+		samples.append(lerpf(start, finish, float(index) / 25.0))
+	samples.sort()
+	for sample in samples:
+		var edge := int(floor(sample))
+		trail.append(ring[posmod(edge, 4)].lerp(ring[posmod(edge + 1, 4)], sample - floor(sample)))
+		var brightness := (sample - start) / (finish - start)
+		var color := BattleConfig.EXIT_TRAIL_COLOR.lerp(BattleConfig.EXIT_HEAD_COLOR, brightness)
+		color.a *= lerpf(1.0, brightness * brightness, BattleConfig.EXIT_TRAIL_FADE_STRENGTH)
+		colors.append(color)
+	canvas.draw_polyline_colors(trail, colors, BattleConfig.EXIT_TRAIL_WIDTH * (10.0 / 3.5), true)
+	canvas.draw_polyline_colors(trail, colors, BattleConfig.EXIT_TRAIL_WIDTH, true)
+	var head := trail[trail.size() - 1]
+	var head_glow := BattleConfig.EXIT_HEAD_COLOR
+	head_glow.a *= 0.44
+	canvas.draw_circle(head, BattleConfig.EXIT_HEAD_GLOW_WIDTH * 0.5, head_glow, true, -1.0, true)
+	canvas.draw_circle(head, BattleConfig.EXIT_HEAD_WIDTH * 0.5, BattleConfig.EXIT_HEAD_COLOR, true, -1.0, true)
+
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
 	match visual:
 		"tree":
