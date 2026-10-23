@@ -5,12 +5,14 @@ use crate::model::{
     Exploration, Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome,
     Phase, Pos, Random, ResultState, Snapshot, Team, TemporaryTerrains, TerrainCellView,
     TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainEntryRule,
-    TerrainLayer, Turn, TurnView, Unit, UnitView,
+    TerrainGrid, TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
-use crate::movement::{can_move, entity_distance, footprint_cells, movement_ranges, unit_at_cell};
+use crate::movement::{
+    can_move, entity_distance, footprint_cells, movement_ranges, unit_at_cell, unit_cells,
+};
 use crate::skill::{can_use_skill, effective_block, effective_dodge, skill_ranges, target_kind};
 use crate::terrain::{
-    footprint_on_impassable, ground_at, movement_cost, temporary_remaining_rounds, terrain_damage,
+    expire_temporary_terrains, grid_cell, ground_at, temporary_remaining_rounds, terrain_damage,
     terrain_type, terrains_at,
 };
 use crate::{authoring, error, gameplay_config};
@@ -283,7 +285,8 @@ impl Game {
                 );
             }
         }
-        let next = players.iter().find_map(|id| turns.get(id).cloned());
+        // 行動中的單位只存在 Turn，不在表中留副本。
+        let next = players.iter().find_map(|id| turns.remove(id));
         self.world.resource_mut::<Exploration>().turns = turns;
         if let Some(turn) = next {
             *self.world.resource_mut::<Turn>() = turn;
@@ -298,10 +301,9 @@ impl Game {
         }
         let next = self
             .world
-            .resource::<Exploration>()
+            .resource_mut::<Exploration>()
             .turns
-            .get(&actor)
-            .cloned()
+            .remove(&actor)
             .ok_or(error::wrong_turn())?;
         let current @ Turn {
             actor,
@@ -319,16 +321,6 @@ impl Game {
         Ok(())
     }
     fn advance_exploration(&mut self) {
-        let Turn {
-            actor,
-            phase: _,
-            movement_remaining: _,
-            movement_segments_used: _,
-        } = self.world.resource::<Turn>();
-        let actor = *actor;
-        if let Some(id) = actor {
-            self.world.resource_mut::<Exploration>().turns.remove(&id);
-        }
         let mut remaining: Vec<_> = self
             .world
             .resource::<Exploration>()
@@ -340,11 +332,10 @@ impl Game {
         if let Some(id) = remaining.first() {
             let next = self
                 .world
-                .resource::<Exploration>()
+                .resource_mut::<Exploration>()
                 .turns
-                .get(id)
-                .expect("剩餘單位應有回合")
-                .clone();
+                .remove(id)
+                .expect("剩餘單位應有回合");
             *self.world.resource_mut::<Turn>() = next;
         } else if self.world.resource::<Exploration>().mode == BattleMode::AttackPending {
             self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
@@ -373,13 +364,7 @@ impl Game {
         } = self.world.resource::<Encounter>();
         let next_round = *round + 1;
         let active = participants.clone();
-        self.world
-            .resource_mut::<TemporaryTerrains>()
-            .0
-            .retain(|_, terrains| {
-                terrains.retain(|_, terrain| terrain.expires_after_round >= next_round);
-                !terrains.is_empty()
-            });
+        expire_temporary_terrains(&mut self.world, next_round);
         let entries: Vec<_> = self
             .world
             .query::<(&Id, &Unit)>()
@@ -778,11 +763,7 @@ impl Game {
         let Exploration { mode, turns } = self.world.resource::<Exploration>();
         let exploring = *mode != BattleMode::Combat;
         let turn_order: Vec<_> = if exploring {
-            let mut available: Vec<_> = turns
-                .keys()
-                .copied()
-                .filter(|id| Some(*id) != *turn_actor)
-                .collect();
+            let mut available: Vec<_> = turns.keys().copied().collect();
             available.sort();
             available
         } else {
@@ -797,15 +778,23 @@ impl Game {
             && can_delay(turn)
             && turn_actor.is_some()
             && !turn_order.is_empty();
+        let unit_cells: HashMap<GridPos, i64> = unit_cells(&self.world)
+            .into_iter()
+            .map(|(cell, entity)| {
+                let id = self.world.get::<Id>(entity).expect("戰鬥單位應具有 Id").0;
+                (cell, id)
+            })
+            .collect();
         let terrain_cells = (0..*height)
             .flat_map(|y| {
                 let board = b;
                 let world = &self.world;
-                let units = &units;
+                let grid = self.world.resource::<TerrainGrid>();
+                let unit_cells = &unit_cells;
                 (0..*width).map(move |x| {
                     let position = GridPos { x, y };
                     let terrains = terrains_at(world, position);
-                    let cost = movement_cost(world, position);
+                    let cell = grid_cell(grid, position);
                     let damage = terrains
                         .iter()
                         .map(|kind| terrain_type(board, kind).damage)
@@ -842,23 +831,13 @@ impl Game {
                     TerrainCellView {
                         x,
                         y,
-                        passable: !footprint_on_impassable(
-                            world,
-                            position,
-                            Footprint {
-                                width: 1,
-                                height: 1,
-                            },
-                        ),
+                        passable: cell.passable,
                         ground_visual: ground_at(board, &terrains)
                             .expect("terrains_at 必含 ground")
                             .clone(),
                         terrains,
-                        unit_id: units
-                            .iter()
-                            .find(|unit| unit.occupied_cells.contains(&position))
-                            .map(|unit| unit.id),
-                        cost,
+                        unit_id: unit_cells.get(&position).copied(),
+                        cost: cell.movement_cost,
                         damage,
                         effect_descriptions,
                     }

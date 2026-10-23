@@ -1,13 +1,12 @@
 //! 瞄準格的視線：所有技能共用，效果範圍不再逐格檢查。
 use crate::error::{self, GameError};
-use crate::model::{Board, Footprint, GridPos};
+use crate::model::{Footprint, GridPos, TerrainGrid};
 use crate::movement::{distance, footprint_cells};
-use crate::terrain::{terrain_type, terrains_at};
-use bevy_ecs::prelude::World;
+use crate::terrain::grid_cell;
 
 /// 任一佔用格同時滿足射程與視線即可；無合法射程時區分過近、過遠，否則回報視線遮擋。
 pub(crate) fn check_sight_in_range(
-    world: &World,
+    grid: &TerrainGrid,
     origin: GridPos,
     footprint: Footprint,
     target: GridPos,
@@ -21,7 +20,7 @@ pub(crate) fn check_sight_in_range(
         all_too_close &= range < min_range;
         if (min_range..=max_range).contains(&range) {
             has_cell_in_range = true;
-            if clear_line(world, cell, target) {
+            if clear_line(grid, cell, target) {
                 return Ok(());
             }
         }
@@ -37,19 +36,19 @@ pub(crate) fn check_sight_in_range(
 
 #[cfg(test)]
 pub(crate) fn has_sight(
-    world: &World,
+    world: &bevy_ecs::prelude::World,
     origin: GridPos,
     footprint: Footprint,
     target: GridPos,
 ) -> bool {
     footprint_cells(origin, footprint)
         .into_iter()
-        .any(|cell| clear_line(world, cell, target))
+        .any(|cell| clear_line(world.resource::<TerrainGrid>(), cell, target))
 }
 
 /// 固定端點順序，避免 Bresenham 在半格取捨時產生方向不對稱。
 /// 起點與終點不遮擋自己的視線，只檢查兩者之間的格子。
-fn clear_line(world: &World, origin: GridPos, target: GridPos) -> bool {
+fn clear_line(grid: &TerrainGrid, origin: GridPos, target: GridPos) -> bool {
     let (start, end) = if (origin.x, origin.y) <= (target.x, target.y) {
         (origin, target)
     } else {
@@ -70,11 +69,7 @@ fn clear_line(world: &World, origin: GridPos, target: GridPos) -> bool {
         if cell == end {
             return true;
         }
-        if cell != start
-            && terrains_at(world, cell)
-                .iter()
-                .any(|kind| terrain_type(world.resource::<Board>(), kind).blocks_sight)
-        {
+        if cell != start && grid_cell(grid, cell).blocks_sight {
             return false;
         }
         let twice = 2 * error;

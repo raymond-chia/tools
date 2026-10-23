@@ -3,9 +3,8 @@ use super::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map, assert_turn_order,
     map_from_ascii_board,
 };
-use crate::model::{Hp, Pos, TemporaryTerrain, TemporaryTerrains, Turn};
+use crate::model::{Hp, Pos, Turn};
 use crate::{Command, Game, GridPos, Phase, Team, TerrainPlacement, authoring};
-use std::collections::HashMap;
 
 const DEFINITIONS: &str = include_str!("../../tests/data/utility_ai_definitions.toml");
 const ALLY_ID: i64 = 3;
@@ -1170,14 +1169,11 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
         let map = map_from_ascii_board(name, &layout, &units);
         let mut game = game_on_map(&definitions, map);
         if let Some(((x, y), _)) = markers.get(&'X') {
-            game.world.resource_mut::<TemporaryTerrains>().0.insert(
+            crate::terrain::add_temporary_terrain(
+                &mut game.world,
                 GridPos { x: *x, y: *y },
-                HashMap::from([(
-                    "wall".into(),
-                    TemporaryTerrain {
-                        expires_after_round: 10,
-                    },
-                )]),
+                "wall".into(),
+                10,
             );
         }
         let snapshot = act(&mut game);

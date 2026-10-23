@@ -7,13 +7,12 @@ use crate::model::{
     ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
     AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint, GridPos,
     HealingPreview, HealthSegmentsView, Hp, Id, Log, MovementTransition, PassiveSkillDef,
-    PassiveSkillEffect, PassiveSkills, Phase, Pos, RollDegree, TemporaryTerrain, TemporaryTerrains,
-    Turn, Unit,
+    PassiveSkillEffect, PassiveSkills, Phase, Pos, RollDegree, TerrainGrid, Turn, Unit,
 };
 use crate::movement::{fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell};
 use crate::terrain::{
-    TerrainEntry, footprint_blocks_push, footprint_on_impassable, footprint_terrain_penalty,
-    terrain_type,
+    TerrainEntry, add_temporary_terrain, footprint_blocks_push, footprint_on_impassable,
+    footprint_terrain_penalty, terrain_type,
 };
 use bevy_ecs::prelude::{Entity, World};
 
@@ -195,7 +194,13 @@ impl Game {
                 x: current.x + direction.x * gameplay_config::PUSH_DISTANCE,
                 y: current.y + direction.y * gameplay_config::PUSH_DISTANCE,
             };
-            let terrain_allows_push = fits(self.world.resource::<Board>(), destination, footprint)
+            let Board {
+                width,
+                height,
+                terrains: _,
+                terrain_types: _,
+            } = self.world.resource::<Board>();
+            let terrain_allows_push = fits(*width, *height, destination, footprint)
                 && !footprint_blocks_push(&self.world, destination, footprint);
             let blocking_units: Vec<Entity> = if terrain_allows_push {
                 self.world
@@ -347,18 +352,13 @@ impl Game {
             cursor: _,
             round: current_round,
         } = self.world.resource::<Encounter>();
-        let current_round = *current_round;
-        self.world
-            .resource_mut::<TemporaryTerrains>()
-            .0
-            .entry(position)
-            .or_default()
-            .insert(
-                terrain.clone(),
-                TemporaryTerrain {
-                    expires_after_round: current_round + duration - 1,
-                },
-            );
+        let expires_after_round = *current_round + duration - 1;
+        add_temporary_terrain(
+            &mut self.world,
+            position,
+            terrain.clone(),
+            expires_after_round,
+        );
         self.world
             .resource_mut::<Log>()
             .0
@@ -390,8 +390,10 @@ pub(crate) fn validate_cell_skill_from_position(
         ActiveSkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
         _ => return Err(error::unit_cannot_use_skill()),
     };
+    let grid = world.resource::<TerrainGrid>();
     if !fits(
-        world.resource::<Board>(),
+        grid.width,
+        grid.height,
         cell,
         Footprint {
             width: 1,
@@ -401,7 +403,7 @@ pub(crate) fn validate_cell_skill_from_position(
         return Err(error::target_cell_out_of_bounds());
     }
     if footprint_on_impassable(
-        world,
+        grid,
         cell,
         Footprint {
             width: 1,
@@ -412,7 +414,7 @@ pub(crate) fn validate_cell_skill_from_position(
     }
     let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用尺寸");
     crate::sight::check_sight_in_range(
-        world,
+        grid,
         origin,
         footprint,
         cell,
@@ -755,7 +757,7 @@ fn validate_unit_skill_target_from_position(
         UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
     }
     crate::sight::check_sight_in_range(
-        world,
+        world.resource::<TerrainGrid>(),
         attacker_position,
         attacker_footprint,
         target_cell,
@@ -976,7 +978,7 @@ fn target_side_from_position(
         .into_iter()
         .any(|cell| {
             crate::sight::check_sight_in_range(
-                world,
+                world.resource::<TerrainGrid>(),
                 unit_position,
                 unit_footprint,
                 cell,
@@ -1066,7 +1068,9 @@ pub(crate) fn effective_dodge(w: &World, entity: Entity) -> i32 {
         .get::<Footprint>(entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
     let penalty =
-        footprint_terrain_penalty(w, position, footprint, |terrain| terrain.dodge_penalty);
+        footprint_terrain_penalty(w.resource::<TerrainGrid>(), position, footprint, |cell| {
+            cell.dodge_penalty
+        });
     (unit.dodge - penalty).max(0)
 }
 
@@ -1082,7 +1086,9 @@ pub(crate) fn effective_block(w: &World, entity: Entity) -> i32 {
         .get::<Footprint>(entity)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
     let penalty =
-        footprint_terrain_penalty(w, position, footprint, |terrain| terrain.block_penalty);
+        footprint_terrain_penalty(w.resource::<TerrainGrid>(), position, footprint, |cell| {
+            cell.block_penalty
+        });
     (unit.block - penalty).max(0)
 }
 
@@ -1144,12 +1150,26 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
                 effect,
             } = skill;
             let mut cells = Vec::new();
-            for y in 0..*height {
-                for x in 0..*width {
+            // 只掃描最大射程涵蓋的方框，方框外的格子必然超出射程。
+            let top = position.y.saturating_sub(*max_range).max(0);
+            let bottom = (position.y + footprint.height)
+                .saturating_add(*max_range)
+                .min(*height);
+            let left = position.x.saturating_sub(*max_range).max(0);
+            let right = (position.x + footprint.width)
+                .saturating_add(*max_range)
+                .min(*width);
+            for y in top..bottom {
+                for x in left..right {
                     let cell = GridPos { x, y };
                     let cell_distance = footprint_cell_distance(position, footprint, cell);
                     if crate::sight::check_sight_in_range(
-                        w, position, footprint, cell, *min_range, *max_range,
+                        w.resource::<TerrainGrid>(),
+                        position,
+                        footprint,
+                        cell,
+                        *min_range,
+                        *max_range,
                     )
                     .is_ok()
                         && (target_kind(effect) != ActiveSkillTargetKind::Enemy

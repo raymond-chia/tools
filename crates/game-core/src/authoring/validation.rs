@@ -432,6 +432,7 @@ pub(crate) fn load_map(
         turns: HashMap::new(),
     });
     w.insert_resource(TemporaryTerrains::default());
+    crate::terrain::refresh_terrain_grid(&mut w);
     w.insert_resource(Turn {
         actor: None,
         phase: Phase::Ended,

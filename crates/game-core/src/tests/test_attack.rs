@@ -1,13 +1,10 @@
-use super::support::{AsciiBoard, ascii_board};
-use crate::model::{ActiveSkills, Board, Footprint, PassiveSkills, Pos, TemporaryTerrains, Unit};
+use super::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, skill_test_data};
 use crate::skill::{attack_damage, hit};
 use crate::{
-    ActiveSkillDef, ActiveSkillEffect, AttackResult, EquipmentView, GridPos, PassiveSkillDef,
-    PassiveSkillEffect, PowerSource, Team, TerrainEntryRule, TerrainLayer, TerrainPlacement,
-    TerrainTypeDef,
+    ActiveSkillDef, ActiveSkillEffect, AttackResult, Game, PassiveSkillDef, PassiveSkillEffect,
+    PowerSource, Team, authoring,
 };
-use bevy_ecs::prelude::{Entity, World};
-use std::collections::HashMap;
+use bevy_ecs::prelude::Entity;
 
 // 驗證命中結果、不同裝備格擋減傷與暴擊順序均符合傷害公式。
 #[test]
@@ -174,11 +171,11 @@ fn hit_uses_expected_flanking_bonus() {
             // 特殊夾擊被動提供 4 點命中加值，支援者不需要持有被動。
             ("特殊夾擊", Some("test_pack_flanking"), 4),
         ] {
-            let (world, attacker, target) =
+            let (game, attacker, target) =
                 flanking_world(diagram, min_range, max_range, passive_id);
             let expected_modifier = 5 + if flanking { expected_bonus } else { 0 };
             assert_eq!(
-                hit(&world, attacker, target, &skill, 0),
+                hit(&game.world, attacker, target, &skill, 0),
                 expected_modifier,
                 "{name}／{passive_name}"
             );
@@ -204,132 +201,42 @@ fn attack_skill(ranged: bool, min_range: i32, max_range: i32) -> ActiveSkillDef 
     }
 }
 
-fn spawn_unit(
-    world: &mut World,
-    position: GridPos,
-    footprint: Footprint,
-    team: Team,
-    active_skills: Vec<String>,
-    passives: Vec<PassiveSkillDef>,
-) -> Entity {
-    let passive_skills = passives.iter().map(|skill| skill.id.clone()).collect();
-    world
-        .resource_mut::<PassiveSkills>()
-        .definitions
-        .extend(passives.into_iter().map(|skill| (skill.id.clone(), skill)));
-    world
-        .spawn((
-            Pos(position),
-            footprint,
-            Unit {
-                unit_type: "test_unit".into(),
-                visual: "test_unit".into(),
-                team,
-                movement: 0,
-                initiative: 0,
-                dodge: 0,
-                block: 0,
-                hit: 5,
-                physical_power: 1,
-                magical_power: 1,
-                block_reduction: 0,
-                equipment: EquipmentView {
-                    main_hand: String::new(),
-                    off_hand: String::new(),
-                    armor: String::new(),
-                    accessory: String::new(),
-                },
-                active_skills,
-                passive_skills,
-            },
-        ))
-        .id()
-}
-
+// 透過共用作者資料建局；B 改為攻擊者同隊的支援者，攻擊者依案例持有夾擊被動。
 fn flanking_world(
     diagram: &str,
     min_range: i32,
     max_range: i32,
     passive_id: Option<&str>,
-) -> (World, Entity, Entity) {
-    let AsciiBoard {
-        board,
-        markers,
-        terrains,
-    } = ascii_board(diagram);
-    let placement = |marker| {
-        let ((x, y), (width, height)) = markers[&marker];
-        (GridPos { x, y }, Footprint { width, height })
-    };
-    let (attacker_position, attacker_footprint) = placement('A');
-    let (supporter_position, supporter_footprint) = placement('B');
-    let (target_position, target_footprint) = placement('T');
-    let melee_skill = attack_skill(false, min_range, max_range);
-    let melee_skill_id = melee_skill.id.clone();
-    let plain = TerrainTypeDef {
-        id: "plain".into(),
-        blocks_sight: false,
-        layer: TerrainLayer::Ground,
-        entry_rule: TerrainEntryRule::Walkable,
-        damage: 0,
-        extra_movement_cost: 0,
-        dodge_penalty: 0,
-        block_penalty: 0,
-    };
-    let mut wall = plain.clone();
-    wall.id = "wall".into();
-    wall.layer = TerrainLayer::Overlay;
-    wall.entry_rule = TerrainEntryRule::Blocked;
-    wall.blocks_sight = true;
-    let mut world = World::new();
-    world.insert_resource(PassiveSkills {
-        definitions: HashMap::new(),
-    });
-    world.insert_resource(TemporaryTerrains::default());
-    world.insert_resource(Board {
-        width: board.0,
-        height: board.1,
-        terrains: terrains
-            .into_iter()
-            .map(|TerrainPlacement { x, y, kind }| (GridPos { x, y }, vec![kind]))
-            .collect(),
-        terrain_types: HashMap::from([("plain".into(), plain), ("wall".into(), wall)]),
-    });
-    world.insert_resource(ActiveSkills {
-        definitions: HashMap::from([(melee_skill_id.clone(), melee_skill)]),
-    });
-    // 每個案例將攻擊者選用的被動註冊到共用定義表，單位只保存技能 ID。
-    let attacker_passives = [("test_flanking", 2), ("test_pack_flanking", 4)]
+) -> (Game, Entity, Entity) {
+    let (mut definitions, mut map) = skill_test_data(
+        min_range,
+        max_range,
+        attack_skill(false, min_range, max_range).effect,
+        Team::Enemy("test_enemy".into()),
+        diagram,
+    );
+    for unit in &mut map.units {
+        if unit.id == BLOCKER_ID {
+            unit.team = Team::Player;
+            unit.min_difficulty = None;
+        }
+    }
+    definitions.passive_skills = [("test_flanking", 2), ("test_pack_flanking", 4)]
         .into_iter()
-        .filter(|(id, _)| passive_id == Some(*id))
         .map(|(id, hit_bonus)| PassiveSkillDef {
             id: id.to_owned(),
             effect: PassiveSkillEffect::Flanking { hit_bonus },
         })
         .collect();
-    let attacker = spawn_unit(
-        &mut world,
-        attacker_position,
-        attacker_footprint,
-        Team::Player,
-        vec![melee_skill_id.clone()],
-        attacker_passives,
-    );
-    spawn_unit(
-        &mut world,
-        supporter_position,
-        supporter_footprint,
-        Team::Player,
-        vec![melee_skill_id],
-        Vec::new(),
-    );
-    let target = spawn_unit(
-        &mut world,
-        target_position,
-        target_footprint,
-        Team::Enemy("test_enemy".into()),
-        Vec::new(),
-        Vec::new(),
-    );
-    (world, attacker, target)
+    for unit_type in &mut definitions.unit_types {
+        unit_type.hit = 5;
+        if unit_type.id == "test_actor" {
+            unit_type.passive_skills = passive_id.into_iter().map(str::to_owned).collect();
+        }
+    }
+    let game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+        .expect("夾擊測試應可載入");
+    let attacker = game.entity(ACTOR_ID).expect("棋盤應包含攻擊者");
+    let target = game.entity(TARGET_ID).expect("棋盤應包含目標");
+    (game, attacker, target)
 }

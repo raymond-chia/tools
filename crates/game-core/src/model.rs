@@ -100,8 +100,30 @@ pub(crate) struct TemporaryTerrain {
 }
 
 #[derive(Resource, Default, Clone)]
-/// 內層 key 是該格的暫時地形種類 ID。
+/// 內層 key 是該格的暫時地形種類 ID；只經由 terrain 模組修改，以同步重建 TerrainGrid。
 pub(crate) struct TemporaryTerrains(pub(crate) HashMap<GridPos, HashMap<String, TemporaryTerrain>>);
+
+/// 找路與視線共用的每格地形摘要，依列優先排列；地形改變時由 terrain 模組重建。
+#[derive(Resource)]
+pub(crate) struct TerrainGrid {
+    pub(crate) width: i32,
+    pub(crate) height: i32,
+    pub(crate) cells: Vec<CellTerrain>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct CellTerrain {
+    /// 所有地形都可步行進入。
+    pub(crate) passable: bool,
+    /// 任一地形有傷害，進入後中斷移動。
+    pub(crate) hazard: bool,
+    pub(crate) blocks_sight: bool,
+    pub(crate) movement_cost: u32,
+    /// 此格所有地形的閃避懲罰總和。
+    pub(crate) dodge_penalty: i32,
+    /// 此格所有地形的格擋懲罰總和。
+    pub(crate) block_penalty: i32,
+}
 
 #[derive(Resource, Default, Clone)]
 pub(crate) struct Encounter {
@@ -124,7 +146,7 @@ pub enum BattleMode {
 #[derive(Resource)]
 pub(crate) struct Exploration {
     pub(crate) mode: BattleMode,
-    // 每個玩家單位的回合狀態表
+    /// 尚未行動、也不是目前行動者的玩家單位回合狀態；目前行動者只存在 Turn。
     pub(crate) turns: HashMap<i64, Turn>,
 }
 

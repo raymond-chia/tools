@@ -2,7 +2,7 @@
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
-    Board, Footprint, GridPos, Log, MovePreview, MovementTransition, Phase, Pos, Turn, Unit,
+    Footprint, GridPos, Log, MovePreview, MovementTransition, Phase, Pos, TerrainGrid, Turn, Unit,
 };
 use crate::terrain::{
     TerrainEntry, footprint_movement_cost, footprint_on_impassable, terrain_ends_movement,
@@ -34,9 +34,10 @@ impl Game {
             .world
             .get::<Footprint>(entity)
             .expect("預覽移動的單位應具有 Footprint 元件");
+        let grid = self.world.resource::<TerrainGrid>();
         let interrupted = path
             .last()
-            .is_some_and(|position| terrain_ends_movement(&self.world, *position, footprint));
+            .is_some_and(|position| terrain_ends_movement(grid, *position, footprint));
         let mut first = Vec::new();
         let mut second = Vec::new();
         let mut spent = 0;
@@ -46,7 +47,7 @@ impl Game {
             first.push(path[0]);
         }
         for position in path.into_iter().skip(1) {
-            spent += footprint_movement_cost(&self.world, position, footprint);
+            spent += footprint_movement_cost(grid, position, footprint);
             if spent <= first_budget {
                 first.push(position);
             } else {
@@ -157,13 +158,14 @@ impl Game {
         let mut actual_path = vec![*path.first().expect("已規劃的移動路徑應包含起點")];
         let mut spent = 0;
         for p in path.iter().copied().skip(1) {
-            spent += footprint_movement_cost(&self.world, p, footprint);
+            let grid = self.world.resource::<TerrainGrid>();
+            spent += footprint_movement_cost(grid, p, footprint);
+            let ends_movement = terrain_ends_movement(grid, p, footprint);
             self.world
                 .get_mut::<Pos>(e)
                 .expect("已建立的戰鬥單位應具有 Pos 元件")
                 .0 = p;
             actual_path.push(p);
-            let ends_movement = terrain_ends_movement(&self.world, p, footprint);
             let downed = self.apply_terrain_entry(e, a, TerrainEntry::Movement);
             if ends_movement || downed {
                 break;
@@ -223,7 +225,7 @@ impl Game {
                 )
             })
             .ok_or(error::unreachable_destination())?;
-        truncate_at_hazard(&self.world, footprint, &mut path);
+        truncate_at_hazard(self.world.resource::<TerrainGrid>(), footprint, &mut path);
         Ok(MovePlan {
             entity,
             turn,
@@ -261,17 +263,11 @@ pub(crate) fn unit_at_cell(world: &World, position: GridPos) -> Option<Entity> {
         .map(|entity| entity.id())
 }
 
-pub(crate) fn fits(b: &Board, p: GridPos, f: Footprint) -> bool {
-    let Board {
-        width,
-        height,
-        terrains: _,
-        terrain_types: _,
-    } = b;
+pub(crate) fn fits(width: i32, height: i32, p: GridPos, f: Footprint) -> bool {
     p.x >= 0
         && p.y >= 0
-        && i64::from(p.x) + i64::from(f.width) <= i64::from(*width)
-        && i64::from(p.y) + i64::from(f.height) <= i64::from(*height)
+        && i64::from(p.x) + i64::from(f.width) <= i64::from(width)
+        && i64::from(p.y) + i64::from(f.height) <= i64::from(height)
 }
 pub(crate) fn distance(a: GridPos, b: GridPos) -> i32 {
     (a.x - b.x).abs() + (a.y - b.y).abs()
@@ -279,13 +275,31 @@ pub(crate) fn distance(a: GridPos, b: GridPos) -> i32 {
 pub(crate) fn overlap(a: GridPos, af: Footprint, b: GridPos, bf: Footprint) -> bool {
     a.x < b.x + bf.width && a.x + af.width > b.x && a.y < b.y + bf.height && a.y + af.height > b.y
 }
-pub(crate) fn occupied(w: &World, ignore: Entity, p: GridPos, f: Footprint) -> bool {
-    w.iter_entities().any(|e| {
-        e.id() != ignore
-            && e.get::<Pos>()
-                .zip(e.get::<Footprint>())
-                .is_some_and(|(q, g)| overlap(p, f, q.0, *g))
-    })
+/// 每格上的單位；單位不會重疊，每格最多一個。需要逐格查詢多次時先整理一次。
+pub(crate) fn unit_cells(w: &World) -> HashMap<GridPos, Entity> {
+    w.iter_entities()
+        .filter_map(|e| Some((e.id(), e.get::<Pos>()?, e.get::<Footprint>()?)))
+        .flat_map(|(entity, position, footprint)| {
+            footprint_cells(position.0, *footprint)
+                .into_iter()
+                .map(move |cell| (cell, entity))
+        })
+        .collect()
+}
+
+/// 除了 ignore 以外所有單位佔用的格子；同一次搜尋只建立一次。
+pub(crate) fn occupied_cells(w: &World, ignore: Entity) -> HashSet<GridPos> {
+    unit_cells(w)
+        .into_iter()
+        .filter(|(_, entity)| *entity != ignore)
+        .map(|(cell, _)| cell)
+        .collect()
+}
+
+pub(crate) fn footprint_blocked(blocked: &HashSet<GridPos>, p: GridPos, f: Footprint) -> bool {
+    footprint_cells(p, f)
+        .iter()
+        .any(|cell| blocked.contains(cell))
 }
 pub(crate) fn entity_distance(w: &World, a: Entity, b: Entity) -> i32 {
     let ap = w.get::<Pos>(a).expect("已建立的戰鬥單位應具有 Pos 元件").0;
@@ -360,8 +374,13 @@ pub(crate) struct Paths {
     best: HashMap<GridPos, PathState>,
     previous: HashMap<PathState, PathState>,
 }
-fn paths(w: &World, e: Entity, start: GridPos, f: Footprint, budget: u32) -> Paths {
-    let board = w.resource::<Board>();
+fn paths(
+    grid: &TerrainGrid,
+    blocked: &HashSet<GridPos>,
+    start: GridPos,
+    f: Footprint,
+    budget: u32,
+) -> Paths {
     let start_state = PathState {
         danger: 0,
         position: start,
@@ -388,14 +407,17 @@ fn paths(w: &World, e: Entity, start: GridPos, f: Footprint, budget: u32) -> Pat
                 x: state.position.x + dx,
                 y: state.position.y + dy,
             };
-            if !fits(board, n, f) || occupied(w, e, n, f) || footprint_on_impassable(w, n, f) {
+            if !fits(grid.width, grid.height, n, f)
+                || footprint_blocked(blocked, n, f)
+                || footprint_on_impassable(grid, n, f)
+            {
                 continue;
             }
             let next_state = PathState {
-                danger: state.danger + u32::from(terrain_ends_movement(w, n, f)),
+                danger: state.danger + u32::from(terrain_ends_movement(grid, n, f)),
                 position: n,
             };
-            let next_movement = movement + footprint_movement_cost(w, n, f);
+            let next_movement = movement + footprint_movement_cost(grid, n, f);
             let dominated = labels.get(&n).is_some_and(|known| {
                 known.iter().any(|(danger, movement)| {
                     *danger <= next_state.danger && *movement <= next_movement
@@ -425,7 +447,7 @@ pub(crate) fn find_path(
     f: Footprint,
     b: u32,
 ) -> Option<Vec<GridPos>> {
-    let search = paths(w, e, s, f, b);
+    let search = paths(w.resource::<TerrainGrid>(), &occupied_cells(w, e), s, f, b);
     reconstruct_path(&search, s, end)
 }
 
@@ -442,11 +464,11 @@ fn reconstruct_path(search: &Paths, start: GridPos, end: GridPos) -> Option<Vec<
     out.reverse();
     Some(out)
 }
-fn truncate_at_hazard(world: &World, footprint: Footprint, path: &mut Vec<GridPos>) {
+fn truncate_at_hazard(grid: &TerrainGrid, footprint: Footprint, path: &mut Vec<GridPos>) {
     if let Some(index) = path
         .iter()
         .skip(1)
-        .position(|position| terrain_ends_movement(world, *position, footprint))
+        .position(|position| terrain_ends_movement(grid, *position, footprint))
     {
         path.truncate(index + 2);
     }
@@ -482,15 +504,17 @@ pub(crate) fn movement_options(
         .expect("移動單位應具有 Unit")
         .movement;
     let (first_budget, second_budget) = movement_budgets(turn, allowance);
+    let grid = world.resource::<TerrainGrid>();
+    let blocked = occupied_cells(world, entity);
     let first = if first_budget > 0 {
-        Some(paths(world, entity, start, footprint, first_budget))
+        Some(paths(grid, &blocked, start, footprint, first_budget))
     } else {
         None
     };
     let second = if include_second {
         Some(paths(
-            world,
-            entity,
+            grid,
+            &blocked,
             start,
             footprint,
             first_budget + second_budget,
@@ -517,14 +541,14 @@ pub(crate) fn movement_options(
         for position in positions {
             let mut path =
                 reconstruct_path(search, start, position).expect("搜尋結果中的位置應可重建路徑");
-            truncate_at_hazard(world, footprint, &mut path);
+            truncate_at_hazard(grid, footprint, &mut path);
             if path.last() != Some(&position) {
                 continue;
             }
             let cost = path
                 .iter()
                 .skip(1)
-                .map(|position| footprint_movement_cost(world, *position, footprint))
+                .map(|position| footprint_movement_cost(grid, *position, footprint))
                 .sum();
             options.push(MovementOption {
                 position,
@@ -537,27 +561,26 @@ pub(crate) fn movement_options(
 }
 
 /// 同一次接敵規劃共用全圖可達路徑，搜尋結果不依目標或技能改變。
-pub(crate) fn full_board_paths(w: &World, e: Entity, s: GridPos, f: Footprint) -> Paths {
-    let Board {
-        width,
-        height,
-        terrains: _,
-        terrain_types: _,
-    } = w.resource::<Board>();
+pub(crate) fn full_board_paths(
+    grid: &TerrainGrid,
+    blocked: &HashSet<GridPos>,
+    s: GridPos,
+    f: Footprint,
+) -> Paths {
     let Footprint {
         width: footprint_width,
         height: footprint_height,
     } = f;
-    let search_budget = (0..=*height - footprint_height)
-        .flat_map(|y| (0..=*width - footprint_width).map(move |x| GridPos { x, y }))
+    let search_budget = (0..=grid.height - footprint_height)
+        .flat_map(|y| (0..=grid.width - footprint_width).map(move |x| GridPos { x, y }))
         .fold(0_u32, |total, cell| {
-            total.saturating_add(footprint_movement_cost(w, cell, f))
+            total.saturating_add(footprint_movement_cost(grid, cell, f))
         });
-    paths(w, e, s, f, search_budget)
+    paths(grid, blocked, s, f, search_budget)
 }
 
 pub(crate) fn toward_skill_range(
-    w: &World,
+    grid: &TerrainGrid,
     search: &Paths,
     s: GridPos,
     target: GridPos,
@@ -576,7 +599,7 @@ pub(crate) fn toward_skill_range(
             footprint_cells(target, target_footprint)
                 .into_iter()
                 .any(|cell| {
-                    crate::sight::check_sight_in_range(w, **p, f, cell, min_range, max_range)
+                    crate::sight::check_sight_in_range(grid, **p, f, cell, min_range, max_range)
                         .is_ok()
                 })
         })
@@ -588,13 +611,13 @@ pub(crate) fn toward_skill_range(
     let mut spent = 0;
     let mut steps = 1;
     for cell in route.iter().skip(1) {
-        let cost = footprint_movement_cost(w, *cell, f);
+        let cost = footprint_movement_cost(grid, *cell, f);
         if cost > b.saturating_sub(spent) {
             break;
         }
         spent += cost;
         steps += 1;
-        if terrain_ends_movement(w, *cell, f) {
+        if terrain_ends_movement(grid, *cell, f) {
             break;
         }
     }
@@ -606,7 +629,8 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     let f = *w
         .get::<Footprint>(e)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let Paths { best, previous: _ } = paths(w, e, p, f, b);
+    let Paths { best, previous: _ } =
+        paths(w.resource::<TerrainGrid>(), &occupied_cells(w, e), p, f, b);
     let mut v: Vec<_> = best.into_keys().collect();
     v.sort_by_key(|p| (p.y, p.x));
     v

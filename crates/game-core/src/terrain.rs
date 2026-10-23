@@ -1,9 +1,11 @@
-//! 地形種類查詢與地形對移動、通行、防禦的影響；固定與暫時地形一律經由 terrains_at 合併。
+//! 地形種類查詢與地形對移動、通行、防禦的影響；固定與暫時地形一律經由 merged_terrains_at 合併。
+//! 找路與視線讀取預先整理的 TerrainGrid，暫時地形只在本模組修改並同步重建。
 use crate::game::{DamageResult, Game};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::model::{
-    Board, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Log, Pos, TemporaryTerrain,
-    TemporaryTerrains, TerrainEntryRule, TerrainLayer, TerrainTypeDef, Unit,
+    Board, CellTerrain, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Log, Pos,
+    TemporaryTerrain, TemporaryTerrains, TerrainEntryRule, TerrainGrid, TerrainLayer,
+    TerrainTypeDef, Unit,
 };
 use crate::movement::footprint_cells;
 use bevy_ecs::prelude::{Entity, World};
@@ -54,27 +56,128 @@ pub(crate) fn fixed_terrains_at<'a>(
     kinds
 }
 
-/// 回傳此格所有地形；未放置 ground 時補上預設地面。
-pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
+/// 合併固定與暫時地形並排序；temporary 為 None 時只看永久地形。
+fn merged_terrains_at<'a>(
+    board: &'a Board,
+    temporary: Option<&'a TemporaryTerrains>,
+    position: GridPos,
+) -> Vec<&'a str> {
     let Board {
         width: _,
         height: _,
         terrains,
         terrain_types,
-    } = w.resource::<Board>();
-    let mut kinds: Vec<_> = fixed_terrains_at(terrain_types, terrains, position)
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
-    if let Some(temporary) = w.resource::<TemporaryTerrains>().0.get(&position) {
-        for kind in temporary.keys() {
-            if !kinds.contains(kind) {
-                kinds.push(kind.clone());
+    } = board;
+    let mut kinds = fixed_terrains_at(terrain_types, terrains, position);
+    if let Some(cell) = temporary.and_then(|TemporaryTerrains(cells)| cells.get(&position)) {
+        for kind in cell.keys() {
+            if !kinds.contains(&kind.as_str()) {
+                kinds.push(kind);
             }
         }
     }
     kinds.sort();
     kinds
+}
+
+/// 回傳此格所有地形；未放置 ground 時補上預設地面。
+pub(crate) fn terrains_at(w: &World, position: GridPos) -> Vec<String> {
+    merged_terrains_at(
+        w.resource::<Board>(),
+        Some(w.resource::<TemporaryTerrains>()),
+        position,
+    )
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
+/// 整理全地圖的地形摘要；temporary 為 None 時只看永久地形。
+pub(crate) fn terrain_grid(board: &Board, temporary: Option<&TemporaryTerrains>) -> TerrainGrid {
+    let Board {
+        width,
+        height,
+        terrains: _,
+        terrain_types: _,
+    } = board;
+    let cells = (0..*height)
+        .flat_map(|y| (0..*width).map(move |x| GridPos { x, y }))
+        .map(|position| {
+            let types: Vec<_> = merged_terrains_at(board, temporary, position)
+                .into_iter()
+                .map(|kind| terrain_type(board, kind))
+                .collect();
+            CellTerrain {
+                passable: types
+                    .iter()
+                    .all(|terrain| terrain.entry_rule == TerrainEntryRule::Walkable),
+                hazard: types.iter().any(|terrain| terrain.damage > 0),
+                blocks_sight: types.iter().any(|terrain| terrain.blocks_sight),
+                movement_cost: 1 + types
+                    .iter()
+                    .map(|terrain| terrain.extra_movement_cost)
+                    .sum::<u32>(),
+                dodge_penalty: types.iter().map(|terrain| terrain.dodge_penalty).sum(),
+                block_penalty: types.iter().map(|terrain| terrain.block_penalty).sum(),
+            }
+        })
+        .collect();
+    TerrainGrid {
+        width: *width,
+        height: *height,
+        cells,
+    }
+}
+
+/// 依目前固定與暫時地形重建 TerrainGrid；載入與暫時地形變動後呼叫。
+pub(crate) fn refresh_terrain_grid(world: &mut World) {
+    let grid = terrain_grid(
+        world.resource::<Board>(),
+        Some(world.resource::<TemporaryTerrains>()),
+    );
+    world.insert_resource(grid);
+}
+
+pub(crate) fn add_temporary_terrain(
+    world: &mut World,
+    position: GridPos,
+    kind: String,
+    expires_after_round: u32,
+) {
+    world
+        .resource_mut::<TemporaryTerrains>()
+        .0
+        .entry(position)
+        .or_default()
+        .insert(
+            kind,
+            TemporaryTerrain {
+                expires_after_round,
+            },
+        );
+    refresh_terrain_grid(world);
+}
+
+/// 移除在指定回合前已到期的暫時地形。
+pub(crate) fn expire_temporary_terrains(world: &mut World, round: u32) {
+    world
+        .resource_mut::<TemporaryTerrains>()
+        .0
+        .retain(|_, terrains| {
+            terrains.retain(|_, terrain| terrain.expires_after_round >= round);
+            !terrains.is_empty()
+        });
+    refresh_terrain_grid(world);
+}
+
+/// 呼叫端須確認位置在棋盤內。
+pub(crate) fn grid_cell(grid: &TerrainGrid, position: GridPos) -> CellTerrain {
+    let TerrainGrid {
+        width,
+        height: _,
+        cells,
+    } = grid;
+    cells[(position.y * width + position.x) as usize]
 }
 
 pub(crate) fn ground_at<'a>(board: &Board, kinds: &'a [String]) -> Option<&'a String> {
@@ -91,26 +194,6 @@ pub(crate) fn ground_at<'a>(board: &Board, kinds: &'a [String]) -> Option<&'a St
         } = terrain_type(board, kind);
         *layer == TerrainLayer::Ground
     })
-}
-
-pub(crate) fn movement_cost(w: &World, position: GridPos) -> u32 {
-    let board = w.resource::<Board>();
-    1 + terrains_at(w, position)
-        .iter()
-        .map(|kind| {
-            let TerrainTypeDef {
-                blocks_sight: _,
-                id: _,
-                layer: _,
-                entry_rule: _,
-                damage: _,
-                extra_movement_cost,
-                dodge_penalty: _,
-                block_penalty: _,
-            } = terrain_type(board, kind);
-            *extra_movement_cost
-        })
-        .sum::<u32>()
 }
 
 /// 暫時地形的剩餘回合數（含本回合）；同格已有同種類固定地形時以固定地形為準，回傳 None。
@@ -155,39 +238,40 @@ fn footprint_terrains(w: &World, position: GridPos, footprint: Footprint) -> Vec
 }
 
 /// 與防禦懲罰一致，移動成本取佔用範圍內各格成本的最大值。
-pub(crate) fn footprint_movement_cost(w: &World, position: GridPos, footprint: Footprint) -> u32 {
+pub(crate) fn footprint_movement_cost(
+    grid: &TerrainGrid,
+    position: GridPos,
+    footprint: Footprint,
+) -> u32 {
     footprint_cells(position, footprint)
         .into_iter()
-        .map(|cell| movement_cost(w, cell))
+        .map(|cell| grid_cell(grid, cell).movement_cost)
         .max()
         .expect("載入時已驗證單位佔用尺寸為正值，應至少佔用一格")
 }
 
-pub(crate) fn terrain_ends_movement(w: &World, position: GridPos, footprint: Footprint) -> bool {
-    footprint_terrains(w, position, footprint)
-        .iter()
-        .any(|kind| {
-            let TerrainTypeDef {
-                blocks_sight: _,
-                id: _,
-                layer: _,
-                entry_rule: _,
-                damage,
-                extra_movement_cost: _,
-                dodge_penalty: _,
-                block_penalty: _,
-            } = terrain_type(w.resource::<Board>(), kind);
-            *damage > 0
-        })
-}
-
-/// 佔用範圍內任一格（含暫時地形）的進入規則符合條件。
-fn footprint_has_entry_rule(
-    w: &World,
+pub(crate) fn terrain_ends_movement(
+    grid: &TerrainGrid,
     position: GridPos,
     footprint: Footprint,
-    matches_rule: impl Fn(TerrainEntryRule) -> bool,
 ) -> bool {
+    footprint_cells(position, footprint)
+        .into_iter()
+        .any(|cell| grid_cell(grid, cell).hazard)
+}
+
+pub(crate) fn footprint_on_impassable(
+    grid: &TerrainGrid,
+    position: GridPos,
+    footprint: Footprint,
+) -> bool {
+    footprint_cells(position, footprint)
+        .into_iter()
+        .any(|cell| !grid_cell(grid, cell).passable)
+}
+
+/// 佔用範圍內任一格（含暫時地形）為阻擋推擊的地形。
+pub(crate) fn footprint_blocks_push(w: &World, position: GridPos, footprint: Footprint) -> bool {
     let board = w.resource::<Board>();
     footprint_cells(position, footprint)
         .into_iter()
@@ -203,39 +287,21 @@ fn footprint_has_entry_rule(
                     dodge_penalty: _,
                     block_penalty: _,
                 } = terrain_type(board, kind);
-                matches_rule(*entry_rule)
+                *entry_rule == TerrainEntryRule::Blocked
             })
         })
 }
 
-pub(crate) fn footprint_on_impassable(w: &World, position: GridPos, footprint: Footprint) -> bool {
-    footprint_has_entry_rule(w, position, footprint, |rule| {
-        rule != TerrainEntryRule::Walkable
-    })
-}
-
-pub(crate) fn footprint_blocks_push(w: &World, position: GridPos, footprint: Footprint) -> bool {
-    footprint_has_entry_rule(w, position, footprint, |rule| {
-        rule == TerrainEntryRule::Blocked
-    })
-}
-
 /// 佔用範圍內各格地形懲罰總和的最大值。
 pub(crate) fn footprint_terrain_penalty(
-    w: &World,
+    grid: &TerrainGrid,
     position: GridPos,
     footprint: Footprint,
-    penalty: impl Fn(&TerrainTypeDef) -> i32,
+    penalty: impl Fn(CellTerrain) -> i32,
 ) -> i32 {
-    let board = w.resource::<Board>();
     footprint_cells(position, footprint)
         .into_iter()
-        .map(|cell| {
-            terrains_at(w, cell)
-                .iter()
-                .map(|kind| penalty(terrain_type(board, kind)))
-                .sum::<i32>()
-        })
+        .map(|cell| penalty(grid_cell(grid, cell)))
         .max()
         .unwrap_or(0)
 }

@@ -27,7 +27,7 @@ pub(crate) fn validate_loot(
     }
     let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用範圍");
     crate::sight::check_sight_in_range(
-        world,
+        world.resource::<crate::model::TerrainGrid>(),
         origin,
         footprint,
         target,

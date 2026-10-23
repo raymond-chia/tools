@@ -5,19 +5,21 @@ use crate::game::Game;
 use crate::model::{
     ActiveSkillDef, ActiveSkillEffect, ActiveSkillPreview, ActiveSkillTargetKind, ActiveSkills,
     AiProfiles, AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos,
-    PreviousAttackTarget, TemporaryTerrains, Turn, Unit,
+    PreviousAttackTarget, TerrainGrid, Turn, Unit,
 };
 use crate::movement::{
-    MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
-    full_board_paths, movement_budgets, movement_options, occupied, toward_skill_range,
-    unit_at_cell,
+    MovementOption, can_move, footprint_blocked, footprint_cell_distance, footprint_cells,
+    footprint_distance, full_board_paths, movement_budgets, movement_options, occupied_cells,
+    toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
 };
-use crate::terrain::{footprint_on_impassable, terrain_ends_movement, terrain_type, terrains_at};
+use crate::terrain::{
+    footprint_on_impassable, terrain_ends_movement, terrain_grid, terrain_type, terrains_at,
+};
 use bevy_ecs::prelude::{Entity, World};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// 只在作者輸入邊界解析引用與驗證設定，執行期直接使用已解析的傾向。
 pub(crate) fn resolve_profiles(
@@ -122,7 +124,11 @@ impl Game {
                     .get::<Footprint>(entity)
                     .expect("AI 單位應具有佔用尺寸");
                 if action.is_none()
-                    && terrain_ends_movement(&self.world, *position, footprint)
+                    && terrain_ends_movement(
+                        self.world.resource::<TerrainGrid>(),
+                        *position,
+                        footprint,
+                    )
                     && can_move(self.world.resource::<Turn>())
                 {
                     continue;
@@ -162,6 +168,10 @@ impl Game {
         if !can_use_skill(self.world.resource::<Turn>()) {
             return None;
         }
+        let footprint = *self
+            .world
+            .get::<Footprint>(actor)
+            .expect("AI 單位應具有佔用尺寸");
         let mut best: Option<ActiveSkillPlan> = None;
         for (
             position_index,
@@ -196,6 +206,10 @@ impl Game {
                     let target_footprint = *target.get::<Footprint>().expect("目標應具有佔用尺寸");
                     // 大型單位可有多個施放格；逐格沿用核心驗證，涵蓋最小射程。
                     for cell in footprint_cells(target_position, target_footprint) {
+                        // 超出最大射程必然無法施放，不必進入完整預覽。
+                        if footprint_cell_distance(*position, footprint, cell) > skill.max_range {
+                            continue;
+                        }
                         let utility = match skill_utility(
                             &self.world,
                             actor,
@@ -454,17 +468,20 @@ fn fallback_position(
     if targets.is_empty() {
         return 0;
     }
+    let current_grid = world.resource::<TerrainGrid>();
+    let occupied = occupied_cells(world, actor);
+    let no_units = HashSet::new();
     // 先選實際可達的目標；全部無路可達時，才只依永久地形規劃。
     for permanent_only in [false, true] {
-        // 規劃資料只保留永久地形，沿用同一套通行、成本與視線規則。
-        let permanent_world = permanent_only.then(|| {
-            let mut permanent_world = World::new();
-            permanent_world.insert_resource(world.resource::<Board>().clone());
-            permanent_world.insert_resource(TemporaryTerrains::default());
-            permanent_world
-        });
-        let planning_world = permanent_world.as_ref().unwrap_or(world);
-        let search = full_board_paths(planning_world, actor, start, footprint);
+        // 第二輪忽略暫時地形與所有單位，兩者之後都可能移開；仍沿用同一套通行、成本與視線規則。
+        let permanent_grid;
+        let (planning_grid, planning_blocked) = if permanent_only {
+            permanent_grid = terrain_grid(world.resource::<Board>(), None);
+            (&permanent_grid, &no_units)
+        } else {
+            (current_grid, &occupied)
+        };
+        let search = full_board_paths(planning_grid, planning_blocked, start, footprint);
         // 依距離與 ID 選擇有合法施放路徑的敵人；治療仍優先接近既定的重傷隊友。
         for &target in &targets {
             let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
@@ -476,7 +493,7 @@ fn fallback_position(
                 .filter_map(|skill| {
                     let skill_distance = desired.clamp(skill.min_range, skill.max_range);
                     let path = toward_skill_range(
-                        planning_world,
+                        planning_grid,
                         &search,
                         start,
                         goal,
@@ -493,8 +510,8 @@ fn fallback_position(
                         .iter()
                         .skip(1)
                         .position(|cell| {
-                            occupied(world, actor, *cell, footprint)
-                                || footprint_on_impassable(world, *cell, footprint)
+                            footprint_blocked(&occupied, *cell, footprint)
+                                || footprint_on_impassable(current_grid, *cell, footprint)
                         })
                         .map_or(path.len(), |index| index + 1);
                     let index = path[..route_end].iter().rev().find_map(|cell| {
