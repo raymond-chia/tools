@@ -31,7 +31,7 @@ id = "plain"
 layer = "ground"
 entry_rule = "walkable"
 
-[[skills]]
+[[active_skills]]
 id = "melee"
 ranged = false
 min_range = 1
@@ -40,7 +40,7 @@ effect = "attack"
 hit_bonus = 100
 power_bonus = 10
 
-[[skills]]
+[[active_skills]]
 id = "shot"
 ranged = true
 min_range = 2
@@ -49,9 +49,8 @@ effect = "attack"
 hit_bonus = 100
 power_bonus = 10
 
-[[skills]]
+[[active_skills]]
 id = "heal"
-ranged = false
 min_range = 0
 max_range = 3
 effect = "heal"
@@ -69,7 +68,7 @@ dodge = 0
 hit = 0
 physical_power = 0
 magical_power = 0
-skills = ["melee"]
+active_skills = ["melee"]
 
 [[unit_types]]
 id = "other_tank"
@@ -82,7 +81,7 @@ dodge = 0
 hit = 0
 physical_power = 0
 magical_power = 0
-skills = ["melee"]
+active_skills = ["melee"]
 
 [[unit_types]]
 id = "archer"
@@ -95,7 +94,7 @@ dodge = 0
 hit = 0
 physical_power = 0
 magical_power = 0
-skills = ["shot"]
+active_skills = ["shot"]
 
 [[unit_types]]
 id = "healer"
@@ -108,7 +107,7 @@ dodge = 0
 hit = 0
 physical_power = 0
 magical_power = 0
-skills = ["heal", "shot"]
+active_skills = ["heal", "shot"]
 
 [[unit_types]]
 id = "target"
@@ -121,7 +120,7 @@ dodge = 0
 hit = 0
 physical_power = 0
 magical_power = 0
-skills = ["melee"]
+active_skills = ["melee"]
 
 # 二維路徑測試專用地形。
 [[terrain_types]]
@@ -154,4 +153,4 @@ dodge = 0
 hit = 0
 physical_power = 0
 magical_power = 0
-skills = ["melee", "shot"]
+active_skills = ["melee", "shot"]

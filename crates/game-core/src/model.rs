@@ -79,7 +79,9 @@ pub(crate) struct Unit {
     pub(crate) block_reduction: i32,
     pub(crate) equipment: EquipmentView,
     /// 單位可使用的技能 ID。
-    pub(crate) skills: Vec<String>,
+    pub(crate) active_skills: Vec<String>,
+    /// 已合併全體預設的被動技能 ID。
+    pub(crate) passive_skills: Vec<String>,
 }
 
 #[derive(Resource, Clone)]
@@ -154,42 +156,58 @@ pub(crate) struct Log(pub(crate) Vec<CombatLogEvent>);
 pub(crate) struct ResultState(pub(crate) Outcome);
 
 #[derive(Resource)]
-pub(crate) struct Skills {
-    /// Key 是技能 ID。
-    pub(crate) definitions: HashMap<String, SkillDef>,
-}
-
-#[derive(Resource)]
 pub(crate) struct AiProfiles {
     pub(crate) by_unit_type: HashMap<String, AiProfile>,
 }
 
+#[derive(Resource)]
+pub(crate) struct ActiveSkills {
+    /// Key 是技能 ID。
+    pub(crate) definitions: HashMap<String, ActiveSkillDef>,
+}
+
+#[derive(Resource)]
+pub(crate) struct PassiveSkills {
+    /// Key 是技能 ID。
+    pub(crate) definitions: HashMap<String, PassiveSkillDef>,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
-pub struct SkillDef {
-    #[serde(default)]
-    pub(crate) power_source: PowerSource,
+pub struct ActiveSkillDef {
     pub(crate) id: String,
-    #[serde(default)]
-    pub(crate) ranged: bool,
     #[serde(default = "default_one")]
     pub(crate) min_range: i32,
     #[serde(default = "default_one")]
     pub(crate) max_range: i32,
-    #[serde(flatten, deserialize_with = "deserialize_skill_effect")]
-    pub(crate) effect: SkillEffect,
+    #[serde(flatten, deserialize_with = "deserialize_active_skill_effect")]
+    pub(crate) effect: ActiveSkillEffect,
+}
+
+/// 被動技能沒有射程與目標，與主動技能分開定義。
+#[derive(Clone, Deserialize, Serialize)]
+pub struct PassiveSkillDef {
+    pub(crate) id: String,
+    #[serde(flatten)]
+    pub(crate) effect: PassiveSkillEffect,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "effect", rename_all = "snake_case")]
-pub enum SkillEffect {
+pub enum ActiveSkillEffect {
     Loot,
     Attack {
+        #[serde(default)]
+        power_source: PowerSource,
+        #[serde(default)]
+        ranged: bool,
         #[serde(default)]
         hit_bonus: i32,
         #[serde(default)]
         power_bonus: i32,
     },
     Push {
+        #[serde(default)]
+        ranged: bool,
         #[serde(default)]
         hit_bonus: i32,
     },
@@ -201,8 +219,15 @@ pub enum SkillEffect {
     },
     Heal {
         #[serde(default)]
+        power_source: PowerSource,
+        #[serde(default)]
         power_bonus: i32,
     },
+}
+
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "effect", rename_all = "snake_case")]
+pub enum PassiveSkillEffect {
     Flanking {
         #[serde(default)]
         hit_bonus: i32,
@@ -296,7 +321,7 @@ pub struct Snapshot {
     pub second_reachable: Vec<GridPos>,
     pub inspected_reachable: Vec<GridPos>,
     pub inspected_second_reachable: Vec<GridPos>,
-    pub skill_ranges: Vec<SkillRangeView>,
+    pub skill_ranges: Vec<ActiveSkillRangeView>,
     /// 本回合尚未行動、依行動順序排列的單位 ID。
     pub turn_order: Vec<i64>,
     pub turn: TurnView,
@@ -418,37 +443,36 @@ pub struct InitiativeRollLog {
 }
 
 #[derive(Serialize)]
-pub struct SkillRangeView {
+pub struct ActiveSkillRangeView {
     pub id: String,
-    pub details: SkillDetailsView,
+    pub details: ActiveSkillDetailsView,
     pub usable: bool,
     pub cells: Vec<GridPos>,
 }
 
 #[derive(Serialize)]
-pub struct SkillDetailsView {
-    pub power_source: PowerSource,
-    pub target: SkillTargetKind,
-    pub ranged: bool,
+pub struct ActiveSkillDetailsView {
+    pub power_source: Option<PowerSource>,
+    pub target: ActiveSkillTargetKind,
+    pub ranged: Option<bool>,
     pub min_range: i32,
     pub max_range: i32,
     pub hit_bonus: Option<i32>,
     pub power_bonus: Option<i32>,
-    pub effect: SkillDetailEffect,
+    pub effect: ActiveSkillDetailEffect,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SkillTargetKind {
+pub enum ActiveSkillTargetKind {
     Cell,
     Ally,
     Enemy,
-    Passive,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum SkillDetailEffect {
+pub enum ActiveSkillDetailEffect {
     Loot,
     Attack,
     Push {
@@ -493,7 +517,7 @@ pub struct MovePreview {
 
 #[derive(Serialize)]
 #[serde(untagged)]
-pub enum SkillPreview {
+pub enum ActiveSkillPreview {
     Attack(AttackPreview),
     Healing(HealingPreview),
 }
@@ -607,7 +631,7 @@ pub struct TurnView {
 }
 
 /// 技能使用的威力由資料明確指定，與近遠距離無關。
-#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PowerSource {
     #[default]
@@ -627,7 +651,7 @@ pub struct EquipmentView {
 #[derive(Serialize)]
 pub struct ActiveSkillView {
     pub id: String,
-    pub details: SkillDetailsView,
+    pub details: ActiveSkillDetailsView,
 }
 
 /// 已由核心分類的被動技能資訊，顯示層只負責翻譯與排版。
@@ -646,7 +670,7 @@ pub(crate) fn default_duration() -> u32 {
 }
 
 // 扁平化列舉的標籤無法由欄位 default 補入，僅在作者省略標籤時指定一般攻擊。
-fn deserialize_skill_effect<'de, D>(deserializer: D) -> Result<SkillEffect, D::Error>
+fn deserialize_active_skill_effect<'de, D>(deserializer: D) -> Result<ActiveSkillEffect, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

@@ -23,7 +23,7 @@ layer="overlay"
 entry_rule="walkable"
 damage=3
 
-[[skills]]
+[[active_skills]]
 id="precise_strike"
 ranged=false
 hit_bonus=100
@@ -32,7 +32,7 @@ min_range=1
 max_range=3
 effect="attack"
 
-[[skills]]
+[[active_skills]]
 id="finishing_strike"
 ranged=false
 hit_bonus=100
@@ -52,7 +52,7 @@ dodge=2
 hit=4
 physical_power = 3
 magical_power = 3
-skills=["precise_strike","finishing_strike"]
+active_skills=["precise_strike","finishing_strike"]
 off_hand = "test_guard_3"
 
 [[unit_types]]
@@ -66,7 +66,7 @@ dodge=12
 hit=0
 physical_power = 0
 magical_power = 0
-skills=["precise_strike","finishing_strike"]
+active_skills=["precise_strike","finishing_strike"]
 off_hand = "test_guard_3"
 
 [[unit_types]]
@@ -80,7 +80,7 @@ dodge=12
 hit=0
 physical_power = 0
 magical_power = 0
-skills=["precise_strike","finishing_strike"]
+active_skills=["precise_strike","finishing_strike"]
 off_hand = "test_guard_3"
 
 

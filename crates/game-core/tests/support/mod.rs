@@ -1,5 +1,5 @@
 use game_core::{
-    Command, Game, GridPos, Phase, PowerSource, SkillDef, SkillEffect, Snapshot, Team,
+    ActiveSkillDef, ActiveSkillEffect, Command, Game, GridPos, Phase, Snapshot, Team,
     TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef, UnitView, authoring,
 };
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ pub(super) fn tank_ai_profile() -> authoring::AiProfile {
 pub(super) fn skill_test_data(
     min_range: i32,
     max_range: i32,
-    effect: SkillEffect,
+    effect: ActiveSkillEffect,
     target_team: Team,
     diagram: &str,
 ) -> (authoring::Definitions, authoring::Map) {
@@ -61,18 +61,11 @@ pub(super) fn skill_test_data(
             test_unit_type(kind, if *marker == 'A' { 100 } else { 0 }, size)
         })
         .collect();
-    let power_source = if matches!(&effect, SkillEffect::Heal { .. }) {
-        PowerSource::Magical
-    } else {
-        PowerSource::Physical
-    };
     let mut skill = serde_json::to_value(effect).expect("測試技能效果應可序列化");
     skill["id"] = TEST_SKILL_ID.into();
-    skill["power_source"] = serde_json::to_value(power_source).expect("威力來源應可序列化");
-    skill["ranged"] = false.into();
     skill["min_range"] = min_range.into();
     skill["max_range"] = max_range.into();
-    let skill: SkillDef = serde_json::from_value(skill).expect("測試技能資料應可載入");
+    let skill: ActiveSkillDef = serde_json::from_value(skill).expect("測試技能資料應可載入");
     let definitions = authoring::Definitions {
         equipment: Vec::new(),
         default_passive_skills: Vec::new(),
@@ -91,7 +84,8 @@ pub(super) fn skill_test_data(
             }))
             .expect("測試地形資料應可載入"),
         ],
-        skills: vec![skill],
+        active_skills: vec![skill],
+        passive_skills: Vec::new(),
         unit_types,
     };
     let map = map_from_ascii_board("test_map", &layout, &units);
@@ -116,7 +110,7 @@ fn test_unit_type(id: &str, initiative: i32, (width, height): (i32, i32)) -> aut
         off_hand: String::new(),
         armor: String::new(),
         accessory: String::new(),
-        skills: vec![TEST_SKILL_ID.into()],
+        active_skills: vec![TEST_SKILL_ID.into()],
         passive_skills: Vec::new(),
     }
 }
@@ -309,7 +303,7 @@ pub(super) fn assert_turn_order(game: &Game, markers: &[(char, i64)], expected: 
 
 pub(super) fn sight_game_in_range(
     diagram: &str,
-    effect: SkillEffect,
+    effect: ActiveSkillEffect,
     target_team: Team,
     min_range: i32,
     max_range: i32,

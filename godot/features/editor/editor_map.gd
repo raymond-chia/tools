@@ -10,6 +10,7 @@ signal unit_dropped(id: int, cell: Vector2i)
 @onready var world_objects: Node2D = $WorldObjects
 @onready var camera: MapCamera = get_node("../Camera2D")
 
+var cargo_layout := {"positions": [], "exits": []}
 var map_data: Dictionary = {}
 var snapshot: Dictionary = {}
 var brush_cells: Array = []
@@ -77,6 +78,10 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == inspected_unit)
 		BattleVisuals.update_unit_health(unit_nodes[unit.id], unit)
 	cell_hovered.emit(hovered)
+	queue_redraw()
+
+func present_cargo(layout: Dictionary) -> void:
+	cargo_layout = layout.duplicate(true)
 	queue_redraw()
 
 func present_brush(cells: Array) -> void:
@@ -166,6 +171,10 @@ func _draw() -> void:
 	if map_data.is_empty(): return
 	BattleVisuals.draw_movement_range(self, ground, snapshot.get("inspected_reachable", []), snapshot.get("inspected_second_reachable", []), true)
 	terrain_overlay.queue_redraw()
+	for exit in cargo_layout.exits:
+		draw_arc(center(Vector2i(exit.x, exit.y)), 12.0, 0, TAU, 32, Color("65e894"), 3.0, true)
+	for cargo in cargo_layout.positions:
+		draw_rect(Rect2(center(Vector2i(cargo.x, cargo.y)) - Vector2(7, 7), Vector2(14, 14)), Color("ffbc60"), false, 3.0)
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))

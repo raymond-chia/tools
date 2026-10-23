@@ -16,7 +16,7 @@ id="rough"
 layer="ground"
 entry_rule="walkable"
 extra_movement_cost=1
-[[skills]]
+[[active_skills]]
 id="melee_attack"
 ranged=false
 hit_bonus=0
@@ -36,7 +36,7 @@ dodge=2
 hit=2
 physical_power = 0
 magical_power = 0
-skills=["melee_attack"]
+active_skills=["melee_attack"]
 off_hand = "test_guard_3"
 
 [[unit_types]]
@@ -50,7 +50,7 @@ dodge=2
 hit=2
 physical_power = 0
 magical_power = 0
-skills=["melee_attack"]
+active_skills=["melee_attack"]
 
 # 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
 [[equipment]]

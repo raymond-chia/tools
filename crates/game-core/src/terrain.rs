@@ -304,7 +304,8 @@ impl Game {
                 magical_power: _,
                 block_reduction: _,
                 equipment: _,
-                skills: _,
+                active_skills: _,
+                passive_skills: _,
             } = self
                 .world
                 .get::<Unit>(entity)

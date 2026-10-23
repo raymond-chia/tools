@@ -23,7 +23,8 @@ fn enemy_without_skill_rejected_on_load() {
             }))
             .expect("測試地形資料應可載入"),
         ],
-        skills: Vec::new(),
+        active_skills: Vec::new(),
+        passive_skills: Vec::new(),
         unit_types: vec![authoring::UnitType {
             ai_profile: "tank".into(),
             id: "test_unit".into(),
@@ -41,7 +42,7 @@ fn enemy_without_skill_rejected_on_load() {
             off_hand: String::new(),
             armor: String::new(),
             accessory: String::new(),
-            skills: Vec::new(),
+            active_skills: Vec::new(),
             passive_skills: Vec::new(),
         }],
     };
@@ -196,6 +197,107 @@ fn selected_difficulty_filters_enemy_placements() {
         actual.sort();
         assert_eq!(actual, expected, "{difficulty}");
     }
+}
+
+// 驗證作者輸入拒絕不會生效或彼此衝突的設定，避免設定被靜默忽略。
+#[test]
+fn ineffective_or_conflicting_settings_are_rejected() {
+    let cases: [(&str, fn(&mut serde_json::Value), &str); 9] = [
+        // 不可通行地形不能設定傷害、移動消耗與防禦懲罰。
+        (
+            "牆壁傷害",
+            |d| entry(d, "terrain_types", "wall")["damage"] = 1.into(),
+            "terrain_values_require_walkable",
+        ),
+        (
+            "牆壁移動消耗",
+            |d| entry(d, "terrain_types", "wall")["extra_movement_cost"] = 1.into(),
+            "terrain_values_require_walkable",
+        ),
+        (
+            "牆壁閃避懲罰",
+            |d| entry(d, "terrain_types", "wall")["dodge_penalty"] = 1.into(),
+            "terrain_values_require_walkable",
+        ),
+        (
+            "牆壁格擋懲罰",
+            |d| entry(d, "terrain_types", "wall")["block_penalty"] = 1.into(),
+            "terrain_values_require_walkable",
+        ),
+        // 推入陣亡地形同樣不可通行。
+        (
+            "推入陣亡地形閃避懲罰",
+            |d| {
+                let terrain = entry(d, "terrain_types", "wall");
+                terrain["entry_rule"] = "instant_down_when_pushed".into();
+                terrain["dodge_penalty"] = 1.into();
+            },
+            "terrain_values_require_walkable",
+        ),
+        // 單位閃避不可為負。
+        (
+            "負閃避",
+            |d| entry(d, "unit_types", "tank")["dodge"] = (-1).into(),
+            "invalid_unit_type",
+        ),
+        // 主動與被動技能共用名稱翻譯，ID 不可重複。
+        (
+            "被動與主動同 ID",
+            |d| add_flanking(d, "melee"),
+            "duplicate_skill_id",
+        ),
+        // 主動技能清單不可引用被動技能。
+        (
+            "主動清單引用被動",
+            |d| {
+                add_flanking(d, "test_flanking");
+                entry(d, "unit_types", "tank")["active_skills"] =
+                    serde_json::json!(["melee", "test_flanking"]);
+            },
+            "unknown_unit_skill",
+        ),
+        // 被動技能清單不可引用主動技能。
+        (
+            "被動清單引用主動",
+            |d| entry(d, "unit_types", "tank")["passive_skills"] = serde_json::json!(["melee"]),
+            "invalid_passive_skills",
+        ),
+    ];
+    let source: toml::Value =
+        toml::from_str(AI_DEFINITIONS).expect("Utility AI 專用測試 TOML 應有效");
+    let map: authoring::Map =
+        serde_json::from_value(difficulty_map()).expect("測試地圖應符合作者格式");
+    for (name, change, expected) in cases {
+        let mut definitions = serde_json::to_value(&source).expect("測試 TOML 應可轉為 JSON");
+        change(&mut definitions);
+        let definitions: authoring::Definitions =
+            serde_json::from_value(definitions).expect("修改後的測試定義應符合作者格式");
+        let error =
+            match Game::from_authoring(definitions, map.clone(), authoring::Difficulty::Easy) {
+                Ok(_) => panic!("{name} 應拒絕載入"),
+                Err(error) => error,
+            };
+        assert_eq!(error.id(), expected, "{name}");
+    }
+}
+
+// 依 ID 取得作者定義中的單筆資料。
+fn entry<'a>(
+    definitions: &'a mut serde_json::Value,
+    category: &str,
+    id: &str,
+) -> &'a mut serde_json::Value {
+    definitions[category]
+        .as_array_mut()
+        .expect("測試定義應包含該類別")
+        .iter_mut()
+        .find(|entry| entry["id"] == id)
+        .expect("測試定義應包含該 ID")
+}
+
+fn add_flanking(definitions: &mut serde_json::Value, id: &str) {
+    definitions["passive_skills"] =
+        serde_json::json!([{"id": id, "effect": "flanking", "hit_bonus": 2}]);
 }
 
 // 簡單、普通、困難各一隻怪物，所有難度共用同一份作者配置。

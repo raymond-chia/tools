@@ -11,7 +11,7 @@ id="plain"
 layer="ground"
 entry_rule="walkable"
 
-[[skills]]
+[[active_skills]]
 id="test_attack"
 ranged=false
 hit_bonus=0
@@ -36,7 +36,7 @@ dodge=2
 hit=4
 physical_power = 5
 magical_power = 5
-skills=["test_attack"]
+active_skills=["test_attack"]
 off_hand = "test_guard_3"
 
 [[unit_types]]
@@ -50,7 +50,7 @@ dodge=4
 hit=5
 physical_power = 3
 magical_power = 3
-skills=["test_attack"]
+active_skills=["test_attack"]
 off_hand = "test_guard_1"
 
 [[unit_types]]
@@ -64,7 +64,7 @@ dodge=3
 hit=4
 physical_power = 3
 magical_power = 3
-skills=["test_attack"]
+active_skills=["test_attack"]
 off_hand = "test_guard_2"
 
 [[unit_types]]
@@ -78,7 +78,7 @@ dodge=2
 hit=2
 physical_power = 1
 magical_power = 1
-skills=["test_attack"]
+active_skills=["test_attack"]
 
 # 專用格擋裝備：保留既有案例的門檻與 2 點減傷。
 [[equipment]]

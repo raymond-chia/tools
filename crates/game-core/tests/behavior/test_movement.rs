@@ -2,8 +2,8 @@ use crate::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, marked_cell, skill_test_data, unit,
 };
 use game_core::{
-    Command, Game, GridPos, MovePreview, Phase, SkillEffect, Team, TerrainEntryRule, TerrainLayer,
-    TerrainTypeDef,
+    ActiveSkillEffect, Command, Game, GridPos, MovePreview, Phase, PowerSource, Team,
+    TerrainEntryRule, TerrainLayer, TerrainTypeDef,
 };
 
 struct MovementPreviewCase {
@@ -259,7 +259,9 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
     let (mut definitions, mut map) = skill_test_data(
         0,
         1,
-        SkillEffect::Attack {
+        ActiveSkillEffect::Attack {
+            power_source: PowerSource::Physical,
+            ranged: false,
             hit_bonus: 100,
             power_bonus: 0,
         },

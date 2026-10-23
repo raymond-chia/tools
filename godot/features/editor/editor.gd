@@ -9,6 +9,7 @@ const OUTCOME_CONDITIONS: Dictionary = {
 	"all_enemies_defeated": {"type": "all_enemies_defeated"},
 	"player_defeated": {"type": "team_defeated", "team": "player"},
 	"cargo_escaped": {"type": "cargo_escaped"},
+	"no_cargo_carried": {"type": "no_cargo_carried"},
 }
 
 @onready var map_list: ItemList = $Layout/Pages/MapPage/MapListPanel/Maps
@@ -19,6 +20,8 @@ const OUTCOME_CONDITIONS: Dictionary = {
 @onready var palette_tabs: TabContainer = $Layout/Pages/MapPage/Materials/PaletteTabs
 @onready var terrain_grids: Array[GridContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Scroll/Tiles, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Scroll/Tiles]
 @onready var outcome_groups: Array[VBoxContainer] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory, $Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat]
+@onready var cargo_tool: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Tool
+@onready var cargo_summary: Label = $Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Summary
 @onready var brush_size: SpinBox = $Layout/Pages/MapPage/Materials/PaletteTabs/Ground/BrushSize
 @onready var brush_labels: Array[Label] = [$Layout/Pages/MapPage/Materials/PaletteTabs/Ground/Brush, $Layout/Pages/MapPage/Materials/PaletteTabs/Overlay/Brush]
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
@@ -37,6 +40,9 @@ const OUTCOME_CONDITIONS: Dictionary = {
 @onready var palette_navigation: HFlowContainer = $Layout/Navigation/PaletteTabs
 @onready var definition_pages: Array = [$Layout/Pages/UnitPage, $Layout/Pages/SkillPage, $Layout/Pages/TerrainPage, $Layout/Pages/EquipmentPage]
 @onready var status_label: Label = $Layout/Status
+
+var cargo_draft := {"positions": [], "exits": []}
+var cargo_draft_changed := false
 
 var editing_mode := 0
 var data_dir := DataSource.directory()
@@ -77,8 +83,13 @@ func _ready() -> void:
 	inspected_facing.item_selected.connect(update_unit_facing)
 	for i in range(2, MODES.size()):
 		mode_list.add_item(MODES[i])
-	for index in 4:
-		palette_tabs.set_tab_title(index, ["地面", "上層", "單位", "勝敗條件"][index])
+	for index in 5:
+		palette_tabs.set_tab_title(index, ["地面", "上層", "單位", "勝敗條件", "貨物"][index])
+	for tool in ["放置貨物", "刪除貨物", "放置出口", "刪除出口"]:
+		cargo_tool.add_item(tool)
+	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Apply.pressed.connect(apply_cargo)
+	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Reset.pressed.connect(reset_cargo_draft)
+	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Remove.pressed.connect(remove_cargo)
 	for index in outcome_groups.size():
 		var group := outcome_groups[index]
 		var key: String = ["victory", "defeat"][index]
@@ -152,6 +163,7 @@ func _ready() -> void:
 		get_tree().root.remove_meta("editor_session")
 		definitions = session.definitions
 		map_data = session.map
+		reset_cargo_draft()
 		map_file = session.file
 		history = session.history
 		stroke_id = session.stroke_id
@@ -254,6 +266,7 @@ func open_selected_map() -> void:
 	if parsed.is_empty():
 		return
 	map_data = parsed
+	reset_cargo_draft()
 	map_view.camera_initialized = false
 	map_file = path
 	history.reset(document_state())
@@ -268,6 +281,7 @@ func new_map() -> void:
 
 func duplicate_map() -> void:
 	if map_data.is_empty(): return
+	if not commit_pending_fields(): return
 	open_map_dialog(true)
 
 func open_map_dialog(duplicate: bool) -> void:
@@ -302,6 +316,7 @@ func submit_map() -> void:
 			"victory": {"mode": "all", "conditions": [{"type": "all_enemies_defeated"}]},
 			"defeat": {"mode": "any", "conditions": [{"type": "team_defeated", "team": "player"}]},
 		}
+	reset_cargo_draft()
 	map_file = path
 	map_view.camera_initialized = false
 	history.reset(document_state())
@@ -346,6 +361,7 @@ func delete_map() -> void:
 		return
 	map_file = ""
 	map_data = {}
+	reset_cargo_draft()
 	history.reset(document_state())
 	refresh_map_list()
 	if map_list.item_count > 0: open_selected_map()
@@ -386,6 +402,7 @@ func validate_current() -> void:
 		pending_edit = {}
 	update_history_controls()
 	map_view.present(map_data, snapshot, selected_cell)
+	refresh_cargo_tools()
 	refresh_inspected_unit()
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
@@ -412,7 +429,7 @@ func apply_document(state: Dictionary) -> void:
 	update_history_controls()
 
 func update_history_controls() -> void:
-	dirty = document_state() != history.saved_state
+	dirty = cargo_draft_changed or document_state() != history.saved_state
 	$Layout/Toolbar/Undo.disabled = not history.undo_redo.has_undo()
 	$Layout/Toolbar/Redo.disabled = not history.undo_redo.has_redo()
 
@@ -420,6 +437,7 @@ func restore_history() -> void:
 	for page in definition_pages: page.discard_pending_fields()
 	pending_edit = {}
 	apply_document(history.state)
+	reset_cargo_draft()
 	refresh_ui()
 	validate_current()
 
@@ -430,6 +448,7 @@ func redo() -> void:
 	if history.undo_redo.redo(): restore_history()
 
 func commit_pending_fields() -> bool:
+	if not apply_cargo(): return false
 	var errors_before_commit := input_error_count
 	var pending_name := map_name.text
 	for page in definition_pages:
@@ -449,6 +468,9 @@ func commit_map_name() -> void:
 
 func resize_map() -> void:
 	if refreshing or map_data.is_empty(): return
+	if not apply_cargo():
+		refresh_ui()
+		return
 	var new_width := int(width_box.value)
 	var new_height := int(height_box.value)
 	if new_width == map_data.width and new_height == map_data.height: return
@@ -471,6 +493,7 @@ func refresh_ui() -> void:
 	width_box.value = map_data.get("width", 10)
 	height_box.value = map_data.get("height", 8)
 	refresh_outcome_groups()
+	refresh_cargo_tools()
 	refreshing = false
 	refresh_map_list()
 	select_map(map_file)
@@ -557,6 +580,7 @@ func update_editing_mode() -> void:
 		0, 1: editing_mode = palette_tabs.current_tab
 		2: editing_mode = mode_list.selected + 2
 		3: editing_mode = -1
+		4: editing_mode = 5
 	refresh_tools_visibility()
 	update_brush_label()
 
@@ -575,6 +599,7 @@ func refresh_grid() -> void:
 	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
 	if snapshot.is_empty(): return
 	map_view.present(map_data, snapshot, selected_cell)
+	refresh_cargo_tools()
 	refresh_inspected_unit()
 
 func refresh_tools_visibility() -> void:
@@ -642,6 +667,9 @@ func inspect_unit(cell: Vector2i) -> void:
 func edit_cell(cell: Vector2i) -> void:
 	if editing_mode == -1: return
 	selected_cell = cell
+	if editing_mode == 5:
+		edit_cargo_cell(cell)
+		return
 	var mode := editing_mode
 	var current := unit_at(cell)
 	if mode <= 1:
@@ -687,7 +715,7 @@ func move_unit(id: int, cell: Vector2i) -> void:
 func refresh_definitions() -> void:
 	var options := read_core_response(core.edit_definition_from_json(JSON.stringify(definitions), "{}", JSON.stringify({"action": "skill_effect_options"})))
 	if options.is_empty(): return
-	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries, options.equipment_choices, options.active_skill_ids, options.passive_skill_ids)
+	for page in definition_pages: page.present(definitions, options.terrain_ids, options.terrain_entries, options.skill_entries, options.equipment_choices, options.active_skill_ids, options.passive_skill_ids)
 
 func update_default_passive_skills(skills: Array) -> void:
 	if definitions.default_passive_skills == skills: return
@@ -695,7 +723,9 @@ func update_default_passive_skills(skills: Array) -> void:
 		refresh_definitions()
 
 func find_definition(category: String, id: String) -> Dictionary:
-	for entry in definitions[category]:
+	# 技能頁同時編輯主動與被動技能。
+	var category_entries: Array = definitions.active_skills + definitions.passive_skills if category == "skills" else definitions[category]
+	for entry in category_entries:
 		if entry.id == id: return entry
 	return {}
 
@@ -843,3 +873,57 @@ func update_unit_facing(index: int) -> void:
 		unit.facing = selected
 		validate_current()
 		return
+
+# 貨物與出口一起提交，未完成的作者配置只作為介面草稿，不送入遊戲預覽。
+func reset_cargo_draft() -> void:
+	var cargo: Variant = map_data.get("cargo")
+	cargo_draft = {"positions": [], "exits": []} if cargo == null else cargo.duplicate(true)
+	cargo_draft_changed = false
+	refresh_cargo_tools()
+	update_history_controls()
+
+func refresh_cargo_tools() -> void:
+	cargo_summary.text = "貨物：%s 份；出口：%s 個%s" % [cargo_draft.positions.size(), cargo_draft.exits.size(), "（尚未套用）" if cargo_draft_changed else ""]
+	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Apply.disabled = not cargo_draft_changed
+	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Reset.disabled = not cargo_draft_changed
+	map_view.present_cargo(cargo_draft)
+
+func edit_cargo_cell(cell: Vector2i) -> void:
+	var key := "positions" if cargo_tool.selected < 2 else "exits"
+	var point := {"x": cell.x, "y": cell.y}
+	var cells: Array = cargo_draft[key]
+	if cargo_tool.selected in [0, 2]:
+		if cells.has(point): return
+		cells.append(point)
+	else:
+		cells.erase(point)
+	update_cargo_draft()
+
+func update_cargo_draft() -> void:
+	var cargo: Variant = map_data.get("cargo")
+	var original: Dictionary = {"positions": [], "exits": []} if cargo == null else cargo
+	cargo_draft_changed = cargo_draft != original
+	refresh_cargo_tools()
+	update_history_controls()
+	status_label.text = "貨物配置尚未套用；儲存或試玩時會一併套用。" if cargo_draft_changed else "貨物配置未變更。"
+
+func remove_cargo() -> void:
+	cargo_draft = {"positions": [], "exits": []}
+	update_cargo_draft()
+
+func apply_cargo() -> bool:
+	if not cargo_draft_changed: return true
+	var candidate := map_data.duplicate(true)
+	candidate.cargo = null if cargo_draft.positions.is_empty() and cargo_draft.exits.is_empty() else cargo_draft.duplicate(true)
+	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(candidate), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
+	if snapshot.is_empty(): return false
+	var previous := document_state()
+	map_data = candidate
+	cargo_draft_changed = false
+	history.record(previous, document_state())
+	update_history_controls()
+	refresh_cargo_tools()
+	map_view.present(map_data, snapshot, selected_cell)
+	refresh_inspected_unit()
+	status_label.text = "資料有效；尚未儲存"
+	return true

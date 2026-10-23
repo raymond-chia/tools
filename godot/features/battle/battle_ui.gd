@@ -597,12 +597,13 @@ func localized_skill_details(skill: Dictionary) -> String:
 	var details: Dictionary = skill.details
 	var lines: Array[String] = []
 	lines.append(tr("SKILL_TARGET_%s" % details.target.to_upper()))
-	lines.append(tr("SKILL_TYPE_RANGED") if details.ranged else tr("SKILL_TYPE_MELEE"))
+	if details.ranged != null:
+		lines.append(tr("SKILL_TYPE_RANGED") if details.ranged else tr("SKILL_TYPE_MELEE"))
 	if details.min_range != details.max_range:
 		lines.append(tr("SKILL_RANGE_INTERVAL") % [int(details.min_range), int(details.max_range)])
 	else:
 		lines.append(tr("SKILL_RANGE") % int(details.max_range))
-	if details.power_bonus != null:
+	if details.power_source != null:
 		lines.append(tr("SKILL_POWER_SOURCE_%s" % details.power_source.to_upper()))
 	if details.hit_bonus != null:
 		lines.append(tr("SKILL_HIT_BONUS") % int(details.hit_bonus))

@@ -24,11 +24,12 @@ mod tests;
 pub use error::GameError;
 pub use game::Game;
 pub use model::{
-    AttackPreview, AttackResult, BattleMode, CargoState, CargoView, CollisionUnitLog,
-    CombatLogEvent, Command, EquipmentView, GridPos, HealingPreview, HealthSegmentsView,
-    InitiativeRollLog, MovePreview, MovementTransition, Outcome, PassiveSkillView, Phase,
-    PowerSource, PresentationEvent, RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView,
-    SkillEffect, SkillPreview, SkillRangeView, SkillTargetKind, Snapshot, Team, TerrainCellView,
+    ActiveSkillDef, ActiveSkillDetailEffect, ActiveSkillDetailsView, ActiveSkillEffect,
+    ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, AttackPreview, AttackResult,
+    BattleMode, CargoState, CargoView, CollisionUnitLog, CombatLogEvent, Command, EquipmentView,
+    GridPos, HealingPreview, HealthSegmentsView, InitiativeRollLog, MovePreview,
+    MovementTransition, Outcome, PassiveSkillDef, PassiveSkillEffect, PassiveSkillView, Phase,
+    PowerSource, PresentationEvent, RollDegree, Snapshot, Team, TerrainCellView,
     TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainLayer, TerrainPlacement,
     TerrainTypeDef, TurnView, UnitView,
 };

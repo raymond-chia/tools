@@ -75,7 +75,7 @@ func test_unit_detail_tabs_show_inspected_unit_skills() -> void:
 	assert_str(battle.ui.active_skills_text.text).contains(tr(BattleConfig.skill_name_key("presentation_push")))
 	battle.world.inspection_clicked.emit(2, Vector2i(0, 3))
 	assert_int(battle.ui.detail_tabs.current_tab).is_equal(battle.ui.DetailTab.ACTIVE_SKILLS)
-	assert_str(battle.ui.active_skills_text.text).is_equal("%s\n%s" % [tr(BattleConfig.skill_name_key("presentation_heal")), "目標：自己或友方單位\n類型：遠程\n射程：0–6 格\n威力來源：魔法\n威力加值：+3\n效果：依威力回復 HP"])
+	assert_str(battle.ui.active_skills_text.text).is_equal("%s\n%s" % [tr(BattleConfig.skill_name_key("presentation_heal")), "目標：自己或友方單位\n射程：0–6 格\n威力來源：魔法\n威力加值：+3\n效果：依威力回復 HP"])
 
 	battle.world.inspection_clicked.emit(0, Vector2i(0, 2))
 	assert_int(battle.ui.detail_tabs.current_tab).is_equal(battle.ui.DetailTab.TERRAIN)

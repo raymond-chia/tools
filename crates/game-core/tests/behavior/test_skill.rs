@@ -1,7 +1,7 @@
 use crate::support::{ACTOR_ID, BLOCKER_ID, TARGET_ID, TEST_SKILL_ID, skill_test_data, unit};
 use game_core::{
-    CombatLogEvent, Command, Game, GridPos, HealingPreview, SkillEffect, SkillPreview, Team,
-    TerrainEntryRule, TerrainLayer, TerrainTypeDef,
+    ActiveSkillEffect, ActiveSkillPreview, CombatLogEvent, Command, Game, GridPos, HealingPreview,
+    PowerSource, Team, TerrainEntryRule, TerrainLayer, TerrainTypeDef,
 };
 
 // 驗證公開推擊命令撞上另一單位時停止移動，並回傳雙方傷害與碰撞日誌。
@@ -10,7 +10,10 @@ fn push_collision_damages_both_units() {
     let mut game = game_with_skill_on_ascii_map(
         1,
         1,
-        SkillEffect::Push { hit_bonus: 100 },
+        ActiveSkillEffect::Push {
+            ranged: false,
+            hit_bonus: 100,
+        },
         Team::Enemy("test_enemy".into()),
         "
         .....
@@ -62,7 +65,10 @@ fn skill_min_range_limits_preview_and_action() {
     let mut game = game_with_skill_on_ascii_map(
         2,
         2,
-        SkillEffect::Push { hit_bonus: 100 },
+        ActiveSkillEffect::Push {
+            ranged: false,
+            hit_bonus: 100,
+        },
         Team::Enemy("test_enemy".into()),
         "
         .....
@@ -108,7 +114,10 @@ fn zero_range_heal_targets_self() {
     let (mut definitions, map) = skill_test_data(
         0,
         0,
-        SkillEffect::Heal { power_bonus: 4 },
+        ActiveSkillEffect::Heal {
+            power_source: PowerSource::Magical,
+            power_bonus: 4,
+        },
         Team::Player,
         "
         A.TB
@@ -146,7 +155,7 @@ fn zero_range_heal_targets_self() {
         .preview_skill(ACTOR_ID, actor_position, TEST_SKILL_ID)
         .expect("零距離治療應可預覽");
     match preview {
-        SkillPreview::Healing(HealingPreview {
+        ActiveSkillPreview::Healing(HealingPreview {
             target: _,
             target_type: _,
             target_hp: _,
@@ -174,7 +183,7 @@ fn zero_range_heal_targets_self() {
 fn game_with_skill_on_ascii_map(
     min_range: i32,
     max_range: i32,
-    effect: SkillEffect,
+    effect: ActiveSkillEffect,
     target_team: Team,
     diagram: &str,
 ) -> Game {

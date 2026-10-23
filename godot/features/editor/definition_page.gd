@@ -16,7 +16,7 @@ const FIELD_LABELS := {
 	"hp": "生命值", "movement": "移動力", "initiative": "先攻", "dodge": "閃避",
 	"block": "格擋", "hit": "命中", "physical_power": "物理威力", "magical_power": "魔法威力",
 	"main_hand": "主手", "off_hand": "副手", "armor": "護具", "accessory": "飾品",
-	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "skills": "可用技能", "passive_skills": "被動技能",
+	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "active_skills": "主動技能", "passive_skills": "被動技能",
 	"ranged": "遠程技能", "min_range": "最小範圍", "max_range": "最大範圍",
 	"effect": "效果", "hit_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
@@ -26,7 +26,7 @@ const FIELD_LABELS := {
 const CHOICES := {
 	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},
 	"power_source": {"physical": "物理", "magical": "魔法"},
-	"effect": {"attack": "攻擊", "push": "推擊", "mire": "產生地形", "heal": "治療", "flanking": "被動夾擊"},
+	"effect": {"attack": "攻擊", "push": "推擊", "mire": "產生地形", "heal": "治療", "flanking": "被動夾擊", "loot": "掠奪"},
 	"layer": {"ground": "地面", "overlay": "上層"},
 	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
 }
@@ -59,7 +59,7 @@ func _ready() -> void:
 	$ListPanel/Actions/Remove.pressed.connect(func(): remove_requested.emit(category, selected_id()))
 	$RemoveDialog.confirmed.connect(func(): remove_confirmed.emit(category, removing_id))
 
-# 清單拖曳只處理介面位置；地形可移動的目標由核心提供。
+# 清單拖曳只處理介面位置；地形與技能可移動的目標由核心提供。
 func begin_entry_drag(at_position: Vector2) -> Variant:
 	var index := entries.get_item_at_position(at_position, true)
 	if index < 0: return null
@@ -78,7 +78,7 @@ func can_drop_entry(at_position: Vector2, data: Variant) -> bool:
 	if not data is Dictionary or data.get("source") != entries: return false
 	var target := entry_drop_index(at_position)
 	if target < 0 or target == data.index: return false
-	if category == "terrain_types":
+	if category in ["terrain_types", "skills"]:
 		var order: Dictionary = entries.get_item_metadata(data.index)
 		return order.move_targets.has(entries.get_item_metadata(target).id)
 	return true
@@ -130,7 +130,7 @@ func select_id(id: String) -> void:
 		entries.select(0)
 	refresh_fields()
 
-func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, loadout_choices: Dictionary, active_ids: Array, passive_ids: Array) -> void:
+func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, skill_entries: Array, loadout_choices: Dictionary, active_ids: Array, passive_ids: Array) -> void:
 	equipment_choices = loadout_choices
 	active_skill_ids = active_ids
 	passive_skill_ids = passive_ids
@@ -138,8 +138,8 @@ func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, load
 	var previous := selected_id()
 	definitions = value
 	entries.clear()
-	if category == "terrain_types":
-		for entry in terrain_entries:
+	if category in ["terrain_types", "skills"]:
+		for entry in terrain_entries if category == "terrain_types" else skill_entries:
 			var index := entries.add_item(entry.id)
 			entries.set_item_metadata(index, entry)
 	else:
@@ -155,7 +155,9 @@ func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, load
 
 func selected_definition() -> Dictionary:
 	var id := selected_id()
-	for entry in definitions.get(category, []):
+	# 技能頁同時呈現主動與被動技能。
+	var category_entries: Array = definitions.active_skills + definitions.passive_skills if category == "skills" else definitions.get(category, [])
+	for entry in category_entries:
 		if entry.id == id: return entry
 	return {}
 
@@ -176,7 +178,6 @@ func refresh_fields() -> void:
 		fields.add_child(defaults_label)
 		fields.add_child(create_passive_selector(definitions.default_passive_skills, false, func(value: Variant): default_passive_skills_changed.emit(value)))
 	for key in entry:
-		if category == "skills" and entry.effect == "flanking" and key in ["power_source", "ranged", "min_range", "max_range"]: continue
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)
 		fields.add_child(label)
@@ -191,7 +192,7 @@ func refresh_fields() -> void:
 			input = check
 		elif key == "visual" and category == "unit_types":
 			input = create_visual_selector(id, value)
-		elif key == "skills":
+		elif key == "active_skills":
 			var skills := VBoxContainer.new()
 			for skill_id in active_skill_ids:
 				var check := CheckBox.new()
@@ -268,10 +269,10 @@ func commit_field(id: String, key: String, edit: LineEdit, previous: Variant) ->
 		field_changed.emit(category, id, key, edit.text)
 
 func toggle_skill(id: String, skill_id: String, enabled: bool) -> void:
-	var skills: Array = selected_definition().skills.duplicate()
+	var skills: Array = selected_definition().active_skills.duplicate()
 	if enabled: skills.append(skill_id)
 	else: skills.erase(skill_id)
-	field_changed.emit(category, id, "skills", skills)
+	field_changed.emit(category, id, "active_skills", skills)
 
 func choose_effect_terrain(id: String) -> void:
 	# 尚未提交切換，先恢復目前效果的顯示；取消時資料與畫面維持一致。

@@ -1,9 +1,9 @@
 //! 載入、命令分派、回合流程與快照。
 use crate::error::GameError;
 use crate::model::{
-    BattleMode, Board, CombatLogEvent, Command, Encounter, Exploration, Footprint, GridPos, Hp, Id,
-    InitiativeRollLog, Log, MovementTransition, Outcome, Phase, Pos, Random, ResultState,
-    SkillTargetKind, Skills, Snapshot, Team, TemporaryTerrains, TerrainCellView,
+    ActiveSkillTargetKind, ActiveSkills, BattleMode, Board, CombatLogEvent, Command, Encounter,
+    Exploration, Footprint, GridPos, Hp, Id, InitiativeRollLog, Log, MovementTransition, Outcome,
+    Phase, Pos, Random, ResultState, Snapshot, Team, TemporaryTerrains, TerrainCellView,
     TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainEntryRule,
     TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
@@ -92,12 +92,12 @@ impl Game {
             Command::Skill { actor, x, y, skill } => {
                 let definition = self
                     .world
-                    .resource::<Skills>()
+                    .resource::<ActiveSkills>()
                     .definitions
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| error::unknown_skill(&skill))?;
-                let attack = target_kind(&definition.effect) == SkillTargetKind::Enemy;
+                let attack = target_kind(&definition.effect) == ActiveSkillTargetKind::Enemy;
                 let triggered_enemies = if attack
                     && self.world.resource::<Exploration>().mode == BattleMode::Exploring
                 {

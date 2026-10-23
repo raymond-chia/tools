@@ -121,16 +121,16 @@ layout_mode = 2
 custom_minimum_size = Vector2(95, 0)
 layout_mode = 2
 min_value = 2.0
-max_value = 40.0
 value = 10.0
+allow_greater = true
 prefix = "寬 "
 
 [node name="Height" type="SpinBox" parent="Layout/Pages/MapPage/MapPanel/MapFields"]
 custom_minimum_size = Vector2(95, 0)
 layout_mode = 2
 min_value = 2.0
-max_value = 40.0
 value = 8.0
+allow_greater = true
 prefix = "高 "
 
 [node name="MapViewportContainer" type="SubViewportContainer" parent="Layout/Pages/MapPage/MapPanel"]
@@ -315,6 +315,10 @@ text = "玩家全滅"
 layout_mode = 2
 text = "貨物離場"
 
+[node name="no_cargo_carried" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+text = "無人攜帶貨物"
+
 [node name="Defeat" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups"]
 layout_mode = 2
 
@@ -337,12 +341,48 @@ text = "玩家全滅"
 layout_mode = 2
 text = "貨物離場"
 
+[node name="no_cargo_carried" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+text = "無人攜帶貨物"
+
 [node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups"]
 layout_mode = 2
 text = "每組至少勾選一個條件。
 貨物離場需先有貨物與出口設定。
+無人攜帶貨物在開局通常已成立，請搭配其他條件。
 勝敗條件同時成立時，判定失敗。"
 autowrap_mode = 2
+
+[node name="Cargo" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs"]
+layout_mode = 2
+
+[node name="Tool" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
+layout_mode = 2
+
+[node name="Summary" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
+layout_mode = 2
+text = "在地圖點選貨物與出口位置，再按套用。
+橙色方框：貨物；綠色圓環：出口。
+出口必須位於地圖邊界。
+啟用時至少需要一份貨物與一個出口。
+只有敵方能使用掠奪技能，每人最多攜帶一份。"
+autowrap_mode = 2
+
+[node name="Apply" type="Button" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
+layout_mode = 2
+text = "套用貨物配置"
+
+[node name="Reset" type="Button" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
+layout_mode = 2
+text = "取消尚未套用的配置"
+
+[node name="Remove" type="Button" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
+layout_mode = 2
+text = "移除全部貨物與出口"
 
 [node name="UnitPage" parent="Layout/Pages" instance=ExtResource("5")]
 layout_mode = 2

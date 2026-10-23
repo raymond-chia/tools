@@ -1,12 +1,11 @@
 //! 作者輸入的驗證與建局準備；入口共用地圖規則，執行期依賴已建立的不變量。
 use crate::error::GameError;
 use crate::model::{
-    BattleMode, Board, Encounter, Exploration, Footprint, GridPos, Hp, Id, Log, Outcome, Phase,
-    Pos, Random, ResultState, SkillDef, SkillEffect, SkillTargetKind, Skills, Team,
+    ActiveSkillDef, ActiveSkillEffect, ActiveSkills, BattleMode, Board, Encounter, Exploration,
+    Footprint, GridPos, Hp, Id, Log, Outcome, PassiveSkills, Phase, Pos, Random, ResultState, Team,
     TemporaryTerrains, TerrainLayer, Turn, Unit,
 };
 use crate::movement::footprint_cells;
-use crate::skill::target_kind;
 use crate::terrain::fixed_terrains_at;
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::World;
@@ -93,8 +92,11 @@ pub(crate) struct LoadedMap {
 /// 定義只解析一次，供各地圖驗證與正式建局共用。
 pub(crate) struct PreparedDefinitions {
     terrain_types: HashMap<String, crate::model::TerrainTypeDef>,
-    skills: HashMap<String, SkillDef>,
+    active_skills: HashMap<String, ActiveSkillDef>,
+    passive_skills: HashMap<String, crate::model::PassiveSkillDef>,
     unit_types: HashMap<String, authoring::UnitType>,
+    /// key 是單位種類 ID，value 是已合併全體預設的被動技能 ID。
+    unit_passives: HashMap<String, Vec<String>>,
     equipment_stats: HashMap<String, crate::equipment::EquipmentStats>,
     ai_profiles: crate::model::AiProfiles,
 }
@@ -107,7 +109,8 @@ pub(crate) fn prepare_definitions(
         default_passive_skills,
         ai_profiles,
         terrain_types,
-        skills,
+        active_skills,
+        passive_skills,
         unit_types,
     } = definitions;
     let mut terrains = HashMap::new();
@@ -128,25 +131,61 @@ pub(crate) fn prepare_definitions(
     {
         return Err(error::invalid_terrain_values(kind));
     }
+    // 不可進入的地形不會讓單位停留，傷害、移動消耗與防禦懲罰只對可通行地形有意義。
+    if let Some(kind) = terrain_types
+        .iter()
+        .filter(|(_, terrain)| {
+            terrain.entry_rule != crate::TerrainEntryRule::Walkable
+                && (terrain.damage != 0
+                    || terrain.extra_movement_cost != 0
+                    || terrain.dodge_penalty != 0
+                    || terrain.block_penalty != 0)
+        })
+        .map(|(kind, _)| kind)
+        .min()
+    {
+        return Err(error::terrain_values_require_walkable(kind));
+    }
     if terrain_types
         .get(gameplay_config::DEFAULT_GROUND_TERRAIN)
         .is_none_or(|terrain| terrain.layer != TerrainLayer::Ground)
     {
         return Err(error::missing_default_ground_terrain());
     }
-    let skill_ids: HashSet<_> = skills.iter().map(|skill| skill.id.as_str()).collect();
+    let skill_ids: HashSet<_> = active_skills
+        .iter()
+        .map(|skill| skill.id.as_str())
+        .collect();
+    // 主動與被動技能共用名稱翻譯，ID 不可重複。
+    let mut passive_ids = HashSet::new();
+    for passive in &passive_skills {
+        if skill_ids.contains(passive.id.as_str()) || !passive_ids.insert(passive.id.as_str()) {
+            return Err(error::duplicate_skill_id());
+        }
+        let crate::model::PassiveSkillEffect::Flanking { hit_bonus } = passive.effect;
+        if hit_bonus < 0 {
+            return Err(error::invalid_passive_skills(&passive.id));
+        }
+    }
     let ai_profiles = crate::ai::resolve_profiles(ai_profiles, &unit_types)?;
     let equipment = crate::equipment::definitions(equipment)?;
     let mut equipment_stats = HashMap::new();
     let mut types = HashMap::new();
-    crate::skill::validate_passive_skills(&default_passive_skills, &skills, "全體預設")?;
-    for mut kind in unit_types {
-        kind.skills = crate::skill::resolve_unit_skills(&kind, &default_passive_skills, &skills)?;
-        if kind.id.trim().is_empty() || kind.hp <= 0 || kind.width <= 0 || kind.height <= 0 {
+    let mut unit_passives = HashMap::new();
+    crate::skill::validate_passive_skills(&default_passive_skills, &passive_skills, "全體預設")?;
+    for kind in unit_types {
+        let passives =
+            crate::skill::resolve_passive_skills(&kind, &default_passive_skills, &passive_skills)?;
+        if kind.id.trim().is_empty()
+            || kind.hp <= 0
+            || kind.width <= 0
+            || kind.height <= 0
+            || kind.dodge < 0
+        {
             return Err(error::invalid_unit_type(&kind.id));
         }
         if let Some(unknown) = kind
-            .skills
+            .active_skills
             .iter()
             .find(|skill| !skill_ids.contains(skill.as_str()))
         {
@@ -154,7 +193,7 @@ pub(crate) fn prepare_definitions(
         }
         let mut unit_skills = HashSet::new();
         if let Some(duplicate) = kind
-            .skills
+            .active_skills
             .iter()
             .find(|skill| !unit_skills.insert(skill.as_str()))
         {
@@ -164,19 +203,17 @@ pub(crate) fn prepare_definitions(
             kind.id.clone(),
             crate::equipment::resolve(&kind, &equipment)?,
         );
+        unit_passives.insert(kind.id.clone(), passives);
         if types.insert(kind.id.clone(), kind).is_some() {
             return Err(error::duplicate_unit_type_id());
         }
     }
     let mut skill_definitions = HashMap::new();
-    for skill in skills {
-        if matches!(skill.effect, SkillEffect::Flanking { hit_bonus } if hit_bonus < 0) {
-            return Err(error::invalid_passive_skills(&skill.id));
-        }
+    for skill in active_skills {
         if skill.min_range < 0 || skill.max_range < skill.min_range {
             return Err(error::invalid_skill_range(&skill.id));
         }
-        if let SkillEffect::Mire { terrain, duration } = &skill.effect {
+        if let ActiveSkillEffect::Mire { terrain, duration } = &skill.effect {
             if *duration == 0 {
                 return Err(error::invalid_duration(&skill.id));
             }
@@ -194,8 +231,13 @@ pub(crate) fn prepare_definitions(
     }
     Ok(PreparedDefinitions {
         terrain_types,
-        skills: skill_definitions,
+        active_skills: skill_definitions,
+        passive_skills: passive_skills
+            .into_iter()
+            .map(|skill| (skill.id.clone(), skill))
+            .collect(),
         unit_types: types,
+        unit_passives,
         equipment_stats,
         ai_profiles,
     })
@@ -209,8 +251,10 @@ pub(crate) fn validate_map_with_definitions(
     validate_map(map)?;
     let PreparedDefinitions {
         terrain_types,
-        skills,
+        active_skills,
+        passive_skills,
         unit_types: types,
+        unit_passives,
         equipment_stats,
         ai_profiles: _,
     } = definitions;
@@ -229,21 +273,17 @@ pub(crate) fn validate_map_with_definitions(
         let kind = types
             .get(&placement.unit_type)
             .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
-        // 敵方 AI 依技能決定行動，沒有技能就無法推進回合。
-        if matches!(placement.team, Team::Enemy(_))
-            && !kind.skills.iter().any(|id| {
-                skills
-                    .get(id)
-                    .is_some_and(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
-            })
-        {
+        // 敵方 AI 依主動技能決定行動，沒有技能就無法推進回合。
+        if matches!(placement.team, Team::Enemy(_)) && kind.active_skills.is_empty() {
             return Err(error::missing_ai_skill(placement.id));
         }
     }
     validate_numeric_ranges(
         terrain_types,
-        skills,
+        active_skills,
+        passive_skills,
         types,
+        unit_passives,
         equipment_stats,
         *width,
         *height,
@@ -306,7 +346,7 @@ pub(crate) fn validate_map_with_definitions(
             off_hand: _,
             armor: _,
             accessory: _,
-            skills: _,
+            active_skills: _,
             passive_skills: _,
         } = types.get(unit_type).expect("單位配置的類型已在上方驗證");
         if *x < 0
@@ -349,8 +389,10 @@ pub(crate) fn load_map(
     let terrains = validate_map_with_definitions(&definitions, &map)?;
     let PreparedDefinitions {
         terrain_types,
-        skills: skill_definitions,
+        active_skills: skill_definitions,
+        passive_skills,
         unit_types: types,
+        unit_passives,
         equipment_stats,
         ai_profiles,
     } = definitions;
@@ -399,8 +441,11 @@ pub(crate) fn load_map(
     w.insert_resource(Random(0xc0ffee));
     w.insert_resource(Log::default());
     w.insert_resource(ResultState(Outcome::Ongoing));
-    w.insert_resource(Skills {
+    w.insert_resource(ActiveSkills {
         definitions: skill_definitions,
+    });
+    w.insert_resource(PassiveSkills {
+        definitions: passive_skills,
     });
     let mut presentation_events = Vec::new();
     for placement in placements {
@@ -430,7 +475,7 @@ pub(crate) fn load_map(
             off_hand: _,
             armor: _,
             accessory: _,
-            skills,
+            active_skills,
             passive_skills: _,
         } = types
             .get(&unit_type)
@@ -444,6 +489,10 @@ pub(crate) fn load_map(
             block_reduction,
             equipment,
         } = equipment_stats.get(&unit_type).expect("配裝已驗證").clone();
+        let passives = unit_passives
+            .get(&unit_type)
+            .expect("被動技能已解析")
+            .clone();
         let f = Footprint { width, height };
         let p = GridPos { x, y };
         if matches!(team, Team::Enemy(_))
@@ -476,7 +525,8 @@ pub(crate) fn load_map(
                 magical_power,
                 block_reduction,
                 equipment,
-                skills,
+                active_skills,
+                passive_skills: passives,
             },
         ));
     }
@@ -489,8 +539,10 @@ pub(crate) fn load_map(
 /// 載入時建立座標、地形疊加與戰鬥數值可安全運算的不變量。
 fn validate_numeric_ranges(
     terrains: &HashMap<String, crate::model::TerrainTypeDef>,
-    skills: &HashMap<String, SkillDef>,
+    active_skills: &HashMap<String, ActiveSkillDef>,
+    passive_skills: &HashMap<String, crate::model::PassiveSkillDef>,
     units: &HashMap<String, authoring::UnitType>,
+    unit_passives: &HashMap<String, Vec<String>>,
     equipment_stats: &HashMap<String, crate::equipment::EquipmentStats>,
     width: i32,
     height: i32,
@@ -537,28 +589,36 @@ fn validate_numeric_ranges(
                 .initiative
                 .checked_add(gameplay_config::INITIATIVE_DIE_SIDES as i32)
                 .is_none()
-            || i64::from(unit.dodge.max(0)) + i64::from(stats.block.max(0)) > i64::from(i32::MAX)
+            || i64::from(unit.dodge) + i64::from(stats.block) > i64::from(i32::MAX)
         {
             return Err(error::numeric_range(&unit.id));
         }
-        for skill in skills
+        for skill in active_skills
             .values()
-            .filter(|skill| unit.skills.contains(&skill.id))
+            .filter(|skill| unit.active_skills.contains(&skill.id))
         {
-            let (hit_bonus, power_bonus) = match skill.effect {
-                SkillEffect::Attack {
+            let (hit_bonus, power) = match skill.effect {
+                ActiveSkillEffect::Attack {
+                    power_source,
+                    ranged: _,
                     hit_bonus,
                     power_bonus,
-                } => (hit_bonus, Some(power_bonus)),
-                SkillEffect::Push { hit_bonus } => (hit_bonus, None),
-                SkillEffect::Heal { power_bonus } => (0, Some(power_bonus)),
-                SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } | SkillEffect::Loot => {
+                } => (hit_bonus, Some((power_source, power_bonus))),
+                ActiveSkillEffect::Push {
+                    ranged: _,
+                    hit_bonus,
+                } => (hit_bonus, None),
+                ActiveSkillEffect::Heal {
+                    power_source,
+                    power_bonus,
+                } => (0, Some((power_source, power_bonus))),
+                ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => {
                     continue;
                 }
             };
             let hit = i64::from(unit.hit) + i64::from(hit_bonus);
-            let power = power_bonus.map_or(0, |bonus| {
-                i64::from(match skill.power_source {
+            let power = power.map_or(0, |(power_source, bonus)| {
+                i64::from(match power_source {
                     crate::PowerSource::Physical => stats.physical_power,
                     crate::PowerSource::Magical => stats.magical_power,
                 }) + i64::from(bonus)
@@ -566,13 +626,17 @@ fn validate_numeric_ranges(
             if hit < i64::from(i32::MIN)
                 || hit
                     + i64::from(crate::skill::flanking_hit_bonus(
-                        unit.skills.iter().filter_map(|id| skills.get(id)),
+                        unit_passives
+                            .get(&unit.id)
+                            .expect("被動技能已解析")
+                            .iter()
+                            .map(|id| passive_skills.get(id).expect("被動技能已驗證")),
                     ))
                     + i64::from(gameplay_config::HIT_DIE_SIDES)
                     > i64::from(i32::MAX)
                 || power < i64::from(i32::MIN)
                 || power.max(0) * 2 > i64::from(i32::MAX)
-                || matches!(skill.effect, SkillEffect::Heal { .. })
+                || matches!(skill.effect, ActiveSkillEffect::Heal { .. })
                     && power.max(0) + i64::from(maximum_hp) > i64::from(i32::MAX)
             {
                 return Err(error::numeric_range(&unit.id));

@@ -38,9 +38,9 @@ pub fn documents_from_json(definitions: &str, map: &str) -> Result<(String, Stri
     validation::validate_map_with_definitions(&prepared, &map)?;
     // 單位的技能依技能頁籤排列存檔，不沿用勾選的先後順序。
     for unit in &mut definitions.unit_types {
-        unit.skills.sort_by_key(|id| {
+        unit.active_skills.sort_by_key(|id| {
             definitions
-                .skills
+                .active_skills
                 .iter()
                 .position(|skill| skill.id == *id)
                 .expect("遊戲資料驗證已確認單位引用的技能存在")

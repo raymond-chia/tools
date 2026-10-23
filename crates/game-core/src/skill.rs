@@ -3,10 +3,12 @@ use crate::error::{self, GameError};
 use crate::game::{DamageResult, Game, die};
 use crate::gameplay_config;
 use crate::model::{
-    AttackPreview, AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
-    GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, MovementTransition, Phase, Pos,
-    RollDegree, SkillDef, SkillDetailEffect, SkillDetailsView, SkillEffect, SkillPreview,
-    SkillRangeView, SkillTargetKind, Skills, TemporaryTerrain, TemporaryTerrains, Turn, Unit,
+    ActiveSkillDef, ActiveSkillDetailEffect, ActiveSkillDetailsView, ActiveSkillEffect,
+    ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
+    AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint, GridPos,
+    HealingPreview, HealthSegmentsView, Hp, Id, Log, MovementTransition, PassiveSkillDef,
+    PassiveSkillEffect, PassiveSkills, Phase, Pos, RollDegree, TemporaryTerrain, TemporaryTerrains,
+    Turn, Unit,
 };
 use crate::movement::{fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell};
 use crate::terrain::{
@@ -29,9 +31,9 @@ impl Game {
         actor: i64,
         target_cell: GridPos,
         skill_id: &str,
-    ) -> Result<SkillPreview, GameError> {
+    ) -> Result<ActiveSkillPreview, GameError> {
         let attacker = self.skill_caster(actor)?;
-        let Skills { definitions } = self.world.resource::<Skills>();
+        let ActiveSkills { definitions } = self.world.resource::<ActiveSkills>();
         let skill = definitions
             .get(skill_id)
             .ok_or_else(|| error::unknown_skill(skill_id))?;
@@ -42,13 +44,13 @@ impl Game {
         &mut self,
         actor: i64,
         position: GridPos,
-        skill: SkillDef,
+        skill: ActiveSkillDef,
     ) -> Result<(), GameError> {
         let ae = self.skill_caster(actor)?;
-        if matches!(skill.effect, SkillEffect::Loot) {
+        if matches!(skill.effect, ActiveSkillEffect::Loot) {
             return self.loot_cargo(ae, actor, position, &skill);
         }
-        if target_kind(&skill.effect) == SkillTargetKind::Cell {
+        if target_kind(&skill.effect) == ActiveSkillTargetKind::Cell {
             return self.use_cell_skill(ae, actor, position, skill);
         }
         let a = actor;
@@ -72,7 +74,8 @@ impl Game {
             magical_power: _,
             block_reduction: _,
             equipment: _,
-            skills: _,
+            active_skills: _,
+            passive_skills: _,
         } = self
             .world
             .get::<Unit>(ae)
@@ -91,19 +94,23 @@ impl Game {
             magical_power: _,
             block_reduction: _,
             equipment: _,
-            skills: _,
+            active_skills: _,
+            passive_skills: _,
         } = self
             .world
             .get::<Unit>(te)
             .expect("已建立的戰鬥單位應具有 Unit 元件")
             .clone();
-        let (hit_bonus, power_bonus, push) = match effect {
+        let (hit_bonus, power, push) = match effect {
             UnitSkillEffect::Attack {
                 hit_bonus,
-                power_bonus,
+                power,
                 push,
-            } => (hit_bonus, power_bonus, push),
-            UnitSkillEffect::Heal { power_bonus } => {
+            } => (hit_bonus, power, push),
+            UnitSkillEffect::Heal {
+                power_source,
+                power_bonus,
+            } => {
                 let HealingPreview {
                     target: target_id,
                     target_type,
@@ -114,7 +121,7 @@ impl Game {
                     remaining_hp,
                     missing_hp: _,
                     health_segments: _,
-                } = healing_preview(&self.world, ae, te, power_bonus, skill.power_source);
+                } = healing_preview(&self.world, ae, te, power_bonus, power_source);
                 self.world
                     .get_mut::<Hp>(te)
                     .expect("已建立的戰鬥單位應具有 Hp 元件")
@@ -149,7 +156,7 @@ impl Game {
         let target_block = effective_block(&self.world, te);
         let degree = degree(natural, modifier, target_dodge);
         let result = attack_result(natural, modifier, target_dodge, target_dodge + target_block);
-        let base_damage = direct_damage(&self.world, ae, skill.power_source, power_bonus);
+        let base_damage = direct_damage(&self.world, ae, power);
         let critical = degree == RollDegree::CriticalSuccess;
         let raw_damage = attack_damage(
             base_damage,
@@ -242,7 +249,8 @@ impl Game {
                         magical_power: _,
                         block_reduction: _,
                         equipment: _,
-                        skills: _,
+                        active_skills: _,
+                        passive_skills: _,
                     } = self
                         .world
                         .get::<Unit>(blocking_entity)
@@ -319,7 +327,7 @@ impl Game {
         entity: Entity,
         actor: i64,
         position: GridPos,
-        skill: SkillDef,
+        skill: ActiveSkillDef,
     ) -> Result<(), GameError> {
         let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
         let (terrain, duration) =
@@ -327,10 +335,8 @@ impl Game {
         let unit = self.world.get::<Unit>(entity).expect("施放者應具有 Unit");
         let actor_type = unit.unit_type.clone();
         let actor_team = unit.team.clone();
-        let SkillDef {
-            power_source: _,
+        let ActiveSkillDef {
             id,
-            ranged: _,
             min_range: _,
             max_range: _,
             effect: _,
@@ -374,14 +380,14 @@ pub(crate) fn validate_cell_skill_from_position(
     actor: Entity,
     origin: GridPos,
     cell: GridPos,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
 ) -> Result<(String, u32), GameError> {
     let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
-    if !unit.skills.contains(&skill.id) {
+    if !unit.active_skills.contains(&skill.id) {
         return Err(error::unit_cannot_use_skill());
     }
     let (terrain, duration) = match &skill.effect {
-        SkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
+        ActiveSkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
         _ => return Err(error::unit_cannot_use_skill()),
     };
     if !fits(
@@ -422,25 +428,28 @@ pub(crate) fn preview_unit_skill_from_position(
     attacker: Entity,
     position: GridPos,
     target_cell: GridPos,
-    skill: &SkillDef,
-) -> Result<SkillPreview, GameError> {
+    skill: &ActiveSkillDef,
+) -> Result<ActiveSkillPreview, GameError> {
     let (target_entity, effect) =
         validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)?;
-    let (hit_bonus, power_bonus) = match effect {
-        UnitSkillEffect::Heal { power_bonus } => {
-            return Ok(SkillPreview::Healing(healing_preview(
+    let (hit_bonus, power) = match effect {
+        UnitSkillEffect::Heal {
+            power_source,
+            power_bonus,
+        } => {
+            return Ok(ActiveSkillPreview::Healing(healing_preview(
                 world,
                 attacker,
                 target_entity,
                 power_bonus,
-                skill.power_source,
+                power_source,
             )));
         }
         UnitSkillEffect::Attack {
             hit_bonus,
-            power_bonus,
+            power,
             push: _,
-        } => (hit_bonus, power_bonus),
+        } => (hit_bonus, power),
     };
 
     let Unit {
@@ -456,7 +465,8 @@ pub(crate) fn preview_unit_skill_from_position(
         magical_power: _,
         block_reduction: _,
         equipment: _,
-        skills: _,
+        active_skills: _,
+        passive_skills: _,
     } = world
         .get::<Unit>(attacker)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
@@ -473,7 +483,8 @@ pub(crate) fn preview_unit_skill_from_position(
         magical_power: _,
         block_reduction: _,
         equipment: _,
-        skills: _,
+        active_skills: _,
+        passive_skills: _,
     } = world
         .get::<Unit>(target_entity)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
@@ -502,7 +513,7 @@ pub(crate) fn preview_unit_skill_from_position(
             AttackResult::Hit => hit_count += 1,
         }
     }
-    let hit_damage = direct_damage(world, attacker, skill.power_source, power_bonus);
+    let hit_damage = direct_damage(world, attacker, power);
     let block_damage = attack_damage(
         hit_damage,
         AttackResult::Block,
@@ -516,7 +527,7 @@ pub(crate) fn preview_unit_skill_from_position(
     } else {
         0
     };
-    Ok(SkillPreview::Attack(AttackPreview {
+    Ok(ActiveSkillPreview::Attack(AttackPreview {
         target,
         target_type: target_type.clone(),
         target_hp: *target_hp,
@@ -592,14 +603,9 @@ fn healing_preview(
 }
 
 // 推擊不具有直接傷害；預覽與結算共用此判斷。
-fn direct_damage(
-    world: &World,
-    actor: Entity,
-    source: crate::PowerSource,
-    power_bonus: Option<i32>,
-) -> i32 {
-    match power_bonus {
-        Some(bonus) => skill_power(unit_power(world, actor, source), bonus),
+fn direct_damage(world: &World, actor: Entity, power: Option<(crate::PowerSource, i32)>) -> i32 {
+    match power {
+        Some((source, bonus)) => skill_power(unit_power(world, actor, source), bonus),
         None => 0,
     }
 }
@@ -610,12 +616,13 @@ fn skill_power(power: i32, power_bonus: i32) -> i32 {
 }
 
 /// 技能指定的目標種類；以技能種類決定行為時一律經過此函式。
-pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
+pub(crate) fn target_kind(effect: &ActiveSkillEffect) -> ActiveSkillTargetKind {
     match effect {
-        SkillEffect::Attack { .. } | SkillEffect::Push { .. } => SkillTargetKind::Enemy,
-        SkillEffect::Heal { .. } => SkillTargetKind::Ally,
-        SkillEffect::Mire { .. } | SkillEffect::Loot => SkillTargetKind::Cell,
-        SkillEffect::Flanking { .. } => SkillTargetKind::Passive,
+        ActiveSkillEffect::Attack { .. } | ActiveSkillEffect::Push { .. } => {
+            ActiveSkillTargetKind::Enemy
+        }
+        ActiveSkillEffect::Heal { .. } => ActiveSkillTargetKind::Ally,
+        ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => ActiveSkillTargetKind::Cell,
     }
 }
 
@@ -623,10 +630,12 @@ pub(crate) fn target_kind(effect: &SkillEffect) -> SkillTargetKind {
 enum UnitSkillEffect {
     Attack {
         hit_bonus: i32,
-        power_bonus: Option<i32>,
+        /// 推擊沒有直接傷害，因此不具威力來源與加值。
+        power: Option<(crate::PowerSource, i32)>,
         push: bool,
     },
     Heal {
+        power_source: crate::PowerSource,
         power_bonus: i32,
     },
 }
@@ -636,7 +645,7 @@ fn validate_unit_skill_target(
     world: &World,
     attacker: Entity,
     target_cell: GridPos,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
 ) -> Result<(Entity, UnitSkillEffect), GameError> {
     let position = world.get::<Pos>(attacker).expect("施放者應具有位置").0;
     validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)
@@ -647,12 +656,10 @@ fn validate_unit_skill_target_from_position(
     attacker: Entity,
     attacker_position: GridPos,
     target_cell: GridPos,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
 ) -> Result<(Entity, UnitSkillEffect), GameError> {
-    let SkillDef {
-        power_source: _,
+    let ActiveSkillDef {
         id,
-        ranged: _,
         min_range,
         max_range,
         effect: skill_effect,
@@ -678,7 +685,8 @@ fn validate_unit_skill_target_from_position(
         magical_power: _,
         block_reduction: _,
         equipment: _,
-        skills,
+        active_skills,
+        passive_skills: _,
     } = world
         .get::<Unit>(attacker)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
@@ -695,31 +703,41 @@ fn validate_unit_skill_target_from_position(
         magical_power: _,
         block_reduction: _,
         equipment: _,
-        skills: _,
+        active_skills: _,
+        passive_skills: _,
     } = world
         .get::<Unit>(target)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    if !skills.contains(id) {
+    if !active_skills.contains(id) {
         return Err(error::unit_cannot_use_skill());
     }
     let effect = match skill_effect {
-        SkillEffect::Attack {
+        ActiveSkillEffect::Attack {
+            power_source,
+            ranged: _,
             hit_bonus,
             power_bonus,
         } => UnitSkillEffect::Attack {
             hit_bonus: *hit_bonus,
-            power_bonus: Some(*power_bonus),
+            power: Some((*power_source, *power_bonus)),
             push: false,
         },
-        SkillEffect::Push { hit_bonus } => UnitSkillEffect::Attack {
+        ActiveSkillEffect::Push {
+            ranged: _,
+            hit_bonus,
+        } => UnitSkillEffect::Attack {
             hit_bonus: *hit_bonus,
-            power_bonus: None,
+            power: None,
             push: true,
         },
-        SkillEffect::Heal { power_bonus } => UnitSkillEffect::Heal {
+        ActiveSkillEffect::Heal {
+            power_source,
+            power_bonus,
+        } => UnitSkillEffect::Heal {
+            power_source: *power_source,
             power_bonus: *power_bonus,
         },
-        SkillEffect::Mire { .. } | SkillEffect::Flanking { .. } | SkillEffect::Loot => {
+        ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => {
             return Err(error::unit_cannot_use_skill());
         }
     };
@@ -786,7 +804,7 @@ pub(crate) fn hit(
     world: &World,
     attacker: Entity,
     target: Entity,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
     hit_bonus: i32,
 ) -> i32 {
     let HitBreakdown {
@@ -802,7 +820,7 @@ fn hit_breakdown(
     world: &World,
     attacker: Entity,
     target: Entity,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
     hit_bonus: i32,
 ) -> HitBreakdown {
     let position = world.get::<Pos>(attacker).expect("攻擊者應具有位置").0;
@@ -814,7 +832,7 @@ fn hit_breakdown_from_position(
     attacker: Entity,
     position: GridPos,
     target: Entity,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
     hit_bonus: i32,
 ) -> HitBreakdown {
     let unit = world
@@ -836,17 +854,15 @@ fn flanking_bonus(
     attacker: Entity,
     position: GridPos,
     target: Entity,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
 ) -> i32 {
-    let SkillDef {
-        power_source: _,
+    let ActiveSkillDef {
         id: _,
-        ranged,
         min_range,
         max_range,
-        effect: _,
+        effect,
     } = skill;
-    if *ranged {
+    if !melee_enemy_skill(effect) {
         return 0;
     }
     let attacker_side = match target_side_from_position(
@@ -860,7 +876,7 @@ fn flanking_bonus(
         .expect("可發動攻擊的單位應具有 Unit")
         .team
         .clone();
-    let Skills { definitions } = world.resource::<Skills>();
+    let ActiveSkills { definitions } = world.resource::<ActiveSkills>();
     let has_supporter = world.iter_entities().any(|entity| {
         if entity.id() == attacker || entity.id() == target {
             return false;
@@ -878,7 +894,8 @@ fn flanking_bonus(
             magical_power: _,
             block_reduction: _,
             equipment: _,
-            skills,
+            active_skills,
+            passive_skills: _,
         } = match entity.get::<Unit>() {
             Some(unit) => unit,
             None => return false,
@@ -886,13 +903,10 @@ fn flanking_bonus(
         if !crate::teams::are_allied(world, team, &attacker_team) {
             return false;
         }
-        skills
+        active_skills
             .iter()
             .filter_map(|skill_id| definitions.get(skill_id))
-            .filter(|support_skill| {
-                !support_skill.ranged
-                    && target_kind(&support_skill.effect) == SkillTargetKind::Enemy
-            })
+            .filter(|support_skill| melee_enemy_skill(&support_skill.effect))
             .any(|support_skill| {
                 target_side_within_range(
                     world,
@@ -905,15 +919,25 @@ fn flanking_bonus(
             })
     });
     if has_supporter {
-        let unit = world.get::<Unit>(attacker).expect("攻擊者應具有 Unit");
+        let unit = world.get::<Unit>(attacker).expect("戰鬥單位應具有 Unit");
+        let PassiveSkills { definitions } = world.resource::<PassiveSkills>();
         flanking_hit_bonus(
-            unit.skills
+            unit.passive_skills
                 .iter()
-                .map(|id| definitions.get(id).expect("單位技能引用已驗證")),
+                .map(|id| definitions.get(id).expect("單位被動技能已驗證")),
         )
     } else {
         0
     }
+}
+
+/// 夾擊只計入近戰的攻擊與推擊。
+fn melee_enemy_skill(effect: &ActiveSkillEffect) -> bool {
+    matches!(
+        effect,
+        ActiveSkillEffect::Attack { ranged: false, .. }
+            | ActiveSkillEffect::Push { ranged: false, .. }
+    )
 }
 
 fn target_side_within_range(
@@ -1081,7 +1105,7 @@ fn push_direction(w: &World, attacker: Entity, target_cell: GridPos) -> GridPos 
     }
 }
 
-pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
+pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
     let board @ Board {
         width,
         height,
@@ -1105,18 +1129,16 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
         magical_power: _,
         block_reduction: _,
         equipment: _,
-        skills,
+        active_skills,
+        passive_skills: _,
     } = w.get::<Unit>(e).expect("已建立的戰鬥單位應具有 Unit 元件");
-    let Skills { definitions } = w.resource::<Skills>();
-    let ranges: Vec<_> = skills
+    let ActiveSkills { definitions } = w.resource::<ActiveSkills>();
+    let ranges: Vec<_> = active_skills
         .iter()
-        .filter_map(|skill_id| definitions.get(skill_id))
-        .filter(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
+        .map(|skill_id| definitions.get(skill_id).expect("單位技能引用已驗證"))
         .map(|skill| {
-            let SkillDef {
-                power_source: _,
+            let ActiveSkillDef {
                 id,
-                ranged: _,
                 min_range,
                 max_range,
                 effect,
@@ -1130,17 +1152,18 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
                         w, position, footprint, cell, *min_range, *max_range,
                     )
                     .is_ok()
-                        && (target_kind(effect) != SkillTargetKind::Enemy || cell_distance > 0)
+                        && (target_kind(effect) != ActiveSkillTargetKind::Enemy
+                            || cell_distance > 0)
                     {
                         cells.push(cell);
                     }
                 }
             }
-            SkillRangeView {
+            ActiveSkillRangeView {
                 id: id.clone(),
                 details: skill_details(skill, board),
                 usable: can_use_skill(w.resource::<Turn>())
-                    && (!matches!(effect, SkillEffect::Loot)
+                    && (!matches!(effect, ActiveSkillEffect::Loot)
                         || w.get_resource::<crate::model::Cargo>()
                             .is_some_and(|cargo| {
                                 cargo.items.iter().any(|item| match item {
@@ -1159,48 +1182,62 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<SkillRangeView> {
     ranges
 }
 
-fn skill_details(skill: &SkillDef, board: &Board) -> SkillDetailsView {
-    let SkillDef {
-        power_source,
+fn skill_details(skill: &ActiveSkillDef, board: &Board) -> ActiveSkillDetailsView {
+    let ActiveSkillDef {
         id: _,
-        ranged,
         min_range,
         max_range,
         effect: skill_effect,
     } = skill;
     let target = target_kind(skill_effect);
-    let (hit_bonus, power_bonus, effect) = match skill_effect {
-        SkillEffect::Attack {
+    let (power_source, ranged, hit_bonus, power_bonus, effect) = match skill_effect {
+        ActiveSkillEffect::Attack {
+            power_source,
+            ranged,
             hit_bonus,
             power_bonus,
         } => (
+            Some(*power_source),
+            Some(*ranged),
             Some(*hit_bonus),
             Some(*power_bonus),
-            SkillDetailEffect::Attack,
+            ActiveSkillDetailEffect::Attack,
         ),
-        SkillEffect::Push { hit_bonus } => (
+        ActiveSkillEffect::Push { ranged, hit_bonus } => (
+            None,
+            Some(*ranged),
             Some(*hit_bonus),
             None,
-            SkillDetailEffect::Push {
+            ActiveSkillDetailEffect::Push {
                 distance: gameplay_config::PUSH_DISTANCE,
             },
         ),
-        SkillEffect::Mire { terrain, duration } => (
+        ActiveSkillEffect::Mire { terrain, duration } => (
             None,
             None,
-            SkillDetailEffect::Mire {
+            None,
+            None,
+            ActiveSkillDetailEffect::Mire {
                 extra_movement_cost: terrain_type(board, terrain).extra_movement_cost as i32,
                 duration: *duration,
             },
         ),
-        SkillEffect::Heal { power_bonus } => (None, Some(*power_bonus), SkillDetailEffect::Heal),
-        SkillEffect::Loot => (None, None, SkillDetailEffect::Loot),
-        SkillEffect::Flanking { .. } => unreachable!("被動技能不建立主動技能範圍"),
+        ActiveSkillEffect::Heal {
+            power_source,
+            power_bonus,
+        } => (
+            Some(*power_source),
+            None,
+            None,
+            Some(*power_bonus),
+            ActiveSkillDetailEffect::Heal,
+        ),
+        ActiveSkillEffect::Loot => (None, None, None, None, ActiveSkillDetailEffect::Loot),
     };
-    SkillDetailsView {
-        power_source: *power_source,
+    ActiveSkillDetailsView {
+        power_source,
         target,
-        ranged: *ranged,
+        ranged,
         min_range: *min_range,
         max_range: *max_range,
         hit_bonus,
@@ -1227,25 +1264,25 @@ fn block_reduction(world: &World, entity: Entity) -> i32 {
 /// 作者輸入邊界只允許已定義的被動技能，且同一效果只能選一個版本。
 pub(crate) fn validate_passive_skills(
     ids: &[String],
-    skills: &[SkillDef],
+    passives: &[PassiveSkillDef],
     owner: &str,
 ) -> Result<(), GameError> {
-    let valid = ids.iter().all(|id| {
-        skills
-            .iter()
-            .any(|skill| skill.id == *id && target_kind(&skill.effect) == SkillTargetKind::Passive)
-    });
+    let valid = ids
+        .iter()
+        .all(|id| passives.iter().any(|passive| passive.id == *id));
     if ids.len() > 1 || !valid {
         return Err(error::invalid_passive_skills(owner));
     }
     Ok(())
 }
 
-pub(crate) fn flanking_hit_bonus<'a>(skills: impl Iterator<Item = &'a SkillDef>) -> i32 {
-    skills
-        .filter_map(|skill| match skill.effect {
-            SkillEffect::Flanking { hit_bonus } => Some(hit_bonus),
-            _ => None,
+pub(crate) fn flanking_hit_bonus<'a>(
+    passives: impl IntoIterator<Item = &'a PassiveSkillDef>,
+) -> i32 {
+    passives
+        .into_iter()
+        .map(|passive| match passive.effect {
+            PassiveSkillEffect::Flanking { hit_bonus } => hit_bonus,
         })
         .next()
         .unwrap_or(0)
@@ -1257,12 +1294,11 @@ pub(crate) fn active_skill_views(
     entity: Entity,
 ) -> Vec<crate::model::ActiveSkillView> {
     let unit = world.get::<Unit>(entity).expect("戰鬥單位應具有 Unit");
-    let Skills { definitions } = world.resource::<Skills>();
+    let ActiveSkills { definitions } = world.resource::<ActiveSkills>();
     let board = world.resource::<Board>();
-    unit.skills
+    unit.active_skills
         .iter()
         .map(|id| definitions.get(id).expect("單位技能已驗證"))
-        .filter(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
         .map(|skill| crate::model::ActiveSkillView {
             id: skill.id.clone(),
             details: skill_details(skill, board),
@@ -1275,55 +1311,43 @@ pub(crate) fn passive_skill_views(
     entity: Entity,
 ) -> Vec<crate::model::PassiveSkillView> {
     let unit = world.get::<Unit>(entity).expect("戰鬥單位應具有 Unit");
-    let Skills { definitions } = world.resource::<Skills>();
-    unit.skills
+    let PassiveSkills { definitions } = world.resource::<PassiveSkills>();
+    unit.passive_skills
         .iter()
-        .filter_map(|id| {
-            let skill = definitions.get(id).expect("單位技能已驗證");
-            match skill.effect {
-                SkillEffect::Flanking { hit_bonus } => Some(crate::model::PassiveSkillView {
-                    id: id.clone(),
-                    hit_bonus,
-                }),
-                _ => None,
-            }
+        .map(|id| definitions.get(id).expect("單位被動技能已驗證"))
+        .map(|passive| match passive.effect {
+            PassiveSkillEffect::Flanking { hit_bonus } => crate::model::PassiveSkillView {
+                id: passive.id.clone(),
+                hit_bonus,
+            },
         })
         .collect()
 }
 
-/// 載入與編輯器共用技能分配，執行期只保存已決定的完整技能清單。
-pub(crate) fn resolve_unit_skills(
+/// 載入與編輯器共用被動技能分配；同效果由單位版本覆蓋全體預設。
+pub(crate) fn resolve_passive_skills(
     unit: &crate::authoring::UnitType,
     defaults: &[String],
-    skills: &[SkillDef],
+    passives: &[PassiveSkillDef],
 ) -> Result<Vec<String>, GameError> {
-    validate_passive_skills(&unit.passive_skills, skills, &unit.id)?;
-    let mut passives: Vec<&SkillDef> = Vec::new();
+    validate_passive_skills(&unit.passive_skills, passives, &unit.id)?;
+    let mut resolved: Vec<String> = Vec::new();
     for id in defaults.iter().chain(&unit.passive_skills) {
-        let skill = skills
+        let passive = passives
             .iter()
-            .find(|skill| skill.id == *id)
+            .find(|passive| passive.id == *id)
             .expect("預設與單位被動技能已在作者輸入邊界驗證");
-        let effect = std::mem::discriminant(&skill.effect);
-        match passives
-            .iter()
-            .position(|existing| std::mem::discriminant(&existing.effect) == effect)
-        {
-            Some(index) => passives[index] = skill,
-            None => passives.push(skill),
+        let effect = std::mem::discriminant(&passive.effect);
+        match resolved.iter().position(|existing| {
+            let definition = passives
+                .iter()
+                .find(|skill| skill.id == *existing)
+                .expect("已解析的被動技能應存在");
+            std::mem::discriminant(&definition.effect) == effect
+        }) {
+            Some(index) => resolved[index] = id.clone(),
+            None => resolved.push(id.clone()),
         }
     }
-    if unit.skills.iter().any(|id| {
-        skills
-            .iter()
-            .any(|skill| skill.id == *id && target_kind(&skill.effect) == SkillTargetKind::Passive)
-    }) {
-        return Err(error::invalid_passive_skills(&unit.id));
-    }
-    Ok(unit
-        .skills
-        .iter()
-        .chain(passives.iter().map(|skill| &skill.id))
-        .cloned()
-        .collect())
+    Ok(resolved)
 }

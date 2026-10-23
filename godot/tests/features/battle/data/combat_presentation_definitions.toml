@@ -22,7 +22,7 @@ id="cliff"
 layer="ground"
 entry_rule="instant_down_when_pushed"
 
-[[skills]]
+[[active_skills]]
 id="presentation_push"
 ranged=false
 min_range=1
@@ -30,7 +30,7 @@ max_range=6
 effect="push"
 hit_bonus=100
 
-[[skills]]
+[[active_skills]]
 id="presentation_finish"
 ranged=true
 min_range=1
@@ -39,16 +39,15 @@ effect="attack"
 hit_bonus=100
 power_bonus=100
 
-[[skills]]
+[[active_skills]]
 id="presentation_heal"
-ranged=true
 min_range=0
 max_range=6
 effect="heal"
 power_source = "magical"
 power_bonus=3
 
-[[skills]]
+[[active_skills]]
 id="idle_attack"
 ranged=false
 min_range=1
@@ -68,7 +67,7 @@ dodge=0
 hit=5
 physical_power = 5
 magical_power = 5
-skills=["presentation_push","presentation_finish"]
+active_skills=["presentation_push","presentation_finish"]
 
 [[unit_types]]
 id="presentation_healer"
@@ -81,7 +80,7 @@ dodge=0
 hit=0
 physical_power = 5
 magical_power = 5
-skills=["presentation_heal"]
+active_skills=["presentation_heal"]
 
 [[unit_types]]
 id="presentation_target"
@@ -94,4 +93,4 @@ dodge=0
 hit=0
 physical_power = 0
 magical_power = 0
-skills=["idle_attack"]
+active_skills=["idle_attack"]

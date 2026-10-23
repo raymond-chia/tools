@@ -25,7 +25,7 @@ id="cliff"
 layer="ground"
 entry_rule="instant_down_when_pushed"
 
-[[skills]]
+[[active_skills]]
 id="shield_bash"
 ranged=false
 min_range=1
@@ -33,9 +33,8 @@ max_range=6
 effect="push"
 hit_bonus=100
 
-[[skills]]
+[[active_skills]]
 id="mire"
-ranged=true
 min_range=0
 max_range=6
 effect="mire"
@@ -55,7 +54,7 @@ dodge=10
 hit=0
 physical_power = 0
 magical_power = 0
-skills=["shield_bash","mire"]
+active_skills=["shield_bash","mire"]
 off_hand = "test_guard_10"
 
 [[unit_types]]
@@ -71,7 +70,7 @@ dodge=10
 hit=0
 physical_power = 0
 magical_power = 0
-skills=["shield_bash","mire"]
+active_skills=["shield_bash","mire"]
 off_hand = "test_guard_10"
 
 [[unit_types]]
@@ -87,7 +86,7 @@ dodge=10
 hit=0
 physical_power = 0
 magical_power = 0
-skills=["shield_bash","mire"]
+active_skills=["shield_bash","mire"]
 off_hand = "test_guard_10"
 
 

@@ -1,9 +1,10 @@
 use super::support::{AsciiBoard, ascii_board};
-use crate::model::{Board, Footprint, Pos, Skills, TemporaryTerrains, Unit};
+use crate::model::{ActiveSkills, Board, Footprint, PassiveSkills, Pos, TemporaryTerrains, Unit};
 use crate::skill::{attack_damage, hit};
 use crate::{
-    AttackResult, EquipmentView, GridPos, PowerSource, SkillDef, SkillEffect, Team,
-    TerrainEntryRule, TerrainLayer, TerrainPlacement, TerrainTypeDef,
+    ActiveSkillDef, ActiveSkillEffect, AttackResult, EquipmentView, GridPos, PassiveSkillDef,
+    PassiveSkillEffect, PowerSource, Team, TerrainEntryRule, TerrainLayer, TerrainPlacement,
+    TerrainTypeDef,
 };
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::HashMap;
@@ -185,18 +186,18 @@ fn hit_uses_expected_flanking_bonus() {
     }
 }
 
-fn attack_skill(ranged: bool, min_range: i32, max_range: i32) -> SkillDef {
-    SkillDef {
-        power_source: PowerSource::Physical,
+fn attack_skill(ranged: bool, min_range: i32, max_range: i32) -> ActiveSkillDef {
+    ActiveSkillDef {
         id: if ranged {
             "ranged_attack".into()
         } else {
             "melee_attack".into()
         },
-        ranged,
         min_range,
         max_range,
-        effect: SkillEffect::Attack {
+        effect: ActiveSkillEffect::Attack {
+            power_source: PowerSource::Physical,
+            ranged,
             hit_bonus: 0,
             power_bonus: 0,
         },
@@ -208,8 +209,14 @@ fn spawn_unit(
     position: GridPos,
     footprint: Footprint,
     team: Team,
-    skills: Vec<String>,
+    active_skills: Vec<String>,
+    passives: Vec<PassiveSkillDef>,
 ) -> Entity {
+    let passive_skills = passives.iter().map(|skill| skill.id.clone()).collect();
+    world
+        .resource_mut::<PassiveSkills>()
+        .definitions
+        .extend(passives.into_iter().map(|skill| (skill.id.clone(), skill)));
     world
         .spawn((
             Pos(position),
@@ -232,7 +239,8 @@ fn spawn_unit(
                     armor: String::new(),
                     accessory: String::new(),
                 },
-                skills,
+                active_skills,
+                passive_skills,
             },
         ))
         .id()
@@ -274,6 +282,9 @@ fn flanking_world(
     wall.entry_rule = TerrainEntryRule::Blocked;
     wall.blocks_sight = true;
     let mut world = World::new();
+    world.insert_resource(PassiveSkills {
+        definitions: HashMap::new(),
+    });
     world.insert_resource(TemporaryTerrains::default());
     world.insert_resource(Board {
         width: board.0,
@@ -284,32 +295,25 @@ fn flanking_world(
             .collect(),
         terrain_types: HashMap::from([("plain".into(), plain), ("wall".into(), wall)]),
     });
-    let mut definitions = HashMap::from([(melee_skill_id.clone(), melee_skill)]);
-    // 每個案例都定義相同的兩種被動，只改變攻擊者持有的技能 ID。
-    for (id, hit_bonus) in [("test_flanking", 2), ("test_pack_flanking", 4)] {
-        definitions.insert(
-            id.to_owned(),
-            SkillDef {
-                id: id.to_owned(),
-                power_source: PowerSource::Physical,
-                ranged: false,
-                min_range: 0,
-                max_range: 0,
-                effect: SkillEffect::Flanking { hit_bonus },
-            },
-        );
-    }
-    world.insert_resource(Skills { definitions });
-    let mut attacker_skills = vec![melee_skill_id.clone()];
-    if let Some(id) = passive_id {
-        attacker_skills.push(id.to_owned());
-    }
+    world.insert_resource(ActiveSkills {
+        definitions: HashMap::from([(melee_skill_id.clone(), melee_skill)]),
+    });
+    // 每個案例將攻擊者選用的被動註冊到共用定義表，單位只保存技能 ID。
+    let attacker_passives = [("test_flanking", 2), ("test_pack_flanking", 4)]
+        .into_iter()
+        .filter(|(id, _)| passive_id == Some(*id))
+        .map(|(id, hit_bonus)| PassiveSkillDef {
+            id: id.to_owned(),
+            effect: PassiveSkillEffect::Flanking { hit_bonus },
+        })
+        .collect();
     let attacker = spawn_unit(
         &mut world,
         attacker_position,
         attacker_footprint,
         Team::Player,
-        attacker_skills,
+        vec![melee_skill_id.clone()],
+        attacker_passives,
     );
     spawn_unit(
         &mut world,
@@ -317,12 +321,14 @@ fn flanking_world(
         supporter_footprint,
         Team::Player,
         vec![melee_skill_id],
+        Vec::new(),
     );
     let target = spawn_unit(
         &mut world,
         target_position,
         target_footprint,
         Team::Enemy("test_enemy".into()),
+        Vec::new(),
         Vec::new(),
     );
     (world, attacker, target)

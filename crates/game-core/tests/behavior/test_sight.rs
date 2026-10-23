@@ -2,14 +2,16 @@ use crate::support::{
     ACTOR_ID, TARGET_ID, TEST_SKILL_ID, ascii_board, end_turn_and_continue, marked_cell,
     sight_game_in_range, unit,
 };
-use game_core::{Command, Game, GridPos, Phase, SkillEffect, Team};
+use game_core::{ActiveSkillEffect, Command, Game, GridPos, Phase, PowerSource, Team};
 
-fn sight_game(diagram: &str, effect: SkillEffect, target_team: Team) -> Game {
+fn sight_game(diagram: &str, effect: ActiveSkillEffect, target_team: Team) -> Game {
     sight_game_in_range(diagram, effect, target_team, 0, 20)
 }
 
-fn attack() -> SkillEffect {
-    SkillEffect::Attack {
+fn attack() -> ActiveSkillEffect {
+    ActiveSkillEffect::Attack {
+        power_source: PowerSource::Physical,
+        ranged: false,
         hit_bonus: 100,
         power_bonus: 0,
     }
@@ -21,19 +23,28 @@ fn all_skill_targets_require_sight() {
     for (effect, target_team) in [
         (attack(), Team::Enemy("test_enemy".into())),
         (
-            SkillEffect::Push { hit_bonus: 100 },
+            ActiveSkillEffect::Push {
+                ranged: false,
+                hit_bonus: 100,
+            },
             Team::Enemy("test_enemy".into()),
         ),
-        (SkillEffect::Heal { power_bonus: 1 }, Team::Player),
         (
-            SkillEffect::Mire {
+            ActiveSkillEffect::Heal {
+                power_source: PowerSource::Magical,
+                power_bonus: 1,
+            },
+            Team::Player,
+        ),
+        (
+            ActiveSkillEffect::Mire {
                 terrain: "wall".into(),
                 duration: 2,
             },
             Team::Enemy("test_enemy".into()),
         ),
     ] {
-        let ground = matches!(effect, SkillEffect::Mire { .. });
+        let ground = matches!(effect, ActiveSkillEffect::Mire { .. });
         let mut game = sight_game("A#T", effect, target_team);
         game.command(Command::Start).expect("戰鬥應可開始");
         let snapshot = game.snapshot(None);
@@ -114,19 +125,28 @@ fn skill_range_and_sight_require_the_same_origin_cell() {
         for (effect, target_team) in [
             (attack(), Team::Enemy("test_enemy".into())),
             (
-                SkillEffect::Push { hit_bonus: 100 },
+                ActiveSkillEffect::Push {
+                    ranged: false,
+                    hit_bonus: 100,
+                },
                 Team::Enemy("test_enemy".into()),
             ),
-            (SkillEffect::Heal { power_bonus: 1 }, Team::Player),
             (
-                SkillEffect::Mire {
+                ActiveSkillEffect::Heal {
+                    power_source: PowerSource::Magical,
+                    power_bonus: 1,
+                },
+                Team::Player,
+            ),
+            (
+                ActiveSkillEffect::Mire {
                     terrain: "wall".into(),
                     duration: 2,
                 },
                 Team::Enemy("test_enemy".into()),
             ),
         ] {
-            let ground = matches!(effect, SkillEffect::Mire { .. });
+            let ground = matches!(effect, ActiveSkillEffect::Mire { .. });
             let mut game = sight_game_in_range(diagram, effect, target_team, min_range, max_range);
             game.command(Command::Start).expect("戰鬥應可開始");
             let snapshot = game.snapshot(None);
@@ -176,7 +196,7 @@ fn temporary_terrain_blocks_sight_until_removed() {
     let diagram = "AXT";
     let mut game = sight_game(
         diagram,
-        SkillEffect::Mire {
+        ActiveSkillEffect::Mire {
             terrain: "wall".into(),
             duration: 2,
         },

@@ -8,7 +8,7 @@ id = "plain"
 layer = "ground"
 entry_rule = "walkable"
 
-[[skills]]
+[[active_skills]]
 id = "strike"
 power_source = "physical"
 ranged = false
@@ -19,10 +19,8 @@ hit_bonus = 100
 power_bonus = 1000
 
 # 掠奪沿用普通技能入口與行動限制，目標為相鄰貨物位置。
-[[skills]]
+[[active_skills]]
 id = "loot"
-power_source = "physical"
-ranged = false
 min_range = 1
 max_range = 1
 effect = "loot"
@@ -34,7 +32,7 @@ visual = "test.svg"
 hp = 10
 movement = 5
 initiative = 0
-skills = ["strike"]
+active_skills = ["strike"]
 
 [[unit_types]]
 id = "raider"
@@ -43,7 +41,7 @@ visual = "test.svg"
 hp = 10
 movement = 5
 initiative = 100
-skills = ["strike", "loot"]
+active_skills = ["strike", "loot"]
 
 [[unit_types]]
 id = "second_raider"
@@ -52,4 +50,4 @@ visual = "test.svg"
 hp = 10
 movement = 5
 initiative = 50
-skills = ["strike", "loot"]
+active_skills = ["strike", "loot"]

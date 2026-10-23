@@ -3,9 +3,9 @@ use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
+    ActiveSkillDef, ActiveSkillEffect, ActiveSkillPreview, ActiveSkillTargetKind, ActiveSkills,
     AiProfiles, AttackPreview, Board, Footprint, GridPos, HealingPreview, Hp, Id, Pos,
-    PreviousAttackTarget, SkillDef, SkillEffect, SkillPreview, SkillTargetKind, Skills,
-    TemporaryTerrains, Turn, Unit,
+    PreviousAttackTarget, TemporaryTerrains, Turn, Unit,
 };
 use crate::movement::{
     MovementOption, can_move, footprint_cell_distance, footprint_cells, footprint_distance,
@@ -45,9 +45,9 @@ pub(crate) fn resolve_profiles(
     Ok(AiProfiles { by_unit_type })
 }
 
-struct SkillPlan {
+struct ActiveSkillPlan {
     position_index: usize,
-    skill: SkillDef,
+    skill: ActiveSkillDef,
     target_cell: GridPos,
     target_id: i64,
     utility: f64,
@@ -69,27 +69,20 @@ impl Game {
             let profile = by_unit_type
                 .get(&unit.unit_type)
                 .expect("作者資料已解析所有單位種類的 AI 傾向");
-            let Skills { definitions } = self.world.resource::<Skills>();
-            let mut skills: Vec<_> = unit
-                .skills
+            let ActiveSkills { definitions } = self.world.resource::<ActiveSkills>();
+            let mut active_skills: Vec<_> = unit
+                .active_skills
                 .iter()
-                .filter_map(|id| {
-                    let skill = definitions.get(id).expect("作者資料已驗證技能引用");
-                    if target_kind(&skill.effect) == SkillTargetKind::Passive {
-                        None
-                    } else {
-                        Some(skill.clone())
-                    }
-                })
+                .map(|id| definitions.get(id).expect("作者資料已驗證技能引用").clone())
                 .collect();
-            skills.sort_by(|a, b| a.id.cmp(&b.id));
+            active_skills.sort_by(|a, b| a.id.cmp(&b.id));
             let mut positions =
                 movement_options(&self.world, entity, self.world.resource::<Turn>(), false);
-            let healing_focus = healing_focus(&self.world, entity, profile, &skills);
+            let healing_focus = healing_focus(&self.world, entity, profile, &active_skills);
             let skill_plan =
-                self.ai_skill_plan(entity, profile, &skills, &positions, healing_focus);
+                self.ai_skill_plan(entity, profile, &active_skills, &positions, healing_focus);
             let (position_index, action) = match skill_plan {
-                Some(SkillPlan {
+                Some(ActiveSkillPlan {
                     position_index,
                     skill,
                     target_cell,
@@ -104,7 +97,7 @@ impl Game {
                             &self.world,
                             entity,
                             profile,
-                            &skills,
+                            &active_skills,
                             &positions,
                             healing_focus,
                         ),
@@ -141,7 +134,7 @@ impl Game {
                 .remove::<PreviousAttackTarget>();
             match action {
                 Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
-                    let attack = target_kind(&skill.effect) == SkillTargetKind::Enemy;
+                    let attack = target_kind(&skill.effect) == ActiveSkillTargetKind::Enemy;
                     self.use_skill_at_cell(actor, cell, skill)?;
                     if attack && self.world.get_entity(entity).is_ok() {
                         self.world
@@ -162,14 +155,14 @@ impl Game {
         &self,
         actor: Entity,
         profile: &AiProfile,
-        skills: &[SkillDef],
+        active_skills: &[ActiveSkillDef],
         positions: &[MovementOption],
         healing_focus: Option<Entity>,
-    ) -> Option<SkillPlan> {
+    ) -> Option<ActiveSkillPlan> {
         if !can_use_skill(self.world.resource::<Turn>()) {
             return None;
         }
-        let mut best: Option<SkillPlan> = None;
+        let mut best: Option<ActiveSkillPlan> = None;
         for (
             position_index,
             MovementOption {
@@ -179,11 +172,11 @@ impl Game {
             },
         ) in positions.iter().enumerate()
         {
-            for skill in skills {
+            for skill in active_skills {
                 let preferred_distance = match preferred_skill_distance(
                     profile,
-                    skills,
-                    matches!(skill.effect, SkillEffect::Heal { .. }),
+                    active_skills,
+                    matches!(skill.effect, ActiveSkillEffect::Heal { .. }),
                 ) {
                     Some(distance) => distance,
                     None => continue,
@@ -216,7 +209,7 @@ impl Game {
                             Some(utility) => utility,
                             None => continue,
                         };
-                        let candidate = SkillPlan {
+                        let candidate = ActiveSkillPlan {
                             position_index,
                             skill: skill.clone(),
                             target_cell: cell,
@@ -257,7 +250,7 @@ fn skill_utility(
     profile: &AiProfile,
     position: GridPos,
     cell: GridPos,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
     preferred_distance: i32,
     healing_focus: Option<Entity>,
 ) -> Option<f64> {
@@ -267,7 +260,7 @@ fn skill_utility(
     let positioning = -(f64::from(footprint_cell_distance(position, footprint, cell))
         - f64::from(preferred_distance))
     .abs();
-    if matches!(skill.effect, SkillEffect::Mire { .. }) {
+    if matches!(skill.effect, ActiveSkillEffect::Mire { .. }) {
         if profile.positioning_weight == 0 {
             return None;
         }
@@ -297,7 +290,7 @@ fn skill_utility(
     }
     let preview = preview_unit_skill_from_position(world, actor, position, cell, skill).ok()?;
     match preview {
-        SkillPreview::Attack(preview) => {
+        ActiveSkillPreview::Attack(preview) => {
             if profile.damage_weight == 0 {
                 return None;
             }
@@ -314,7 +307,7 @@ fn skill_utility(
                     + positioning * f64::from(profile.positioning_weight),
             )
         }
-        SkillPreview::Healing(HealingPreview {
+        ActiveSkillPreview::Healing(HealingPreview {
             target: _,
             target_type: _,
             target_hp,
@@ -371,12 +364,12 @@ fn healing_focus(
     world: &World,
     actor: Entity,
     profile: &AiProfile,
-    skills: &[SkillDef],
+    active_skills: &[ActiveSkillDef],
 ) -> Option<Entity> {
     if profile.healing_weight == 0
-        || !skills
+        || !active_skills
             .iter()
-            .any(|skill| matches!(skill.effect, SkillEffect::Heal { .. }))
+            .any(|skill| matches!(skill.effect, ActiveSkillEffect::Heal { .. }))
     {
         return None;
     }
@@ -415,7 +408,7 @@ fn fallback_position(
     world: &World,
     actor: Entity,
     profile: &AiProfile,
-    skills: &[SkillDef],
+    active_skills: &[ActiveSkillDef],
     positions: &[MovementOption],
     healing_focus: Option<Entity>,
 ) -> usize {
@@ -454,7 +447,7 @@ fn fallback_position(
         .movement;
     let (first_budget, second_budget) = movement_budgets(world.resource::<Turn>(), allowance);
     let budget = first_budget + second_budget;
-    let desired = match preferred_skill_distance(profile, skills, healing_focus.is_some()) {
+    let desired = match preferred_skill_distance(profile, active_skills, healing_focus.is_some()) {
         Some(distance) => distance,
         None => return 0,
     };
@@ -477,7 +470,7 @@ fn fallback_position(
             let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
             let goal = world.get::<Pos>(target).expect("目標應具有位置").0;
             // 共用跨技能偏好；每條路徑仍須朝該技能可施放的合法射程前進。
-            let position = skills
+            let position = active_skills
                 .iter()
                 .filter(|skill| relevant_positioning_skill(profile, skill, healing_focus.is_some()))
                 .filter_map(|skill| {
@@ -540,10 +533,10 @@ fn fallback_position(
 /// 攻擊與治療分別比較可用技能，避免自我治療的零射程影響接敵站位。
 fn preferred_skill_distance(
     profile: &AiProfile,
-    skills: &[SkillDef],
+    active_skills: &[ActiveSkillDef],
     healing: bool,
 ) -> Option<i32> {
-    let ranges = skills
+    let ranges = active_skills
         .iter()
         .filter(|skill| relevant_positioning_skill(profile, skill, healing));
     match profile.distance_preference {
@@ -552,14 +545,14 @@ fn preferred_skill_distance(
     }
 }
 
-fn relevant_positioning_skill(profile: &AiProfile, skill: &SkillDef, healing: bool) -> bool {
+fn relevant_positioning_skill(profile: &AiProfile, skill: &ActiveSkillDef, healing: bool) -> bool {
     match skill.effect {
-        SkillEffect::Heal { .. } => healing && profile.healing_weight > 0,
-        SkillEffect::Attack { .. } | SkillEffect::Push { .. } => {
+        ActiveSkillEffect::Heal { .. } => healing && profile.healing_weight > 0,
+        ActiveSkillEffect::Attack { .. } | ActiveSkillEffect::Push { .. } => {
             !healing && profile.damage_weight > 0
         }
-        SkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
-        SkillEffect::Flanking { .. } | SkillEffect::Loot => false,
+        ActiveSkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
+        ActiveSkillEffect::Loot => false,
     }
 }
 

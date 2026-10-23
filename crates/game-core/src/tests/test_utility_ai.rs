@@ -141,10 +141,13 @@ fn archer_positions_before_shooting() {
 // 驗證治癒者比較所有技能並優先治療重傷隊友，不受技能清單順序影響。
 #[test]
 fn healer_prioritizes_healing_independent_of_skill_order() {
-    for skills in [["heal", "shot"], ["shot", "heal"]] {
+    for active_skills in [["heal", "shot"], ["shot", "heal"]] {
         let mut definitions = definitions();
-        unit_type_mut(&mut definitions, "healer")["skills"] =
-            toml::Value::Array(skills.map(|skill| toml::Value::String(skill.into())).into());
+        unit_type_mut(&mut definitions, "healer")["active_skills"] = toml::Value::Array(
+            active_skills
+                .map(|skill| toml::Value::String(skill.into()))
+                .into(),
+        );
         let mut game = game(
             &definitions,
             ".LA..T......",
@@ -156,7 +159,11 @@ fn healer_prioritizes_healing_independent_of_skill_order() {
         );
         wound(&mut game, ALLY_ID, 20);
         let snapshot = act(&mut game);
-        assert_eq!(action(&snapshot), Some(("heal", ALLY_ID)), "{skills:?}");
+        assert_eq!(
+            action(&snapshot),
+            Some(("heal", ALLY_ID)),
+            "{active_skills:?}"
+        );
         assert_eq!(
             game.world
                 .get::<Hp>(game.entity(ALLY_ID).expect("隊友應仍存在"))
@@ -385,7 +392,7 @@ fn unit_type_uses_referenced_profile() {
         let mut definitions = definitions();
         let archer = unit_type_mut(&mut definitions, "archer");
         archer["ai_profile"] = profile.into();
-        archer["skills"] = toml::Value::Array(vec!["shot".into(), "melee".into()]);
+        archer["active_skills"] = toml::Value::Array(vec!["shot".into(), "melee".into()]);
         let mut game = duel(&definitions, "archer", "..A..T......");
         let target = game.entity(TARGET_ID).expect("ASCII 的 T 應建立目標單位");
         let target_x = game.world.get::<Pos>(target).expect("目標應有位置").0.x;
@@ -452,7 +459,7 @@ fn pursuit_survives_replanning_after_spikes() {
         profile_mut(&mut definitions, "archer")["pursuit_weight"] = pursuit.into();
         profile_mut(&mut definitions, "archer")["distance_preference"] = "near".into();
         unit_type_mut(&mut definitions, "archer")["movement"] = 3.into();
-        let shot = definitions["skills"]
+        let shot = definitions["active_skills"]
             .as_array_mut()
             .expect("測試定義應包含技能")
             .iter_mut()
@@ -577,7 +584,7 @@ fn distance_preference_tracks_skill_range() {
     ] {
         let mut definitions = definitions();
         profile_mut(&mut definitions, "archer")["distance_preference"] = preference.into();
-        let shot = definitions["skills"]
+        let shot = definitions["active_skills"]
             .as_array_mut()
             .expect("測試定義應包含技能陣列")
             .iter_mut()
@@ -608,7 +615,7 @@ fn ai_minimum_range_uses_any_actor_cell() {
     actor_type.insert("width".into(), 2.into());
     actor_type.insert("height".into(), 2.into());
     actor_type.insert("movement".into(), 0.into());
-    let shot = definitions["skills"]
+    let shot = definitions["active_skills"]
         .as_array_mut()
         .expect("測試定義應包含技能陣列")
         .iter_mut()
@@ -632,7 +639,7 @@ fn ai_minimum_range_uses_any_actor_cell() {
 // 驗證第一段內可攻擊就施放，否則利用兩段接近射程但不施放，且沒有攻擊技能不追敵。
 #[test]
 fn fallback_uses_available_skill_ranges() {
-    for (skills, diagram, expected_x, expected_action) in [
+    for (active_skills, diagram, expected_x, expected_action) in [
         (vec!["shot"], "..A....T....", 3, Some(("shot", TARGET_ID))),
         (vec!["shot"], "..A......T..", 5, None),
         (vec!["shot"], "..A.......T.", 6, None),
@@ -640,19 +647,23 @@ fn fallback_uses_available_skill_ranges() {
         (vec!["heal"], "..A.......T.", 2, None),
     ] {
         let mut definitions = definitions();
-        unit_type_mut(&mut definitions, "archer")["skills"] = toml::Value::Array(
-            skills
+        unit_type_mut(&mut definitions, "archer")["active_skills"] = toml::Value::Array(
+            active_skills
                 .iter()
                 .map(|skill| toml::Value::String((*skill).into()))
                 .collect(),
         );
         let mut game = duel(&definitions, "archer", diagram);
         let snapshot = act(&mut game);
-        assert_eq!(actor_x(&snapshot), expected_x, "{skills:?}, 地圖 {diagram}");
+        assert_eq!(
+            actor_x(&snapshot),
+            expected_x,
+            "{active_skills:?}, 地圖 {diagram}"
+        );
         assert_eq!(
             action(&snapshot),
             expected_action,
-            "{skills:?}, 地圖 {diagram}"
+            "{active_skills:?}, 地圖 {diagram}"
         );
     }
 }

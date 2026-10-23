@@ -590,7 +590,7 @@ fn equipment_authoring_round_trip_preserves_definitions() {
     let before: Value = serde_json::from_str(&json).expect("原始 JSON 應有效");
     let after: Value = serde_json::from_str(&reloaded).expect("重新載入的 JSON 應有效");
     assert_eq!(before, after);
-    assert_eq!(before["skills"][1]["power_source"], "magical");
+    assert_eq!(before["active_skills"][1]["power_source"], "magical");
     assert_eq!(before["equipment"][2]["slot"], "two_hand");
 }
 
@@ -855,7 +855,10 @@ fn editor_skill_power_sources_survive_document_saving() {
         .expect("切換技能效果應成功");
         let definitions = edited_definitions(&result);
         let result: Value = serde_json::from_str(&result).expect("編輯結果應為有效 JSON");
-        assert_eq!(result["definitions"]["skills"][0]["power_source"], source);
+        assert_eq!(
+            result["definitions"]["active_skills"][0]["power_source"],
+            source
+        );
         let definitions_json = serde_json::to_string(&definitions).expect("定義應可序列化");
         let map_json = serde_json::to_string(&map()).expect("地圖應可序列化");
         let (definitions_toml, map_toml) =

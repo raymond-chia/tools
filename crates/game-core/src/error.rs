@@ -168,7 +168,7 @@ pub(crate) fn json_serialize(message: String) -> GameError {
 pub(crate) fn invalid_unit_type(id: &str) -> GameError {
     GameError::new(
         "invalid_unit_type",
-        format!("{id} {}", "的 id、HP 與佔用尺寸無效"),
+        format!("{id} {}", "的 id、HP、閃避或佔用尺寸無效"),
     )
 }
 
@@ -226,6 +226,16 @@ pub(crate) fn skill_terrain_not_overlay(id: &str) -> GameError {
     GameError::new(
         "skill_terrain_not_overlay",
         format!("{id} {}", "產生的地形必須是 overlay"),
+    )
+}
+
+pub(crate) fn terrain_values_require_walkable(kind: &str) -> GameError {
+    GameError::new(
+        "terrain_values_require_walkable",
+        format!(
+            "{kind} {}",
+            "只有可通行地形可以設定 damage、extra_movement_cost、dodge_penalty、block_penalty"
+        ),
     )
 }
 

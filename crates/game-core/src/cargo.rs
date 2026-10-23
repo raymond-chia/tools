@@ -1,7 +1,7 @@
 //! 貨物的目標驗證、掠奪、離場與死亡掉落。
 use crate::error::{self, GameError};
 use crate::game::Game;
-use crate::model::{Cargo, CargoState, Footprint, GridPos, Id, Pos, SkillDef, Team, Unit};
+use crate::model::{ActiveSkillDef, Cargo, CargoState, Footprint, GridPos, Id, Pos, Team, Unit};
 use bevy_ecs::prelude::{Entity, World};
 
 pub(crate) fn validate_loot(
@@ -9,10 +9,10 @@ pub(crate) fn validate_loot(
     actor: Entity,
     origin: GridPos,
     target: GridPos,
-    skill: &SkillDef,
+    skill: &ActiveSkillDef,
 ) -> Result<(), GameError> {
     let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
-    if !unit.skills.contains(&skill.id) {
+    if !unit.active_skills.contains(&skill.id) {
         return Err(error::unit_cannot_use_skill());
     }
     let id = world.get::<Id>(actor).expect("施放者應具有 Id").0;
@@ -42,7 +42,7 @@ impl Game {
         entity: Entity,
         id: i64,
         target: GridPos,
-        skill: &SkillDef,
+        skill: &ActiveSkillDef,
     ) -> Result<(), GameError> {
         let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
         validate_loot(&self.world, entity, origin, target, skill)?;

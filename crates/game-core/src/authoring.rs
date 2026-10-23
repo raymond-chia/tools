@@ -1,7 +1,7 @@
 //! 原始資料格式，供編輯器與正式遊戲載入文件時使用。
 //! 驗證與建局準備集中於 validation；單位與地形配置會轉成執行期資料，勝敗條件組則由核心直接使用。
 pub(crate) mod validation;
-use super::{GridPos, SkillDef, Team, TerrainPlacement, TerrainTypeDef};
+use super::{ActiveSkillDef, GridPos, PassiveSkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
 use crate::model::default_one;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,9 @@ pub struct Definitions {
     #[serde(default)]
     pub terrain_types: Vec<TerrainTypeDef>,
     #[serde(default)]
-    pub skills: Vec<SkillDef>,
+    pub active_skills: Vec<ActiveSkillDef>,
+    #[serde(default)]
+    pub passive_skills: Vec<PassiveSkillDef>,
     #[serde(default)]
     pub unit_types: Vec<UnitType>,
 }
@@ -57,7 +59,7 @@ pub struct UnitType {
     #[serde(default)]
     pub accessory: String,
     #[serde(default)]
-    pub skills: Vec<String>,
+    pub active_skills: Vec<String>,
     /// 與全體預設合併，同效果由此清單覆蓋；空清單保留預設。
     #[serde(default)]
     pub passive_skills: Vec<String>,

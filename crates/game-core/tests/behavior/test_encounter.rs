@@ -6,7 +6,7 @@ const DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
 
 fn encounter_game(diagram: &str, reverse: bool) -> (Game, Vec<(char, i64)>) {
     let mut definitions: toml::Value = toml::from_str(DEFINITIONS).expect("測試定義應為有效 TOML");
-    let shot = definitions["skills"]
+    let shot = definitions["active_skills"]
         .as_array_mut()
         .expect("測試定義應包含技能")
         .iter_mut()

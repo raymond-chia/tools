@@ -2,9 +2,9 @@
 use super::EditorError;
 use crate::authoring::{Definitions, EquipmentDef, EquipmentSlot, Map, UnitType, validation};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
-use crate::skill::target_kind;
 use crate::{
-    SkillDef, SkillEffect, SkillTargetKind, TerrainEntryRule, TerrainLayer, TerrainTypeDef,
+    ActiveSkillDef, ActiveSkillEffect, PassiveSkillDef, PassiveSkillEffect, TerrainEntryRule,
+    TerrainLayer, TerrainTypeDef,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -58,6 +58,7 @@ enum DefinitionEdit {
 #[serde(tag = "effect", rename_all = "snake_case")]
 enum EffectSelection {
     Attack,
+    Loot,
     Push,
     Mire { terrain: String },
     Heal,
@@ -121,20 +122,29 @@ pub fn edit_definition_from_json(
                 .map(|unit| (unit.id.clone(), equipment_choices(unit, &equipment)))
                 .collect();
             let active_skill_ids: Vec<_> = definitions
-                .skills
+                .active_skills
                 .iter()
-                .filter(|skill| target_kind(&skill.effect) != SkillTargetKind::Passive)
                 .map(|skill| &skill.id)
                 .collect();
             let passive_skill_ids: Vec<_> = definitions
-                .skills
+                .passive_skills
                 .iter()
-                .filter(|skill| target_kind(&skill.effect) == SkillTargetKind::Passive)
-                .map(|skill| &skill.id)
+                .map(|passive| &passive.id)
+                .collect();
+            // 技能頁先列主動再列被動；拖曳只調整同組內的順序。
+            let skill_entries: Vec<_> = active_skill_ids
+                .iter()
+                .map(|id| serde_json::json!({"id": id, "move_targets": active_skill_ids}))
+                .chain(
+                    passive_skill_ids
+                        .iter()
+                        .map(|id| serde_json::json!({"id": id, "move_targets": passive_skill_ids})),
+                )
                 .collect();
             return Ok(serde_json::json!({
                 "terrain_ids": terrain_ids,
                 "terrain_entries": terrain_entries,
+                "skill_entries": skill_entries,
                 "equipment_choices": equipment_choices,
                 "active_skill_ids": active_skill_ids,
                 "passive_skill_ids": passive_skill_ids,
@@ -153,7 +163,11 @@ pub fn edit_definition_from_json(
                 move_entry(&mut definitions.unit_types, &id, offset, |_, _| true)?
             }
             DefinitionCategory::Skills => {
-                move_entry(&mut definitions.skills, &id, offset, |_, _| true)?
+                if position(&definitions.active_skills, &id).is_some() {
+                    move_entry(&mut definitions.active_skills, &id, offset, |_, _| true)?
+                } else {
+                    move_entry(&mut definitions.passive_skills, &id, offset, |_, _| true)?
+                }
             }
             DefinitionCategory::TerrainTypes => {
                 // 地形固定依圖層分組；拖曳只調整同圖層內的順序。
@@ -177,40 +191,69 @@ pub fn edit_definition_from_json(
             DefinitionCategory::UnitTypes => {
                 update_entry(&mut definitions.unit_types, &id, &key, value)?
             }
-            DefinitionCategory::Skills => update_entry(&mut definitions.skills, &id, &key, value)?,
+            DefinitionCategory::Skills => {
+                if position(&definitions.active_skills, &id).is_some() {
+                    update_entry(&mut definitions.active_skills, &id, &key, value)?
+                } else {
+                    update_entry(&mut definitions.passive_skills, &id, &key, value)?
+                }
+            }
             DefinitionCategory::TerrainTypes => {
                 update_entry(&mut definitions.terrain_types, &id, &key, value)?
             }
         },
         DefinitionEdit::ChangeSkillEffect { id, effect } => {
-            let skill = definitions
-                .skills
-                .iter_mut()
-                .find(|skill| skill.id == id)
-                .ok_or_else(|| EditorError::operation("not_found", &id, Vec::new()))?;
-            skill.effect = match effect {
-                EffectSelection::Attack => SkillEffect::Attack {
+            let active = position(&definitions.active_skills, &id);
+            let passive = position(&definitions.passive_skills, &id);
+            if active.is_none() && passive.is_none() {
+                return Err(EditorError::operation("not_found", &id, Vec::new()));
+            }
+            // 主被動互換時移到另一組清單末端；主動技能之間切換保留射程。
+            let active_effect = match effect {
+                EffectSelection::Attack => Some(ActiveSkillEffect::Attack {
+                    power_source: crate::PowerSource::Physical,
+                    ranged: false,
                     hit_bonus: 0,
                     power_bonus: 0,
-                },
-                EffectSelection::Push => SkillEffect::Push { hit_bonus: 0 },
-                EffectSelection::Mire { terrain } => SkillEffect::Mire {
+                }),
+                EffectSelection::Loot => Some(ActiveSkillEffect::Loot),
+                EffectSelection::Push => Some(ActiveSkillEffect::Push {
+                    ranged: false,
+                    hit_bonus: 0,
+                }),
+                EffectSelection::Mire { terrain } => Some(ActiveSkillEffect::Mire {
                     terrain,
                     duration: crate::model::default_duration(),
-                },
-                EffectSelection::Heal => SkillEffect::Heal { power_bonus: 0 },
-                EffectSelection::Flanking => SkillEffect::Flanking { hit_bonus: 0 },
+                }),
+                EffectSelection::Heal => Some(ActiveSkillEffect::Heal {
+                    power_source: crate::PowerSource::Magical,
+                    power_bonus: 0,
+                }),
+                EffectSelection::Flanking => None,
             };
-            if target_kind(&skill.effect) == SkillTargetKind::Passive {
-                skill.ranged = false;
-                skill.min_range = 0;
-                skill.max_range = 0;
+            match (active_effect, active, passive) {
+                (Some(effect), Some(index), _) => definitions.active_skills[index].effect = effect,
+                (Some(effect), None, _) => {
+                    remove_entry(&mut definitions.passive_skills, &id);
+                    definitions.active_skills.push(ActiveSkillDef {
+                        id,
+                        min_range: crate::model::default_one(),
+                        max_range: crate::model::default_one(),
+                        effect,
+                    });
+                }
+                (None, _, Some(index)) => {
+                    definitions.passive_skills[index].effect =
+                        PassiveSkillEffect::Flanking { hit_bonus: 0 }
+                }
+                (None, _, None) => {
+                    remove_entry(&mut definitions.active_skills, &id);
+                    definitions.passive_skills.push(PassiveSkillDef {
+                        id,
+                        effect: PassiveSkillEffect::Flanking { hit_bonus: 0 },
+                    });
+                }
             }
-            skill.power_source = if matches!(skill.effect, SkillEffect::Heal { .. }) {
-                crate::PowerSource::Magical
-            } else {
-                crate::PowerSource::Physical
-            };
         }
         DefinitionEdit::Add { category, id } => {
             validate_new_id(&definitions, category, &id)?;
@@ -252,16 +295,16 @@ pub fn edit_definition_from_json(
                     off_hand: String::new(),
                     armor: String::new(),
                     accessory: String::new(),
-                    skills: Vec::new(),
+                    active_skills: Vec::new(),
                     passive_skills: Vec::new(),
                 }),
-                DefinitionCategory::Skills => definitions.skills.push(SkillDef {
-                    power_source: crate::PowerSource::default(),
+                DefinitionCategory::Skills => definitions.active_skills.push(ActiveSkillDef {
                     id,
-                    ranged: false,
                     min_range: crate::model::default_one(),
                     max_range: crate::model::default_one(),
-                    effect: SkillEffect::Attack {
+                    effect: ActiveSkillEffect::Attack {
+                        power_source: crate::PowerSource::default(),
+                        ranged: false,
                         hit_bonus: 0,
                         power_bonus: 0,
                     },
@@ -295,7 +338,11 @@ pub fn edit_definition_from_json(
                     duplicate_entry(&mut definitions.unit_types, id, &source_id)?
                 }
                 DefinitionCategory::Skills => {
-                    duplicate_entry(&mut definitions.skills, id, &source_id)?
+                    if position(&definitions.active_skills, &source_id).is_some() {
+                        duplicate_entry(&mut definitions.active_skills, id, &source_id)?
+                    } else {
+                        duplicate_entry(&mut definitions.passive_skills, id, &source_id)?
+                    }
                 }
                 DefinitionCategory::TerrainTypes => {
                     duplicate_entry(&mut definitions.terrain_types, id, &source_id)?
@@ -311,7 +358,10 @@ pub fn edit_definition_from_json(
             match category {
                 DefinitionCategory::Equipment => remove_entry(&mut definitions.equipment, &id),
                 DefinitionCategory::UnitTypes => remove_entry(&mut definitions.unit_types, &id),
-                DefinitionCategory::Skills => remove_entry(&mut definitions.skills, &id),
+                DefinitionCategory::Skills => {
+                    remove_entry(&mut definitions.active_skills, &id);
+                    remove_entry(&mut definitions.passive_skills, &id);
+                }
                 DefinitionCategory::TerrainTypes => {
                     remove_entry(&mut definitions.terrain_types, &id)
                 }
@@ -377,7 +427,7 @@ fn check_removal(
             }
             for unit in &definitions.unit_types {
                 if unit
-                    .skills
+                    .active_skills
                     .iter()
                     .chain(unit.passive_skills.iter())
                     .any(|skill| skill == id)
@@ -387,8 +437,8 @@ fn check_removal(
             }
         }
         DefinitionCategory::TerrainTypes => {
-            for skill in &definitions.skills {
-                if matches!(&skill.effect, SkillEffect::Mire { terrain, duration: _ } if terrain == id)
+            for skill in &definitions.active_skills {
+                if matches!(&skill.effect, ActiveSkillEffect::Mire { terrain, duration: _ } if terrain == id)
                 {
                     references.push(("skills", skill.id.clone()));
                 }
@@ -410,7 +460,10 @@ fn contains_id(definitions: &Definitions, category: DefinitionCategory, id: &str
     match category {
         DefinitionCategory::Equipment => position(&definitions.equipment, id).is_some(),
         DefinitionCategory::UnitTypes => position(&definitions.unit_types, id).is_some(),
-        DefinitionCategory::Skills => position(&definitions.skills, id).is_some(),
+        DefinitionCategory::Skills => {
+            position(&definitions.active_skills, id).is_some()
+                || position(&definitions.passive_skills, id).is_some()
+        }
         DefinitionCategory::TerrainTypes => position(&definitions.terrain_types, id).is_some(),
     }
 }
@@ -439,7 +492,16 @@ impl Identified for UnitType {
     }
 }
 
-impl Identified for SkillDef {
+impl Identified for ActiveSkillDef {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn set_id(&mut self, id: String) {
+        self.id = id;
+    }
+}
+
+impl Identified for PassiveSkillDef {
     fn id(&self) -> &str {
         &self.id
     }

@@ -1,15 +1,17 @@
 use super::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, TEST_SKILL_ID, ascii_board, sight_game_in_range,
 };
-use crate::model::{Footprint, Pos, Skills};
-use crate::{Command, Game, GridPos, SkillEffect, Team};
+use crate::model::{ActiveSkills, Footprint, Pos};
+use crate::{ActiveSkillEffect, Command, Game, GridPos, PowerSource, Team};
 
-fn sight_game(diagram: &str, effect: SkillEffect, target_team: Team) -> Game {
+fn sight_game(diagram: &str, effect: ActiveSkillEffect, target_team: Team) -> Game {
     sight_game_in_range(diagram, effect, target_team, 0, 20)
 }
 
-fn attack() -> SkillEffect {
-    SkillEffect::Attack {
+fn attack() -> ActiveSkillEffect {
+    ActiveSkillEffect::Attack {
+        power_source: PowerSource::Physical,
+        ranged: false,
         hit_bonus: 100,
         power_bonus: 0,
     }
@@ -224,7 +226,7 @@ fn ground_skill_preview_requires_range_and_sight() {
     ] {
         let game = sight_game_in_range(
             diagram,
-            SkillEffect::Mire {
+            ActiveSkillEffect::Mire {
                 terrain: "wall".into(),
                 duration: 2,
             },
@@ -235,7 +237,7 @@ fn ground_skill_preview_requires_range_and_sight() {
         let actor = game.entity(ACTOR_ID).expect("施放者應存在");
         let origin = game.world.get::<Pos>(actor).expect("施放者應有位置").0;
         let cell = marked_cell(diagram, 'T');
-        let skill = &game.world.resource::<Skills>().definitions[TEST_SKILL_ID];
+        let skill = &game.world.resource::<ActiveSkills>().definitions[TEST_SKILL_ID];
         let result = crate::skill::validate_cell_skill_from_position(
             &game.world,
             actor,
