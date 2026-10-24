@@ -39,6 +39,27 @@ func test_move_contact_starts_initiative_immediately() -> void:
 	assert_int(battle.state.turn.actor).is_equal(3)
 	assert_int(int(battle.state.round)).is_equal(1)
 
+# 驗證位移待出刀時重選自己保留技能，切換隊友則清除選取，讓隊友可正常移動。
+func test_switch_player_after_step_clears_skill_selection_and_allows_move() -> void:
+	battle.ui.action_buttons.step_through_the_sedge.pressed.emit()
+	battle.world.primary_clicked.emit(0, Vector2i(2, 1))
+	await wait_until_idle(battle, runner)
+	assert_str(battle.state.turn.phase).is_equal("pending_strike")
+	assert_str(battle.pending_action).is_equal("step_through_the_sedge")
+	battle.ui.turn_order_focus_requested.emit(1)
+	assert_str(battle.pending_action).is_equal("step_through_the_sedge")
+	battle.ui.turn_order_focus_requested.emit(2)
+	assert_int(battle.state.turn.actor).is_equal(2)
+	assert_str(battle.pending_action).is_empty()
+	battle.world.primary_clicked.emit(0, Vector2i(2, 2))
+	await wait_until_idle(battle, runner)
+	assert_str(battle.state.turn.phase).is_equal("moving")
+	assert_int(int(battle.state.turn.move_remaining)).is_equal(1)
+	for unit in battle.state.units:
+		if unit.id == 2:
+			assert_int(int(unit.x)).is_equal(2)
+			assert_int(int(unit.y)).is_equal(2)
+
 # 驗證遠距攻擊接敵後，其餘玩家完成探索陣營回合，下一輪敵人才進入先攻順序。
 func test_attack_contact_waits_for_player_faction() -> void:
 	assert_str(battle.state.battle_mode).is_equal("exploring")

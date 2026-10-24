@@ -119,13 +119,9 @@ impl Game {
             movement_segments_used,
         } = turn;
         let spent = self.execute_move_path(e, a, &path);
-        if self.world.get_entity(e).is_err() {
+        if !self.finish_position_change(e, a) {
             return Ok(());
         }
-        if self.escape_with_cargo(e, a) {
-            return Ok(());
-        }
-        self.activate_enemies_near(&[e]);
         let Turn {
             actor: _,
             phase,
@@ -147,6 +143,14 @@ impl Game {
             *phase = Phase::Moving;
         }
         Ok(())
+    }
+    /// 普通移動與位移技能共用落點收尾；回傳單位是否仍在場上。
+    pub(crate) fn finish_position_change(&mut self, entity: Entity, actor: i64) -> bool {
+        if self.world.get_entity(entity).is_err() || self.escape_with_cargo(entity, actor) {
+            return false;
+        }
+        self.activate_enemies_near(&[entity]);
+        true
     }
     /// 玩家與敵方共用逐格移動及地形傷害結算；回傳實際消耗的移動成本。
     pub(crate) fn execute_move_path(&mut self, e: Entity, a: i64, path: &[GridPos]) -> u32 {

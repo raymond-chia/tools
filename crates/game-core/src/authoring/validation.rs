@@ -611,6 +611,7 @@ fn validate_numeric_ranges(
                     power_source,
                     power_bonus,
                 } => (0, Some((power_source, power_bonus))),
+                ActiveSkillEffect::MoveThenAttack => (0, Some((crate::PowerSource::Physical, 0))),
                 ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => {
                     continue;
                 }

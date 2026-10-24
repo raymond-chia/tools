@@ -569,7 +569,7 @@ fn relevant_positioning_skill(profile: &AiProfile, skill: &ActiveSkillDef, heali
             !healing && profile.damage_weight > 0
         }
         ActiveSkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
-        ActiveSkillEffect::Loot => false,
+        ActiveSkillEffect::Loot | ActiveSkillEffect::MoveThenAttack => false,
     }
 }
 

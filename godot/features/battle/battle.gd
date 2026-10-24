@@ -70,6 +70,8 @@ func send(command: Dictionary) -> bool:
 	if value.is_empty():
 		present()
 		return false
+	if not state.is_empty() and state.turn.actor != value.turn.actor:
+		pending_action = ""
 	state = value
 	pending_display_log.append_array(value.log)
 	status = ""
@@ -188,7 +190,8 @@ func use_pending_action(cell: Vector2i) -> void:
 	var actor: int = state.turn.actor
 	var succeeded := send({"type": "skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action})
 	if succeeded:
-		pending_action = ""
+		if state.turn.phase != "pending_strike":
+			pending_action = ""
 		present()
 
 func _on_end_turn_requested() -> void:

@@ -158,6 +158,7 @@ SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit 
 SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
 SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；發生碰撞時，參與碰撞的單位皆受到碰撞傷害,Effect: Pushes the target %d tile on hit; all units involved in a collision take collision damage
+SKILL_EFFECT_STEP_THROUGH_THE_SEDGE,穿過單位移至視線內空格，再選擇近戰攻擊或結束回合。,Pass through units to a visible empty cell; then make a melee attack or end the turn.
 SKILL_HIT_BONUS,命中加值：%+d,Hit modifier: %+d
 SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
 SKILL_NAME_FLANKING,夾擊,Flanking
@@ -168,6 +169,7 @@ SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
 SKILL_NAME_POWER_STRIKE,強力一擊,Power Strike
 SKILL_NAME_RANGED_ATTACK,遠程攻擊,Ranged Attack
 SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
+SKILL_NAME_STEP_THROUGH_THE_SEDGE,踏莎行,Step Through the Sedge
 SKILL_POWER_BONUS,威力加值：%+d,Power modifier: %+d
 SKILL_POWER_SOURCE_MAGICAL,威力來源：魔法,Power source: Magical
 SKILL_POWER_SOURCE_PHYSICAL,威力來源：物理,Power source: Physical
@@ -202,6 +204,7 @@ TERRAIN_NAME_SPIKES,地刺,Spikes
 UNIT_NAME_ARIA,亞莉亞・劍士,Aria · Fighter
 UNIT_NAME_LYRA,萊拉・遊俠,Lyra · Ranger
 UNIT_NAME_MIRA,米菈・術士,Mira · Mage
+UNIT_NAME_SWORDSMAN,流浪劍客,Wandering Swordsman
 UNIT_NAME_WOLF,荒原狼,Wasteland Wolf
 UNIT_SIZE_LARGE,大型,Large
 UNIT_SIZE_NORMAL,一般,Normal

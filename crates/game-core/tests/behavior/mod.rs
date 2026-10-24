@@ -7,3 +7,4 @@ mod test_movement;
 mod test_outcome_conditions;
 mod test_sight;
 mod test_skill;
+mod test_step_through_the_sedge;

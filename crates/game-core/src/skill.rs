@@ -7,7 +7,8 @@ use crate::model::{
     ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
     AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint, GridPos,
     HealingPreview, HealthSegmentsView, Hp, Id, Log, MovementTransition, PassiveSkillDef,
-    PassiveSkillEffect, PassiveSkills, Phase, Pos, RollDegree, TerrainGrid, Turn, Unit,
+    PassiveSkillEffect, PassiveSkills, PendingStrike, Phase, Pos, RollDegree, TerrainGrid, Turn,
+    Unit,
 };
 use crate::movement::{fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell};
 use crate::terrain::{
@@ -16,7 +17,99 @@ use crate::terrain::{
 };
 use bevy_ecs::prelude::{Entity, World};
 
+/// 待出刀時，同一技能改用普通近戰；其他技能不能打斷這段行動。
+pub(crate) fn skill_for_current_stage(
+    world: &World,
+    actor: Entity,
+    skill: &ActiveSkillDef,
+) -> Result<ActiveSkillDef, GameError> {
+    if let Some(PendingStrike { skill: pending }) = world.get::<PendingStrike>(actor) {
+        if pending != &skill.id {
+            return Err(error::cannot_use_skill());
+        }
+        return Ok(ActiveSkillDef {
+            id: skill.id.clone(),
+            min_range: 1,
+            max_range: 1,
+            effect: ActiveSkillEffect::Attack {
+                power_source: crate::PowerSource::Physical,
+                ranged: false,
+                hit_bonus: 0,
+                power_bonus: 0,
+            },
+        });
+    }
+    Ok(skill.clone())
+}
+
+fn validate_step_destination(
+    world: &World,
+    actor: Entity,
+    destination: GridPos,
+    skill: &ActiveSkillDef,
+) -> Result<(), GameError> {
+    let unit = world.get::<Unit>(actor).expect("施放者應具有單位資料");
+    if !unit.active_skills.contains(&skill.id) {
+        return Err(error::unit_cannot_use_skill());
+    }
+    let origin = world.get::<Pos>(actor).expect("施放者應具有位置").0;
+    let footprint = *world.get::<Footprint>(actor).expect("施放者應具有尺寸");
+    let grid = world.resource::<TerrainGrid>();
+    if !fits(grid.width, grid.height, destination, footprint) {
+        return Err(error::target_cell_out_of_bounds());
+    }
+    if destination == origin
+        || footprint_on_impassable(grid, destination, footprint)
+        || world.iter_entities().any(|entity| {
+            entity.id() != actor
+                && entity
+                    .get::<Pos>()
+                    .zip(entity.get::<Footprint>())
+                    .is_some_and(|(position, other)| {
+                        overlap(destination, footprint, position.0, *other)
+                    })
+        })
+    {
+        return Err(error::target_cell_impassable());
+    }
+    crate::sight::check_sight_in_range(
+        grid,
+        origin,
+        footprint,
+        destination,
+        skill.min_range,
+        skill.max_range,
+    )
+}
+
 impl Game {
+    fn move_then_attack(
+        &mut self,
+        entity: Entity,
+        actor: i64,
+        destination: GridPos,
+        skill: &ActiveSkillDef,
+    ) -> Result<(), GameError> {
+        validate_step_destination(&self.world, entity, destination, skill)?;
+        let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
+        self.world
+            .get_mut::<Pos>(entity)
+            .expect("施放者應具有位置")
+            .0 = destination;
+        self.movements.push(MovementTransition {
+            unit_id: actor,
+            path: vec![origin, destination],
+            log_insert_index: self.world.resource::<Log>().0.len(),
+        });
+        self.apply_terrain_entry(entity, actor, TerrainEntry::Movement);
+        if self.finish_position_change(entity, actor) {
+            self.world.entity_mut(entity).insert(PendingStrike {
+                skill: skill.id.clone(),
+            });
+            self.world.resource_mut::<Turn>().phase = Phase::PendingStrike;
+        }
+        Ok(())
+    }
     /// 預覽與施放共用：確認輪到該單位且本回合仍可使用技能，回傳施放者。
     fn skill_caster(&self, actor: i64) -> Result<Entity, GameError> {
         self.ensure(actor)?;
@@ -37,7 +130,8 @@ impl Game {
             .get(skill_id)
             .ok_or_else(|| error::unknown_skill(skill_id))?;
         let position = self.world.get::<Pos>(attacker).expect("施放者應具有位置").0;
-        preview_unit_skill_from_position(&self.world, attacker, position, target_cell, skill)
+        let skill = skill_for_current_stage(&self.world, attacker, skill)?;
+        preview_unit_skill_from_position(&self.world, attacker, position, target_cell, &skill)
     }
     pub(crate) fn use_skill_at_cell(
         &mut self,
@@ -46,6 +140,10 @@ impl Game {
         skill: ActiveSkillDef,
     ) -> Result<(), GameError> {
         let ae = self.skill_caster(actor)?;
+        let skill = skill_for_current_stage(&self.world, ae, &skill)?;
+        if matches!(skill.effect, ActiveSkillEffect::MoveThenAttack) {
+            return self.move_then_attack(ae, actor, position, &skill);
+        }
         if matches!(skill.effect, ActiveSkillEffect::Loot) {
             return self.loot_cargo(ae, actor, position, &skill);
         }
@@ -624,7 +722,9 @@ pub(crate) fn target_kind(effect: &ActiveSkillEffect) -> ActiveSkillTargetKind {
             ActiveSkillTargetKind::Enemy
         }
         ActiveSkillEffect::Heal { .. } => ActiveSkillTargetKind::Ally,
-        ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => ActiveSkillTargetKind::Cell,
+        ActiveSkillEffect::Mire { .. }
+        | ActiveSkillEffect::Loot
+        | ActiveSkillEffect::MoveThenAttack => ActiveSkillTargetKind::Cell,
     }
 }
 
@@ -739,7 +839,9 @@ fn validate_unit_skill_target_from_position(
             power_source: *power_source,
             power_bonus: *power_bonus,
         },
-        ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => {
+        ActiveSkillEffect::Mire { .. }
+        | ActiveSkillEffect::Loot
+        | ActiveSkillEffect::MoveThenAttack => {
             return Err(error::unit_cannot_use_skill());
         }
     };
@@ -1041,7 +1143,8 @@ pub(crate) fn can_use_skill(turn: &Turn) -> bool {
         movement_remaining: _,
         movement_segments_used,
     } = turn;
-    matches!(phase, Phase::Ready | Phase::Moving) && *movement_segments_used == 0
+    matches!(phase, Phase::PendingStrike)
+        || matches!(phase, Phase::Ready | Phase::Moving) && *movement_segments_used == 0
         || matches!(phase, Phase::AfterMove) && *movement_segments_used == 1
 }
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
@@ -1142,7 +1245,9 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
     let ranges: Vec<_> = active_skills
         .iter()
         .map(|skill_id| definitions.get(skill_id).expect("單位技能引用已驗證"))
+        .filter_map(|skill| skill_for_current_stage(w, e, skill).ok())
         .map(|skill| {
+            let skill = &skill;
             let ActiveSkillDef {
                 id,
                 min_range,
@@ -1163,15 +1268,20 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
                 for x in left..right {
                     let cell = GridPos { x, y };
                     let cell_distance = footprint_cell_distance(position, footprint, cell);
-                    if crate::sight::check_sight_in_range(
-                        w.resource::<TerrainGrid>(),
-                        position,
-                        footprint,
-                        cell,
-                        *min_range,
-                        *max_range,
-                    )
-                    .is_ok()
+                    let in_range = if matches!(effect, ActiveSkillEffect::MoveThenAttack) {
+                        validate_step_destination(w, e, cell, skill).is_ok()
+                    } else {
+                        crate::sight::check_sight_in_range(
+                            w.resource::<TerrainGrid>(),
+                            position,
+                            footprint,
+                            cell,
+                            *min_range,
+                            *max_range,
+                        )
+                        .is_ok()
+                    };
+                    if in_range
                         && (target_kind(effect) != ActiveSkillTargetKind::Enemy
                             || cell_distance > 0)
                     {
@@ -1251,6 +1361,13 @@ fn skill_details(skill: &ActiveSkillDef, board: &Board) -> ActiveSkillDetailsVie
             None,
             Some(*power_bonus),
             ActiveSkillDetailEffect::Heal,
+        ),
+        ActiveSkillEffect::MoveThenAttack => (
+            None,
+            None,
+            None,
+            None,
+            ActiveSkillDetailEffect::MoveThenAttack,
         ),
         ActiveSkillEffect::Loot => (None, None, None, None, ActiveSkillDetailEffect::Loot),
     };

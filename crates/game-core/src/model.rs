@@ -156,7 +156,13 @@ pub enum Phase {
     Ready,
     Moving,
     AfterMove,
+    PendingStrike,
     Ended,
+}
+
+#[derive(Component)]
+pub(crate) struct PendingStrike {
+    pub(crate) skill: String,
 }
 
 #[derive(Resource, Clone)]
@@ -227,6 +233,7 @@ pub enum ActiveSkillEffect {
         #[serde(default)]
         power_bonus: i32,
     },
+    MoveThenAttack,
     Push {
         #[serde(default)]
         ranged: bool,
@@ -497,6 +504,7 @@ pub enum ActiveSkillTargetKind {
 pub enum ActiveSkillDetailEffect {
     Loot,
     Attack,
+    MoveThenAttack,
     Push {
         distance: i32,
     },

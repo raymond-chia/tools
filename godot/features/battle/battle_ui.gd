@@ -614,6 +614,8 @@ func localized_skill_details(skill: Dictionary) -> String:
 		lines.append(tr("SKILL_EFFECT_PUSH") % int(effect.distance))
 	elif effect.kind == "mire":
 		lines.append(tr("SKILL_EFFECT_MIRE") % [int(effect.extra_movement_cost), int(effect.duration)])
+	elif effect.kind == "move_then_attack":
+		lines.append(tr("SKILL_EFFECT_STEP_THROUGH_THE_SEDGE"))
 	elif effect.kind == "heal":
 		lines.append(tr("SKILL_EFFECT_HEAL"))
 	return "\n".join(lines)

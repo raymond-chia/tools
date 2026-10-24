@@ -83,12 +83,6 @@ impl Game {
             Command::SelectUnit { actor } => self.select_exploration_unit(actor),
             Command::Move { actor, x, y } => {
                 self.move_to(actor, GridPos { x, y })?;
-                if self.world.resource::<Exploration>().mode == BattleMode::Exploring
-                    && self.has_active_enemy()
-                {
-                    self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
-                    self.roll_round();
-                }
                 Ok(())
             }
             Command::Skill { actor, x, y, skill } => {
@@ -99,7 +93,12 @@ impl Game {
                     .get(&skill)
                     .cloned()
                     .ok_or_else(|| error::unknown_skill(&skill))?;
-                let attack = target_kind(&definition.effect) == ActiveSkillTargetKind::Enemy;
+                let staged_skill = crate::skill::skill_for_current_stage(
+                    &self.world,
+                    self.entity(actor).ok_or(error::missing_actor())?,
+                    &definition,
+                )?;
+                let attack = target_kind(&staged_skill.effect) == ActiveSkillTargetKind::Enemy;
                 let triggered_enemies = if attack
                     && self.world.resource::<Exploration>().mode == BattleMode::Exploring
                 {
@@ -132,6 +131,7 @@ impl Game {
             }
             Command::Delay { actor, after } => self.delay(actor, after),
         }?;
+        self.update_exploration_encounter();
         self.outcome();
         if self.world.resource::<Exploration>().mode != BattleMode::Combat
             && self.world.resource::<Turn>().phase == Phase::Ended
@@ -140,6 +140,19 @@ impl Game {
             self.advance_exploration();
         }
         Ok(())
+    }
+    /// 所有命令共用遭遇切換；分段技能先完成當前行動，再開始戰鬥排序。
+    fn update_exploration_encounter(&mut self) {
+        if self.world.resource::<Exploration>().mode == BattleMode::Exploring
+            && self.has_active_enemy()
+        {
+            if self.world.resource::<Turn>().phase == Phase::PendingStrike {
+                self.world.resource_mut::<Exploration>().mode = BattleMode::AttackPending;
+            } else {
+                self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
+                self.roll_round();
+            }
+        }
     }
     pub fn set_random_seed(&mut self, seed: u64) {
         self.world.resource_mut::<Random>().0 = seed;
@@ -429,6 +442,11 @@ impl Game {
             round: _,
         } = self.world.resource::<Encounter>();
         let actor = order.get(*cursor).copied();
+        if let Some(entity) = actor.and_then(|id| self.entity(id)) {
+            self.world
+                .entity_mut(entity)
+                .remove::<crate::model::PendingStrike>();
+        }
         let remaining = actor
             .and_then(|a| self.entity(a))
             .map(|e| {
@@ -446,6 +464,16 @@ impl Game {
         }
     }
     pub(crate) fn finish(&mut self) {
+        if let Some(entity) = self
+            .world
+            .resource::<Turn>()
+            .actor
+            .and_then(|actor| self.entity(actor))
+        {
+            self.world
+                .entity_mut(entity)
+                .remove::<crate::model::PendingStrike>();
+        }
         self.world.resource_mut::<Turn>().phase = Phase::Ended;
     }
     /// 扣除生命值；歸零時立即移除單位，因此呼叫端應改用回傳值而非再讀取 Hp。

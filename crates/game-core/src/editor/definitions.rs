@@ -57,6 +57,7 @@ enum DefinitionEdit {
 #[derive(Deserialize)]
 #[serde(tag = "effect", rename_all = "snake_case")]
 enum EffectSelection {
+    MoveThenAttack,
     Attack,
     Loot,
     Push,
@@ -216,6 +217,7 @@ pub fn edit_definition_from_json(
                     hit_bonus: 0,
                     power_bonus: 0,
                 }),
+                EffectSelection::MoveThenAttack => Some(ActiveSkillEffect::MoveThenAttack),
                 EffectSelection::Loot => Some(ActiveSkillEffect::Loot),
                 EffectSelection::Push => Some(ActiveSkillEffect::Push {
                     ranged: false,
