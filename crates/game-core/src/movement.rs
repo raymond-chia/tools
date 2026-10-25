@@ -21,6 +21,12 @@ struct MovePlan {
     path: Vec<GridPos>,
 }
 
+/// 位置變更已完成地形與落點結算；呼叫端只處理自己的行動階段。
+pub(crate) struct PositionChangeResult {
+    pub(crate) movement_cost: u32,
+    pub(crate) unit_remains: bool,
+}
+
 impl Game {
     pub fn preview_move(&self, actor: i64, end: GridPos) -> Result<MovePreview, GameError> {
         let MovePlan {
@@ -118,8 +124,11 @@ impl Game {
             movement_remaining: _,
             movement_segments_used,
         } = turn;
-        let spent = self.execute_move_path(e, a, &path);
-        if !self.finish_position_change(e, a) {
+        let PositionChangeResult {
+            movement_cost: spent,
+            unit_remains,
+        } = self.change_position(e, a, &path, TerrainEntry::Movement);
+        if !unit_remains {
             return Ok(());
         }
         let Turn {
@@ -144,16 +153,15 @@ impl Game {
         }
         Ok(())
     }
-    /// 普通移動與位移技能共用落點收尾；回傳單位是否仍在場上。
-    pub(crate) fn finish_position_change(&mut self, entity: Entity, actor: i64) -> bool {
-        if self.world.get_entity(entity).is_err() || self.escape_with_cargo(entity, actor) {
-            return false;
-        }
-        self.activate_enemies_near(&[entity]);
-        true
-    }
-    /// 玩家與敵方共用逐格移動及地形傷害結算；回傳實際消耗的移動成本。
-    pub(crate) fn execute_move_path(&mut self, e: Entity, a: i64, path: &[GridPos]) -> u32 {
+    /// 所有已驗證的位置變更共用此入口：逐格結算地形，再處理撤離與遭遇。
+    /// 路徑含起點；位移技能與推擊只傳入起點及落點，普通移動則傳入完整路徑。
+    pub(crate) fn change_position(
+        &mut self,
+        e: Entity,
+        a: i64,
+        path: &[GridPos],
+        entry: TerrainEntry,
+    ) -> PositionChangeResult {
         let footprint = *self
             .world
             .get::<Footprint>(e)
@@ -170,7 +178,7 @@ impl Game {
                 .expect("已建立的戰鬥單位應具有 Pos 元件")
                 .0 = p;
             actual_path.push(p);
-            let downed = self.apply_terrain_entry(e, a, TerrainEntry::Movement);
+            let downed = self.apply_terrain_entry(e, a, entry);
             if ends_movement || downed {
                 break;
             }
@@ -182,7 +190,14 @@ impl Game {
                 log_insert_index,
             });
         }
-        spent
+        let unit_remains = self.world.get_entity(e).is_ok() && !self.escape_with_cargo(e, a);
+        if unit_remains {
+            self.activate_enemies_near(&[e]);
+        }
+        PositionChangeResult {
+            movement_cost: spent,
+            unit_remains,
+        }
     }
     fn move_plan(&self, actor: i64, end: GridPos) -> Result<MovePlan, GameError> {
         self.ensure(actor)?;

@@ -2,7 +2,9 @@ use crate::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, end_turn_and_continue, map_from_ascii_board,
     marked_cell, unit,
 };
-use game_core::{CargoState, Command, Game, GridPos, Outcome, Phase, Team, authoring};
+use game_core::{
+    CargoState, CombatLogEvent, Command, Game, GridPos, Outcome, Phase, Team, authoring,
+};
 use serde_json::{Value, json};
 
 const DEFINITIONS: &str = include_str!("../data/cargo_objective_definitions.toml");
@@ -236,7 +238,7 @@ fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
     assert_eq!(snapshot.outcome, Outcome::Ongoing);
 }
 
-// 驗證攜貨到出口或在出口取貨皆立即判敗，空手到出口與攜貨到其他位置則繼續。
+// 驗證走到、被推到出口或在出口取貨時依攜貨狀態離場判敗，空手與非出口則繼續。
 #[test]
 fn cargo_and_exit_resolve_outcome() {
     enum LootTiming {
@@ -245,7 +247,12 @@ fn cargo_and_exit_resolve_outcome() {
         None,
     }
 
-    for (name, diagram, loot_timing, destination, expected_outcome) in [
+    enum Arrival {
+        Move,
+        Push,
+    }
+
+    for (name, diagram, loot_timing, arrival, destination, expected_outcome) in [
         // 攜貨者抵達地圖內部的 E，同樣離場並立即判敗。
         (
             "攜貨抵達內部出口",
@@ -255,6 +262,7 @@ fn cargo_and_exit_resolve_outcome() {
             ......
             ",
             LootTiming::BeforeMovement,
+            Arrival::Move,
             'E',
             Outcome::Defeat,
         ),
@@ -267,6 +275,7 @@ fn cargo_and_exit_resolve_outcome() {
             .....
             ",
             LootTiming::BeforeMovement,
+            Arrival::Move,
             'E',
             Outcome::Defeat,
         ),
@@ -279,6 +288,7 @@ fn cargo_and_exit_resolve_outcome() {
             .....
             ",
             LootTiming::BeforeMovement,
+            Arrival::Move,
             'E',
             Outcome::Defeat,
         ),
@@ -291,6 +301,7 @@ fn cargo_and_exit_resolve_outcome() {
             .....
             ",
             LootTiming::None,
+            Arrival::Move,
             'E',
             Outcome::Ongoing,
         ),
@@ -303,6 +314,7 @@ fn cargo_and_exit_resolve_outcome() {
             .....
             ",
             LootTiming::BeforeMovement,
+            Arrival::Move,
             'D',
             Outcome::Ongoing,
         ),
@@ -313,6 +325,33 @@ fn cargo_and_exit_resolve_outcome() {
             A..TCE
             ",
             LootTiming::AfterMovement,
+            Arrival::Move,
+            'E',
+            Outcome::Defeat,
+        ),
+        // 空手被推到出口時，強盜與地面貨物均保留，戰鬥繼續。
+        (
+            "空手被推到出口",
+            "
+            .C..
+            ATE.
+            ....
+            ",
+            LootTiming::None,
+            Arrival::Push,
+            'E',
+            Outcome::Ongoing,
+        ),
+        // 攜貨被推到出口時立即離場，貨物逃離並判敗。
+        (
+            "攜貨被推到出口",
+            "
+            .C..
+            ATE.
+            ....
+            ",
+            LootTiming::BeforeMovement,
+            Arrival::Push,
             'E',
             Outcome::Defeat,
         ),
@@ -320,9 +359,41 @@ fn cargo_and_exit_resolve_outcome() {
         let (mut game, layout) = game(diagram);
         if matches!(loot_timing, LootTiming::BeforeMovement) {
             loot(&mut game, marked_cell(&layout, 'C'));
-            next_raider_turn(&mut game);
         }
-        move_to(&mut game, TARGET_ID, marked_cell(&layout, destination));
+        match arrival {
+            Arrival::Move => {
+                if matches!(loot_timing, LootTiming::BeforeMovement) {
+                    next_raider_turn(&mut game);
+                }
+                move_to(&mut game, TARGET_ID, marked_cell(&layout, destination));
+            }
+            Arrival::Push => {
+                next_actor(&mut game, ACTOR_ID);
+                game.set_random_seed(1);
+                let GridPos { x, y } = marked_cell(&layout, 'T');
+                let snapshot = game
+                    .command(Command::Skill {
+                        actor: ACTOR_ID,
+                        x,
+                        y,
+                        skill: "push".into(),
+                    })
+                    .expect("護衛應可將強盜推到出口");
+                assert_eq!(
+                    snapshot.log.iter().any(|event| matches!(
+                        event,
+                        CombatLogEvent::Skill {
+                            target: TARGET_ID,
+                            pushed: true,
+                            push_blocked: false,
+                            ..
+                        }
+                    )),
+                    true,
+                    "{name}：推擊應命中且未被阻擋"
+                );
+            }
+        }
         if matches!(loot_timing, LootTiming::AfterMovement) {
             loot(&mut game, marked_cell(&layout, 'C'));
         }
@@ -348,9 +419,27 @@ fn cargo_and_exit_resolve_outcome() {
                 .command(Command::Continue)
                 .expect("結束後命令應維持結果");
             assert_eq!(snapshot.outcome, Outcome::Defeat, "{name}");
-        } else if matches!(loot_timing, LootTiming::BeforeMovement) {
-            // 先取貨再走到非出口時，強盜應留在場上，貨物也仍在身上。
-            assert_eq!(carrying(&game, TARGET_ID), true, "{name}");
+        } else {
+            let raider = unit(&snapshot, TARGET_ID);
+            assert_eq!(
+                GridPos {
+                    x: raider.x,
+                    y: raider.y
+                },
+                marked_cell(&layout, destination),
+                "{name}"
+            );
+            let carrying = matches!(loot_timing, LootTiming::BeforeMovement);
+            assert_eq!(raider.carrying_cargo, carrying, "{name}");
+            assert_eq!(
+                snapshot.cargo.as_ref().expect("地圖已設定貨物").items,
+                vec![if carrying {
+                    CargoState::Carried(TARGET_ID)
+                } else {
+                    CargoState::Ground(marked_cell(&layout, 'C'))
+                }],
+                "{name}"
+            );
         }
     }
 }

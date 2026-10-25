@@ -18,6 +18,15 @@ effect = "attack"
 hit_bonus = 100
 power_bonus = 1000
 
+# 推擊出口案例使用無直接傷害的推擊，避免先擊倒攜貨者。
+[[active_skills]]
+id = "push"
+min_range = 1
+max_range = 1
+effect = "push"
+ranged = false
+hit_bonus = 100
+
 # 掠奪沿用普通技能入口與行動限制，目標為相鄰貨物位置。
 [[active_skills]]
 id = "loot"
@@ -32,7 +41,7 @@ visual = "test.svg"
 hp = 10
 movement = 5
 initiative = 0
-active_skills = ["strike"]
+active_skills = ["strike", "push"]
 
 [[unit_types]]
 id = "raider"

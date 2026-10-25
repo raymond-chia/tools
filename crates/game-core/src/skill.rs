@@ -6,11 +6,12 @@ use crate::model::{
     ActiveSkillDef, ActiveSkillDetailEffect, ActiveSkillDetailsView, ActiveSkillEffect,
     ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
     AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint, GridPos,
-    HealingPreview, HealthSegmentsView, Hp, Id, Log, MovementTransition, PassiveSkillDef,
-    PassiveSkillEffect, PassiveSkills, PendingStrike, Phase, Pos, RollDegree, TerrainGrid, Turn,
-    Unit,
+    HealingPreview, HealthSegmentsView, Hp, Id, Log, PassiveSkillDef, PassiveSkillEffect,
+    PassiveSkills, PendingStrike, Phase, Pos, RollDegree, TerrainGrid, Turn, Unit,
 };
-use crate::movement::{fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell};
+use crate::movement::{
+    PositionChangeResult, fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell,
+};
 use crate::terrain::{
     TerrainEntry, add_temporary_terrain, footprint_blocks_push, footprint_on_impassable,
     footprint_terrain_penalty, terrain_type,
@@ -92,17 +93,16 @@ impl Game {
     ) -> Result<(), GameError> {
         validate_step_destination(&self.world, entity, destination, skill)?;
         let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
-        self.world
-            .get_mut::<Pos>(entity)
-            .expect("施放者應具有位置")
-            .0 = destination;
-        self.movements.push(MovementTransition {
-            unit_id: actor,
-            path: vec![origin, destination],
-            log_insert_index: self.world.resource::<Log>().0.len(),
-        });
-        self.apply_terrain_entry(entity, actor, TerrainEntry::Movement);
-        if self.finish_position_change(entity, actor) {
+        let PositionChangeResult {
+            movement_cost: _,
+            unit_remains,
+        } = self.change_position(
+            entity,
+            actor,
+            &[origin, destination],
+            TerrainEntry::Movement,
+        );
+        if unit_remains {
             self.world.entity_mut(entity).insert(PendingStrike {
                 skill: skill.id.clone(),
             });
@@ -273,7 +273,7 @@ impl Game {
             mut max_hp,
             mut downed,
         } = self.apply_damage(te, target, damage);
-        let mut pushed = false;
+        let mut push_path = None;
         let mut push_blocked = false;
         let mut collision_damage = 0;
         let mut collision_units = Vec::new();
@@ -319,17 +319,7 @@ impl Game {
             };
             let can_push = terrain_allows_push && blocking_units.is_empty();
             if can_push {
-                self.world
-                    .get_mut::<Pos>(te)
-                    .expect("已建立的戰鬥單位應具有 Pos 元件")
-                    .0 = destination;
-                // 推移在技能結果之後、進入地形之前呈現，包含推入後陣亡的單位。
-                self.movements.push(MovementTransition {
-                    unit_id: target,
-                    path: vec![current, destination],
-                    log_insert_index: self.world.resource::<Log>().0.len() + 1,
-                });
-                pushed = true;
+                push_path = Some([current, destination]);
             } else {
                 push_blocked = true;
                 collision_damage = gameplay_config::COLLISION_DAMAGE;
@@ -381,6 +371,7 @@ impl Game {
                 }
             }
         }
+        let pushed = push_path.is_some();
         self.world
             .resource_mut::<Log>()
             .0
@@ -419,8 +410,9 @@ impl Game {
                 collision_damage,
                 collision_units,
             });
-        if pushed {
-            self.apply_terrain_entry(te, target, TerrainEntry::Push);
+        if let Some(path) = push_path {
+            // 技能結果先入日誌，位置變更入口再記錄推移與地形效果的呈現順序。
+            self.change_position(te, target, &path, TerrainEntry::Push);
         }
         self.finish();
         Ok(())
