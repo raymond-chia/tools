@@ -1,4 +1,5 @@
-//! Utility AI：先評估第一段移動與技能組合，無法施放時再利用兩段移動接近。
+//! Utility AI：貨物目標優先，其餘評估第一段移動與技能，無法施放時再利用兩段移動接近。
+mod cargo;
 use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
@@ -8,9 +9,9 @@ use crate::model::{
     PreviousAttackTarget, TerrainGrid, Turn, Unit,
 };
 use crate::movement::{
-    MovementOption, can_move, footprint_blocked, footprint_cell_distance, footprint_cells,
-    footprint_distance, full_board_paths, movement_budgets, movement_options, occupied_cells,
-    toward_skill_range, unit_at_cell,
+    MovementOption, PathPriority, can_move, footprint_blocked, footprint_cell_distance,
+    footprint_cells, footprint_distance, full_board_paths, movement_budgets, movement_options,
+    occupied_cells, toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
     can_use_skill, preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
@@ -55,6 +56,17 @@ struct ActiveSkillPlan {
     utility: f64,
 }
 
+struct AiAction {
+    skill: ActiveSkillDef,
+    target_cell: GridPos,
+    attack_target: Option<i64>,
+}
+
+struct AiTurnPlan {
+    movement: MovementOption,
+    action: Option<AiAction>,
+}
+
 impl Game {
     pub(crate) fn run_ai_turn(&mut self) -> Result<(), GameError> {
         loop {
@@ -78,43 +90,18 @@ impl Game {
                 .map(|id| definitions.get(id).expect("作者資料已驗證技能引用").clone())
                 .collect();
             active_skills.sort_by(|a, b| a.id.cmp(&b.id));
-            let mut positions =
-                movement_options(&self.world, entity, self.world.resource::<Turn>(), false);
-            let healing_focus = healing_focus(&self.world, entity, profile, &active_skills);
-            let skill_plan =
-                self.ai_skill_plan(entity, profile, &active_skills, &positions, healing_focus);
-            let (position_index, action) = match skill_plan {
-                Some(ActiveSkillPlan {
-                    position_index,
-                    skill,
-                    target_cell,
-                    target_id,
-                    utility: _,
-                }) => (position_index, Some((skill, target_cell, target_id))),
-                None => {
-                    positions =
-                        movement_options(&self.world, entity, self.world.resource::<Turn>(), true);
-                    (
-                        fallback_position(
-                            &self.world,
-                            entity,
-                            profile,
-                            &active_skills,
-                            &positions,
-                            healing_focus,
-                        ),
-                        None,
-                    )
-                }
-            };
-            let MovementOption {
-                position,
-                path,
-                cost: _,
-            } = &positions[position_index];
+            let AiTurnPlan {
+                movement:
+                    MovementOption {
+                        position,
+                        path,
+                        cost: _,
+                    },
+                action,
+            } = self.ai_turn_plan(entity, profile, &active_skills);
             if path.len() > 1 {
                 // 與玩家共用移動成本、階段、地形傷害及遭遇啟動流程。
-                self.move_along(actor, path.clone())?;
+                self.move_along(actor, path)?;
                 if self.world.get_entity(entity).is_err() {
                     return Ok(());
                 }
@@ -126,7 +113,7 @@ impl Game {
                 if action.is_none()
                     && terrain_ends_movement(
                         self.world.resource::<TerrainGrid>(),
-                        *position,
+                        position,
                         footprint,
                     )
                     && can_move(self.world.resource::<Turn>())
@@ -139,19 +126,71 @@ impl Game {
                 .entity_mut(entity)
                 .remove::<PreviousAttackTarget>();
             match action {
-                Some((skill, cell, target_id)) if can_use_skill(self.world.resource::<Turn>()) => {
+                Some(AiAction {
+                    skill,
+                    target_cell,
+                    attack_target,
+                }) if can_use_skill(self.world.resource::<Turn>()) => {
                     let attack = target_kind(&skill.effect) == ActiveSkillTargetKind::Enemy;
-                    self.use_skill_at_cell(actor, cell, skill)?;
+                    self.use_skill_at_cell(actor, target_cell, skill)?;
                     if attack && self.world.get_entity(entity).is_ok() {
-                        self.world
-                            .entity_mut(entity)
-                            .insert(PreviousAttackTarget(target_id));
+                        if let Some(target) = attack_target {
+                            self.world
+                                .entity_mut(entity)
+                                .insert(PreviousAttackTarget(target));
+                        }
                     }
                     return Ok(());
                 }
                 _ => {
                     self.finish();
                     return Ok(());
+                }
+            }
+        }
+    }
+
+    fn ai_turn_plan(
+        &self,
+        actor: Entity,
+        profile: &AiProfile,
+        active_skills: &[ActiveSkillDef],
+    ) -> AiTurnPlan {
+        if let Some(plan) = self.ai_cargo_turn_plan(actor, profile, active_skills) {
+            return plan;
+        }
+        let mut positions =
+            movement_options(&self.world, actor, self.world.resource::<Turn>(), false);
+        let healing_focus = healing_focus(&self.world, actor, profile, active_skills);
+        match self.ai_skill_plan(actor, profile, active_skills, &positions, healing_focus) {
+            Some(ActiveSkillPlan {
+                position_index,
+                skill,
+                target_cell,
+                target_id,
+                utility: _,
+            }) => AiTurnPlan {
+                movement: positions.swap_remove(position_index),
+                action: Some(AiAction {
+                    skill,
+                    target_cell,
+                    attack_target: Some(target_id),
+                }),
+            },
+            None => {
+                positions =
+                    movement_options(&self.world, actor, self.world.resource::<Turn>(), true);
+                let index = fallback_position(
+                    &self.world,
+                    actor,
+                    profile,
+                    active_skills,
+                    &positions,
+                    healing_focus,
+                );
+                AiTurnPlan {
+                    movement: positions.swap_remove(index),
+                    action: None,
                 }
             }
         }
@@ -481,7 +520,13 @@ fn fallback_position(
         } else {
             (current_grid, &occupied)
         };
-        let search = full_board_paths(planning_grid, planning_blocked, start, footprint);
+        let search = full_board_paths(
+            planning_grid,
+            planning_blocked,
+            start,
+            footprint,
+            PathPriority::Safety,
+        );
         // 依距離與 ID 選擇有合法施放路徑的敵人；治療仍優先接近既定的重傷隊友。
         for &target in &targets {
             let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");

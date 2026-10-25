@@ -348,17 +348,22 @@ struct PathState {
     position: GridPos,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum PathPriority {
+    Safety,
+    MovementCost,
+}
+
 #[derive(Eq)]
 struct Node {
     movement: u32,
     state: PathState,
+    priority: (u32, u32),
 }
 impl Ord for Node {
     fn cmp(&self, o: &Self) -> Ordering {
-        o.state
-            .danger
-            .cmp(&self.state.danger)
-            .then_with(|| o.movement.cmp(&self.movement))
+        o.priority
+            .cmp(&self.priority)
             .then_with(|| self.state.position.x.cmp(&o.state.position.x))
             .then_with(|| self.state.position.y.cmp(&o.state.position.y))
     }
@@ -370,7 +375,7 @@ impl PartialOrd for Node {
 }
 impl PartialEq for Node {
     fn eq(&self, o: &Self) -> bool {
-        self.movement == o.movement && self.state == o.state
+        self.priority == o.priority && self.state == o.state
     }
 }
 
@@ -384,6 +389,7 @@ fn paths(
     start: GridPos,
     f: Footprint,
     budget: u32,
+    priority: PathPriority,
 ) -> Paths {
     let start_state = PathState {
         danger: 0,
@@ -396,8 +402,14 @@ fn paths(
     let mut heap = BinaryHeap::from([Node {
         movement: 0,
         state: start_state,
+        priority: (0, 0),
     }]);
-    while let Some(Node { movement, state }) = heap.pop() {
+    while let Some(Node {
+        movement,
+        state,
+        priority: _,
+    }) = heap.pop()
+    {
         if movement
             > *dist
                 .get(&state)
@@ -437,6 +449,10 @@ fn paths(
                 heap.push(Node {
                     movement: next_movement,
                     state: next_state,
+                    priority: match priority {
+                        PathPriority::Safety => (next_state.danger, next_movement),
+                        PathPriority::MovementCost => (next_movement, next_state.danger),
+                    },
                 })
             }
         }
@@ -451,7 +467,14 @@ pub(crate) fn find_path(
     f: Footprint,
     b: u32,
 ) -> Option<Vec<GridPos>> {
-    let search = paths(w.resource::<TerrainGrid>(), &occupied_cells(w, e), s, f, b);
+    let search = paths(
+        w.resource::<TerrainGrid>(),
+        &occupied_cells(w, e),
+        s,
+        f,
+        b,
+        PathPriority::Safety,
+    );
     reconstruct_path(&search, s, end)
 }
 
@@ -511,7 +534,14 @@ pub(crate) fn movement_options(
     let grid = world.resource::<TerrainGrid>();
     let blocked = occupied_cells(world, entity);
     let first = if first_budget > 0 {
-        Some(paths(grid, &blocked, start, footprint, first_budget))
+        Some(paths(
+            grid,
+            &blocked,
+            start,
+            footprint,
+            first_budget,
+            PathPriority::Safety,
+        ))
     } else {
         None
     };
@@ -522,6 +552,7 @@ pub(crate) fn movement_options(
             start,
             footprint,
             first_budget + second_budget,
+            PathPriority::Safety,
         ))
     } else {
         None
@@ -570,6 +601,7 @@ pub(crate) fn full_board_paths(
     blocked: &HashSet<GridPos>,
     s: GridPos,
     f: Footprint,
+    priority: PathPriority,
 ) -> Paths {
     let Footprint {
         width: footprint_width,
@@ -580,7 +612,42 @@ pub(crate) fn full_board_paths(
         .fold(0_u32, |total, cell| {
             total.saturating_add(footprint_movement_cost(grid, cell, f))
         });
-    paths(grid, blocked, s, f, search_budget)
+    paths(grid, blocked, s, f, search_budget, priority)
+}
+
+/// 從共用全圖搜尋結果選出實際移動成本最低的合法終點。
+pub(crate) fn shortest_route(
+    grid: &TerrainGrid,
+    search: &Paths,
+    start: GridPos,
+    footprint: Footprint,
+    accepts: impl Fn(GridPos) -> bool,
+) -> Option<MovementOption> {
+    let Paths { best, previous: _ } = search;
+    best.keys()
+        .copied()
+        .filter(|position| accepts(*position))
+        .map(|position| {
+            let path =
+                reconstruct_path(search, start, position).expect("全圖搜尋中的終點應可重建路徑");
+            let cost = path
+                .iter()
+                .skip(1)
+                .map(|cell| footprint_movement_cost(grid, *cell, footprint))
+                .sum();
+            MovementOption {
+                position,
+                path,
+                cost,
+            }
+        })
+        .min_by_key(
+            |MovementOption {
+                 position,
+                 path: _,
+                 cost,
+             }| (*cost, position.y, position.x),
+        )
 }
 
 pub(crate) fn toward_skill_range(
@@ -633,8 +700,14 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     let f = *w
         .get::<Footprint>(e)
         .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let Paths { best, previous: _ } =
-        paths(w.resource::<TerrainGrid>(), &occupied_cells(w, e), p, f, b);
+    let Paths { best, previous: _ } = paths(
+        w.resource::<TerrainGrid>(),
+        &occupied_cells(w, e),
+        p,
+        f,
+        b,
+        PathPriority::Safety,
+    );
     let mut v: Vec<_> = best.into_keys().collect();
     v.sort_by_key(|p| (p.y, p.x));
     v

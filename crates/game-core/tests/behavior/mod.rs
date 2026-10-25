@@ -1,5 +1,6 @@
 mod test_alliances;
 mod test_authoring;
+mod test_cargo_ai;
 mod test_cargo_objective;
 mod test_encounter;
 mod test_equipment;
