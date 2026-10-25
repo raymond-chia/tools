@@ -236,10 +236,16 @@ fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
     assert_eq!(snapshot.outcome, Outcome::Ongoing);
 }
 
-// 驗證邊界與內部出口皆可離場，是否攜貨、移動落點與其他敵人是否存活共同決定判敗。
+// 驗證攜貨到出口或在出口取貨皆立即判敗，空手到出口與攜貨到其他位置則繼續。
 #[test]
-fn raider_movement_resolves_cargo_escape() {
-    for (name, diagram, should_loot, destination, expected_outcome) in [
+fn cargo_and_exit_resolve_outcome() {
+    enum LootTiming {
+        BeforeMovement,
+        AfterMovement,
+        None,
+    }
+
+    for (name, diagram, loot_timing, destination, expected_outcome) in [
         // 攜貨者抵達地圖內部的 E，同樣離場並立即判敗。
         (
             "攜貨抵達內部出口",
@@ -248,7 +254,7 @@ fn raider_movement_resolves_cargo_escape() {
             .ACTE.
             ......
             ",
-            true,
+            LootTiming::BeforeMovement,
             'E',
             Outcome::Defeat,
         ),
@@ -260,7 +266,7 @@ fn raider_movement_resolves_cargo_escape() {
             .ACTE
             .....
             ",
-            true,
+            LootTiming::BeforeMovement,
             'E',
             Outcome::Defeat,
         ),
@@ -272,7 +278,7 @@ fn raider_movement_resolves_cargo_escape() {
             .ACTE
             .....
             ",
-            true,
+            LootTiming::BeforeMovement,
             'E',
             Outcome::Defeat,
         ),
@@ -284,7 +290,7 @@ fn raider_movement_resolves_cargo_escape() {
             .ACTE
             .....
             ",
-            false,
+            LootTiming::None,
             'E',
             Outcome::Ongoing,
         ),
@@ -296,20 +302,38 @@ fn raider_movement_resolves_cargo_escape() {
             .ACTE
             .....
             ",
-            true,
+            LootTiming::BeforeMovement,
             'D',
             Outcome::Ongoing,
         ),
+        // 空手先抵達 E，再取得旁邊 C 的貨物，應在取貨當下離場並判敗。
+        (
+            "在出口取貨立即逃離",
+            "
+            A..TCE
+            ",
+            LootTiming::AfterMovement,
+            'E',
+            Outcome::Defeat,
+        ),
     ] {
         let (mut game, layout) = game(diagram);
-        if should_loot {
+        if matches!(loot_timing, LootTiming::BeforeMovement) {
             loot(&mut game, marked_cell(&layout, 'C'));
             next_raider_turn(&mut game);
         }
         move_to(&mut game, TARGET_ID, marked_cell(&layout, destination));
+        if matches!(loot_timing, LootTiming::AfterMovement) {
+            loot(&mut game, marked_cell(&layout, 'C'));
+        }
         let snapshot = game.snapshot(None);
         assert_eq!(snapshot.outcome, expected_outcome, "{name}");
         if expected_outcome == Outcome::Defeat {
+            assert_eq!(
+                snapshot.cargo.as_ref().expect("地圖已設定貨物").items,
+                vec![CargoState::Escaped],
+                "{name}"
+            );
             assert_eq!(
                 snapshot.units.iter().any(|unit| unit.id == ACTOR_ID),
                 true,
@@ -324,7 +348,8 @@ fn raider_movement_resolves_cargo_escape() {
                 .command(Command::Continue)
                 .expect("結束後命令應維持結果");
             assert_eq!(snapshot.outcome, Outcome::Defeat, "{name}");
-        } else if should_loot {
+        } else if matches!(loot_timing, LootTiming::BeforeMovement) {
+            // 先取貨再走到非出口時，強盜應留在場上，貨物也仍在身上。
             assert_eq!(carrying(&game, TARGET_ID), true, "{name}");
         }
     }

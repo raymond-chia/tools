@@ -53,6 +53,7 @@ impl Game {
             .find(|item| **item == CargoState::Ground(target))
             .expect("掠奪目標已驗證有貨物");
         *item = CargoState::Carried(id);
+        self.escape_with_cargo(entity, id);
         self.finish();
         Ok(())
     }
