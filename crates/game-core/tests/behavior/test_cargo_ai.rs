@@ -142,16 +142,17 @@ fn approach_cargo_and_attack_instead_of_using_second_segment() {
     }
 }
 
-// 驗證依繞牆與粗糙地面的實際路程選擇 F，停在 D 撿貨。
+// 驗證與可見玩家開戰後，依繞牆與粗糙地面的實際路程選擇 F，停在 D 撿貨。
 #[test]
 fn choose_cargo_by_walkable_path_cost() {
     for diagram in [
         "
-            A#C..T
+            A#C...
             .#....
             ......
             D.....
             F....E
+            T.....
         ",
         "
             A~.C.T
@@ -180,15 +181,16 @@ fn choose_cargo_by_walkable_path_cost() {
     }
 }
 
-// 驗證近處貨物不可達時改撿其他貨物，所有貨物不可達時恢復攻擊。
+// 驗證與可見玩家開戰後，近處貨物不可達時改撿其他貨物，所有貨物不可達時恢復攻擊。
 #[test]
 fn unreachable_cargo_does_not_block_other_actions() {
     for (diagram, carries, target_hp) in [
         (
             "
-            A#C#T
+            A#C#.
             .####
             F...E
+            T....
         ",
             true,
             100,

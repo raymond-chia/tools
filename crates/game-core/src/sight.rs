@@ -34,6 +34,23 @@ pub(crate) fn check_sight_in_range(
     }
 }
 
+/// 目標佔用範圍內任一格可被合法瞄準。
+pub(crate) fn sees_footprint_in_range(
+    grid: &TerrainGrid,
+    origin: GridPos,
+    footprint: Footprint,
+    target: GridPos,
+    target_footprint: Footprint,
+    min_range: i32,
+    max_range: i32,
+) -> bool {
+    footprint_cells(target, target_footprint)
+        .into_iter()
+        .any(|cell| {
+            check_sight_in_range(grid, origin, footprint, cell, min_range, max_range).is_ok()
+        })
+}
+
 #[cfg(test)]
 pub(crate) fn has_sight(
     world: &bevy_ecs::prelude::World,

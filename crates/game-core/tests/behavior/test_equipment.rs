@@ -450,7 +450,7 @@ fn equipment_block_chance_matches_loadout() {
     }
 }
 
-// 驗證裝備減傷的預覽與實際結算一致，暴擊先減傷再加倍，完全減傷不扣血。
+// 驗證命中、暴擊命中、閃避與裝備格擋的預覽及實際結算一致，暴擊先減傷再加倍。
 #[test]
 fn equipment_block_damage_matches_preview_and_resolution() {
     struct Case {
@@ -474,6 +474,28 @@ fn equipment_block_damage_matches_preview_and_resolution() {
             result: "hit",
             critical: false,
             damage: 5,
+        },
+        // 自然 20 在無裝備時暴擊命中，5 點傷害加倍為 10。
+        Case {
+            name: "暴擊命中",
+            shield: "",
+            armor: "",
+            seed: 15,
+            roll: 20,
+            result: "hit",
+            critical: true,
+            damage: 10,
+        },
+        // 骰值 4 加命中 5 仍低於閃避 12，攻擊被閃避且不扣血。
+        Case {
+            name: "實際閃避",
+            shield: "",
+            armor: "",
+            seed: 3,
+            roll: 4,
+            result: "dodge",
+            critical: false,
+            damage: 0,
         },
         // 骰值 8 被盾牌格擋，5 點傷害扣除盾牌減傷 2 後剩 3。
         Case {
@@ -546,9 +568,11 @@ fn equipment_block_damage_matches_preview_and_resolution() {
         let preview = preview(&game, "melee", GridPos { x: 2, y: 1 });
         let damage_field = match (result, critical) {
             ("hit", false) => "hit_damage",
+            ("hit", true) => "critical_hit_damage",
+            ("dodge", false) => "dodge_damage",
             ("block", false) => "block_damage",
             ("block", true) => "critical_block_damage",
-            _ => panic!("減傷案例應為普通命中、普通格擋或暴擊格擋"),
+            _ => panic!("傷害案例應為命中、暴擊命中、閃避、普通格擋或暴擊格擋"),
         };
         assert_eq!(preview[damage_field], damage, "{name}");
         game.set_random_seed(seed);

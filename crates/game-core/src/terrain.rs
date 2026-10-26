@@ -3,11 +3,10 @@
 use crate::game::{DamageResult, Game};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::model::{
-    Board, CellTerrain, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Log, Pos,
-    TemporaryTerrain, TemporaryTerrains, TerrainEntryRule, TerrainGrid, TerrainLayer,
-    TerrainTypeDef, Unit,
+    Board, CellTerrain, CombatLogEvent, Encounter, Footprint, GridPos, Hp, Log, TemporaryTerrain,
+    TemporaryTerrains, TerrainEntryRule, TerrainGrid, TerrainLayer, TerrainTypeDef, Unit,
 };
-use crate::movement::footprint_cells;
+use crate::movement::{footprint_cells, placement};
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::HashMap;
 
@@ -321,14 +320,7 @@ impl Game {
         id: i64,
         entry: TerrainEntry,
     ) -> bool {
-        let Pos(position) = *self
-            .world
-            .get::<Pos>(entity)
-            .expect("進入地形的單位應具有 Pos 元件");
-        let footprint = *self
-            .world
-            .get::<Footprint>(entity)
-            .expect("進入地形的單位應具有 Footprint 元件");
+        let (position, footprint) = placement(&self.world, entity);
         for terrain in footprint_terrains(&self.world, position, footprint) {
             let TerrainTypeDef {
                 blocks_sight: _,

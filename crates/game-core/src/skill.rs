@@ -5,17 +5,19 @@ use crate::gameplay_config;
 use crate::model::{
     ActiveSkillDef, ActiveSkillDetailEffect, ActiveSkillDetailsView, ActiveSkillEffect,
     ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
-    AttackResult, Board, CollisionUnitLog, CombatLogEvent, Encounter, Footprint, GridPos,
-    HealingPreview, HealthSegmentsView, Hp, Id, Log, PassiveSkillDef, PassiveSkillEffect,
-    PassiveSkills, PendingStrike, Phase, Pos, RollDegree, TerrainGrid, Turn, Unit,
+    AttackResult, Board, CellTerrain, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
+    GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, PassiveSkillDef, PassiveSkillEffect,
+    PassiveSkills, PendingStrike, Pos, RollDegree, TerrainGrid, Turn, Unit,
 };
 use crate::movement::{
-    PositionChangeResult, fits, footprint_cell_distance, footprint_cells, overlap, unit_at_cell,
+    PositionChangeResult, fits, footprint_cell_distance, footprint_cells, placement, unit_at_cell,
+    units_overlapping,
 };
 use crate::terrain::{
     TerrainEntry, add_temporary_terrain, footprint_blocks_push, footprint_on_impassable,
     footprint_terrain_penalty, terrain_type,
 };
+use crate::turn::can_use_skill;
 use bevy_ecs::prelude::{Entity, World};
 
 /// 待出刀時，同一技能改用普通近戰；其他技能不能打斷這段行動。
@@ -43,17 +45,12 @@ pub(crate) fn skill_for_current_stage(
     Ok(skill.clone())
 }
 
-fn validate_step_destination(
+fn check_step_destination(
     world: &World,
     actor: Entity,
+    origin: GridPos,
     destination: GridPos,
-    skill: &ActiveSkillDef,
 ) -> Result<(), GameError> {
-    let unit = world.get::<Unit>(actor).expect("施放者應具有單位資料");
-    if !unit.active_skills.contains(&skill.id) {
-        return Err(error::unit_cannot_use_skill());
-    }
-    let origin = world.get::<Pos>(actor).expect("施放者應具有位置").0;
     let footprint = *world.get::<Footprint>(actor).expect("施放者應具有尺寸");
     let grid = world.resource::<TerrainGrid>();
     if !fits(grid.width, grid.height, destination, footprint) {
@@ -61,26 +58,13 @@ fn validate_step_destination(
     }
     if destination == origin
         || footprint_on_impassable(grid, destination, footprint)
-        || world.iter_entities().any(|entity| {
-            entity.id() != actor
-                && entity
-                    .get::<Pos>()
-                    .zip(entity.get::<Footprint>())
-                    .is_some_and(|(position, other)| {
-                        overlap(destination, footprint, position.0, *other)
-                    })
-        })
+        || units_overlapping(world, destination, footprint)
+            .into_iter()
+            .any(|entity| entity != actor)
     {
         return Err(error::target_cell_impassable());
     }
-    crate::sight::check_sight_in_range(
-        grid,
-        origin,
-        footprint,
-        destination,
-        skill.min_range,
-        skill.max_range,
-    )
+    Ok(())
 }
 
 impl Game {
@@ -91,8 +75,12 @@ impl Game {
         destination: GridPos,
         skill: &ActiveSkillDef,
     ) -> Result<(), GameError> {
-        validate_step_destination(&self.world, entity, destination, skill)?;
         let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
+        let SkillEvaluation {
+            in_range: _,
+            target,
+        } = evaluate_skill(&self.world, entity, origin, destination, skill);
+        target?;
         let PositionChangeResult {
             movement_cost: _,
             unit_remains,
@@ -103,16 +91,13 @@ impl Game {
             TerrainEntry::Movement,
         );
         if unit_remains {
-            self.world.entity_mut(entity).insert(PendingStrike {
-                skill: skill.id.clone(),
-            });
-            self.world.resource_mut::<Turn>().phase = Phase::PendingStrike;
+            self.await_strike(entity, skill.id.clone());
         }
         Ok(())
     }
     /// 預覽與施放共用：確認輪到該單位且本回合仍可使用技能，回傳施放者。
     fn skill_caster(&self, actor: i64) -> Result<Entity, GameError> {
-        self.ensure(actor)?;
+        self.ensure_turn(actor)?;
         if !can_use_skill(self.world.resource::<Turn>()) {
             return Err(error::cannot_use_skill());
         }
@@ -238,35 +223,33 @@ impl Game {
                         remaining_hp,
                         max_hp,
                     });
-                self.finish();
+                self.finish_turn();
                 return Ok(());
             }
         };
-        let HitBreakdown {
-            base_hit,
-            skill_hit,
-            flanking_modifier,
-            total: modifier,
-        } = hit_breakdown(&self.world, ae, te, &skill, hit_bonus);
+        let position = self.world.get::<Pos>(ae).expect("攻擊者應具有位置").0;
+        let calculation @ AttackCalculation {
+            hit:
+                HitBreakdown {
+                    base_hit,
+                    skill_hit,
+                    flanking_modifier,
+                    total: modifier,
+                },
+            dodge_target: target_dodge,
+            block_target: target_block,
+            hit_damage: _,
+            block_damage: _,
+            critical_hit_damage: _,
+            critical_block_damage: _,
+        } = attack_calculation(&self.world, ae, position, te, &skill, hit_bonus, power);
         let natural = die(&mut self.world, gameplay_config::HIT_DIE_SIDES) as i32;
-        let target_dodge = effective_dodge(&self.world, te);
-        let target_block = effective_block(&self.world, te);
-        let degree = degree(natural, modifier, target_dodge);
-        let result = attack_result(natural, modifier, target_dodge, target_dodge + target_block);
-        let base_damage = direct_damage(&self.world, ae, power);
-        let critical = degree == RollDegree::CriticalSuccess;
-        let raw_damage = attack_damage(
-            base_damage,
-            AttackResult::Hit,
-            block_reduction(&self.world, te),
-            critical,
-        );
-        let damage = attack_damage(
-            base_damage,
+        let AttackRoll {
             result,
-            block_reduction(&self.world, te),
             critical,
-        );
+            raw_damage,
+            damage,
+        } = resolve_attack_roll(&calculation, natural);
         let damage_reduction = raw_damage - damage;
         let DamageResult {
             mut remaining_hp,
@@ -279,15 +262,7 @@ impl Game {
         let mut collision_units = Vec::new();
         if push && result == AttackResult::Hit && !downed {
             let direction = push_direction(&self.world, ae, target_cell);
-            let current = self
-                .world
-                .get::<Pos>(te)
-                .expect("已建立的戰鬥單位應具有 Pos 元件")
-                .0;
-            let footprint = *self
-                .world
-                .get::<Footprint>(te)
-                .expect("已建立的戰鬥單位應具有 Footprint 元件");
+            let (current, footprint) = placement(&self.world, te);
             let destination = GridPos {
                 x: current.x + direction.x * gameplay_config::PUSH_DISTANCE,
                 y: current.y + direction.y * gameplay_config::PUSH_DISTANCE,
@@ -301,18 +276,9 @@ impl Game {
             let terrain_allows_push = fits(*width, *height, destination, footprint)
                 && !footprint_blocks_push(&self.world, destination, footprint);
             let blocking_units: Vec<Entity> = if terrain_allows_push {
-                self.world
-                    .iter_entities()
-                    .filter(|entity| {
-                        entity.id() != te
-                            && entity
-                                .get::<Pos>()
-                                .zip(entity.get::<Footprint>())
-                                .is_some_and(|(position, other_footprint)| {
-                                    overlap(destination, footprint, position.0, *other_footprint)
-                                })
-                    })
-                    .map(|entity| entity.id())
+                units_overlapping(&self.world, destination, footprint)
+                    .into_iter()
+                    .filter(|entity| *entity != te)
                     .collect()
             } else {
                 Vec::new()
@@ -391,7 +357,7 @@ impl Game {
                 hit: modifier,
                 hit_total: natural + modifier,
                 dodge_target: target_dodge,
-                block_target: target_dodge + target_block,
+                block_target: target_block,
                 result,
                 critical,
                 raw_damage,
@@ -414,7 +380,7 @@ impl Game {
             // 技能結果先入日誌，位置變更入口再記錄推移與地形效果的呈現順序。
             self.change_position(te, target, &path, TerrainEntry::Push);
         }
-        self.finish();
+        self.finish_turn();
         Ok(())
     }
     fn use_cell_skill(
@@ -459,23 +425,17 @@ impl Game {
                 skill: id,
                 terrain,
             });
-        self.finish();
+        self.finish_turn();
         Ok(())
     }
 }
 
 /// 施放與 AI 預覽共用地形技能合法性；作者引用與數值已於載入時驗證。
-pub(crate) fn validate_cell_skill_from_position(
+fn check_cell_skill_target(
     world: &World,
-    actor: Entity,
-    origin: GridPos,
     cell: GridPos,
     skill: &ActiveSkillDef,
 ) -> Result<(String, u32), GameError> {
-    let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
-    if !unit.active_skills.contains(&skill.id) {
-        return Err(error::unit_cannot_use_skill());
-    }
     let (terrain, duration) = match &skill.effect {
         ActiveSkillEffect::Mire { terrain, duration } => (terrain.clone(), *duration),
         _ => return Err(error::unit_cannot_use_skill()),
@@ -502,16 +462,129 @@ pub(crate) fn validate_cell_skill_from_position(
     ) {
         return Err(error::target_cell_impassable());
     }
-    let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用尺寸");
-    crate::sight::check_sight_in_range(
-        grid,
-        origin,
-        footprint,
-        cell,
-        skill.min_range,
-        skill.max_range,
-    )?;
     Ok((terrain, duration))
+}
+
+// 範圍提示與完整目標合法性共用評估；範圍內的空地仍可顯示。
+struct SkillEvaluation {
+    in_range: bool,
+    target: Result<SkillTarget, GameError>,
+}
+
+enum SkillTarget {
+    Unit(Entity, UnitSkillEffect),
+    Terrain(String, u32),
+    Loot,
+    Step,
+}
+
+fn evaluate_skill(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    cell: GridPos,
+    skill: &ActiveSkillDef,
+) -> SkillEvaluation {
+    let footprint = *world.get::<Footprint>(actor).expect("施放者應具有佔用尺寸");
+    let owns_skill = world
+        .get::<Unit>(actor)
+        .expect("施放者應具有 Unit")
+        .active_skills
+        .contains(&skill.id);
+    let range = if matches!(skill.effect, ActiveSkillEffect::MoveThenAttack) {
+        if owns_skill {
+            check_step_destination(world, actor, origin, cell)
+        } else {
+            Err(error::unit_cannot_use_skill())
+        }
+    } else {
+        Ok(())
+    }
+    .and_then(|()| {
+        crate::sight::check_sight_in_range(
+            world.resource::<TerrainGrid>(),
+            origin,
+            footprint,
+            cell,
+            skill.min_range,
+            skill.max_range,
+        )
+    });
+    let in_range = range.is_ok()
+        && (target_kind(&skill.effect) != ActiveSkillTargetKind::Enemy
+            || footprint_cell_distance(origin, footprint, cell) > 0);
+    let target = if !owns_skill {
+        Err(error::unit_cannot_use_skill())
+    } else {
+        match &skill.effect {
+            ActiveSkillEffect::MoveThenAttack => Ok(SkillTarget::Step),
+            ActiveSkillEffect::Loot => {
+                crate::cargo::check_loot_target(world, actor, cell).map(|()| SkillTarget::Loot)
+            }
+            ActiveSkillEffect::Mire { .. } => check_cell_skill_target(world, cell, skill)
+                .map(|(terrain, duration)| SkillTarget::Terrain(terrain, duration)),
+            ActiveSkillEffect::Attack { .. }
+            | ActiveSkillEffect::Push { .. }
+            | ActiveSkillEffect::Heal { .. } => {
+                check_unit_skill_target(world, actor, origin, cell, skill)
+                    .map(|(entity, effect)| SkillTarget::Unit(entity, effect))
+            }
+        }
+    };
+    // 先保留目標錯誤，再套用射程／視線錯誤，維持既有錯誤順序。
+    let target = target.and_then(|target| range.map(|()| target));
+    SkillEvaluation { in_range, target }
+}
+
+pub(crate) fn validate_cell_skill_from_position(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    cell: GridPos,
+    skill: &ActiveSkillDef,
+) -> Result<(String, u32), GameError> {
+    let SkillEvaluation {
+        in_range: _,
+        target,
+    } = evaluate_skill(world, actor, origin, cell, skill);
+    match target? {
+        SkillTarget::Terrain(terrain, duration) => Ok((terrain, duration)),
+        _ => Err(error::unit_cannot_use_skill()),
+    }
+}
+
+fn validate_unit_skill_target_from_position(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    cell: GridPos,
+    skill: &ActiveSkillDef,
+) -> Result<(Entity, UnitSkillEffect), GameError> {
+    let SkillEvaluation {
+        in_range: _,
+        target,
+    } = evaluate_skill(world, actor, origin, cell, skill);
+    match target? {
+        SkillTarget::Unit(entity, effect) => Ok((entity, effect)),
+        _ => Err(error::unit_cannot_use_skill()),
+    }
+}
+
+pub(crate) fn validate_loot_from_position(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    cell: GridPos,
+    skill: &ActiveSkillDef,
+) -> Result<(), GameError> {
+    let SkillEvaluation {
+        in_range: _,
+        target,
+    } = evaluate_skill(world, actor, origin, cell, skill);
+    match target? {
+        SkillTarget::Loot => Ok(()),
+        _ => Err(error::unit_cannot_use_skill()),
+    }
 }
 
 /// AI 與一般預覽共用同一計算；假想位置只用於查詢，不改動 ECS。
@@ -545,24 +618,6 @@ pub(crate) fn preview_unit_skill_from_position(
     };
 
     let Unit {
-        unit_type: _,
-        visual: _,
-        team: _,
-        movement: _,
-        initiative: _,
-        dodge: _,
-        block: _,
-        hit: _,
-        physical_power: _,
-        magical_power: _,
-        block_reduction: _,
-        equipment: _,
-        active_skills: _,
-        passive_skills: _,
-    } = world
-        .get::<Unit>(attacker)
-        .expect("已建立的戰鬥單位應具有 Unit 元件");
-    let Unit {
         unit_type: target_type,
         visual: _,
         team: _,
@@ -587,31 +642,39 @@ pub(crate) fn preview_unit_skill_from_position(
     } = world
         .get::<Hp>(target_entity)
         .expect("已建立的戰鬥單位應具有 Hp 元件");
-    let HitBreakdown {
-        base_hit: _,
-        skill_hit: _,
-        flanking_modifier: _,
-        total: modifier,
-    } = hit_breakdown_from_position(world, attacker, position, target_entity, skill, hit_bonus);
-    let dodge_target = effective_dodge(world, target_entity);
-    let block_target = dodge_target + effective_block(world, target_entity);
+    let calculation @ AttackCalculation {
+        hit: _,
+        dodge_target: _,
+        block_target: _,
+        hit_damage,
+        block_damage,
+        critical_hit_damage,
+        critical_block_damage,
+    } = attack_calculation(
+        world,
+        attacker,
+        position,
+        target_entity,
+        skill,
+        hit_bonus,
+        power,
+    );
     let mut dodge_count = 0;
     let mut block_count = 0;
     let mut hit_count = 0;
     for natural in 1..=gameplay_config::HIT_DIE_SIDES as i32 {
-        match attack_result(natural, modifier, dodge_target, block_target) {
+        let AttackRoll {
+            result,
+            critical: _,
+            raw_damage: _,
+            damage: _,
+        } = resolve_attack_roll(&calculation, natural);
+        match result {
             AttackResult::Dodge => dodge_count += 1,
             AttackResult::Block => block_count += 1,
             AttackResult::Hit => hit_count += 1,
         }
     }
-    let hit_damage = direct_damage(world, attacker, power);
-    let block_damage = attack_damage(
-        hit_damage,
-        AttackResult::Block,
-        block_reduction(world, target_entity),
-        false,
-    );
     let hit_remaining_hp = (*target_hp - hit_damage).max(0);
     let block_remaining_hp = (*target_hp - block_damage).max(0);
     let block_segment = if block_count > 0 {
@@ -634,19 +697,9 @@ pub(crate) fn preview_unit_skill_from_position(
         critical_chance: 100 / gameplay_config::HIT_DIE_SIDES,
         dodge_damage: 0,
         block_damage,
-        critical_block_damage: attack_damage(
-            hit_damage,
-            AttackResult::Block,
-            block_reduction(world, target_entity),
-            true,
-        ),
+        critical_block_damage,
         hit_damage,
-        critical_hit_damage: attack_damage(
-            hit_damage,
-            AttackResult::Hit,
-            block_reduction(world, target_entity),
-            true,
-        ),
+        critical_hit_damage,
         health_segments: HealthSegmentsView {
             hit: hit_remaining_hp,
             block: block_segment,
@@ -745,7 +798,7 @@ fn validate_unit_skill_target(
     validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)
 }
 
-fn validate_unit_skill_target_from_position(
+fn check_unit_skill_target(
     world: &World,
     attacker: Entity,
     attacker_position: GridPos,
@@ -753,9 +806,9 @@ fn validate_unit_skill_target_from_position(
     skill: &ActiveSkillDef,
 ) -> Result<(Entity, UnitSkillEffect), GameError> {
     let ActiveSkillDef {
-        id,
-        min_range,
-        max_range,
+        id: _,
+        min_range: _,
+        max_range: _,
         effect: skill_effect,
     } = skill;
     let attacker_footprint = *world
@@ -779,7 +832,7 @@ fn validate_unit_skill_target_from_position(
         magical_power: _,
         block_reduction: _,
         equipment: _,
-        active_skills,
+        active_skills: _,
         passive_skills: _,
     } = world
         .get::<Unit>(attacker)
@@ -802,9 +855,6 @@ fn validate_unit_skill_target_from_position(
     } = world
         .get::<Unit>(target)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    if !active_skills.contains(id) {
-        return Err(error::unit_cannot_use_skill());
-    }
     let effect = match skill_effect {
         ActiveSkillEffect::Attack {
             power_source,
@@ -850,15 +900,89 @@ fn validate_unit_skill_target_from_position(
         }
         UnitSkillEffect::Heal { .. } | UnitSkillEffect::Attack { .. } => {}
     }
-    crate::sight::check_sight_in_range(
-        world.resource::<TerrainGrid>(),
-        attacker_position,
-        attacker_footprint,
-        target_cell,
-        *min_range,
-        *max_range,
-    )?;
     Ok((target, effect))
+}
+
+// 預覽與實際攻擊共用同一份命中門檻及各結果傷害。
+struct AttackCalculation {
+    hit: HitBreakdown,
+    dodge_target: i32,
+    block_target: i32,
+    hit_damage: i32,
+    block_damage: i32,
+    critical_hit_damage: i32,
+    critical_block_damage: i32,
+}
+
+fn attack_calculation(
+    world: &World,
+    attacker: Entity,
+    position: GridPos,
+    target: Entity,
+    skill: &ActiveSkillDef,
+    hit_bonus: i32,
+    power: Option<(crate::PowerSource, i32)>,
+) -> AttackCalculation {
+    let hit = hit_breakdown_from_position(world, attacker, position, target, skill, hit_bonus);
+    let dodge_target = effective_dodge(world, target);
+    let block_target = dodge_target + effective_block(world, target);
+    let hit_damage = direct_damage(world, attacker, power);
+    let reduction = block_reduction(world, target);
+    AttackCalculation {
+        hit,
+        dodge_target,
+        block_target,
+        hit_damage,
+        block_damage: attack_damage(hit_damage, AttackResult::Block, reduction, false),
+        critical_hit_damage: attack_damage(hit_damage, AttackResult::Hit, reduction, true),
+        critical_block_damage: attack_damage(hit_damage, AttackResult::Block, reduction, true),
+    }
+}
+
+struct AttackRoll {
+    result: AttackResult,
+    critical: bool,
+    raw_damage: i32,
+    damage: i32,
+}
+
+// 只計算，不擲骰、不扣血；預覽逐一代入骰值，實際攻擊只代入一次。
+fn resolve_attack_roll(calculation: &AttackCalculation, natural: i32) -> AttackRoll {
+    let AttackCalculation {
+        hit:
+            HitBreakdown {
+                base_hit: _,
+                skill_hit: _,
+                flanking_modifier: _,
+                total: modifier,
+            },
+        dodge_target,
+        block_target,
+        hit_damage,
+        block_damage,
+        critical_hit_damage,
+        critical_block_damage,
+    } = calculation;
+    let result = attack_result(natural, *modifier, *dodge_target, *block_target);
+    let critical = degree(natural, *modifier, *dodge_target) == RollDegree::CriticalSuccess;
+    let raw_damage = if critical {
+        *critical_hit_damage
+    } else {
+        *hit_damage
+    };
+    let damage = match (result, critical) {
+        (AttackResult::Dodge, _) => 0,
+        (AttackResult::Hit, false) => *hit_damage,
+        (AttackResult::Hit, true) => *critical_hit_damage,
+        (AttackResult::Block, false) => *block_damage,
+        (AttackResult::Block, true) => *critical_block_damage,
+    };
+    AttackRoll {
+        result,
+        critical,
+        raw_damage,
+        damage,
+    }
 }
 
 fn attack_result(
@@ -912,6 +1036,7 @@ pub(crate) fn hit(
     total
 }
 
+#[cfg(test)]
 fn hit_breakdown(
     world: &World,
     attacker: Entity,
@@ -1061,27 +1186,22 @@ fn target_side_from_position(
     } = *world
         .get::<Footprint>(unit)
         .expect("參與包夾的單位應具有 Footprint");
-    let target_position = world.get::<Pos>(target).expect("包夾目標應具有 Pos").0;
-    let target_footprint @ Footprint {
-        width: target_width,
-        height: target_height,
-    } = *world
-        .get::<Footprint>(target)
-        .expect("包夾目標應具有 Footprint");
-    if !footprint_cells(target_position, target_footprint)
-        .into_iter()
-        .any(|cell| {
-            crate::sight::check_sight_in_range(
-                world.resource::<TerrainGrid>(),
-                unit_position,
-                unit_footprint,
-                cell,
-                min_range,
-                max_range,
-            )
-            .is_ok()
-        })
-    {
+    let (
+        target_position,
+        target_footprint @ Footprint {
+            width: target_width,
+            height: target_height,
+        },
+    ) = placement(world, target);
+    if !crate::sight::sees_footprint_in_range(
+        world.resource::<TerrainGrid>(),
+        unit_position,
+        unit_footprint,
+        target_position,
+        target_footprint,
+        min_range,
+        max_range,
+    ) {
         return None;
     }
 
@@ -1128,17 +1248,6 @@ pub(crate) fn attack_damage(
     result_damage * if critical { 2 } else { 1 }
 }
 
-pub(crate) fn can_use_skill(turn: &Turn) -> bool {
-    let Turn {
-        actor: _,
-        phase,
-        movement_remaining: _,
-        movement_segments_used,
-    } = turn;
-    matches!(phase, Phase::PendingStrike)
-        || matches!(phase, Phase::Ready | Phase::Moving) && *movement_segments_used == 0
-        || matches!(phase, Phase::AfterMove) && *movement_segments_used == 1
-}
 pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
     if n == 1 {
         RollDegree::CriticalFailure
@@ -1155,46 +1264,31 @@ pub(crate) fn effective_dodge(w: &World, entity: Entity) -> i32 {
     let unit = w
         .get::<Unit>(entity)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    let position = w
-        .get::<Pos>(entity)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let footprint = *w
-        .get::<Footprint>(entity)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let penalty =
-        footprint_terrain_penalty(w.resource::<TerrainGrid>(), position, footprint, |cell| {
-            cell.dodge_penalty
-        });
-    (unit.dodge - penalty).max(0)
+    defense_after_terrain(w, entity, unit.dodge, |cell| cell.dodge_penalty)
 }
 
 pub(crate) fn effective_block(w: &World, entity: Entity) -> i32 {
     let unit = w
         .get::<Unit>(entity)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    let position = w
-        .get::<Pos>(entity)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let footprint = *w
-        .get::<Footprint>(entity)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
+    defense_after_terrain(w, entity, unit.block, |cell| cell.block_penalty)
+}
+
+/// 防禦值扣除佔用範圍內的地形懲罰，最低為 0。
+fn defense_after_terrain(
+    w: &World,
+    entity: Entity,
+    base: i32,
+    penalty: impl Fn(CellTerrain) -> i32,
+) -> i32 {
+    let (position, footprint) = placement(w, entity);
     let penalty =
-        footprint_terrain_penalty(w.resource::<TerrainGrid>(), position, footprint, |cell| {
-            cell.block_penalty
-        });
-    (unit.block - penalty).max(0)
+        footprint_terrain_penalty(w.resource::<TerrainGrid>(), position, footprint, penalty);
+    (base - penalty).max(0)
 }
 
 fn push_direction(w: &World, attacker: Entity, target_cell: GridPos) -> GridPos {
-    let attacker_position = w
-        .get::<Pos>(attacker)
-        .expect("已建立的戰鬥單位應具有 Pos 元件")
-        .0;
-    let attacker_footprint = *w
-        .get::<Footprint>(attacker)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
+    let (attacker_position, attacker_footprint) = placement(w, attacker);
     if attacker_position.x + attacker_footprint.width <= target_cell.x {
         GridPos { x: 1, y: 0 }
     } else if target_cell.x < attacker_position.x {
@@ -1213,10 +1307,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
         terrains: _,
         terrain_types: _,
     } = w.resource::<Board>();
-    let position = w.get::<Pos>(e).expect("已建立的戰鬥單位應具有 Pos 元件").0;
-    let footprint = *w
-        .get::<Footprint>(e)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
+    let (position, footprint) = placement(w, e);
     let Unit {
         unit_type: _,
         visual: _,
@@ -1242,7 +1333,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
             let skill = &skill;
             let ActiveSkillDef {
                 id,
-                min_range,
+                min_range: _,
                 max_range,
                 effect,
             } = skill;
@@ -1259,24 +1350,11 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
             for y in top..bottom {
                 for x in left..right {
                     let cell = GridPos { x, y };
-                    let cell_distance = footprint_cell_distance(position, footprint, cell);
-                    let in_range = if matches!(effect, ActiveSkillEffect::MoveThenAttack) {
-                        validate_step_destination(w, e, cell, skill).is_ok()
-                    } else {
-                        crate::sight::check_sight_in_range(
-                            w.resource::<TerrainGrid>(),
-                            position,
-                            footprint,
-                            cell,
-                            *min_range,
-                            *max_range,
-                        )
-                        .is_ok()
-                    };
-                    if in_range
-                        && (target_kind(effect) != ActiveSkillTargetKind::Enemy
-                            || cell_distance > 0)
-                    {
+                    let SkillEvaluation {
+                        in_range,
+                        target: _,
+                    } = evaluate_skill(w, e, position, cell, skill);
+                    if in_range {
                         cells.push(cell);
                     }
                 }
@@ -1290,7 +1368,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
                             .is_some_and(|cargo| {
                                 cargo.items.iter().any(|item| match item {
                                     crate::model::CargoState::Ground(target) => {
-                                        crate::cargo::validate_loot(w, e, position, *target, skill)
+                                        validate_loot_from_position(w, e, position, *target, skill)
                                             .is_ok()
                                     }
                                     crate::model::CargoState::Carried(_)

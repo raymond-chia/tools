@@ -9,16 +9,17 @@ use crate::model::{
     PreviousAttackTarget, TerrainGrid, Turn, Unit,
 };
 use crate::movement::{
-    MovementOption, PathPriority, can_move, footprint_blocked, footprint_cell_distance,
-    footprint_cells, footprint_distance, full_board_paths, movement_budgets, movement_options,
-    occupied_cells, toward_skill_range, unit_at_cell,
+    MovementOption, PathPriority, footprint_blocked, footprint_cell_distance, footprint_cells,
+    footprint_distance, full_board_paths, movement_options, occupied_cells, placement,
+    toward_skill_range, unit_at_cell,
 };
 use crate::skill::{
-    can_use_skill, preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
+    preview_unit_skill_from_position, target_kind, validate_cell_skill_from_position,
 };
 use crate::terrain::{
     footprint_on_impassable, terrain_ends_movement, terrain_grid, terrain_type, terrains_at,
 };
+use crate::turn::{can_move, can_use_skill, movement_budgets};
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::{HashMap, HashSet};
 
@@ -143,7 +144,7 @@ impl Game {
                     return Ok(());
                 }
                 _ => {
-                    self.finish();
+                    self.finish_turn();
                     return Ok(());
                 }
             }
@@ -404,12 +405,12 @@ fn target_distance(world: &World, actor: Entity, position: GridPos, target: Enti
     let actor_footprint = *world
         .get::<Footprint>(actor)
         .expect("AI 單位應具有佔用尺寸");
+    let (target_position, target_footprint) = placement(world, target);
     let target_position = if actor == target {
         position
     } else {
-        world.get::<Pos>(target).expect("目標應具有位置").0
+        target_position
     };
-    let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
     footprint_distance(position, actor_footprint, target_position, target_footprint)
 }
 
@@ -529,8 +530,7 @@ fn fallback_position(
         );
         // 依距離與 ID 選擇有合法施放路徑的敵人；治療仍優先接近既定的重傷隊友。
         for &target in &targets {
-            let target_footprint = *world.get::<Footprint>(target).expect("目標應具有佔用尺寸");
-            let goal = world.get::<Pos>(target).expect("目標應具有位置").0;
+            let (goal, target_footprint) = placement(world, target);
             // 共用跨技能偏好；每條路徑仍須朝該技能可施放的合法射程前進。
             let position = active_skills
                 .iter()

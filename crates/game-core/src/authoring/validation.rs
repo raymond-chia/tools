@@ -2,8 +2,8 @@
 use crate::error::GameError;
 use crate::model::{
     ActiveSkillDef, ActiveSkillEffect, ActiveSkills, BattleMode, Board, Encounter, Exploration,
-    Footprint, GridPos, Hp, Id, Log, Outcome, PassiveSkills, Phase, Pos, Random, ResultState, Team,
-    TemporaryTerrains, TerrainLayer, Turn, Unit,
+    Footprint, GridPos, Hp, Id, Log, Outcome, PassiveSkills, Pos, Random, ResultState, Team,
+    TemporaryTerrains, TerrainLayer, Unit,
 };
 use crate::movement::footprint_cells;
 use crate::terrain::fixed_terrains_at;
@@ -431,12 +431,7 @@ pub(crate) fn load_map(
     });
     w.insert_resource(TemporaryTerrains::default());
     crate::terrain::refresh_terrain_grid(&mut w);
-    w.insert_resource(Turn {
-        actor: None,
-        phase: Phase::Ended,
-        movement_remaining: 0,
-        movement_segments_used: 0,
-    });
+    w.insert_resource(crate::turn::initial_turn());
     w.insert_resource(Random(0xc0ffee));
     w.insert_resource(Log::default());
     w.insert_resource(ResultState(Outcome::Ongoing));

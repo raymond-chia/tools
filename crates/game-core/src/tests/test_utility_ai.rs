@@ -3,7 +3,7 @@ use super::support::{
     ACTOR_ID, AsciiBoard, TARGET_ID, ascii_board, ascii_map, assert_turn_order,
     map_from_ascii_board,
 };
-use crate::model::{Hp, Pos, Turn};
+use crate::model::{BattleMode, Encounter, Exploration, Hp, Pos, Turn};
 use crate::{Command, Game, GridPos, Phase, Team, TerrainPlacement, authoring};
 
 const DEFINITIONS: &str = include_str!("../../tests/data/utility_ai_definitions.toml");
@@ -784,7 +784,7 @@ struct RouteCase {
     avoids_terrain: bool,
 }
 
-// 驗證佔用範圍、阻擋來源與地形成本影響路徑及兩段預算，經過尖刺後同回合繼續移動。
+// 驗證已開戰時，佔用範圍、阻擋來源與地形成本影響路徑及兩段預算，經過尖刺後同回合繼續移動。
 #[test]
 fn ai_routes_respect_footprints_hazards_and_movement_costs() {
     let cases = [
@@ -1176,6 +1176,16 @@ fn ai_routes_respect_footprints_hazards_and_movement_costs() {
                 10,
             );
         }
+        // 路徑案例直接建立已開戰狀態，包含開戰後才被牆隔開的情境。
+        let order: Vec<_> = units.iter().map(|(_, id, _, _)| *id).collect();
+        *game.world.resource_mut::<Encounter>() = Encounter {
+            participants: order.iter().copied().collect(),
+            order,
+            cursor: 0,
+            round: 1,
+        };
+        game.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
+        game.begin_turn();
         let snapshot = act(&mut game);
         let entity = game.entity(ACTOR_ID).expect("路徑測試 AI 應仍存活");
         assert_eq!(

@@ -7,14 +7,14 @@ use crate::model::{
     TerrainDescriptionValues, TerrainDescriptionView, TerrainEffectView, TerrainEntryRule,
     TerrainGrid, TerrainLayer, Turn, TurnView, Unit, UnitView,
 };
-use crate::movement::{
-    can_move, entity_distance, footprint_cells, movement_ranges, unit_at_cell, unit_cells,
-};
-use crate::skill::{can_use_skill, effective_block, effective_dodge, skill_ranges, target_kind};
+use crate::movement::{footprint_cells, movement_ranges, placement, unit_at_cell, unit_cells};
+use crate::skill::{effective_block, effective_dodge, skill_ranges, target_kind};
+use crate::teams::{are_allied, is_hostile_to_player, is_player};
 use crate::terrain::{
     expire_temporary_terrains, grid_cell, ground_at, temporary_remaining_rounds, terrain_damage,
     terrain_type, terrains_at,
 };
+use crate::turn::{can_delay, can_move, can_use_skill, new_turn};
 use crate::{authoring, error, gameplay_config};
 use bevy_ecs::prelude::{Entity, World};
 use std::collections::{HashMap, HashSet};
@@ -125,8 +125,8 @@ impl Game {
                 Ok(())
             }
             Command::EndTurn { actor } => {
-                self.ensure(actor)?;
-                self.finish();
+                self.ensure_turn(actor)?;
+                self.finish_turn();
                 Ok(())
             }
             Command::Delay { actor, after } => self.delay(actor, after),
@@ -161,19 +161,19 @@ impl Game {
         if self.world.resource::<Turn>().actor.is_some() {
             return Ok(());
         }
-        let players: Vec<_> = self
+        // 同盟陣營與玩家一起參戰，但探索階段只有玩家行動。
+        let side: Vec<_> = self
             .world
-            .query::<(&Id, &Unit)>()
-            .iter(&self.world)
-            .filter(|(_, unit)| unit.team == Team::Player)
-            .map(|(id, _)| id.0)
+            .iter_entities()
+            .filter_map(|entity| Some((entity.get::<Id>()?.0, entity.get::<Unit>()?)))
+            .filter(|(_, unit)| are_allied(&self.world, &unit.team, &Team::Player))
+            .map(|(id, _)| id)
             .collect();
-        let mut players = players;
-        players.sort();
+        let players: Vec<_> = self.player_units().into_iter().map(|(id, _)| id).collect();
         self.world
             .resource_mut::<Encounter>()
             .participants
-            .extend(players.iter().copied());
+            .extend(side);
         if self.activate_enemies_near_players() {
             self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
             self.roll_round();
@@ -191,28 +191,58 @@ impl Game {
         } = self.world.resource::<Encounter>();
         participants.iter().any(|id| {
             self.entity(*id).is_some_and(|entity| {
-                self.world
+                let team = &self
+                    .world
                     .get::<Unit>(entity)
                     .expect("單位應具有 Unit")
-                    .team
-                    != Team::Player
+                    .team;
+                is_hostile_to_player(&self.world, team)
             })
         })
     }
-    fn activate_enemies_near_players(&mut self) -> bool {
-        let players: Vec<_> = self
+    /// 依 ID 排序的玩家單位。
+    fn player_units(&self) -> Vec<(i64, Entity)> {
+        let mut players: Vec<_> = self
             .world
             .iter_entities()
             .filter(|entity| {
                 entity
                     .get::<Unit>()
-                    .is_some_and(|unit| unit.team == Team::Player)
+                    .is_some_and(|unit| is_player(&unit.team))
             })
-            .map(|entity| entity.id())
+            .map(|entity| {
+                (
+                    entity.get::<Id>().expect("戰鬥單位應具有 Id").0,
+                    entity.id(),
+                )
+            })
+            .collect();
+        players.sort();
+        players
+    }
+    fn activate_enemies_near_players(&mut self) -> bool {
+        let players: Vec<_> = self
+            .player_units()
+            .into_iter()
+            .map(|(_, entity)| entity)
             .collect();
         self.activate_enemies_near(&players)
     }
-    /// 先找出遭遇範圍內的敵人，再連鎖觸發附近一批。
+    /// 遭遇與連鎖參戰共用十格內可見的判定。
+    fn can_see_in_encounter(&self, source: Entity, target: Entity) -> bool {
+        let (origin, footprint) = placement(&self.world, source);
+        let (target, target_footprint) = placement(&self.world, target);
+        crate::sight::sees_footprint_in_range(
+            self.world.resource::<TerrainGrid>(),
+            origin,
+            footprint,
+            target,
+            target_footprint,
+            0,
+            gameplay_config::ENCOUNTER_RANGE,
+        )
+    }
+    /// 先找出遭遇範圍內可見的敵人，再連鎖觸發彼此可見的一批。
     pub(crate) fn activate_enemies_near(&mut self, units: &[Entity]) -> bool {
         let enemies: Vec<_> = self
             .world
@@ -220,13 +250,12 @@ impl Game {
             .filter(|entity| {
                 entity
                     .get::<Unit>()
-                    .is_some_and(|unit| unit.team != Team::Player)
+                    .is_some_and(|unit| is_hostile_to_player(&self.world, &unit.team))
             })
             .filter(|entity| {
-                units.iter().any(|unit| {
-                    entity_distance(&self.world, *unit, entity.id())
-                        <= gameplay_config::ENCOUNTER_RANGE
-                })
+                units
+                    .iter()
+                    .any(|unit| self.can_see_in_encounter(*unit, entity.id()))
             })
             .map(|entity| entity.id())
             .collect();
@@ -241,7 +270,7 @@ impl Game {
         participants.extend(enemies);
         found
     }
-    /// 依敵人彼此距離擴展整個連通群，不以陣營識別碼決定參戰範圍。
+    /// 依敵人彼此的距離與視線擴展整個連通群，不以陣營識別碼決定參戰範圍。
     fn connected_enemies(&self, seeds: &[Entity]) -> Vec<i64> {
         let enemies: Vec<_> = self
             .world
@@ -249,7 +278,7 @@ impl Game {
             .filter(|entity| {
                 entity
                     .get::<Unit>()
-                    .is_some_and(|unit| unit.team != Team::Player)
+                    .is_some_and(|unit| is_hostile_to_player(&self.world, &unit.team))
             })
             .map(|entity| entity.id())
             .collect();
@@ -263,10 +292,7 @@ impl Game {
         while cursor < connected.len() {
             let source = connected[cursor];
             for enemy in &enemies {
-                if !visited.contains(enemy)
-                    && entity_distance(&self.world, source, *enemy)
-                        <= gameplay_config::ENCOUNTER_RANGE
-                {
+                if !visited.contains(enemy) && self.can_see_in_encounter(source, *enemy) {
                     visited.insert(*enemy);
                     connected.push(*enemy);
                 }
@@ -287,15 +313,7 @@ impl Game {
                     .get::<Unit>(entity)
                     .expect("玩家單位應具有 Unit")
                     .movement;
-                turns.insert(
-                    *id,
-                    Turn {
-                        actor: Some(*id),
-                        phase: Phase::Ready,
-                        movement_remaining: movement,
-                        movement_segments_used: 0,
-                    },
-                );
+                turns.insert(*id, new_turn(Some(*id), movement));
             }
         }
         // 行動中的單位只存在 Turn，不在表中留副本。
@@ -354,17 +372,7 @@ impl Game {
             self.world.resource_mut::<Exploration>().mode = BattleMode::Combat;
             self.roll_round();
         } else {
-            let mut players: Vec<_> = self
-                .world
-                .iter_entities()
-                .filter(|entity| {
-                    entity
-                        .get::<Unit>()
-                        .is_some_and(|unit| unit.team == Team::Player)
-                })
-                .filter_map(|entity| entity.get::<Id>().map(|id| id.0))
-                .collect();
-            players.sort();
+            let players: Vec<_> = self.player_units().into_iter().map(|(id, _)| id).collect();
             self.reset_exploration_turns(&players);
         }
     }
@@ -432,49 +440,7 @@ impl Game {
                 round,
                 initiative_rolls,
             });
-        self.begin()
-    }
-    fn begin(&mut self) {
-        let Encounter {
-            participants: _,
-            order,
-            cursor,
-            round: _,
-        } = self.world.resource::<Encounter>();
-        let actor = order.get(*cursor).copied();
-        if let Some(entity) = actor.and_then(|id| self.entity(id)) {
-            self.world
-                .entity_mut(entity)
-                .remove::<crate::model::PendingStrike>();
-        }
-        let remaining = actor
-            .and_then(|a| self.entity(a))
-            .map(|e| {
-                self.world
-                    .get::<Unit>(e)
-                    .expect("已建立的戰鬥單位應具有 Unit 元件")
-                    .movement
-            })
-            .unwrap_or(0);
-        *self.world.resource_mut::<Turn>() = Turn {
-            actor,
-            phase: Phase::Ready,
-            movement_remaining: remaining,
-            movement_segments_used: 0,
-        }
-    }
-    pub(crate) fn finish(&mut self) {
-        if let Some(entity) = self
-            .world
-            .resource::<Turn>()
-            .actor
-            .and_then(|actor| self.entity(actor))
-        {
-            self.world
-                .entity_mut(entity)
-                .remove::<crate::model::PendingStrike>();
-        }
-        self.world.resource_mut::<Turn>().phase = Phase::Ended;
+        self.begin_turn()
     }
     /// 扣除生命值；歸零時立即移除單位，因此呼叫端應改用回傳值而非再讀取 Hp。
     pub(crate) fn apply_damage(&mut self, entity: Entity, id: i64, amount: i32) -> DamageResult {
@@ -515,14 +481,7 @@ impl Game {
             }
         }
         if is_actor {
-            let Turn {
-                actor,
-                phase,
-                movement_remaining: _,
-                movement_segments_used: _,
-            } = &mut *self.world.resource_mut::<Turn>();
-            *actor = None;
-            *phase = Phase::Ended;
+            self.remove_turn_actor();
         }
         self.world.entity_mut(entity).despawn();
     }
@@ -540,7 +499,11 @@ impl Game {
             }
             *cursor >= order.len()
         };
-        if end { self.roll_round() } else { self.begin() }
+        if end {
+            self.roll_round()
+        } else {
+            self.begin_turn()
+        }
     }
     fn can_continue(&self) -> bool {
         if self.world.resource::<ResultState>().0 != Outcome::Ongoing
@@ -548,23 +511,22 @@ impl Game {
         {
             return false;
         }
-        let Turn {
-            actor,
-            phase,
-            movement_remaining: _,
-            movement_segments_used: _,
-        } = self.world.resource::<Turn>();
-        if *phase == Phase::Ended {
+        if self.world.resource::<Turn>().phase == Phase::Ended {
             return true;
         }
-        actor
+        self.turn_actor_team().is_some_and(|team| !is_player(team))
+    }
+    fn turn_actor_team(&self) -> Option<&Team> {
+        self.world
+            .resource::<Turn>()
+            .actor
             .and_then(|actor| self.entity(actor))
-            .is_some_and(|entity| {
-                self.world
+            .map(|entity| {
+                &self
+                    .world
                     .get::<Unit>(entity)
                     .expect("已建立的戰鬥單位應具有 Unit 元件")
                     .team
-                    != Team::Player
             })
     }
     fn continue_battle(&mut self) -> Result<(), GameError> {
@@ -576,45 +538,6 @@ impl Game {
             return Ok(());
         }
         self.run_ai_turn()
-    }
-    fn delay(&mut self, actor: i64, after: i64) -> Result<(), GameError> {
-        self.ensure(actor)?;
-        let turn = self.world.resource::<Turn>();
-        if !can_delay(turn) {
-            return Err(error::delay_after_action());
-        }
-        let Encounter {
-            participants: _,
-            order,
-            cursor,
-            round: _,
-        } = self.world.resource::<Encounter>();
-        let target_index = order
-            .iter()
-            .position(|unit_id| *unit_id == after)
-            .ok_or(error::missing_delay_target())?;
-        if target_index <= *cursor {
-            return Err(error::invalid_delay_target());
-        }
-        {
-            let Encounter {
-                participants: _,
-                order,
-                cursor,
-                round: _,
-            } = &mut *self.world.resource_mut::<Encounter>();
-            let delayed_actor = order.remove(*cursor);
-            order.insert(target_index, delayed_actor);
-        }
-        self.begin();
-        Ok(())
-    }
-    pub(crate) fn ensure(&self, a: i64) -> Result<(), GameError> {
-        if self.world.resource::<Turn>().actor != Some(a) {
-            Err(error::wrong_turn())
-        } else {
-            Ok(())
-        }
     }
     pub(crate) fn entity(&self, id: i64) -> Option<Entity> {
         self.world
@@ -630,7 +553,7 @@ impl Game {
             let evaluate = |condition: &OutcomeCondition| match condition {
                 OutcomeCondition::AllEnemiesDefeated => !self.world.iter_entities().any(|e| {
                     e.get::<Unit>()
-                        .is_some_and(|u| matches!(u.team, Team::Enemy(_)))
+                        .is_some_and(|u| is_hostile_to_player(&self.world, &u.team))
                 }),
                 OutcomeCondition::TeamDefeated { team } => !self
                     .world
@@ -731,15 +654,7 @@ impl Game {
             })
             .collect();
         units.sort_by(|a, b| a.id.cmp(&b.id));
-        let player_turn = turn_actor
-            .and_then(|actor| self.entity(actor))
-            .is_some_and(|entity| {
-                self.world
-                    .get::<Unit>(entity)
-                    .expect("已建立的戰鬥單位應具有 Unit 元件")
-                    .team
-                    == Team::Player
-            });
+        let player_turn = self.turn_actor_team().is_some_and(is_player);
         let can_move = player_turn && can_move(turn);
         let movement_ranges = if can_move {
             turn_actor
@@ -765,14 +680,9 @@ impl Game {
                         .get::<Unit>(entity)
                         .expect("戰鬥單位應具有 Unit 元件")
                         .movement;
-                    Turn {
-                        actor: Some(actor),
-                        phase: Phase::Ready,
-                        movement_remaining: movement,
-                        movement_segments_used: 0,
-                    }
+                    new_turn(Some(actor), movement)
                 };
-                if crate::movement::can_move(&inspected_turn) {
+                if crate::turn::can_move(&inspected_turn) {
                     crate::movement::movement_ranges(&self.world, entity, &inspected_turn)
                 } else {
                     (Vec::new(), Vec::new())
@@ -887,22 +797,24 @@ impl Game {
             height: *height,
             terrain_effects: {
                 let mut effects = Vec::new();
+                let effect_view =
+                    |position: &GridPos, kind: &String, remaining_rounds| TerrainEffectView {
+                        blocks_movement: terrain_type(b, kind).entry_rule
+                            != TerrainEntryRule::Walkable,
+                        x: position.x,
+                        y: position.y,
+                        damage: terrain_damage(b, kind),
+                        visual: kind.clone(),
+                        effect: kind.clone(),
+                        remaining_rounds,
+                    };
                 for (position, kinds) in fixed_terrains {
                     // ground 由 terrain_cells 的 ground_visual 呈現，這裡只列 overlay。
                     for kind in kinds
                         .iter()
                         .filter(|kind| terrain_type(b, kind).layer == TerrainLayer::Overlay)
                     {
-                        effects.push(TerrainEffectView {
-                            blocks_movement: terrain_type(b, kind).entry_rule
-                                != TerrainEntryRule::Walkable,
-                            x: position.x,
-                            y: position.y,
-                            damage: terrain_damage(b, kind),
-                            visual: kind.clone(),
-                            effect: kind.clone(),
-                            remaining_rounds: None,
-                        });
+                        effects.push(effect_view(position, kind, None));
                     }
                 }
                 for (position, kinds) in temporary_terrains {
@@ -913,16 +825,7 @@ impl Game {
                         if remaining_rounds.is_none() {
                             continue;
                         }
-                        effects.push(TerrainEffectView {
-                            blocks_movement: terrain_type(b, kind).entry_rule
-                                != TerrainEntryRule::Walkable,
-                            x: position.x,
-                            y: position.y,
-                            damage: terrain_damage(b, kind),
-                            visual: kind.clone(),
-                            effect: kind.clone(),
-                            remaining_rounds,
-                        });
+                        effects.push(effect_view(position, kind, remaining_rounds));
                     }
                 }
                 effects.sort_by_key(|effect| (effect.y, effect.x, effect.effect.clone()));
@@ -955,17 +858,6 @@ impl Game {
             presentation_events: Vec::new(),
         }
     }
-}
-
-/// 尚未開始行動（未移動、未使用技能）才能延後。
-fn can_delay(turn: &Turn) -> bool {
-    let Turn {
-        actor: _,
-        phase,
-        movement_remaining: _,
-        movement_segments_used,
-    } = turn;
-    *phase == Phase::Ready && *movement_segments_used == 0
 }
 
 pub(crate) fn die(w: &mut World, s: u32) -> u32 {

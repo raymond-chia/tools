@@ -1,17 +1,19 @@
 //! 撿貨與撤離的優先規劃；路徑、技能驗證和實際結算仍使用核心共用流程。
 use super::{ActiveSkillPlan, AiAction, AiTurnPlan};
 use crate::authoring::AiProfile;
-use crate::cargo::validate_loot;
 use crate::game::Game;
 use crate::model::{
-    ActiveSkillDef, ActiveSkillEffect, ActiveSkillTargetKind, Cargo, CargoState, Footprint,
-    GridPos, Id, Pos, Team, TerrainGrid, Turn, Unit,
+    ActiveSkillDef, ActiveSkillEffect, ActiveSkillTargetKind, Cargo, CargoState, GridPos, Id,
+    TerrainGrid, Turn, Unit,
 };
 use crate::movement::{
-    MovementOption, PathPriority, full_board_paths, movement_options, occupied_cells,
+    MovementOption, PathPriority, full_board_paths, movement_options, occupied_cells, placement,
     shortest_route,
 };
-use crate::skill::{can_use_skill, target_kind};
+use crate::skill::target_kind;
+use crate::skill::validate_loot_from_position;
+use crate::teams::is_player;
+use crate::turn::can_use_skill;
 use bevy_ecs::prelude::Entity;
 
 struct CargoRoute {
@@ -30,7 +32,7 @@ impl Game {
             .filter(|skill| matches!(skill.effect, ActiveSkillEffect::Loot))
             .collect();
         if !carrying
-            && (!matches!(unit.team, Team::Enemy(_))
+            && (is_player(&unit.team)
                 || loot_skills.is_empty()
                 || !items
                     .iter()
@@ -38,11 +40,7 @@ impl Game {
         {
             return None;
         }
-        let start = self.world.get::<Pos>(actor).expect("AI 單位應具有位置").0;
-        let footprint = *self
-            .world
-            .get::<Footprint>(actor)
-            .expect("AI 單位應具有佔用尺寸");
+        let (start, footprint) = placement(&self.world, actor);
         let grid = self.world.resource::<TerrainGrid>();
         let search = full_board_paths(
             grid,
@@ -66,7 +64,14 @@ impl Game {
                 for skill in &loot_skills {
                     if let Some(movement) =
                         shortest_route(grid, &search, start, footprint, |position| {
-                            validate_loot(&self.world, actor, position, *target, skill).is_ok()
+                            validate_loot_from_position(
+                                &self.world,
+                                actor,
+                                position,
+                                *target,
+                                skill,
+                            )
+                            .is_ok()
                         })
                     {
                         candidates.push(CargoRoute {

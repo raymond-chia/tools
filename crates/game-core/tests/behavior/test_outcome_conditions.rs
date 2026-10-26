@@ -8,13 +8,14 @@ const DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
 const ALL_ENEMIES_DEFEATED: &str = "all_enemies_defeated";
 const PLAYER_TEAM_DEFEATED: &str = "team_defeated";
 const DIAGRAM: &str = "
-    ....
+    ...F
     .AT.
     ....
 ";
 
 const TEAM_MEMBER_ID: i64 = 4;
 const SECOND_TEAM_MEMBER_ID: i64 = 5;
+const ALLY_ID: i64 = 6;
 const CARGO_DIAGRAM: &str = "
     .......
     .BATCUE
@@ -55,7 +56,26 @@ fn map_data(victory: Value, defeat: Value) -> authoring::Map {
     map
 }
 
-fn game(victory: Value, defeat: Value, attacker: i64) -> Game {
+// F 加入與玩家同盟的陣營；同盟單位不算敵人。
+fn with_player_ally(mut map: authoring::Map) -> authoring::Map {
+    let GridPos { x, y } = marked_cell(&ascii_board(DIAGRAM), 'F');
+    let team = Team::Enemy("friends".into());
+    map.units.push(authoring::UnitPlacement {
+        facing: authoring::Facing::Right,
+        id: ALLY_ID,
+        min_difficulty: Some(authoring::Difficulty::Easy),
+        unit_type: "target".into(),
+        team: team.clone(),
+        x,
+        y,
+    });
+    map.alliances = vec![authoring::Alliance {
+        teams: vec![Team::Player, team],
+    }];
+    map
+}
+
+fn game(map: authoring::Map, attacker: i64) -> Game {
     let mut definitions: authoring::Definitions =
         toml::from_str(DEFINITIONS).expect("測試定義應可載入");
     for unit in &mut definitions.unit_types {
@@ -68,12 +88,8 @@ fn game(victory: Value, defeat: Value, attacker: i64) -> Game {
             0
         };
     }
-    let mut game = Game::from_authoring(
-        definitions,
-        map_data(victory, defeat),
-        authoring::Difficulty::Easy,
-    )
-    .expect("明確指定勝敗條件的地圖應可載入");
+    let mut game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+        .expect("明確指定勝敗條件的地圖應可載入");
     game.set_random_seed(1);
     let snapshot = game.command(Command::Start).expect("戰鬥應可開始");
     assert_eq!(snapshot.turn.actor, Some(attacker));
@@ -236,7 +252,7 @@ fn partially_satisfied_groups_respect_each_match_mode() {
             Outcome::Defeat,
         ),
     ] {
-        let mut game = game(victory, defeat, attacker);
+        let mut game = game(map_data(victory, defeat), attacker);
         assert_eq!(eliminate_opponent(&mut game, attacker), expected, "{name}");
     }
 }
@@ -328,8 +344,10 @@ fn cargo_escape_resolves_the_configured_outcome() {
 fn defeat_has_priority_when_both_groups_match() {
     for mode in ["all", "any"] {
         let mut game = game(
-            group(mode, &[ALL_ENEMIES_DEFEATED]),
-            group(mode, &[ALL_ENEMIES_DEFEATED]),
+            map_data(
+                group(mode, &[ALL_ENEMIES_DEFEATED]),
+                group(mode, &[ALL_ENEMIES_DEFEATED]),
+            ),
             ACTOR_ID,
         );
         assert_eq!(
@@ -449,4 +467,15 @@ fn team_elimination_and_no_carriers_must_both_be_satisfied() {
             "{name}"
         );
     }
+}
+
+// 驗證敵對陣營全滅即勝利，存活的玩家同盟不算敵人。
+#[test]
+fn surviving_player_allies_do_not_block_victory() {
+    let map = with_player_ally(map_data(
+        group("all", &[ALL_ENEMIES_DEFEATED]),
+        group("any", &[PLAYER_TEAM_DEFEATED]),
+    ));
+    let mut game = game(map, ACTOR_ID);
+    assert_eq!(eliminate_opponent(&mut game, ACTOR_ID), Outcome::Victory);
 }

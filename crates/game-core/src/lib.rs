@@ -1,5 +1,5 @@
 //! Godot 無關的權威戰棋核心。
-//! 資料型別見 model；錯誤 ID 與描述見 error；載入、回合與快照見 game；移動與空間規則見 movement；技能與戰鬥規則見 skill。
+//! 資料型別見 model；錯誤 ID 與描述見 error；載入、命令與快照見 game；回合規則見 turn；移動與空間規則見 movement；技能與戰鬥規則見 skill。
 
 mod ai;
 pub mod authoring;
@@ -16,6 +16,7 @@ mod sight;
 mod skill;
 mod teams;
 mod terrain;
+mod turn;
 #[cfg(test)]
 extern crate self as game_core;
 #[cfg(test)]

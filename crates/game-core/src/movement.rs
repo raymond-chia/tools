@@ -2,11 +2,12 @@
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
-    Footprint, GridPos, Log, MovePreview, MovementTransition, Phase, Pos, TerrainGrid, Turn, Unit,
+    Footprint, GridPos, Log, MovePreview, MovementTransition, Pos, TerrainGrid, Turn, Unit,
 };
 use crate::terrain::{
     TerrainEntry, footprint_movement_cost, footprint_on_impassable, terrain_ends_movement,
 };
+use crate::turn::{can_move, movement_budgets, spend_movement};
 use bevy_ecs::prelude::{Entity, World};
 use std::{
     cmp::Ordering,
@@ -15,7 +16,6 @@ use std::{
 
 struct MovePlan {
     entity: Entity,
-    turn: Turn,
     first_budget: u32,
     second_budget: u32,
     path: Vec<GridPos>,
@@ -31,7 +31,6 @@ impl Game {
     pub fn preview_move(&self, actor: i64, end: GridPos) -> Result<MovePreview, GameError> {
         let MovePlan {
             entity,
-            turn: _,
             first_budget,
             second_budget: _,
             path,
@@ -81,15 +80,15 @@ impl Game {
 
     /// AI 使用已評估的路徑；移動結算與玩家共用。
     pub(crate) fn move_along(&mut self, actor: i64, path: Vec<GridPos>) -> Result<(), GameError> {
-        self.ensure(actor)?;
+        self.ensure_turn(actor)?;
         let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
         let turn @ Turn {
             actor: _,
             phase: _,
             movement_remaining: _,
             movement_segments_used: _,
-        } = self.world.resource::<Turn>().clone();
-        if !can_move(&turn) {
+        } = self.world.resource::<Turn>();
+        if !can_move(turn) {
             return Err(error::cannot_move());
         }
         let allowance = self
@@ -97,12 +96,11 @@ impl Game {
             .get::<Unit>(entity)
             .expect("移動單位應具有 Unit")
             .movement;
-        let (first_budget, second_budget) = movement_budgets(&turn, allowance);
+        let (first_budget, second_budget) = movement_budgets(turn, allowance);
         self.execute_move_plan(
             actor,
             MovePlan {
                 entity,
-                turn,
                 first_budget,
                 second_budget,
                 path,
@@ -113,17 +111,10 @@ impl Game {
     fn execute_move_plan(&mut self, a: i64, plan: MovePlan) -> Result<(), GameError> {
         let MovePlan {
             entity: e,
-            turn,
             first_budget,
             second_budget,
             path,
         } = plan;
-        let Turn {
-            actor: _,
-            phase: _,
-            movement_remaining: _,
-            movement_segments_used,
-        } = turn;
         let PositionChangeResult {
             movement_cost: spent,
             unit_remains,
@@ -131,26 +122,12 @@ impl Game {
         if !unit_remains {
             return Ok(());
         }
-        let Turn {
-            actor: _,
-            phase,
-            movement_remaining,
-            movement_segments_used: segments_used,
-        } = &mut *self.world.resource_mut::<Turn>();
-        if movement_segments_used == 0 && spent <= first_budget {
-            *movement_remaining = first_budget - spent;
-        } else if movement_segments_used == 0 {
-            *segments_used = 1;
-            *movement_remaining = second_budget - (spent - first_budget);
-        } else {
-            *movement_remaining = second_budget - spent;
-        }
-        if *movement_remaining == 0 {
-            *segments_used += 1;
-            *phase = Phase::AfterMove;
-        } else {
-            *phase = Phase::Moving;
-        }
+        spend_movement(
+            &mut self.world.resource_mut::<Turn>(),
+            first_budget,
+            second_budget,
+            spent,
+        );
         Ok(())
     }
     /// 所有已驗證的位置變更共用此入口：逐格結算地形，再處理撤離與遭遇。
@@ -200,7 +177,7 @@ impl Game {
         }
     }
     fn move_plan(&self, actor: i64, end: GridPos) -> Result<MovePlan, GameError> {
-        self.ensure(actor)?;
+        self.ensure_turn(actor)?;
         let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
         let allowance = self
             .world
@@ -212,20 +189,12 @@ impl Game {
             phase: _,
             movement_remaining: _,
             movement_segments_used: _,
-        } = self.world.resource::<Turn>().clone();
-        if !can_move(&turn) {
+        } = self.world.resource::<Turn>();
+        if !can_move(turn) {
             return Err(error::cannot_move());
         }
-        let start = self
-            .world
-            .get::<Pos>(entity)
-            .expect("已建立的戰鬥單位應具有 Pos 元件")
-            .0;
-        let footprint = *self
-            .world
-            .get::<Footprint>(entity)
-            .expect("已建立的戰鬥單位應具有 Footprint 元件");
-        let (first_budget, second_budget) = movement_budgets(&turn, allowance);
+        let (start, footprint) = placement(&self.world, entity);
+        let (first_budget, second_budget) = movement_budgets(turn, allowance);
         let first_path = if first_budget > 0 {
             find_path(&self.world, entity, start, end, footprint, first_budget)
         } else {
@@ -247,12 +216,20 @@ impl Game {
         truncate_at_hazard(self.world.resource::<TerrainGrid>(), footprint, &mut path);
         Ok(MovePlan {
             entity,
-            turn,
             first_budget,
             second_budget,
             path,
         })
     }
+}
+
+/// 單位目前的位置與佔用尺寸；所有戰鬥單位都同時具有兩者。
+pub(crate) fn placement(world: &World, entity: Entity) -> (GridPos, Footprint) {
+    let Pos(position) = *world.get::<Pos>(entity).expect("戰鬥單位應具有 Pos 元件");
+    let footprint = *world
+        .get::<Footprint>(entity)
+        .expect("戰鬥單位應具有 Footprint 元件");
+    (position, footprint)
 }
 
 pub(crate) fn footprint_cells(position: GridPos, footprint: Footprint) -> Vec<GridPos> {
@@ -261,25 +238,33 @@ pub(crate) fn footprint_cells(position: GridPos, footprint: Footprint) -> Vec<Gr
         .collect()
 }
 pub(crate) fn unit_at_cell(world: &World, position: GridPos) -> Option<Entity> {
+    units_overlapping(
+        world,
+        position,
+        Footprint {
+            width: 1,
+            height: 1,
+        },
+    )
+    .into_iter()
+    .next()
+}
+/// 與指定佔用範圍重疊的所有單位。
+pub(crate) fn units_overlapping(
+    world: &World,
+    position: GridPos,
+    footprint: Footprint,
+) -> Vec<Entity> {
     world
         .iter_entities()
-        .find(|entity| {
+        .filter(|entity| {
             entity
                 .get::<Pos>()
                 .zip(entity.get::<Footprint>())
-                .is_some_and(|(pos, footprint)| {
-                    overlap(
-                        position,
-                        Footprint {
-                            width: 1,
-                            height: 1,
-                        },
-                        pos.0,
-                        *footprint,
-                    )
-                })
+                .is_some_and(|(pos, other)| overlap(position, footprint, pos.0, *other))
         })
         .map(|entity| entity.id())
+        .collect()
 }
 
 pub(crate) fn fits(width: i32, height: i32, p: GridPos, f: Footprint) -> bool {
@@ -319,17 +304,6 @@ pub(crate) fn footprint_blocked(blocked: &HashSet<GridPos>, p: GridPos, f: Footp
     footprint_cells(p, f)
         .iter()
         .any(|cell| blocked.contains(cell))
-}
-pub(crate) fn entity_distance(w: &World, a: Entity, b: Entity) -> i32 {
-    let ap = w.get::<Pos>(a).expect("已建立的戰鬥單位應具有 Pos 元件").0;
-    let af = *w
-        .get::<Footprint>(a)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    let bp = w.get::<Pos>(b).expect("已建立的戰鬥單位應具有 Pos 元件").0;
-    let bf = *w
-        .get::<Footprint>(b)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
-    footprint_distance(ap, af, bp, bf)
 }
 /// 單位佔用範圍到指定格子的距離；技能射程與目標選格共用。
 pub(crate) fn footprint_cell_distance(
@@ -529,7 +503,7 @@ pub(crate) fn movement_options(
     turn: &Turn,
     include_second: bool,
 ) -> Vec<MovementOption> {
-    let start = world.get::<Pos>(entity).expect("移動單位應具有位置").0;
+    let (start, footprint) = placement(world, entity);
     let mut options = vec![MovementOption {
         position: start,
         path: vec![start],
@@ -538,9 +512,6 @@ pub(crate) fn movement_options(
     if !can_move(turn) {
         return options;
     }
-    let footprint = *world
-        .get::<Footprint>(entity)
-        .expect("移動單位應具有佔用尺寸");
     let allowance = world
         .get::<Unit>(entity)
         .expect("移動單位應具有 Unit")
@@ -682,12 +653,15 @@ pub(crate) fn toward_skill_range(
     let end = *best
         .keys()
         .filter(|p| {
-            footprint_cells(target, target_footprint)
-                .into_iter()
-                .any(|cell| {
-                    crate::sight::check_sight_in_range(grid, **p, f, cell, min_range, max_range)
-                        .is_ok()
-                })
+            crate::sight::sees_footprint_in_range(
+                grid,
+                **p,
+                f,
+                target,
+                target_footprint,
+                min_range,
+                max_range,
+            )
         })
         .min_by_key(|p| {
             let range = footprint_distance(**p, f, target, target_footprint);
@@ -711,10 +685,7 @@ pub(crate) fn toward_skill_range(
     Some(route)
 }
 fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
-    let p = w.get::<Pos>(e).expect("已建立的戰鬥單位應具有 Pos 元件").0;
-    let f = *w
-        .get::<Footprint>(e)
-        .expect("已建立的戰鬥單位應具有 Footprint 元件");
+    let (p, f) = placement(w, e);
     let Paths { best, previous: _ } = paths(
         w.resource::<TerrainGrid>(),
         &occupied_cells(w, e),
@@ -727,34 +698,6 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
     v.sort_by_key(|p| (p.y, p.x));
     v
 }
-/// 本回合是否還能移動；每回合最多兩段移動。
-pub(crate) fn can_move(turn: &Turn) -> bool {
-    let Turn {
-        actor: _,
-        phase,
-        movement_remaining: _,
-        movement_segments_used,
-    } = turn;
-    matches!(phase, Phase::Ready | Phase::Moving | Phase::AfterMove) && *movement_segments_used < 2
-}
-
-/// 第一段尚未用完時保留第二段完整額度；進入第二段後只使用剩餘額度。
-pub(crate) fn movement_budgets(turn: &Turn, allowance: u32) -> (u32, u32) {
-    let Turn {
-        actor: _,
-        phase,
-        movement_remaining,
-        movement_segments_used,
-    } = turn;
-    if *movement_segments_used == 0 {
-        (*movement_remaining, allowance)
-    } else if *phase == Phase::AfterMove {
-        (0, allowance)
-    } else {
-        (0, *movement_remaining)
-    }
-}
-
 /// 呼叫端須先以 can_move 確認仍可移動。
 pub(crate) fn movement_ranges(w: &World, e: Entity, turn: &Turn) -> (Vec<GridPos>, Vec<GridPos>) {
     let allowance = w
