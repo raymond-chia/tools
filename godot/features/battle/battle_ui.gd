@@ -550,19 +550,22 @@ func _on_action_pressed(action: String) -> void:
 
 func sync_action_buttons() -> void:
 	var current_ids := {}
-	for skill in presented_skills:
+	for index in range(presented_skills.size()):
+		var skill: Dictionary = presented_skills[index]
 		current_ids[skill.id] = true
-		if action_buttons.has(skill.id):
-			continue
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(100, 48)
-		button.toggle_mode = true
-		button.pressed.connect(_on_action_pressed.bind(skill.id))
-		button.mouse_entered.connect(_on_skill_mouse_entered.bind(skill.id))
-		button.mouse_exited.connect(_on_skill_mouse_exited.bind(skill.id))
-		button.gui_input.connect(_on_skill_gui_input.bind(skill.id))
-		action_buttons_container.add_child(button)
-		action_buttons[skill.id] = button
+		if not action_buttons.has(skill.id):
+			var button := Button.new()
+			button.custom_minimum_size = Vector2(100, 48)
+			button.toggle_mode = true
+			button.pressed.connect(_on_action_pressed.bind(skill.id))
+			button.mouse_entered.connect(_on_skill_mouse_entered.bind(skill.id))
+			button.mouse_exited.connect(_on_skill_mouse_exited.bind(skill.id))
+			button.gui_input.connect(_on_skill_gui_input.bind(skill.id))
+			action_buttons_container.add_child(button)
+			action_buttons[skill.id] = button
+		var button: Button = action_buttons[skill.id]
+		if button.get_index() != index:
+			action_buttons_container.move_child(button, index)
 	for action in action_buttons.keys():
 		if current_ids.has(action):
 			continue

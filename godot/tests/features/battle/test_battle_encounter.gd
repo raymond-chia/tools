@@ -60,6 +60,24 @@ func test_switch_player_after_step_clears_skill_selection_and_allows_move() -> v
 			assert_int(int(unit.x)).is_equal(2)
 			assert_int(int(unit.y)).is_equal(2)
 
+# 驗證踏莎行待出刀後切換隊友及切回自己，技能按鈕仍依原本順序排列。
+func test_step_preserves_skill_button_order_when_switching_players() -> void:
+	var expected_buttons: Array = [battle.ui.action_buttons.long_shot, battle.ui.action_buttons.step_through_the_sedge]
+	assert_array(battle.ui.action_buttons_container.get_children()).contains_exactly(expected_buttons)
+	battle.ui.action_buttons.step_through_the_sedge.pressed.emit()
+	battle.world.primary_clicked.emit(0, Vector2i(2, 1))
+	await wait_until_idle(battle, runner)
+	assert_str(battle.state.turn.phase).is_equal("pending_strike")
+	assert_array(battle.ui.action_buttons_container.get_children()).contains_exactly([battle.ui.action_buttons.step_through_the_sedge])
+	for actor_id in [2, 1]:
+		battle.ui.turn_order_focus_requested.emit(actor_id)
+		await runner.simulate_frames(1)
+		assert_int(battle.state.turn.actor).is_equal(actor_id)
+		assert_array(battle.ui.action_buttons_container.get_children()).contains_exactly([
+			battle.ui.action_buttons.long_shot,
+			battle.ui.action_buttons.step_through_the_sedge,
+		] if actor_id == 2 else [battle.ui.action_buttons.step_through_the_sedge])
+
 # 驗證遠距攻擊接敵後，其餘玩家完成探索陣營回合，下一輪敵人才進入先攻順序。
 func test_attack_contact_waits_for_player_faction() -> void:
 	assert_str(battle.state.battle_mode).is_equal("exploring")
