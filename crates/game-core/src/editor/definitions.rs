@@ -122,20 +122,27 @@ pub fn edit_definition_from_json(
                 .iter()
                 .map(|unit| (unit.id.clone(), equipment_choices(unit, &equipment)))
                 .collect();
-            let active_skill_ids: Vec<_> = definitions
-                .active_skills
-                .iter()
-                .map(|skill| &skill.id)
-                .collect();
+            let mut active_skills: Vec<_> = definitions.active_skills.iter().collect();
+            active_skills.sort_by_key(|skill| is_magical_effect(&skill.effect));
+            let active_skill_ids: Vec<_> = active_skills.iter().map(|skill| &skill.id).collect();
             let passive_skill_ids: Vec<_> = definitions
                 .passive_skills
                 .iter()
                 .map(|passive| &passive.id)
                 .collect();
-            // 技能頁先列主動再列被動；拖曳只調整同組內的順序。
-            let skill_entries: Vec<_> = active_skill_ids
+            // 技能頁依一般主動、魔法、被動分組；拖曳只調整同組內的順序。
+            let skill_entries: Vec<_> = active_skills
                 .iter()
-                .map(|id| serde_json::json!({"id": id, "move_targets": active_skill_ids}))
+                .map(|skill| {
+                    let move_targets: Vec<_> = active_skills
+                        .iter()
+                        .filter(|target| {
+                            is_magical_effect(&target.effect) == is_magical_effect(&skill.effect)
+                        })
+                        .map(|target| &target.id)
+                        .collect();
+                    serde_json::json!({"id": skill.id, "move_targets": move_targets})
+                })
                 .chain(
                     passive_skill_ids
                         .iter()
@@ -165,7 +172,13 @@ pub fn edit_definition_from_json(
             }
             DefinitionCategory::Skills => {
                 if position(&definitions.active_skills, &id).is_some() {
-                    move_entry(&mut definitions.active_skills, &id, offset, |_, _| true)?
+                    // 與畫面使用相同分組，讓拖曳位移對應正確的資料位置。
+                    definitions
+                        .active_skills
+                        .sort_by_key(|skill| is_magical_effect(&skill.effect));
+                    move_entry(&mut definitions.active_skills, &id, offset, |a, b| {
+                        is_magical_effect(&a.effect) == is_magical_effect(&b.effect)
+                    })?
                 } else {
                     move_entry(&mut definitions.passive_skills, &id, offset, |_, _| true)?
                 }
@@ -518,6 +531,20 @@ impl Identified for TerrainTypeDef {
     }
     fn set_id(&mut self, id: String) {
         self.id = id;
+    }
+}
+
+/// 編輯器的魔法分組集中在此，供清單顯示與拖曳共用。
+fn is_magical_effect(effect: &ActiveSkillEffect) -> bool {
+    match effect {
+        ActiveSkillEffect::Attack { power_source, .. }
+        | ActiveSkillEffect::Heal { power_source, .. } => {
+            *power_source == crate::PowerSource::Magical
+        }
+        ActiveSkillEffect::Mire { .. } => true,
+        ActiveSkillEffect::Loot
+        | ActiveSkillEffect::MoveThenAttack
+        | ActiveSkillEffect::Push { .. } => false,
     }
 }
 
