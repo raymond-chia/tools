@@ -7,11 +7,10 @@ use crate::model::{
     ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
     AttackResult, Board, CellTerrain, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
     GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, PassiveSkillDef, PassiveSkillEffect,
-    PassiveSkills, PendingStrike, Pos, RollDegree, TerrainGrid, Turn, Unit,
+    PassiveSkills, PendingStrike, Pos, RollDegree, TerrainGrid, Unit,
 };
 use crate::movement::{
-    PositionChangeResult, fits, footprint_cell_distance, footprint_cells, placement, unit_at_cell,
-    units_overlapping,
+    fits, footprint_cell_distance, footprint_cells, placement, unit_at_cell, units_overlapping,
 };
 use crate::terrain::{
     TerrainEntry, add_temporary_terrain, footprint_blocks_push, footprint_on_impassable,
@@ -81,10 +80,7 @@ impl Game {
             target,
         } = evaluate_skill(&self.world, entity, origin, destination, skill);
         target?;
-        let PositionChangeResult {
-            movement_cost: _,
-            unit_remains,
-        } = self.change_position(
+        let unit_remains = self.change_position(
             entity,
             actor,
             &[origin, destination],
@@ -98,7 +94,7 @@ impl Game {
     /// 預覽與施放共用：確認輪到該單位且本回合仍可使用技能，回傳施放者。
     fn skill_caster(&self, actor: i64) -> Result<Entity, GameError> {
         self.ensure_turn(actor)?;
-        if !can_use_skill(self.world.resource::<Turn>()) {
+        if !can_use_skill(&self.world) {
             return Err(error::cannot_use_skill());
         }
         self.entity(actor).ok_or(error::missing_actor())
@@ -1362,7 +1358,7 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
             ActiveSkillRangeView {
                 id: id.clone(),
                 details: skill_details(skill, board),
-                usable: can_use_skill(w.resource::<Turn>())
+                usable: can_use_skill(w)
                     && (!matches!(effect, ActiveSkillEffect::Loot)
                         || w.get_resource::<crate::model::Cargo>()
                             .is_some_and(|cargo| {

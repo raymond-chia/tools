@@ -2,12 +2,13 @@
 use crate::error::{self, GameError};
 use crate::game::Game;
 use crate::model::{
-    Footprint, GridPos, Log, MovePreview, MovementTransition, Pos, TerrainGrid, Turn, Unit,
+    BattleMode, Exploration, Footprint, GridPos, Log, MovePreview, MovementTransition, Pos,
+    TerrainGrid, Turn, Unit,
 };
 use crate::terrain::{
     TerrainEntry, footprint_movement_cost, footprint_on_impassable, terrain_ends_movement,
 };
-use crate::turn::{can_move, movement_budgets, spend_movement};
+use crate::turn::{can_move, movement_budgets, spend_exploration_step, spend_movement};
 use bevy_ecs::prelude::{Entity, World};
 use std::{
     cmp::Ordering,
@@ -17,14 +18,8 @@ use std::{
 struct MovePlan {
     entity: Entity,
     first_budget: u32,
-    second_budget: u32,
     path: Vec<GridPos>,
-}
-
-/// 位置變更已完成地形與落點結算；呼叫端只處理自己的行動階段。
-pub(crate) struct PositionChangeResult {
-    pub(crate) movement_cost: u32,
-    pub(crate) unit_remains: bool,
+    turn_after: Turn,
 }
 
 impl Game {
@@ -32,17 +27,18 @@ impl Game {
         let MovePlan {
             entity,
             first_budget,
-            second_budget: _,
             path,
+            turn_after: _,
         } = self.move_plan(actor, end)?;
         let footprint = *self
             .world
             .get::<Footprint>(entity)
             .expect("預覽移動的單位應具有 Footprint 元件");
         let grid = self.world.resource::<TerrainGrid>();
-        let interrupted = path
-            .last()
-            .is_some_and(|position| terrain_ends_movement(grid, *position, footprint));
+        let interrupted = path.last() != Some(&end)
+            || path
+                .last()
+                .is_some_and(|position| terrain_ends_movement(grid, *position, footprint));
         let mut first = Vec::new();
         let mut second = Vec::new();
         let mut spent = 0;
@@ -79,7 +75,11 @@ impl Game {
     }
 
     /// AI 使用已評估的路徑；移動結算與玩家共用。
-    pub(crate) fn move_along(&mut self, actor: i64, path: Vec<GridPos>) -> Result<(), GameError> {
+    pub(crate) fn move_along(
+        &mut self,
+        actor: i64,
+        mut path: Vec<GridPos>,
+    ) -> Result<(), GameError> {
         self.ensure_turn(actor)?;
         let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
         let turn @ Turn {
@@ -97,13 +97,23 @@ impl Game {
             .expect("移動單位應具有 Unit")
             .movement;
         let (first_budget, second_budget) = movement_budgets(turn, allowance);
+        let (_, footprint) = placement(&self.world, entity);
+        let grid = self.world.resource::<TerrainGrid>();
+        truncate_at_hazard(grid, footprint, &mut path);
+        let spent = path
+            .iter()
+            .skip(1)
+            .map(|position| footprint_movement_cost(grid, *position, footprint))
+            .sum();
+        let mut turn_after = turn.clone();
+        spend_movement(&mut turn_after, first_budget, second_budget, spent);
         self.execute_move_plan(
             actor,
             MovePlan {
                 entity,
                 first_budget,
-                second_budget,
                 path,
+                turn_after,
             },
         )
     }
@@ -111,26 +121,18 @@ impl Game {
     fn execute_move_plan(&mut self, a: i64, plan: MovePlan) -> Result<(), GameError> {
         let MovePlan {
             entity: e,
-            first_budget,
-            second_budget,
+            first_budget: _,
             path,
+            turn_after,
         } = plan;
-        let PositionChangeResult {
-            movement_cost: spent,
-            unit_remains,
-        } = self.change_position(e, a, &path, TerrainEntry::Movement);
+        let unit_remains = self.change_position(e, a, &path, TerrainEntry::Movement);
         if !unit_remains {
             return Ok(());
         }
-        spend_movement(
-            &mut self.world.resource_mut::<Turn>(),
-            first_budget,
-            second_budget,
-            spent,
-        );
+        *self.world.resource_mut::<Turn>() = turn_after;
         Ok(())
     }
-    /// 所有已驗證的位置變更共用此入口：逐格結算地形，再處理撤離與遭遇。
+    /// 所有已驗證的位置變更共用此入口，回傳單位是否仍在場；探索時逐格保留遭遇的敵人。
     /// 路徑含起點；位移技能與推擊只傳入起點及落點，普通移動則傳入完整路徑。
     pub(crate) fn change_position(
         &mut self,
@@ -138,17 +140,16 @@ impl Game {
         a: i64,
         path: &[GridPos],
         entry: TerrainEntry,
-    ) -> PositionChangeResult {
+    ) -> bool {
         let footprint = *self
             .world
             .get::<Footprint>(e)
             .expect("執行移動的單位應具有 Footprint 元件");
         let log_insert_index = self.world.resource::<Log>().0.len();
         let mut actual_path = vec![*path.first().expect("已規劃的移動路徑應包含起點")];
-        let mut spent = 0;
+        let exploring = self.world.resource::<Exploration>().mode == BattleMode::Exploring;
         for p in path.iter().copied().skip(1) {
             let grid = self.world.resource::<TerrainGrid>();
-            spent += footprint_movement_cost(grid, p, footprint);
             let ends_movement = terrain_ends_movement(grid, p, footprint);
             self.world
                 .get_mut::<Pos>(e)
@@ -156,6 +157,9 @@ impl Game {
                 .0 = p;
             actual_path.push(p);
             let downed = self.apply_terrain_entry(e, a, entry);
+            if exploring && !downed {
+                self.activate_enemies_near(&[e]);
+            }
             if ends_movement || downed {
                 break;
             }
@@ -168,13 +172,10 @@ impl Game {
             });
         }
         let unit_remains = self.world.get_entity(e).is_ok() && !self.escape_with_cargo(e, a);
-        if unit_remains {
+        if unit_remains && !exploring {
             self.activate_enemies_near(&[e]);
         }
-        PositionChangeResult {
-            movement_cost: spent,
-            unit_remains,
-        }
+        unit_remains
     }
     fn move_plan(&self, actor: i64, end: GridPos) -> Result<MovePlan, GameError> {
         self.ensure_turn(actor)?;
@@ -195,6 +196,7 @@ impl Game {
         }
         let (start, footprint) = placement(&self.world, entity);
         let (first_budget, second_budget) = movement_budgets(turn, allowance);
+        let exploring = self.world.resource::<Exploration>().mode == BattleMode::Exploring;
         let first_path = if first_budget > 0 {
             find_path(&self.world, entity, start, end, footprint, first_budget)
         } else {
@@ -212,13 +214,60 @@ impl Game {
                     first_budget + second_budget,
                 )
             })
+            .or_else(|| {
+                if exploring {
+                    let search = full_board_paths(
+                        self.world.resource::<TerrainGrid>(),
+                        &occupied_cells(&self.world, entity),
+                        start,
+                        footprint,
+                        PathPriority::Safety,
+                    );
+                    reconstruct_path(&search, start, end)
+                } else {
+                    None
+                }
+            })
             .ok_or(error::unreachable_destination())?;
         truncate_at_hazard(self.world.resource::<TerrainGrid>(), footprint, &mut path);
+        let mut turn_after = turn.clone();
+        if exploring {
+            let mut encountered = false;
+            let mut steps = 1;
+            for position in path.iter().copied().skip(1) {
+                let cost = footprint_movement_cost(
+                    self.world.resource::<TerrainGrid>(),
+                    position,
+                    footprint,
+                );
+                let (first, second) = movement_budgets(&turn_after, allowance);
+                if encountered && (!can_move(&turn_after) || cost > first + second) {
+                    break;
+                }
+                spend_exploration_step(&mut turn_after, allowance, cost)?;
+                steps += 1;
+                encountered |= !self.encounter_enemies_at(position, footprint).is_empty();
+            }
+            path.truncate(steps);
+        } else {
+            let spent = path
+                .iter()
+                .skip(1)
+                .map(|position| {
+                    footprint_movement_cost(
+                        self.world.resource::<TerrainGrid>(),
+                        *position,
+                        footprint,
+                    )
+                })
+                .sum();
+            spend_movement(&mut turn_after, first_budget, second_budget, spent);
+        }
         Ok(MovePlan {
             entity,
             first_budget,
-            second_budget,
             path,
+            turn_after,
         })
     }
 }

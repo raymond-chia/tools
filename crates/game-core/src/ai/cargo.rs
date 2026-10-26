@@ -122,7 +122,7 @@ impl Game {
         } = self.cargo_route(actor, active_skills)?;
         let turn = self.world.resource::<Turn>();
         let mut first = movement_options(&self.world, actor, turn, false);
-        if can_use_skill(turn) {
+        if can_use_skill(&self.world) {
             if let Some((skill, target_cell)) = loot.as_ref() {
                 if let Some(index) = first.iter().position(|plan| plan.position == goal) {
                     return Some(AiTurnPlan {

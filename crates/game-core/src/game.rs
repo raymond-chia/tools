@@ -133,6 +133,23 @@ impl Game {
         }?;
         self.update_exploration_encounter();
         self.outcome();
+        if self.world.resource::<Exploration>().mode == BattleMode::Exploring
+            && self.world.resource::<ResultState>().0 == Outcome::Ongoing
+        {
+            let turn = self.world.resource::<Turn>();
+            if turn.phase == Phase::Ended || (turn.phase != Phase::PendingStrike && !can_move(turn))
+            {
+                let actor = turn.actor;
+                if let Some(entity) = actor.and_then(|actor| self.entity(actor)) {
+                    let movement = self
+                        .world
+                        .get::<Unit>(entity)
+                        .expect("探索單位應具有 Unit")
+                        .movement;
+                    *self.world.resource_mut::<Turn>() = new_turn(actor, movement);
+                }
+            }
+        }
         if self.world.resource::<Exploration>().mode != BattleMode::Combat
             && self.world.resource::<Turn>().phase == Phase::Ended
             && self.world.resource::<ResultState>().0 == Outcome::Ongoing
@@ -231,6 +248,14 @@ impl Game {
     /// 遭遇與連鎖參戰共用十格內可見的判定。
     fn can_see_in_encounter(&self, source: Entity, target: Entity) -> bool {
         let (origin, footprint) = placement(&self.world, source);
+        self.can_see_in_encounter_from(origin, footprint, target)
+    }
+    fn can_see_in_encounter_from(
+        &self,
+        origin: GridPos,
+        footprint: Footprint,
+        target: Entity,
+    ) -> bool {
         let (target, target_footprint) = placement(&self.world, target);
         crate::sight::sees_footprint_in_range(
             self.world.resource::<TerrainGrid>(),
@@ -242,23 +267,34 @@ impl Game {
             gameplay_config::ENCOUNTER_RANGE,
         )
     }
-    /// 先找出遭遇範圍內可見的敵人，再連鎖觸發彼此可見的一批。
-    pub(crate) fn activate_enemies_near(&mut self, units: &[Entity]) -> bool {
-        let enemies: Vec<_> = self
-            .world
+    /// 移動預覽與實際遭遇共用同一套位置、距離及視線判斷。
+    pub(crate) fn encounter_enemies_at(
+        &self,
+        origin: GridPos,
+        footprint: Footprint,
+    ) -> Vec<Entity> {
+        self.world
             .iter_entities()
             .filter(|entity| {
-                entity
-                    .get::<Unit>()
-                    .is_some_and(|unit| is_hostile_to_player(&self.world, &unit.team))
-            })
-            .filter(|entity| {
-                units
-                    .iter()
-                    .any(|unit| self.can_see_in_encounter(*unit, entity.id()))
+                entity.get::<Unit>().is_some_and(|unit| {
+                    is_hostile_to_player(&self.world, &unit.team)
+                        && self.can_see_in_encounter_from(origin, footprint, entity.id())
+                })
             })
             .map(|entity| entity.id())
+            .collect()
+    }
+    /// 先找出遭遇範圍內可見的敵人，再連鎖觸發彼此可見的一批。
+    pub(crate) fn activate_enemies_near(&mut self, units: &[Entity]) -> bool {
+        let mut enemies: Vec<_> = units
+            .iter()
+            .flat_map(|unit| {
+                let (origin, footprint) = placement(&self.world, *unit);
+                self.encounter_enemies_at(origin, footprint)
+            })
             .collect();
+        enemies.sort();
+        enemies.dedup();
         let enemies = self.connected_enemies(&enemies);
         let found = !enemies.is_empty();
         let Encounter {
@@ -697,7 +733,7 @@ impl Game {
         } else {
             Vec::new()
         };
-        let can_skill = player_turn && can_use_skill(turn);
+        let can_skill = player_turn && can_use_skill(&self.world);
         let Exploration { mode, turns } = self.world.resource::<Exploration>();
         let exploring = *mode != BattleMode::Combat;
         let turn_order: Vec<_> = if exploring {

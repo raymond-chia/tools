@@ -1,8 +1,8 @@
 //! 回合的初始化、行動權限、移動額度與階段切換；Turn 僅承載資料。
 use crate::error::{self, GameError};
 use crate::game::Game;
-use crate::model::{Encounter, PendingStrike, Phase, Turn, Unit};
-use bevy_ecs::prelude::Entity;
+use crate::model::{BattleMode, Encounter, Exploration, PendingStrike, Phase, Turn, Unit};
+use bevy_ecs::prelude::{Entity, World};
 
 pub(crate) fn new_turn(actor: Option<i64>, movement: u32) -> Turn {
     Turn {
@@ -47,16 +47,36 @@ pub(crate) fn movement_budgets(turn: &Turn, allowance: u32) -> (u32, u32) {
     }
 }
 
-pub(crate) fn can_use_skill(turn: &Turn) -> bool {
+pub(crate) fn can_use_skill(world: &World) -> bool {
     let Turn {
         actor: _,
         phase,
         movement_remaining: _,
         movement_segments_used,
-    } = turn;
+    } = world.resource::<Turn>();
     matches!(phase, Phase::PendingStrike)
+        || world.resource::<Exploration>().mode == BattleMode::Exploring
+            && matches!(phase, Phase::Ready | Phase::Moving | Phase::AfterMove)
         || matches!(phase, Phase::Ready | Phase::Moving) && *movement_segments_used == 0
         || matches!(phase, Phase::AfterMove) && *movement_segments_used == 1
+}
+
+/// 探索逐格扣除移動成本；本次額度不足時，自動開始同一人的下一回合。
+pub(crate) fn spend_exploration_step(
+    turn: &mut Turn,
+    allowance: u32,
+    cost: u32,
+) -> Result<(), GameError> {
+    let (first, second) = movement_budgets(turn, allowance);
+    if !can_move(turn) || cost > first + second {
+        *turn = new_turn(turn.actor, allowance);
+    }
+    let (first, second) = movement_budgets(turn, allowance);
+    if cost > first + second {
+        return Err(error::unreachable_destination());
+    }
+    spend_movement(turn, first, second, cost);
+    Ok(())
 }
 
 /// 尚未開始行動（未移動、未使用技能）才能延後。

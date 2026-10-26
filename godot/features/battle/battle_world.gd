@@ -510,7 +510,7 @@ func draw_move_path(path: Array, color: Color) -> void:
 func _draw() -> void:
 	if state.is_empty():
 		return
-	if pending_action == "" and not is_presenting_combat_events():
+	if state.battle_mode != "exploring" and pending_action == "" and not is_presenting_combat_events():
 		BattleVisuals.draw_movement_range(self, ground, state.reachable, state.second_reachable, false)
 		BattleVisuals.draw_movement_range(self, ground, state.inspected_reachable, state.inspected_second_reachable, true)
 	for cell in selected_skill_range(): draw_marker(Vector2i(cell.x,cell.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)

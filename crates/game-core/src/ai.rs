@@ -131,7 +131,7 @@ impl Game {
                     skill,
                     target_cell,
                     attack_target,
-                }) if can_use_skill(self.world.resource::<Turn>()) => {
+                }) if can_use_skill(&self.world) => {
                     let attack = target_kind(&skill.effect) == ActiveSkillTargetKind::Enemy;
                     self.use_skill_at_cell(actor, target_cell, skill)?;
                     if attack && self.world.get_entity(entity).is_ok() {
@@ -205,7 +205,7 @@ impl Game {
         positions: &[MovementOption],
         healing_focus: Option<Entity>,
     ) -> Option<ActiveSkillPlan> {
-        if !can_use_skill(self.world.resource::<Turn>()) {
+        if !can_use_skill(&self.world) {
             return None;
         }
         let footprint = *self

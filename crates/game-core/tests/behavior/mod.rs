@@ -4,6 +4,7 @@ mod test_cargo_ai;
 mod test_cargo_objective;
 mod test_encounter;
 mod test_equipment;
+mod test_exploration;
 mod test_movement;
 mod test_outcome_conditions;
 mod test_sight;
