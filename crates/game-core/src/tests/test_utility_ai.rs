@@ -14,6 +14,17 @@ fn definitions() -> toml::Value {
     toml::from_str(DEFINITIONS).expect("Utility AI 專用測試 TOML 應有效")
 }
 
+fn sweep_ai_definitions() -> toml::Value {
+    let mut definitions = definitions();
+    let actor = unit_type_mut(&mut definitions, "tank");
+    actor["movement"] = 0.into();
+    actor["hit"] = 100.into();
+    actor["physical_power"] = 6.into();
+    // 固定不移動且只提供橫掃，避免其他技能或移動影響案例。
+    actor["active_skills"] = toml::Value::Array(vec!["sweep".into()]);
+    definitions
+}
+
 fn unit_type_mut<'a>(definitions: &'a mut toml::Value, id: &str) -> &'a mut toml::Value {
     definitions["unit_types"]
         .as_array_mut()
@@ -1337,4 +1348,282 @@ fn encounter_enemy_movement_activates_connected_enemies() {
         game.command(Command::Continue).expect("應可推進到下一回合");
     }
     assert_turn_order(&game, &markers, "ATLS", "移動後啟動同伴並連鎖十格");
+}
+
+// 驗證橫掃先比較敵友總傷害，再用少量固定種子確認輸出與友傷權重的多數選擇。
+#[test]
+fn sweep_ai_scores_all_targets_and_friendly_fire() {
+    const SECOND_ENEMY_ID: i64 = 4;
+
+    // 依序為傾向、輸出權重、友傷權重、兩敵一友時是否多數接受友傷。
+    for (profile_name, damage_weight, friendly_fire_weight, mostly_sweeps) in [
+        ("重輸出", 100, 6, true),
+        ("偏輸出", 10, 6, true),
+        ("偏避友傷", 6, 100, false),
+        ("重避友傷", 6, 1000, false),
+    ] {
+        for (name, diagram, expected_targets, may_hit_allies) in [
+            // 驗證空中心格兩側的敵人都列入橫掃收益。
+            (
+                "兩敵無友",
+                "
+                .....
+                .TDC.
+                ..A..
+                .....
+                ",
+                vec![TARGET_ID, SECOND_ENEMY_ID],
+                false,
+            ),
+            // 驗證敵友總傷害相等時，即使重輸出也不使用橫掃。
+            (
+                "一敵一友",
+                "
+                .....
+                .BT..
+                ..A..
+                .....
+                ",
+                vec![],
+                false,
+            ),
+            // 驗證友軍總傷害較大時，所有傾向都不使用橫掃。
+            (
+                "一敵兩友",
+                "
+                .....
+                .BTL.
+                ..A..
+                .....
+                ",
+                vec![],
+                false,
+            ),
+            // 驗證敵方總傷害較大時，權重決定少量種子中是否多數接受友傷。
+            (
+                "兩敵一友",
+                "
+                .....
+                .BTC.
+                ..A..
+                .....
+                ",
+                vec![TARGET_ID, ALLY_ID, SECOND_ENEMY_ID],
+                true,
+            ),
+        ] {
+            let mut definitions = sweep_ai_definitions();
+            let profile = profile_mut(&mut definitions, "tank");
+            profile["damage_weight"] = damage_weight.into();
+            profile["friendly_fire_weight"] = friendly_fire_weight.into();
+            let layout = ascii_board(diagram);
+            let units: Vec<_> = [
+                ('A', ACTOR_ID, "tank", enemy()),
+                ('T', TARGET_ID, "target", Team::Player),
+                ('B', ALLY_ID, "target", enemy()),
+                ('C', SECOND_ENEMY_ID, "target", Team::Player),
+                ('L', 5, "target", enemy()),
+            ]
+            .into_iter()
+            .filter(|(marker, _, _, _)| layout.markers.contains_key(marker))
+            .collect();
+            let mut friendly_fire_uses = 0;
+            for seed in [1, 2, 3, 4, 5] {
+                let mut game = game_on_map(
+                    &definitions,
+                    map_from_ascii_board("sweep_ai", &layout, &units),
+                );
+                game.command(Command::Start).expect("測試戰鬥應可開始");
+                assert_eq!(game.world.resource::<Turn>().actor, Some(ACTOR_ID));
+                // 在先攻擲骰後設定種子，讓這五個種子直接控制 AI 的友傷取捨。
+                game.set_random_seed(seed);
+                let snapshot = game.command(Command::Continue).expect("AI 應可完成行動");
+                let snapshot = serde_json::to_value(snapshot).expect("行動快照應可序列化");
+                let hits: Vec<_> = snapshot["log"]
+                    .as_array()
+                    .expect("快照應有日誌")
+                    .iter()
+                    .filter_map(|event| Some((event["skill"].as_str()?, event["target"].as_i64()?)))
+                    .collect();
+                let hits_ally = hits.contains(&("sweep", ALLY_ID));
+                if hits_ally {
+                    friendly_fire_uses += 1;
+                }
+                // 拒絕友傷時應向右只打 C；接受時必須完整命中上方的兩敵一友。
+                let expected_hits: Vec<_> = if may_hit_allies && !hits_ally {
+                    vec![("sweep", SECOND_ENEMY_ID)]
+                } else {
+                    expected_targets
+                        .iter()
+                        .map(|target| ("sweep", *target))
+                        .collect()
+                };
+                assert_eq!(hits, expected_hits, "{profile_name}：{name}，種子 {seed}");
+            }
+            if may_hit_allies {
+                assert_eq!(
+                    friendly_fire_uses > 2,
+                    mostly_sweeps,
+                    "{profile_name}：{name}，接受友傷 {friendly_fire_uses}/5 次"
+                );
+            }
+        }
+    }
+}
+
+// 驗證 2×2 AI 周圍八個合法中心格都能橫掃兩端目標，避免只命中重疊範圍而漏測中心格。
+#[test]
+fn sweep_ai_large_actor_uses_centers_outside_its_footprint() {
+    let mut actions = Vec::new();
+    for (name, diagram) in [
+        (
+            "上側左格",
+            "
+            ......
+            .TDC..
+            ..AA..
+            ..AA..
+            ......
+            ......
+            ",
+        ),
+        (
+            "上側右格",
+            "
+            ......
+            ..TDC.
+            ..AA..
+            ..AA..
+            ......
+            ......
+            ",
+        ),
+        (
+            "下側左格",
+            "
+            ......
+            ......
+            ..AA..
+            ..AA..
+            .TDC..
+            ......
+            ",
+        ),
+        (
+            "下側右格",
+            "
+            ......
+            ......
+            ..AA..
+            ..AA..
+            ..TDC.
+            ......
+            ",
+        ),
+        (
+            "左側上格",
+            "
+            ......
+            .T....
+            .DAA..
+            .CAA..
+            ......
+            ......
+            ",
+        ),
+        (
+            "左側下格",
+            "
+            ......
+            ......
+            .TAA..
+            .DAA..
+            .C....
+            ......
+            ",
+        ),
+        (
+            "右側上格",
+            "
+            ......
+            ....T.
+            ..AAD.
+            ..AAC.
+            ......
+            ......
+            ",
+        ),
+        (
+            "右側下格",
+            "
+            ......
+            ......
+            ..AAT.
+            ..AAD.
+            ....C.
+            ......
+            ",
+        ),
+    ] {
+        let layout = ascii_board(diagram);
+        let mut definitions = sweep_ai_definitions();
+        let (_, size) = layout.markers[&'A'];
+        let actor = unit_type_mut(&mut definitions, "tank")
+            .as_table_mut()
+            .expect("測試單位種類應為 table");
+        actor.insert("width".into(), size.0.into());
+        actor.insert("height".into(), size.1.into());
+        let mut game = game_on_map(
+            &definitions,
+            map_from_ascii_board(
+                "large_sweep_ai",
+                &layout,
+                &[
+                    ('A', ACTOR_ID, "tank", enemy()),
+                    ('T', TARGET_ID, "target", Team::Player),
+                    ('C', ALLY_ID, "target", Team::Player),
+                ],
+            ),
+        );
+        game.command(Command::Start).expect("測試戰鬥應可開始");
+        let ((x, y), _) = layout.markers[&'D'];
+        let preview = game
+            .preview_skill(ACTOR_ID, GridPos { x, y }, "sweep")
+            .expect("大型單位的外側中心格應可橫掃");
+        match preview {
+            crate::ActiveSkillPreview::Area { cells: _, targets } => {
+                assert_eq!(
+                    targets
+                        .iter()
+                        .map(|target| target.target)
+                        .collect::<Vec<_>>(),
+                    vec![TARGET_ID, ALLY_ID],
+                    "{name}：預覽應包含橫掃兩端的目標"
+                );
+            }
+            _ => panic!("橫掃應回傳範圍預覽"),
+        }
+        let snapshot = act(&mut game);
+        let targets: Vec<_> = snapshot["log"]
+            .as_array()
+            .expect("快照應有日誌")
+            .iter()
+            .filter(|event| event["actor"] == ACTOR_ID && event["skill"] == "sweep")
+            .map(|event| event["target"].as_i64().expect("橫掃日誌應有目標 ID"))
+            .collect();
+        actions.push((name, targets));
+    }
+    assert_eq!(
+        actions,
+        vec![
+            ("上側左格", vec![TARGET_ID, ALLY_ID]),
+            ("上側右格", vec![TARGET_ID, ALLY_ID]),
+            ("下側左格", vec![TARGET_ID, ALLY_ID]),
+            ("下側右格", vec![TARGET_ID, ALLY_ID]),
+            ("左側上格", vec![TARGET_ID, ALLY_ID]),
+            ("左側下格", vec![TARGET_ID, ALLY_ID]),
+            ("右側上格", vec![TARGET_ID, ALLY_ID]),
+            ("右側下格", vec![TARGET_ID, ALLY_ID]),
+        ]
+    );
 }

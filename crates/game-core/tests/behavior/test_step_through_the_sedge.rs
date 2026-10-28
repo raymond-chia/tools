@@ -286,7 +286,7 @@ fn step_through_the_sedge_can_end_turn_without_attacking() {
     );
 }
 
-// 驗證落點形成夾擊時，出刀預覽不改變戰局，實際攻擊採用落點的夾擊加成。
+// 驗證落點夾擊提供單體出刀預覽且不改變戰局，實際攻擊採用相同加成。
 #[test]
 fn step_through_the_sedge_follow_up_uses_landing_position_for_flanking() {
     let diagram = "
@@ -307,7 +307,9 @@ fn step_through_the_sedge_follow_up_uses_landing_position_for_flanking() {
         .expect("踏莎行後應能預覽落點旁的敵人");
     let hit_remaining_hp = match preview {
         ActiveSkillPreview::Attack(preview) => preview.hit_remaining_hp,
-        ActiveSkillPreview::Healing(_) => panic!("踏莎行後應產生攻擊預覽"),
+        ActiveSkillPreview::Area { .. } | ActiveSkillPreview::Healing(_) => {
+            panic!("踏莎行後應產生攻擊預覽")
+        }
     };
     assert_eq!(snapshot_value(&game.snapshot(None)), before);
     assert_eq!(hit_remaining_hp, 99);

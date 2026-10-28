@@ -1,17 +1,19 @@
-//! 技能驗證、預覽、效果與戰鬥計算。
+//! 所有技能的驗證、預覽、效果與戰鬥計算集中於此；貨物掉落與撤離由 cargo 管理。
 use crate::error::{self, GameError};
 use crate::game::{DamageResult, Game, die};
 use crate::gameplay_config;
 use crate::model::{
     ActiveSkillDef, ActiveSkillDetailEffect, ActiveSkillDetailsView, ActiveSkillEffect,
     ActiveSkillPreview, ActiveSkillRangeView, ActiveSkillTargetKind, ActiveSkills, AttackPreview,
-    AttackResult, Board, CellTerrain, CollisionUnitLog, CombatLogEvent, Encounter, Footprint,
-    GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log, PassiveSkillDef, PassiveSkillEffect,
-    PassiveSkills, PendingStrike, Pos, RollDegree, TerrainGrid, Unit,
+    AttackResult, Board, Cargo, CargoState, CellTerrain, CollisionUnitLog, CombatLogEvent,
+    Encounter, Footprint, GridPos, HealingPreview, HealthSegmentsView, Hp, Id, Log,
+    PassiveSkillDef, PassiveSkillEffect, PassiveSkills, PendingStrike, Pos, RollDegree,
+    TerrainGrid, Unit,
 };
 use crate::movement::{
     fits, footprint_cell_distance, footprint_cells, placement, unit_at_cell, units_overlapping,
 };
+use crate::teams::is_player;
 use crate::terrain::{
     TerrainEntry, add_temporary_terrain, footprint_blocks_push, footprint_on_impassable,
     footprint_terrain_penalty, terrain_type,
@@ -128,12 +130,28 @@ impl Game {
         if matches!(skill.effect, ActiveSkillEffect::Loot) {
             return self.loot_cargo(ae, actor, position, &skill);
         }
+        if matches!(skill.effect, ActiveSkillEffect::Sweep) {
+            return self.use_sweep(ae, actor, position, &skill);
+        }
         if target_kind(&skill.effect) == ActiveSkillTargetKind::Cell {
             return self.use_cell_skill(ae, actor, position, skill);
         }
-        let a = actor;
-        let target_cell = position;
-        let (te, effect) = validate_unit_skill_target(&self.world, ae, target_cell, &skill)?;
+        let (target, effect) = validate_unit_skill_target(&self.world, ae, position, &skill)?;
+        self.resolve_unit_skill(ae, actor, target, position, &skill, effect);
+        self.finish_turn();
+        Ok(())
+    }
+
+    // 已驗證的單體與範圍命中共用結算；整個技能結束後才消耗回合。
+    fn resolve_unit_skill(
+        &mut self,
+        ae: Entity,
+        a: i64,
+        te: Entity,
+        target_cell: GridPos,
+        skill: &ActiveSkillDef,
+        effect: UnitSkillEffect,
+    ) {
         let target = self
             .world
             .get::<Id>(te)
@@ -211,7 +229,7 @@ impl Game {
                         actor: a,
                         actor_type,
                         actor_team,
-                        skill: skill.id,
+                        skill: skill.id.clone(),
                         target: target_id,
                         target_type,
                         target_team,
@@ -219,8 +237,7 @@ impl Game {
                         remaining_hp,
                         max_hp,
                     });
-                self.finish_turn();
-                return Ok(());
+                return;
             }
         };
         let position = self.world.get::<Pos>(ae).expect("攻擊者應具有位置").0;
@@ -341,7 +358,7 @@ impl Game {
                 actor: a,
                 actor_type,
                 actor_team,
-                skill: skill.id,
+                skill: skill.id.clone(),
                 target,
                 target_type,
                 target_team,
@@ -376,8 +393,6 @@ impl Game {
             // 技能結果先入日誌，位置變更入口再記錄推移與地形效果的呈現順序。
             self.change_position(te, target, &path, TerrainEntry::Push);
         }
-        self.finish_turn();
-        Ok(())
     }
     fn use_cell_skill(
         &mut self,
@@ -424,6 +439,168 @@ impl Game {
         self.finish_turn();
         Ok(())
     }
+
+    fn loot_cargo(
+        &mut self,
+        entity: Entity,
+        id: i64,
+        target: GridPos,
+        skill: &ActiveSkillDef,
+    ) -> Result<(), GameError> {
+        let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
+        validate_loot_from_position(&self.world, entity, origin, target, skill)?;
+        let mut cargo = self.world.resource_mut::<Cargo>();
+        let item = cargo
+            .items
+            .iter_mut()
+            .find(|item| **item == CargoState::Ground(target))
+            .expect("掠奪目標已驗證有貨物");
+        *item = CargoState::Carried(id);
+        self.escape_with_cargo(entity, id);
+        self.finish_turn();
+        Ok(())
+    }
+
+    fn use_sweep(
+        &mut self,
+        entity: Entity,
+        actor: i64,
+        center: GridPos,
+        skill: &ActiveSkillDef,
+    ) -> Result<(), GameError> {
+        let origin = self.world.get::<Pos>(entity).expect("施放者應有位置").0;
+        let cells = sweep_area(&self.world, entity, origin, center, skill)?;
+        let targets = sweep_targets(&self.world, entity, &cells);
+        for target in targets {
+            let cell = self.world.get::<Pos>(target).expect("範圍內單位應有位置").0;
+            self.resolve_unit_skill(
+                entity,
+                actor,
+                target,
+                cell,
+                skill,
+                UnitSkillEffect::Attack {
+                    hit_bonus: 0,
+                    power: Some((crate::PowerSource::Physical, 0)),
+                    push: false,
+                },
+            );
+        }
+        self.finish_turn();
+        Ok(())
+    }
+}
+
+// 非玩家只能拾取地面貨物，且每人最多攜帶一份。
+fn check_loot_target(world: &World, actor: Entity, target: GridPos) -> Result<(), GameError> {
+    let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
+    let id = world.get::<Id>(actor).expect("施放者應具有 Id").0;
+    let Cargo { items, exits: _ } = world
+        .get_resource::<Cargo>()
+        .ok_or_else(error::cannot_loot)?;
+    if is_player(&unit.team)
+        || !items.contains(&CargoState::Ground(target))
+        || items.contains(&CargoState::Carried(id))
+    {
+        return Err(error::cannot_loot());
+    }
+    Ok(())
+}
+
+// 橫掃以相鄰中心格決定方向，範圍內不區分敵我。
+fn check_sweep_target(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    center: GridPos,
+) -> Result<Vec<GridPos>, GameError> {
+    let Board {
+        width,
+        height,
+        terrains: _,
+        terrain_types: _,
+    } = world.resource::<Board>();
+    if center.x < 0 || center.y < 0 || center.x >= *width || center.y >= *height {
+        return Err(error::target_cell_out_of_bounds());
+    }
+    let footprint = *world.get::<Footprint>(actor).expect("施放者應有尺寸");
+    if footprint_cell_distance(origin, footprint, center) != 1 {
+        return Err(error::target_too_far());
+    }
+    let dx = if center.x < origin.x {
+        -1
+    } else if center.x >= origin.x + footprint.width {
+        1
+    } else {
+        0
+    };
+    let dy = if center.y < origin.y {
+        -1
+    } else if center.y >= origin.y + footprint.height {
+        1
+    } else {
+        0
+    };
+    Ok((-1..=1)
+        .map(|offset| GridPos {
+            x: center.x - dy * offset,
+            y: center.y + dx * offset,
+        })
+        .filter(|cell| cell.x >= 0 && cell.y >= 0 && cell.x < *width && cell.y < *height)
+        .collect())
+}
+
+fn sweep_area(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    center: GridPos,
+    skill: &ActiveSkillDef,
+) -> Result<Vec<GridPos>, GameError> {
+    let SkillEvaluation {
+        in_range: _,
+        target,
+    } = evaluate_skill(world, actor, origin, center, skill);
+    match target? {
+        SkillTarget::Sweep(cells) => Ok(cells),
+        _ => Err(error::unit_cannot_use_skill()),
+    }
+}
+
+fn sweep_targets(world: &World, actor: Entity, cells: &[GridPos]) -> Vec<Entity> {
+    let mut targets: Vec<_> = cells
+        .iter()
+        .filter_map(|cell| unit_at_cell(world, *cell))
+        .filter(|target| *target != actor)
+        .collect();
+    targets.sort_by_key(|target| world.get::<Id>(*target).expect("範圍內單位應有 Id").0);
+    targets.dedup();
+    targets
+}
+
+fn preview_sweep(
+    world: &World,
+    actor: Entity,
+    origin: GridPos,
+    center: GridPos,
+    skill: &ActiveSkillDef,
+) -> Result<ActiveSkillPreview, GameError> {
+    let cells = sweep_area(world, actor, origin, center, skill)?;
+    let targets = sweep_targets(world, actor, &cells)
+        .into_iter()
+        .map(|target| {
+            attack_preview(
+                world,
+                actor,
+                origin,
+                target,
+                skill,
+                0,
+                Some((crate::PowerSource::Physical, 0)),
+            )
+        })
+        .collect();
+    Ok(ActiveSkillPreview::Area { cells, targets })
 }
 
 /// 施放與 AI 預覽共用地形技能合法性；作者引用與數值已於載入時驗證。
@@ -472,6 +649,7 @@ enum SkillTarget {
     Terrain(String, u32),
     Loot,
     Step,
+    Sweep(Vec<GridPos>),
 }
 
 fn evaluate_skill(
@@ -513,9 +691,12 @@ fn evaluate_skill(
         Err(error::unit_cannot_use_skill())
     } else {
         match &skill.effect {
+            ActiveSkillEffect::Sweep => {
+                check_sweep_target(world, actor, origin, cell).map(SkillTarget::Sweep)
+            }
             ActiveSkillEffect::MoveThenAttack => Ok(SkillTarget::Step),
             ActiveSkillEffect::Loot => {
-                crate::cargo::check_loot_target(world, actor, cell).map(|()| SkillTarget::Loot)
+                check_loot_target(world, actor, cell).map(|()| SkillTarget::Loot)
             }
             ActiveSkillEffect::Mire { .. } => check_cell_skill_target(world, cell, skill)
                 .map(|(terrain, duration)| SkillTarget::Terrain(terrain, duration)),
@@ -591,6 +772,22 @@ pub(crate) fn preview_unit_skill_from_position(
     target_cell: GridPos,
     skill: &ActiveSkillDef,
 ) -> Result<ActiveSkillPreview, GameError> {
+    if matches!(skill.effect, ActiveSkillEffect::Sweep) {
+        return preview_sweep(world, attacker, position, target_cell, skill);
+    }
+    if target_kind(&skill.effect) == ActiveSkillTargetKind::Cell {
+        let SkillEvaluation { target, .. } =
+            evaluate_skill(world, attacker, position, target_cell, skill);
+        match target? {
+            SkillTarget::Terrain(_, _) | SkillTarget::Loot | SkillTarget::Step => {
+                return Ok(ActiveSkillPreview::Area {
+                    cells: vec![target_cell],
+                    targets: Vec::new(),
+                });
+            }
+            _ => return Err(error::unit_cannot_use_skill()),
+        }
+    }
     let (target_entity, effect) =
         validate_unit_skill_target_from_position(world, attacker, position, target_cell, skill)?;
     let (hit_bonus, power) = match effect {
@@ -613,6 +810,26 @@ pub(crate) fn preview_unit_skill_from_position(
         } => (hit_bonus, power),
     };
 
+    Ok(ActiveSkillPreview::Attack(attack_preview(
+        world,
+        attacker,
+        position,
+        target_entity,
+        skill,
+        hit_bonus,
+        power,
+    )))
+}
+
+fn attack_preview(
+    world: &World,
+    attacker: Entity,
+    position: GridPos,
+    target_entity: Entity,
+    skill: &ActiveSkillDef,
+    hit_bonus: i32,
+    power: Option<(crate::PowerSource, i32)>,
+) -> AttackPreview {
     let Unit {
         unit_type: target_type,
         visual: _,
@@ -678,7 +895,7 @@ pub(crate) fn preview_unit_skill_from_position(
     } else {
         0
     };
-    Ok(ActiveSkillPreview::Attack(AttackPreview {
+    AttackPreview {
         target,
         target_type: target_type.clone(),
         target_hp: *target_hp,
@@ -702,7 +919,7 @@ pub(crate) fn preview_unit_skill_from_position(
             damage: *target_hp - hit_remaining_hp - block_segment,
             missing: *target_max_hp - *target_hp,
         },
-    }))
+    }
 }
 
 fn healing_preview(
@@ -763,7 +980,8 @@ pub(crate) fn target_kind(effect: &ActiveSkillEffect) -> ActiveSkillTargetKind {
             ActiveSkillTargetKind::Enemy
         }
         ActiveSkillEffect::Heal { .. } => ActiveSkillTargetKind::Ally,
-        ActiveSkillEffect::Mire { .. }
+        ActiveSkillEffect::Sweep
+        | ActiveSkillEffect::Mire { .. }
         | ActiveSkillEffect::Loot
         | ActiveSkillEffect::MoveThenAttack => ActiveSkillTargetKind::Cell,
     }
@@ -877,7 +1095,8 @@ fn check_unit_skill_target(
             power_source: *power_source,
             power_bonus: *power_bonus,
         },
-        ActiveSkillEffect::Mire { .. }
+        ActiveSkillEffect::Sweep
+        | ActiveSkillEffect::Mire { .. }
         | ActiveSkillEffect::Loot
         | ActiveSkillEffect::MoveThenAttack => {
             return Err(error::unit_cannot_use_skill());
@@ -1148,11 +1367,12 @@ fn flanking_bonus(
     }
 }
 
-/// 夾擊只計入近戰的攻擊與推擊。
+/// 夾擊只計入近戰攻擊、橫掃與推擊。
 fn melee_enemy_skill(effect: &ActiveSkillEffect) -> bool {
     matches!(
         effect,
-        ActiveSkillEffect::Attack { ranged: false, .. }
+        ActiveSkillEffect::Sweep
+            | ActiveSkillEffect::Attack { ranged: false, .. }
             | ActiveSkillEffect::Push { ranged: false, .. }
     )
 }
@@ -1260,7 +1480,12 @@ pub(crate) fn effective_dodge(w: &World, entity: Entity) -> i32 {
     let unit = w
         .get::<Unit>(entity)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    defense_after_terrain(w, entity, unit.dodge, |cell| cell.dodge_penalty)
+    let dodge = defense_after_terrain(w, entity, unit.dodge, |cell| cell.dodge_penalty);
+    if crate::cargo::is_carrying_cargo(w, entity) {
+        (dodge - gameplay_config::CARGO_DODGE_PENALTY).max(0)
+    } else {
+        dodge
+    }
 }
 
 pub(crate) fn effective_block(w: &World, entity: Entity) -> i32 {
@@ -1360,17 +1585,15 @@ pub(crate) fn skill_ranges(w: &World, e: Entity) -> Vec<ActiveSkillRangeView> {
                 details: skill_details(skill, board),
                 usable: can_use_skill(w)
                     && (!matches!(effect, ActiveSkillEffect::Loot)
-                        || w.get_resource::<crate::model::Cargo>()
-                            .is_some_and(|cargo| {
-                                cargo.items.iter().any(|item| match item {
-                                    crate::model::CargoState::Ground(target) => {
-                                        validate_loot_from_position(w, e, position, *target, skill)
-                                            .is_ok()
-                                    }
-                                    crate::model::CargoState::Carried(_)
-                                    | crate::model::CargoState::Escaped => false,
-                                })
-                            })),
+                        || w.get_resource::<Cargo>().is_some_and(|cargo| {
+                            cargo.items.iter().any(|item| match item {
+                                CargoState::Ground(target) => {
+                                    validate_loot_from_position(w, e, position, *target, skill)
+                                        .is_ok()
+                                }
+                                CargoState::Carried(_) | CargoState::Escaped => false,
+                            })
+                        })),
                 cells,
             }
         })
@@ -1434,6 +1657,13 @@ fn skill_details(skill: &ActiveSkillDef, board: &Board) -> ActiveSkillDetailsVie
             None,
             None,
             ActiveSkillDetailEffect::MoveThenAttack,
+        ),
+        ActiveSkillEffect::Sweep => (
+            Some(crate::PowerSource::Physical),
+            Some(false),
+            Some(0),
+            Some(0),
+            ActiveSkillDetailEffect::Sweep,
         ),
         ActiveSkillEffect::Loot => (None, None, None, None, ActiveSkillDetailEffect::Loot),
     };

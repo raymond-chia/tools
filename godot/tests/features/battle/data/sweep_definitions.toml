@@ -1,0 +1,41 @@
+# 橫掃顯示專用資料：固定玩家先行，敵人與友軍都能承受攻擊。
+[[ai_profiles]]
+id = "near"
+distance_preference = "near"
+damage_weight = 10
+positioning_weight = 10
+
+[[terrain_types]]
+id = "plain"
+layer = "ground"
+entry_rule = "walkable"
+
+[[active_skills]]
+id = "sweep"
+min_range = 1
+max_range = 1
+effect = "sweep"
+
+[[active_skills]]
+id = "melee_attack"
+min_range = 1
+max_range = 1
+effect = "attack"
+
+[[unit_types]]
+id = "sweep_actor"
+ai_profile = "near"
+hp = 100
+movement = 0
+initiative = 100
+hit = 100
+physical_power = 6
+active_skills = ["sweep"]
+
+[[unit_types]]
+id = "sweep_target"
+ai_profile = "near"
+hp = 100
+movement = 0
+initiative = 0
+active_skills = ["melee_attack"]

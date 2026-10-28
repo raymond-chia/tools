@@ -53,7 +53,7 @@ struct ActiveSkillPlan {
     position_index: usize,
     skill: ActiveSkillDef,
     target_cell: GridPos,
-    target_id: i64,
+    target_id: Option<i64>,
     utility: f64,
 }
 
@@ -83,7 +83,8 @@ impl Game {
             let AiProfiles { by_unit_type } = self.world.resource::<AiProfiles>();
             let profile = by_unit_type
                 .get(&unit.unit_type)
-                .expect("作者資料已解析所有單位種類的 AI 傾向");
+                .expect("作者資料已解析所有單位種類的 AI 傾向")
+                .clone();
             let ActiveSkills { definitions } = self.world.resource::<ActiveSkills>();
             let mut active_skills: Vec<_> = unit
                 .active_skills
@@ -99,7 +100,7 @@ impl Game {
                         cost: _,
                     },
                 action,
-            } = self.ai_turn_plan(entity, profile, &active_skills);
+            } = self.ai_turn_plan(entity, &profile, &active_skills);
             if path.len() > 1 {
                 // 與玩家共用移動成本、階段、地形傷害及遭遇啟動流程。
                 self.move_along(actor, path)?;
@@ -152,18 +153,25 @@ impl Game {
     }
 
     fn ai_turn_plan(
-        &self,
+        &mut self,
         actor: Entity,
         profile: &AiProfile,
         active_skills: &[ActiveSkillDef],
     ) -> AiTurnPlan {
-        if let Some(plan) = self.ai_cargo_turn_plan(actor, profile, active_skills) {
+        if let Some(plan) = self.ai_cargo_turn_plan(actor, active_skills) {
             return plan;
         }
         let mut positions =
             movement_options(&self.world, actor, self.world.resource::<Turn>(), false);
         let healing_focus = healing_focus(&self.world, actor, profile, active_skills);
-        match self.ai_skill_plan(actor, profile, active_skills, &positions, healing_focus) {
+        match self.ai_skill_plan(
+            actor,
+            profile,
+            active_skills,
+            &positions,
+            healing_focus,
+            |_| 0,
+        ) {
             Some(ActiveSkillPlan {
                 position_index,
                 skill,
@@ -175,7 +183,7 @@ impl Game {
                 action: Some(AiAction {
                     skill,
                     target_cell,
-                    attack_target: Some(target_id),
+                    attack_target: target_id,
                 }),
             },
             None => {
@@ -198,12 +206,13 @@ impl Game {
     }
 
     fn ai_skill_plan(
-        &self,
+        &mut self,
         actor: Entity,
         profile: &AiProfile,
         active_skills: &[ActiveSkillDef],
         positions: &[MovementOption],
         healing_focus: Option<Entity>,
+        position_priority: impl Fn(GridPos) -> usize,
     ) -> Option<ActiveSkillPlan> {
         if !can_use_skill(&self.world) {
             return None;
@@ -213,6 +222,8 @@ impl Game {
             .get::<Footprint>(actor)
             .expect("AI 單位應具有佔用尺寸");
         let mut best: Option<ActiveSkillPlan> = None;
+        // 同次規劃共用一次擲骰，避免候選位置越多就越容易接受友傷。
+        let mut friendly_fire_roll = None;
         for (
             position_index,
             MovementOption {
@@ -231,64 +242,112 @@ impl Game {
                     Some(distance) => distance,
                     None => continue,
                 };
-                for target in self
-                    .world
-                    .iter_entities()
-                    .filter(|target| target.contains::<Unit>())
-                {
-                    let target_entity = target.id();
-                    let target_id = target.get::<Id>().expect("戰鬥單位應具有 Id").0;
-                    let target_position = if target_entity == actor {
-                        *position
+                let candidates: Vec<(Option<i64>, GridPos)> =
+                    if matches!(skill.effect, ActiveSkillEffect::Sweep) {
+                        // 四條外側邊都列入候選，涵蓋大型單位的每個合法中心格。
+                        let mut centers = Vec::new();
+                        for x in position.x..position.x + footprint.width {
+                            centers.extend([
+                                GridPos {
+                                    x,
+                                    y: position.y - 1,
+                                },
+                                GridPos {
+                                    x,
+                                    y: position.y + footprint.height,
+                                },
+                            ]);
+                        }
+                        for y in position.y..position.y + footprint.height {
+                            centers.extend([
+                                GridPos {
+                                    x: position.x - 1,
+                                    y,
+                                },
+                                GridPos {
+                                    x: position.x + footprint.width,
+                                    y,
+                                },
+                            ]);
+                        }
+                        centers.into_iter().map(|cell| (None, cell)).collect()
                     } else {
-                        target.get::<Pos>().expect("目標應具有位置").0
+                        self.world
+                            .iter_entities()
+                            .filter(|target| target.contains::<Unit>())
+                            .flat_map(|target| {
+                                let target_entity = target.id();
+                                let target_id = target.get::<Id>().expect("戰鬥單位應具有 Id").0;
+                                let target_position = if target_entity == actor {
+                                    *position
+                                } else {
+                                    target.get::<Pos>().expect("目標應具有位置").0
+                                };
+                                let target_footprint =
+                                    *target.get::<Footprint>().expect("目標應具有佔用尺寸");
+                                footprint_cells(target_position, target_footprint)
+                                    .into_iter()
+                                    .map(move |cell| (Some(target_id), cell))
+                            })
+                            .collect()
                     };
-                    let target_footprint = *target.get::<Footprint>().expect("目標應具有佔用尺寸");
-                    // 大型單位可有多個施放格；逐格沿用核心驗證，涵蓋最小射程。
-                    for cell in footprint_cells(target_position, target_footprint) {
-                        // 超出最大射程必然無法施放，不必進入完整預覽。
-                        if footprint_cell_distance(*position, footprint, cell) > skill.max_range {
+                for (target_id, cell) in candidates {
+                    // 超出最大射程必然無法施放，不必進入完整預覽。
+                    if footprint_cell_distance(*position, footprint, cell) > skill.max_range {
+                        continue;
+                    }
+                    let (utility, use_chance) = match skill_utility(
+                        &self.world,
+                        actor,
+                        profile,
+                        *position,
+                        cell,
+                        skill,
+                        preferred_distance,
+                        healing_focus,
+                    ) {
+                        Some(evaluation) => evaluation,
+                        None => continue,
+                    };
+                    if use_chance < 1.0 {
+                        let roll = *friendly_fire_roll
+                            .get_or_insert_with(|| crate::game::die(&mut self.world, 10_000));
+                        if f64::from(roll) > use_chance * 10_000.0 {
                             continue;
                         }
-                        let utility = match skill_utility(
-                            &self.world,
-                            actor,
-                            profile,
-                            *position,
-                            cell,
-                            skill,
-                            preferred_distance,
-                            healing_focus,
-                        ) {
-                            Some(utility) => utility,
-                            None => continue,
-                        };
-                        let candidate = ActiveSkillPlan {
-                            position_index,
-                            skill: skill.clone(),
-                            target_cell: cell,
-                            target_id,
-                            utility,
-                        };
-                        let replace = best.as_ref().is_none_or(|previous| {
-                            candidate.utility.total_cmp(&previous.utility).is_gt()
-                                || (candidate.utility == previous.utility
-                                    && (
-                                        *cost, target_id, &skill.id, cell.y, cell.x, position.y,
-                                        position.x,
-                                    ) < (
-                                        positions[previous.position_index].cost,
-                                        previous.target_id,
-                                        &previous.skill.id,
-                                        previous.target_cell.y,
-                                        previous.target_cell.x,
-                                        positions[previous.position_index].position.y,
-                                        positions[previous.position_index].position.x,
-                                    ))
-                        });
-                        if replace {
-                            best = Some(candidate);
-                        }
+                    }
+                    let candidate = ActiveSkillPlan {
+                        position_index,
+                        skill: skill.clone(),
+                        target_cell: cell,
+                        target_id,
+                        utility,
+                    };
+                    let replace = best.as_ref().is_none_or(|previous| {
+                        candidate.utility.total_cmp(&previous.utility).is_gt()
+                            || (candidate.utility == previous.utility
+                                && (
+                                    position_priority(*position),
+                                    *cost,
+                                    target_id,
+                                    &skill.id,
+                                    cell.y,
+                                    cell.x,
+                                    position.y,
+                                    position.x,
+                                ) < (
+                                    position_priority(positions[previous.position_index].position),
+                                    positions[previous.position_index].cost,
+                                    previous.target_id,
+                                    &previous.skill.id,
+                                    previous.target_cell.y,
+                                    previous.target_cell.x,
+                                    positions[previous.position_index].position.y,
+                                    positions[previous.position_index].position.x,
+                                ))
+                    });
+                    if replace {
+                        best = Some(candidate);
                     }
                 }
             }
@@ -307,7 +366,7 @@ fn skill_utility(
     skill: &ActiveSkillDef,
     preferred_distance: i32,
     healing_focus: Option<Entity>,
-) -> Option<f64> {
+) -> Option<(f64, f64)> {
     let footprint = *world
         .get::<Footprint>(actor)
         .expect("AI 單位應具有佔用尺寸");
@@ -337,29 +396,68 @@ fn skill_utility(
             + f64::from(terrain.dodge_penalty)
             + f64::from(terrain.block_penalty);
         return if control > 0.0 {
-            Some((control + positioning) * f64::from(profile.positioning_weight))
+            Some((
+                (control + positioning) * f64::from(profile.positioning_weight),
+                1.0,
+            ))
         } else {
             None
         };
     }
     let preview = preview_unit_skill_from_position(world, actor, position, cell, skill).ok()?;
     match preview {
+        ActiveSkillPreview::Area { cells: _, targets } => {
+            if profile.damage_weight == 0 {
+                return None;
+            }
+            let actor_team = &world.get::<Unit>(actor).expect("AI 單位應有 Unit").team;
+            let mut value = 0.0;
+            let mut enemy_damage = 0.0;
+            let mut friendly_damage = 0.0;
+            for preview in targets {
+                let target = world
+                    .iter_entities()
+                    .find(|entity| entity.get::<Id>().is_some_and(|id| id.0 == preview.target))
+                    .expect("預覽目標應存在");
+                let allied = crate::teams::are_allied(
+                    world,
+                    actor_team,
+                    &target.get::<Unit>().expect("預覽目標應有 Unit").team,
+                );
+                let damage: f64 = attack_outcomes(&preview)
+                    .into_iter()
+                    .map(|(chance, damage)| {
+                        f64::from(chance) / 100.0 * f64::from(damage.min(preview.target_hp))
+                    })
+                    .sum();
+                if allied {
+                    friendly_damage += damage;
+                } else {
+                    enemy_damage += damage;
+                }
+                value +=
+                    attack_score(world, actor, profile, preview) * if allied { -1.0 } else { 1.0 };
+            }
+            if enemy_damage <= friendly_damage {
+                return None;
+            }
+            let damage_value = enemy_damage * f64::from(profile.damage_weight);
+            let friendly_cost = friendly_damage * f64::from(profile.friendly_fire_weight);
+            let use_chance = damage_value / (damage_value + friendly_cost);
+            Some((
+                value + positioning * f64::from(profile.positioning_weight),
+                use_chance,
+            ))
+        }
         ActiveSkillPreview::Attack(preview) => {
             if profile.damage_weight == 0 {
                 return None;
             }
-            Some(
-                if world
-                    .get::<PreviousAttackTarget>(actor)
-                    .is_some_and(|previous| previous.0 == preview.target)
-                {
-                    f64::from(profile.pursuit_weight)
-                } else {
-                    0.0
-                } + f64::from(preview.hit_chance) / 100.0 * f64::from(profile.hit_weight)
-                    + attack_utility(preview) * f64::from(profile.damage_weight)
+            Some((
+                attack_score(world, actor, profile, preview)
                     + positioning * f64::from(profile.positioning_weight),
-            )
+                1.0,
+            ))
         }
         ActiveSkillPreview::Healing(HealingPreview {
             target: _,
@@ -386,7 +484,7 @@ fn skill_utility(
                     )
                 })
                 .unwrap_or(0.0);
-            Some(
+            Some((
                 (f64::from(healing) + urgency) * f64::from(profile.healing_weight)
                     + if healing_focus.is_some_and(|focus| {
                         let start = world.get::<Pos>(actor).expect("AI 單位應具有位置").0;
@@ -396,7 +494,8 @@ fn skill_utility(
                     } else {
                         positioning
                     } * f64::from(profile.positioning_weight),
-            )
+                1.0,
+            ))
         }
     }
 }
@@ -495,10 +594,7 @@ fn fallback_position(
     let footprint = *world
         .get::<Footprint>(actor)
         .expect("AI 單位應具有佔用尺寸");
-    let allowance = world
-        .get::<Unit>(actor)
-        .expect("AI 單位應具有 Unit")
-        .movement;
+    let allowance = crate::movement::effective_movement(world, actor);
     let (first_budget, second_budget) = movement_budgets(world.resource::<Turn>(), allowance);
     let budget = first_budget + second_budget;
     let desired = match preferred_skill_distance(profile, active_skills, healing_focus.is_some()) {
@@ -610,19 +706,45 @@ fn preferred_skill_distance(
 fn relevant_positioning_skill(profile: &AiProfile, skill: &ActiveSkillDef, healing: bool) -> bool {
     match skill.effect {
         ActiveSkillEffect::Heal { .. } => healing && profile.healing_weight > 0,
-        ActiveSkillEffect::Attack { .. } | ActiveSkillEffect::Push { .. } => {
-            !healing && profile.damage_weight > 0
-        }
+        ActiveSkillEffect::Sweep
+        | ActiveSkillEffect::Attack { .. }
+        | ActiveSkillEffect::Push { .. } => !healing && profile.damage_weight > 0,
         ActiveSkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
         ActiveSkillEffect::Loot | ActiveSkillEffect::MoveThenAttack => false,
     }
 }
 
+fn attack_score(world: &World, actor: Entity, profile: &AiProfile, preview: AttackPreview) -> f64 {
+    let pursuit = if world
+        .get::<PreviousAttackTarget>(actor)
+        .is_some_and(|previous| previous.0 == preview.target)
+    {
+        f64::from(profile.pursuit_weight)
+    } else {
+        0.0
+    };
+    pursuit
+        + f64::from(preview.hit_chance) / 100.0 * f64::from(profile.hit_weight)
+        + attack_utility(preview) * f64::from(profile.damage_weight)
+}
+
 fn attack_utility(preview: AttackPreview) -> f64 {
+    let target_hp = preview.target_hp;
+    attack_outcomes(&preview)
+        .into_iter()
+        .map(|(chance, damage)| {
+            // 擊倒能移除對手後續行動，收益與傷害一同受 damage_weight 控制。
+            f64::from(chance) / 100.0
+                * (f64::from(damage.min(target_hp)) + if damage >= target_hp { 100.0 } else { 0.0 })
+        })
+        .sum()
+}
+
+fn attack_outcomes(preview: &AttackPreview) -> [(u32, i32); 4] {
     let AttackPreview {
         target: _,
         target_type: _,
-        target_hp,
+        target_hp: _,
         target_max_hp: _,
         target_mana: _,
         hit_remaining_hp: _,
@@ -639,25 +761,17 @@ fn attack_utility(preview: AttackPreview) -> f64 {
         critical_hit_damage,
         health_segments: _,
     } = preview;
-    let (critical_hit, critical_block) = if hit_chance > 0 {
-        (critical_chance, 0)
-    } else if block_chance > 0 {
-        (0, critical_chance)
+    let (critical_hit, critical_block) = if *hit_chance > 0 {
+        (*critical_chance, 0)
+    } else if *block_chance > 0 {
+        (0, *critical_chance)
     } else {
         (0, 0)
     };
-    let outcomes = [
-        (hit_chance - critical_hit, hit_damage),
-        (block_chance - critical_block, block_damage),
-        (critical_hit, critical_hit_damage),
-        (critical_block, critical_block_damage),
-    ];
-    outcomes
-        .into_iter()
-        .map(|(chance, damage)| {
-            // 擊倒能移除對手後續行動，收益與傷害一同受 damage_weight 控制。
-            f64::from(chance) / 100.0
-                * (f64::from(damage.min(target_hp)) + if damage >= target_hp { 100.0 } else { 0.0 })
-        })
-        .sum()
+    [
+        (*hit_chance - critical_hit, *hit_damage),
+        (*block_chance - critical_block, *block_damage),
+        (critical_hit, *critical_hit_damage),
+        (critical_block, *critical_block_damage),
+    ]
 }

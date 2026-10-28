@@ -5,6 +5,7 @@ hit_weight = 0
 pursuit_weight = 0
 distance_preference = "near"
 damage_weight = 10
+friendly_fire_weight = 10
 healing_weight = 0
 positioning_weight = 10
 
@@ -14,6 +15,7 @@ hit_weight = 0
 pursuit_weight = 0
 distance_preference = "far"
 damage_weight = 10
+friendly_fire_weight = 10
 healing_weight = 0
 positioning_weight = 10
 
@@ -23,6 +25,7 @@ hit_weight = 0
 pursuit_weight = 0
 distance_preference = "far"
 damage_weight = 1
+friendly_fire_weight = 10
 healing_weight = 100
 positioning_weight = 1
 
@@ -39,6 +42,12 @@ max_range = 1
 effect = "attack"
 hit_bonus = 100
 power_bonus = 10
+
+[[active_skills]]
+id = "sweep"
+min_range = 1
+max_range = 1
+effect = "sweep"
 
 [[active_skills]]
 id = "shot"
@@ -69,6 +78,19 @@ hit = 0
 physical_power = 0
 magical_power = 0
 active_skills = ["melee"]
+
+[[unit_types]]
+id = "sweeper"
+ai_profile = "tank"
+visual = "test.svg"
+hp = 100
+movement = 2
+initiative = 100
+dodge = 0
+hit = 100
+physical_power = 10
+magical_power = 0
+active_skills = ["sweep"]
 
 [[unit_types]]
 id = "other_tank"

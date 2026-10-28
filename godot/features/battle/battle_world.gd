@@ -21,6 +21,8 @@ var move_preview_interrupted := false
 var move_preview_total_cost = null
 var attack_preview: Dictionary = {}
 var attack_preview_unit: Dictionary = {}
+var attack_preview_cells: Array = []
+var attack_preview_targets: Array = []
 var core
 var read_core_response: Callable
 var unit_nodes := {}
@@ -442,10 +444,13 @@ func selected_skill_range() -> Array:
 			return skill_range.cells
 	return []
 
-func pending_action_targets_cell() -> bool:
+# 單位目標技能需指向單位；格子目標技能可指向棋盤上的任意格子。
+func pending_action_previews_hovered() -> bool:
 	for skill_range in state.skill_ranges:
 		if skill_range.id == pending_action:
-			return skill_range.details.target == "cell"
+			if skill_range.details.target != "cell":
+				return not unit_at_cell(hovered).is_empty()
+			return is_cell_on_board(hovered)
 	return false
 
 func clear_move_preview() -> void:
@@ -472,28 +477,36 @@ func update_move_preview() -> void:
 func update_attack_preview() -> void:
 	attack_preview = {}
 	attack_preview_unit = {}
+	attack_preview_cells = []
+	attack_preview_targets = []
 	sync_attack_preview_ring()
-	if is_presenting_combat_events() or pending_action == "" or pending_action_targets_cell() or core == null or state.is_empty() or state.turn.actor == null:
+	if is_presenting_combat_events() or pending_action == "" or core == null or state.is_empty() or state.turn.actor == null:
+		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
+		return
+	if not pending_action_previews_hovered():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
 	var target := unit_at_cell(hovered)
-	if target.is_empty():
-		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
-		return
 	var value: Dictionary = read_core_response.call(core.preview_skill(state.turn.actor, hovered.x, hovered.y, pending_action), false)
 	if value.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
-	attack_preview = value
-	attack_preview_unit = target
+	if value.has("targets"):
+		attack_preview_cells = value.cells
+		attack_preview_targets = value.targets
+	elif value.has("cells"):
+		attack_preview_cells = value.cells
+	else:
+		attack_preview = value
+		attack_preview_unit = target
+		attack_preview_targets = [value]
 	sync_attack_preview_ring()
 	attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 
 func sync_attack_preview_ring() -> void:
-	var preview_unit_id: int = 0 if attack_preview_unit.is_empty() else attack_preview_unit.id
 	for unit_id in unit_nodes:
 		var attack_preview_ring: Sprite2D = unit_nodes[unit_id].get_node("Visual/AttackPreviewRing")
-		attack_preview_ring.visible = unit_id == preview_unit_id
+		attack_preview_ring.visible = attack_preview_targets.any(func(preview: Dictionary): return preview.target == unit_id)
 
 func draw_marker(cell: Vector2i, fill: Color, edge: Color, edge_width := 2.0) -> void:
 	var points := BattleVisuals.diamond(cell_center(cell))
@@ -514,6 +527,8 @@ func _draw() -> void:
 		BattleVisuals.draw_movement_range(self, ground, state.reachable, state.second_reachable, false)
 		BattleVisuals.draw_movement_range(self, ground, state.inspected_reachable, state.inspected_second_reachable, true)
 	for cell in selected_skill_range(): draw_marker(Vector2i(cell.x,cell.y),Color(0.72,0.12,0.04,0.38),Color(1.0,0.34,0.12,0.95),3.0)
+	for cell in attack_preview_cells:
+		draw_marker(Vector2i(cell.x, cell.y),Color(1.0,0.72,0.08,0.42),Color("ffe17a"),4.0)
 	if not attack_preview_unit.is_empty():
 		for cell in attack_preview_unit.occupied_cells:
 			draw_marker(Vector2i(cell.x, cell.y),Color(1.0,0.72,0.08,0.42),Color("ffe17a"),4.0)

@@ -27,7 +27,7 @@ const CHOICES := {
 	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},
 	"power_source": {"physical": "物理", "magical": "魔法"},
 	# 效果選單依一般主動、魔法、被動排列，與技能清單一致。
-	"effect": {"attack": "攻擊", "loot": "掠奪", "push": "推擊", "move_then_attack": "位移後攻擊", "heal": "治療", "mire": "產生地形", "flanking": "被動夾擊"},
+	"effect": {"attack": "攻擊", "sweep": "前方三格橫掃", "loot": "掠奪", "push": "推擊", "move_then_attack": "位移後攻擊", "heal": "治療", "mire": "產生地形", "flanking": "被動夾擊"},
 	"layer": {"ground": "地面", "overlay": "上層"},
 	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
 }

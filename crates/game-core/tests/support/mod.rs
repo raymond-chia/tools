@@ -14,6 +14,7 @@ pub(super) fn tank_ai_profile() -> authoring::AiProfile {
         id: "tank".into(),
         distance_preference: authoring::DistancePreference::Near,
         damage_weight: 10,
+        friendly_fire_weight: 10,
         healing_weight: 0,
         positioning_weight: 10,
         hit_weight: 0,

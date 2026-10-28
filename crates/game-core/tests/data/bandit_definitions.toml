@@ -1,0 +1,148 @@
+# 盜賊技能與貨物行為的專用測試資料。
+
+[[equipment]]
+id = "axe"
+slot = "two_hand"
+hp = 0
+physical_power = 2
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "bow"
+slot = "two_hand"
+hp = 0
+physical_power = 2
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[equipment]]
+id = "light_armor"
+slot = "armor"
+hp = 5
+physical_power = 0
+magical_power = 0
+block = 0
+block_reduction = 0
+
+[[ai_profiles]]
+id = "tank"
+distance_preference = "near"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+hit_weight = 0
+pursuit_weight = 0
+
+[[ai_profiles]]
+id = "archer"
+distance_preference = "far"
+damage_weight = 10
+healing_weight = 0
+positioning_weight = 10
+hit_weight = 0
+pursuit_weight = 0
+
+[[active_skills]]
+id = "loot"
+min_range = 1
+max_range = 1
+effect = "loot"
+
+[[active_skills]]
+id = "sweep"
+min_range = 1
+max_range = 1
+effect = "sweep"
+
+[[active_skills]]
+id = "melee_attack"
+min_range = 1
+max_range = 1
+effect = "attack"
+power_source = "physical"
+ranged = false
+hit_bonus = 0
+power_bonus = 0
+
+[[active_skills]]
+id = "ranged_attack"
+min_range = 1
+max_range = 5
+effect = "attack"
+power_source = "physical"
+ranged = true
+hit_bonus = 0
+power_bonus = 0
+
+[[unit_types]]
+id = "bandit_axe_user"
+ai_profile = "tank"
+visual = ""
+width = 1
+height = 1
+hp = 7
+movement = 4
+initiative = 3
+dodge = 3
+hit = 3
+physical_power = 3
+magical_power = 0
+main_hand = "axe"
+off_hand = ""
+armor = "light_armor"
+accessory = ""
+active_skills = ["melee_attack", "loot"]
+passive_skills = []
+
+[[unit_types]]
+id = "bandit_archer"
+ai_profile = "archer"
+visual = ""
+width = 1
+height = 1
+hp = 4
+movement = 5
+initiative = 5
+dodge = 5
+hit = 3
+physical_power = 2
+magical_power = 0
+main_hand = "bow"
+off_hand = ""
+armor = "light_armor"
+accessory = ""
+active_skills = ["ranged_attack", "loot"]
+passive_skills = []
+
+[[unit_types]]
+id = "bandit_leader"
+ai_profile = "tank"
+visual = ""
+width = 1
+height = 1
+hp = 13
+movement = 5
+initiative = 6
+dodge = 5
+hit = 3
+physical_power = 4
+magical_power = 0
+main_hand = "axe"
+off_hand = ""
+armor = "light_armor"
+accessory = ""
+active_skills = ["melee_attack", "sweep"]
+passive_skills = []
+
+[[terrain_types]]
+id = "plain"
+layer = "ground"
+entry_rule = "walkable"
+blocks_sight = false
+damage = 0
+extra_movement_cost = 0
+dodge_penalty = 0
+block_penalty = 0

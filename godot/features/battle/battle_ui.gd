@@ -613,7 +613,9 @@ func localized_skill_details(skill: Dictionary) -> String:
 	if details.power_bonus != null:
 		lines.append(tr("SKILL_POWER_BONUS") % int(details.power_bonus))
 	var effect: Dictionary = details.effect
-	if effect.kind == "push":
+	if effect.kind == "sweep":
+		lines.append(tr("SKILL_EFFECT_SWEEP"))
+	elif effect.kind == "push":
 		lines.append(tr("SKILL_EFFECT_PUSH") % int(effect.distance))
 	elif effect.kind == "mire":
 		lines.append(tr("SKILL_EFFECT_MIRE") % [int(effect.extra_movement_cost), int(effect.duration)])

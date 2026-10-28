@@ -132,7 +132,7 @@ fn cargo_objective_survives_authoring_conversion() {
     );
 }
 
-// 驗證取貨後本回合不能移動、空位置不能再取貨，另一份貨物可取得且下一輪才可移動。
+// 驗證取貨結束回合且不能重複取貨，兩名攜貨者下一輪移動力由 5 降為 2 並限制可達範圍。
 #[test]
 fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
     let (mut game, layout) = game(
@@ -140,6 +140,7 @@ fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
         .FUD.
         .ACTE
         .....
+        B....
         ",
     );
     assert_eq!(
@@ -220,8 +221,29 @@ fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
 
     next_actor(&mut game, ACTOR_ID);
     next_actor(&mut game, TARGET_ID);
+    let snapshot = game.snapshot(None);
+    assert_eq!(unit(&snapshot, TARGET_ID).movement, 2);
+    assert_eq!(snapshot.turn.move_remaining, 2);
+    let beyond_budget = marked_cell(&layout, 'B');
+    assert_eq!(snapshot.reachable.contains(&beyond_budget), false);
+    assert_eq!(snapshot.second_reachable.contains(&beyond_budget), false);
+    assert_eq!(game.preview_move(TARGET_ID, beyond_budget).is_err(), true);
+    let GridPos { x, y } = beyond_budget;
+    assert_eq!(
+        game.command(Command::Move {
+            actor: TARGET_ID,
+            x,
+            y
+        })
+        .is_err(),
+        true,
+        "攜貨後兩段移動合計只能走四格，不能走到五格外的 B"
+    );
     move_to(&mut game, TARGET_ID, marked_cell(&layout, 'D'));
     next_actor(&mut game, SECOND_RAIDER);
+    let snapshot = game.snapshot(None);
+    assert_eq!(unit(&snapshot, SECOND_RAIDER).movement, 2);
+    assert_eq!(snapshot.turn.move_remaining, 2);
     move_to(&mut game, SECOND_RAIDER, marked_cell(&layout, 'C'));
     let snapshot = game.snapshot(None);
     for (id, destination) in [(TARGET_ID, 'D'), (SECOND_RAIDER, 'C')] {
@@ -236,6 +258,58 @@ fn looting_ends_the_turn_and_preserves_other_cargo_until_next_round() {
         assert_eq!(carrier.carrying_cargo, true);
     }
     assert_eq!(snapshot.outcome, Outcome::Ongoing);
+}
+
+// 驗證取貨後閃避由 10 降為 7，零命中加值攻擊的預覽閃避率由 45% 降為 30%。
+#[test]
+fn carrying_cargo_reduces_dodge_and_attack_preview_chance() {
+    let layout = ascii_board(
+        "
+        .C.
+        .TA
+        ..E
+        ",
+    );
+    let mut definitions: authoring::Definitions =
+        toml::from_str(DEFINITIONS).expect("測試定義應可載入");
+    definitions
+        .unit_types
+        .iter_mut()
+        .find(|unit| unit.id == "raider")
+        .expect("測試定義應包含強盜")
+        .dodge = 10;
+    for skill in &mut definitions.active_skills {
+        let mut data = serde_json::to_value(&*skill).expect("測試技能應可序列化");
+        if data["id"] == "strike" {
+            data["hit_bonus"] = json!(0);
+            *skill = serde_json::from_value(data).expect("零命中加值的測試技能應可載入");
+        }
+    }
+    let mut game =
+        Game::from_authoring(definitions, map_data(&layout), authoring::Difficulty::Easy)
+            .expect("閃避測試地圖應可載入");
+    game.command(Command::Start).expect("閃避測試應可開始");
+    let target = marked_cell(&layout, 'T');
+    for (should_loot, expected_dodge, expected_chance) in [
+        // 空手時保留原本閃避與預覽閃避率。
+        (false, 10, 45),
+        // 取貨後扣除三點閃避，預覽同步降低閃避率。
+        (true, 7, 30),
+    ] {
+        if should_loot {
+            next_actor(&mut game, TARGET_ID);
+            loot(&mut game, marked_cell(&layout, 'C'));
+        }
+        next_actor(&mut game, ACTOR_ID);
+        let snapshot = game.snapshot(None);
+        assert_eq!(unit(&snapshot, TARGET_ID).dodge, expected_dodge);
+        let preview = serde_json::to_value(
+            game.preview_skill(ACTOR_ID, target, "strike")
+                .expect("護衛應可預覽攻擊相鄰強盜"),
+        )
+        .expect("攻擊預覽應可序列化");
+        assert_eq!(preview["dodge_chance"], expected_chance);
+    }
 }
 
 // 驗證走到、被推到出口或在出口取貨時依攜貨狀態離場判敗，空手與非出口則繼續。

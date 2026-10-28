@@ -1,0 +1,44 @@
+name = "sweep_preview"
+width = 5
+height = 4
+
+[victory]
+mode = "all"
+conditions = [{ type = "all_enemies_defeated" }]
+[defeat]
+mode = "any"
+conditions = [{ type = "team_defeated", team = "player" }]
+
+[[units]]
+facing = "right"
+id = 1
+unit_type = "sweep_actor"
+team = "player"
+x = 2
+y = 2
+
+[[units]]
+facing = "right"
+id = 2
+unit_type = "sweep_target"
+team = { enemy = "bandits" }
+min_difficulty = "easy"
+x = 1
+y = 1
+
+[[units]]
+facing = "right"
+id = 3
+unit_type = "sweep_target"
+team = "player"
+x = 2
+y = 1
+
+[[units]]
+facing = "right"
+id = 4
+unit_type = "sweep_target"
+team = { enemy = "bandits" }
+min_difficulty = "easy"
+x = 3
+y = 1

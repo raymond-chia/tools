@@ -22,6 +22,19 @@ struct MovePlan {
     turn_after: Turn,
 }
 
+/// 所有移動入口共用攜貨後的額度，最低為零。
+pub(crate) fn effective_movement(world: &World, entity: Entity) -> u32 {
+    let movement = world
+        .get::<Unit>(entity)
+        .expect("移動單位應具有 Unit")
+        .movement;
+    if crate::cargo::is_carrying_cargo(world, entity) {
+        movement.saturating_sub(crate::gameplay_config::CARGO_MOVEMENT_PENALTY)
+    } else {
+        movement
+    }
+}
+
 impl Game {
     pub fn preview_move(&self, actor: i64, end: GridPos) -> Result<MovePreview, GameError> {
         let MovePlan {
@@ -91,11 +104,7 @@ impl Game {
         if !can_move(turn) {
             return Err(error::cannot_move());
         }
-        let allowance = self
-            .world
-            .get::<Unit>(entity)
-            .expect("移動單位應具有 Unit")
-            .movement;
+        let allowance = crate::movement::effective_movement(&self.world, entity);
         let (first_budget, second_budget) = movement_budgets(turn, allowance);
         let (_, footprint) = placement(&self.world, entity);
         let grid = self.world.resource::<TerrainGrid>();
@@ -180,11 +189,7 @@ impl Game {
     fn move_plan(&self, actor: i64, end: GridPos) -> Result<MovePlan, GameError> {
         self.ensure_turn(actor)?;
         let entity = self.entity(actor).ok_or(error::missing_move_unit())?;
-        let allowance = self
-            .world
-            .get::<Unit>(entity)
-            .expect("已建立的戰鬥單位應具有 Unit 元件")
-            .movement;
+        let allowance = crate::movement::effective_movement(&self.world, entity);
         let turn @ Turn {
             actor: _,
             phase: _,
@@ -561,10 +566,7 @@ pub(crate) fn movement_options(
     if !can_move(turn) {
         return options;
     }
-    let allowance = world
-        .get::<Unit>(entity)
-        .expect("移動單位應具有 Unit")
-        .movement;
+    let allowance = crate::movement::effective_movement(world, entity);
     let (first_budget, second_budget) = movement_budgets(turn, allowance);
     let grid = world.resource::<TerrainGrid>();
     let blocked = occupied_cells(world, entity);
@@ -749,10 +751,7 @@ fn reach(w: &World, e: Entity, b: u32) -> Vec<GridPos> {
 }
 /// 呼叫端須先以 can_move 確認仍可移動。
 pub(crate) fn movement_ranges(w: &World, e: Entity, turn: &Turn) -> (Vec<GridPos>, Vec<GridPos>) {
-    let allowance = w
-        .get::<Unit>(e)
-        .expect("已建立的戰鬥單位應具有 Unit 元件")
-        .movement;
+    let allowance = crate::movement::effective_movement(w, e);
     let (first_budget, second_budget) = movement_budgets(turn, allowance);
     let reachable = if first_budget > 0 {
         reach(w, e, first_budget)

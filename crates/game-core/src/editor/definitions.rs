@@ -57,6 +57,7 @@ enum DefinitionEdit {
 #[derive(Deserialize)]
 #[serde(tag = "effect", rename_all = "snake_case")]
 enum EffectSelection {
+    Sweep,
     MoveThenAttack,
     Attack,
     Loot,
@@ -230,6 +231,7 @@ pub fn edit_definition_from_json(
                     hit_bonus: 0,
                     power_bonus: 0,
                 }),
+                EffectSelection::Sweep => Some(ActiveSkillEffect::Sweep),
                 EffectSelection::MoveThenAttack => Some(ActiveSkillEffect::MoveThenAttack),
                 EffectSelection::Loot => Some(ActiveSkillEffect::Loot),
                 EffectSelection::Push => Some(ActiveSkillEffect::Push {
@@ -542,7 +544,8 @@ fn is_magical_effect(effect: &ActiveSkillEffect) -> bool {
             *power_source == crate::PowerSource::Magical
         }
         ActiveSkillEffect::Mire { .. } => true,
-        ActiveSkillEffect::Loot
+        ActiveSkillEffect::Sweep
+        | ActiveSkillEffect::Loot
         | ActiveSkillEffect::MoveThenAttack
         | ActiveSkillEffect::Push { .. } => false,
     }

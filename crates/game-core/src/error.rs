@@ -263,6 +263,13 @@ pub(crate) fn invalid_skill_range(id: &str) -> GameError {
     )
 }
 
+pub(crate) fn invalid_sweep_range(id: &str) -> GameError {
+    GameError::new(
+        "invalid_sweep_range",
+        format!("{id} 的橫掃中心必須是相鄰一格（min_range 與 max_range 皆為 1）"),
+    )
+}
+
 pub(crate) fn invalid_duration(id: &str) -> GameError {
     GameError::new(
         "invalid_duration",

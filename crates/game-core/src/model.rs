@@ -240,17 +240,18 @@ pub enum ActiveSkillEffect {
         #[serde(default)]
         hit_bonus: i32,
     },
-    Mire {
-        #[serde(default)]
-        terrain: String,
-        #[serde(default = "default_duration")]
-        duration: u32,
-    },
+    Sweep,
     Heal {
         #[serde(default)]
         power_source: PowerSource,
         #[serde(default)]
         power_bonus: i32,
+    },
+    Mire {
+        #[serde(default)]
+        terrain: String,
+        #[serde(default = "default_duration")]
+        duration: u32,
     },
 }
 
@@ -508,11 +509,12 @@ pub enum ActiveSkillDetailEffect {
     Push {
         distance: i32,
     },
+    Sweep,
+    Heal,
     Mire {
         extra_movement_cost: i32,
         duration: u32,
     },
-    Heal,
 }
 
 #[derive(Serialize)]
@@ -550,6 +552,10 @@ pub struct MovePreview {
 pub enum ActiveSkillPreview {
     Attack(AttackPreview),
     Healing(HealingPreview),
+    Area {
+        cells: Vec<GridPos>,
+        targets: Vec<AttackPreview>,
+    },
 }
 
 #[derive(Serialize)]

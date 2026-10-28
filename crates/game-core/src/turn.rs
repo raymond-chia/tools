@@ -1,7 +1,7 @@
 //! 回合的初始化、行動權限、移動額度與階段切換；Turn 僅承載資料。
 use crate::error::{self, GameError};
 use crate::game::Game;
-use crate::model::{BattleMode, Encounter, Exploration, PendingStrike, Phase, Turn, Unit};
+use crate::model::{BattleMode, Encounter, Exploration, PendingStrike, Phase, Turn};
 use bevy_ecs::prelude::{Entity, World};
 
 pub(crate) fn new_turn(actor: Option<i64>, movement: u32) -> Turn {
@@ -128,12 +128,7 @@ impl Game {
         }
         let remaining = actor
             .and_then(|a| self.entity(a))
-            .map(|e| {
-                self.world
-                    .get::<Unit>(e)
-                    .expect("已建立的戰鬥單位應具有 Unit 元件")
-                    .movement
-            })
+            .map(|e| crate::movement::effective_movement(&self.world, e))
             .unwrap_or(0);
         *self.world.resource_mut::<Turn>() = new_turn(actor, remaining);
     }

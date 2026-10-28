@@ -141,11 +141,7 @@ impl Game {
             {
                 let actor = turn.actor;
                 if let Some(entity) = actor.and_then(|actor| self.entity(actor)) {
-                    let movement = self
-                        .world
-                        .get::<Unit>(entity)
-                        .expect("探索單位應具有 Unit")
-                        .movement;
+                    let movement = crate::movement::effective_movement(&self.world, entity);
                     *self.world.resource_mut::<Turn>() = new_turn(actor, movement);
                 }
             }
@@ -344,11 +340,7 @@ impl Game {
         let mut turns = HashMap::new();
         for id in players {
             if let Some(entity) = self.entity(*id) {
-                let movement = self
-                    .world
-                    .get::<Unit>(entity)
-                    .expect("玩家單位應具有 Unit")
-                    .movement;
+                let movement = crate::movement::effective_movement(&self.world, entity);
                 turns.insert(*id, new_turn(Some(*id), movement));
             }
         }
@@ -658,14 +650,7 @@ impl Game {
                 ))
             })
             .map(|(entity, i, p, fp, h, f)| UnitView {
-                carrying_cargo: self
-                    .world
-                    .get_resource::<crate::model::Cargo>()
-                    .is_some_and(|cargo| {
-                        cargo
-                            .items
-                            .contains(&crate::model::CargoState::Carried(i.0))
-                    }),
+                carrying_cargo: crate::cargo::is_carrying_cargo(&self.world, entity),
                 id: i.0,
                 unit_type: f.unit_type.clone(),
                 visual: f.visual.clone(),
@@ -676,7 +661,7 @@ impl Game {
                 occupied_cells: footprint_cells(p.0, *fp),
                 hp: h.current,
                 max_hp: h.maximum,
-                movement: f.movement,
+                movement: crate::movement::effective_movement(&self.world, entity),
                 initiative: f.initiative,
                 dodge: effective_dodge(&self.world, entity),
                 block: effective_block(&self.world, entity),
@@ -711,11 +696,7 @@ impl Game {
                 let inspected_turn = if *turn_actor == Some(actor) {
                     (*turn).clone()
                 } else {
-                    let movement = self
-                        .world
-                        .get::<Unit>(entity)
-                        .expect("戰鬥單位應具有 Unit 元件")
-                        .movement;
+                    let movement = crate::movement::effective_movement(&self.world, entity);
                     new_turn(Some(actor), movement)
                 };
                 if crate::turn::can_move(&inspected_turn) {

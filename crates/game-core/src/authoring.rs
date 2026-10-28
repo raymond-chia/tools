@@ -73,6 +73,9 @@ pub struct AiProfile {
     pub distance_preference: DistancePreference,
     #[serde(default = "default_ai_weight")]
     pub damage_weight: u32,
+    /// 範圍攻擊造成友軍傷害的懲罰；與治療收益分開評估。
+    #[serde(default = "default_ai_weight")]
+    pub friendly_fire_weight: u32,
     #[serde(default)]
     pub healing_weight: u32,
     #[serde(default = "default_ai_weight")]

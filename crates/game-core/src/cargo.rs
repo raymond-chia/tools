@@ -1,51 +1,16 @@
-//! 貨物的目標驗證、掠奪、離場與死亡掉落。
-use crate::error::{self, GameError};
+//! 貨物狀態的死亡掉落與攜貨離場；拾取技能由 skill 管理。
 use crate::game::Game;
-use crate::model::{ActiveSkillDef, Cargo, CargoState, GridPos, Id, Pos, Unit};
-use crate::teams::is_player;
+use crate::model::{Cargo, CargoState, Id, Pos};
 use bevy_ecs::prelude::{Entity, World};
 
-pub(crate) fn check_loot_target(
-    world: &World,
-    actor: Entity,
-    target: GridPos,
-) -> Result<(), GameError> {
-    let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
-    let id = world.get::<Id>(actor).expect("施放者應具有 Id").0;
-    let Cargo { items, exits: _ } = world
+pub(crate) fn is_carrying_cargo(world: &World, entity: Entity) -> bool {
+    let id = world.get::<Id>(entity).expect("戰鬥單位應具有 Id").0;
+    world
         .get_resource::<Cargo>()
-        .ok_or_else(error::cannot_loot)?;
-    if is_player(&unit.team)
-        || !items.contains(&CargoState::Ground(target))
-        || items.contains(&CargoState::Carried(id))
-    {
-        return Err(error::cannot_loot());
-    }
-    Ok(())
+        .is_some_and(|cargo| cargo.items.contains(&CargoState::Carried(id)))
 }
 
 impl Game {
-    pub(crate) fn loot_cargo(
-        &mut self,
-        entity: Entity,
-        id: i64,
-        target: GridPos,
-        skill: &ActiveSkillDef,
-    ) -> Result<(), GameError> {
-        let origin = self.world.get::<Pos>(entity).expect("施放者應具有位置").0;
-        crate::skill::validate_loot_from_position(&self.world, entity, origin, target, skill)?;
-        let mut cargo = self.world.resource_mut::<Cargo>();
-        let item = cargo
-            .items
-            .iter_mut()
-            .find(|item| **item == CargoState::Ground(target))
-            .expect("掠奪目標已驗證有貨物");
-        *item = CargoState::Carried(id);
-        self.escape_with_cargo(entity, id);
-        self.finish_turn();
-        Ok(())
-    }
-
     pub(crate) fn drop_cargo(&mut self, entity: Entity, id: i64) {
         let position = self
             .world
