@@ -154,6 +154,9 @@ func assert_attack_preview_markers(test_case: Dictionary) -> void:
 func assert_attack_preview_bar(case_name: String, expected_segments: Array, max_hp: int) -> void:
 	var bar: HBoxContainer = battle.ui.get_node("Root/AttackPreview/Margin/Content/HealthImpactBar")
 	var segment_names := ["HitRemaining", "BlockSaved", "Damage", "Missing"]
+	# 節點清單是：綠、補血（隱藏）、黃、紅、深色。
+	# 跳過隱藏的補血節點
+	var expected_indices := [0, 2, 3, 4]
 	var expected_colors := [Color(0.384, 0.824, 0.486, 1), Color(0.94902, 0.721569, 0.294118, 1), Color(0.937255, 0.32549, 0.313725, 1), Color(0.055, 0.067, 0.086, 1)]
 	var bar_rect := bar.get_global_rect()
 	assert_bool(bar.is_visible_in_tree()).override_failure_message("%s：血條應實際可見" % case_name).is_true()
@@ -163,7 +166,7 @@ func assert_attack_preview_bar(case_name: String, expected_segments: Array, max_
 	for index in segment_names.size():
 		var segment: ColorRect = bar.get_node(segment_names[index])
 		var message := "%s／%s" % [case_name, segment_names[index]]
-		assert_int(segment.get_index()).override_failure_message("%s：節點順序應為綠黃紅深色" % message).is_equal(index)
+		assert_int(segment.get_index()).override_failure_message("%s：節點順序應為綠黃紅深色" % message).is_equal(expected_indices[index])
 		assert_bool(segment.color.is_equal_approx(expected_colors[index])).override_failure_message("%s：分段顏色應正確" % message).is_true()
 		assert_bool(segment.modulate == Color.WHITE and segment.self_modulate == Color.WHITE).override_failure_message("%s：分段不應被額外染色" % message).is_true()
 		assert_bool(segment.is_visible_in_tree()).override_failure_message("%s：零長度分段應隱藏" % message).is_equal(expected_segments[index] > 0)
