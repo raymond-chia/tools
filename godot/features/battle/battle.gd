@@ -147,11 +147,10 @@ func _on_primary_clicked(unit_id: int, cell: Vector2i) -> void:
 		return
 	if state.is_empty() or state.turn.actor == null or not world.is_cell_on_board(cell):
 		return
-	if state.battle_mode != "combat" and unit_id != 0:
-		for unit in state.units:
-			if unit.id == unit_id and unit.team == "player":
-				send({"type": "select_unit", "actor": unit_id})
-				return
+	for unit in state.units:
+		if unit.id == unit_id and unit.selectable:
+			send({"type": "select_unit", "actor": unit_id})
+			return
 	send({"type": "move", "actor": state.turn.actor, "x": cell.x, "y": cell.y})
 
 func _on_inspection_clicked(unit_id: int, cell: Vector2i) -> void:
@@ -188,10 +187,8 @@ func use_pending_action(cell: Vector2i) -> void:
 		present()
 		return
 	var actor: int = state.turn.actor
-	var succeeded := send({"type": "skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action})
-	if succeeded:
-		if state.turn.phase != "pending_strike":
-			pending_action = ""
+	if send({"type": "skill", "actor": actor, "x": cell.x, "y": cell.y, "skill": pending_action}):
+		pending_action = "" if state.turn.pending_skill == null else state.turn.pending_skill
 		present()
 
 func _on_end_turn_requested() -> void:
@@ -225,7 +222,7 @@ func _on_delay_target_selected(unit_id: int) -> void:
 func _on_turn_order_focus_requested(unit_id: int) -> void:
 	if input_is_locked():
 		return
-	if not state.is_empty() and state.battle_mode != "combat":
+	if world.unit_with_id(state.get("units", []), unit_id).get("selectable", false):
 		send({"type": "select_unit", "actor": unit_id})
 	world.focus_unit(unit_id)
 	if world.unit_id_at_cell(inspected_cell) == 0:

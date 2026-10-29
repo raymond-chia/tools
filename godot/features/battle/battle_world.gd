@@ -444,15 +444,6 @@ func selected_skill_range() -> Array:
 			return skill_range.cells
 	return []
 
-# 單位目標技能需指向單位；格子目標技能可指向棋盤上的任意格子。
-func pending_action_previews_hovered() -> bool:
-	for skill_range in state.skill_ranges:
-		if skill_range.id == pending_action:
-			if skill_range.details.target != "cell":
-				return not unit_at_cell(hovered).is_empty()
-			return is_cell_on_board(hovered)
-	return false
-
 func clear_move_preview() -> void:
 	first_move_path.clear()
 	second_move_path.clear()
@@ -483,7 +474,7 @@ func update_attack_preview() -> void:
 	if is_presenting_combat_events() or pending_action == "" or core == null or state.is_empty() or state.turn.actor == null:
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
-	if not pending_action_previews_hovered():
+	if not is_cell_on_board(hovered):
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
 	var target := unit_at_cell(hovered)
@@ -491,15 +482,14 @@ func update_attack_preview() -> void:
 	if value.is_empty():
 		attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 		return
-	if value.has("targets"):
-		attack_preview_cells = value.cells
-		attack_preview_targets = value.targets
-	elif value.has("cells"):
-		attack_preview_cells = value.cells
-	else:
-		attack_preview = value
-		attack_preview_unit = target
-		attack_preview_targets = [value]
+	match value.kind:
+		"area":
+			attack_preview_cells = value.cells
+			attack_preview_targets = value.targets
+		"attack", "healing":
+			attack_preview = value
+			attack_preview_unit = target
+			attack_preview_targets = [value]
 	sync_attack_preview_ring()
 	attack_preview_changed.emit(attack_preview, get_viewport().get_mouse_position())
 

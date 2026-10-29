@@ -1,7 +1,17 @@
 extends Control
 
 const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
-const MODES := ["繪製地面", "繪製上層", "放置單位", "移動單位", "刪除單位"]
+enum EditMode { NONE, GROUND, OVERLAY, PLACE_UNIT, MOVE_UNIT, DELETE_UNIT, CARGO }
+# 依節點名稱對應，不依分頁順序。
+const PALETTE_TABS := {
+	"Ground": {"title": "地面", "mode": EditMode.GROUND},
+	"Overlay": {"title": "上層", "mode": EditMode.OVERLAY},
+	"Units": {"title": "單位"},
+	"Outcomes": {"title": "勝敗條件", "mode": EditMode.NONE},
+	"Cargo": {"title": "貨物", "mode": EditMode.CARGO},
+}
+const UNIT_MODES := {"放置單位": EditMode.PLACE_UNIT, "移動單位": EditMode.MOVE_UNIT, "刪除單位": EditMode.DELETE_UNIT}
+const BRUSH_LAYERS := {EditMode.GROUND: "ground", EditMode.OVERLAY: "overlay"}
 const TILE_PREVIEW := preload("res://features/editor/terrain_preview.gd")
 
 # 勾選項對應作者資料；條件是否成立由核心判定。
@@ -44,7 +54,7 @@ const OUTCOME_CONDITIONS: Dictionary = {
 var cargo_draft := {"positions": [], "exits": []}
 var cargo_draft_changed := false
 
-var editing_mode := 0
+var editing_mode := EditMode.GROUND
 var data_dir := DataSource.directory()
 var definitions_path := data_dir + "definitions.toml"
 var map_dir := data_dir + "maps/"
@@ -55,7 +65,6 @@ var definitions: Dictionary = {}
 var map_data: Dictionary = {}
 var map_file := ""
 var dirty := false
-var pending_edit: Dictionary = {}
 var history = preload("res://features/editor/edit_history.gd").new()
 var duplicating_map := false
 var refreshing := false
@@ -81,10 +90,11 @@ func _ready() -> void:
 			options.add_item("初始朝向：右" if direction == "right" else "初始朝向：左")
 			options.set_item_metadata(options.item_count - 1, direction)
 	inspected_facing.item_selected.connect(update_unit_facing)
-	for i in range(2, MODES.size()):
-		mode_list.add_item(MODES[i])
-	for index in 5:
-		palette_tabs.set_tab_title(index, ["地面", "上層", "單位", "貨物", "勝敗條件"][index])
+	for title in UNIT_MODES:
+		mode_list.add_item(title)
+		mode_list.set_item_metadata(mode_list.item_count - 1, UNIT_MODES[title])
+	for index in palette_tabs.get_tab_count():
+		palette_tabs.set_tab_title(index, PALETTE_TABS[str(palette_tabs.get_tab_control(index).name)].title)
 	for tool in ["放置貨物", "刪除貨物", "放置出口", "刪除出口"]:
 		cargo_tool.add_item(tool)
 	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Apply.pressed.connect(apply_cargo)
@@ -172,7 +182,7 @@ func _ready() -> void:
 		pages.current_tab = session.get("page", 0)
 		var selections: Array = session.get("selections", [])
 		for index in selections.size(): definition_pages[index].select_id(selections[index])
-		validate_current()
+		refresh_preview()
 		return
 	if map_list.item_count > 0:
 		open_selected_map()
@@ -274,7 +284,7 @@ func open_selected_map() -> void:
 	map_view.inspected_unit = 0
 	dirty = false
 	refresh_ui()
-	validate_current()
+	refresh_preview()
 
 func new_map() -> void:
 	open_map_dialog(false)
@@ -326,7 +336,7 @@ func submit_map() -> void:
 	dirty = true
 	$AddMapDialog.hide()
 	refresh_ui()
-	validate_current()
+	refresh_preview()
 
 func save_map() -> void:
 	if map_data.is_empty(): return
@@ -386,20 +396,29 @@ func play_map() -> void:
 func serialize_documents() -> Dictionary:
 	return read_core_response(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map_data)))
 
-func validate_current() -> void:
-	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
+# 所有文件修改走同一出口：核心驗證通過才寫入歷史，失敗則還原為修改前文件。
+func commit(previous: Dictionary, snapshot := {}, label := "編輯資料", merge_mode := UndoRedo.MERGE_DISABLE) -> bool:
+	if snapshot.is_empty(): snapshot = preview_snapshot()
 	if snapshot.is_empty():
-		if not pending_edit.is_empty():
-			var error_message := status_label.text
-			apply_document(pending_edit)
-			pending_edit = {}
-			refresh_ui()
-			refresh_grid()
-			status_label.text = error_message
-		return
-	if not pending_edit.is_empty():
-		history.record(pending_edit, document_state())
-		pending_edit = {}
+		var error_message := status_label.text
+		apply_document(previous)
+		refresh_ui()
+		refresh_preview()
+		status_label.text = error_message
+		return false
+	history.record(previous, document_state(), label, merge_mode)
+	present_preview(snapshot)
+	return true
+
+func preview_snapshot() -> Dictionary:
+	return read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
+
+# 不修改文件的重新整理，例如開圖、復原與查看單位。
+func refresh_preview() -> void:
+	var snapshot := preview_snapshot()
+	if not snapshot.is_empty(): present_preview(snapshot)
+
+func present_preview(snapshot: Dictionary) -> void:
 	update_history_controls()
 	map_view.present(map_data, snapshot, selected_cell)
 	refresh_cargo_tools()
@@ -419,9 +438,6 @@ func show_error(message: String) -> void:
 func document_state() -> Dictionary:
 	return {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file}
 
-func checkpoint() -> void:
-	pending_edit = document_state()
-
 func apply_document(state: Dictionary) -> void:
 	definitions = state.definitions.duplicate(true)
 	map_data = state.map.duplicate(true)
@@ -435,11 +451,10 @@ func update_history_controls() -> void:
 
 func restore_history() -> void:
 	for page in definition_pages: page.discard_pending_fields()
-	pending_edit = {}
 	apply_document(history.state)
 	reset_cargo_draft()
 	refresh_ui()
-	validate_current()
+	refresh_preview()
 
 func undo() -> void:
 	if history.undo_redo.undo(): restore_history()
@@ -460,9 +475,9 @@ func commit_pending_fields() -> bool:
 
 func commit_map_name() -> void:
 	if refreshing or map_data.is_empty() or map_data.name == map_name.text: return
-	checkpoint()
+	var previous := document_state()
 	map_data.name = map_name.text
-	validate_current()
+	commit(previous)
 	refresh_map_list()
 	select_map(map_file)
 
@@ -474,12 +489,12 @@ func resize_map() -> void:
 	var new_width := int(width_box.value)
 	var new_height := int(height_box.value)
 	if new_width == map_data.width and new_height == map_data.height: return
-	checkpoint()
+	var previous := document_state()
 	map_data.width = new_width
 	map_data.height = new_height
 	# 只刪除超出範圍的地形；不處理單位，避免縮小地圖時不小心改到單位，超界單位交由核心驗證回報。
 	map_data.terrains = map_data.terrains.filter(func(t: Dictionary): return t.x < new_width and t.y < new_height)
-	validate_current()
+	commit(previous)
 
 func refresh_ui() -> void:
 	update_history_controls()
@@ -520,9 +535,9 @@ func update_outcome_group(key: String, group: VBoxContainer) -> void:
 		if child is CheckBox and child.button_pressed:
 			conditions.append(OUTCOME_CONDITIONS[str(child.name)].duplicate(true))
 	var mode: OptionButton = group.get_node("Mode")
-	checkpoint()
+	var previous := document_state()
 	map_data[key] = {"mode": "all" if mode.selected == 0 else "any", "conditions": conditions}
-	validate_current()
+	commit(previous)
 
 func refresh_tools() -> void:
 	refresh_terrain_list()
@@ -576,11 +591,8 @@ func refresh_terrain_list() -> void:
 	update_brush_label()
 
 func update_editing_mode() -> void:
-	match palette_tabs.current_tab:
-		0, 1: editing_mode = palette_tabs.current_tab
-		2: editing_mode = mode_list.selected + 2
-		3: editing_mode = -1
-		4: editing_mode = 5
+	var tab: Dictionary = PALETTE_TABS[str(palette_tabs.get_current_tab_control().name)]
+	editing_mode = tab.get("mode", mode_list.get_selected_metadata())
 	refresh_tools_visibility()
 	update_brush_label()
 
@@ -595,21 +607,14 @@ func terrain_kinds(layer: String) -> Array:
 	var kinds: Array = definitions.terrain_types.filter(func(terrain: Dictionary): return terrain.layer == layer).map(func(terrain: Dictionary): return terrain.id)
 	return kinds
 
-func refresh_grid() -> void:
-	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(map_data), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
-	if snapshot.is_empty(): return
-	map_view.present(map_data, snapshot, selected_cell)
-	refresh_cargo_tools()
-	refresh_inspected_unit()
-
 func refresh_tools_visibility() -> void:
-	# 工具切換只更新介面狀態；資料修改的驗證與預覽由 validate_current 統一處理。
-	var mode := editing_mode
-	map_view.drag_paint = mode in [0, 1]
-	unit_list.visible = mode == 2
-	placement_facing.visible = mode == 2
-	team_list.visible = mode == 2
-	faction_field.visible = mode == 2 and team_list.selected != 0
+	# 工具切換只更新介面狀態；資料修改的驗證與預覽由 commit 統一處理。
+	var placing := editing_mode == EditMode.PLACE_UNIT
+	map_view.drag_paint = BRUSH_LAYERS.has(editing_mode)
+	unit_list.visible = placing
+	placement_facing.visible = placing
+	team_list.visible = placing
+	faction_field.visible = placing and team_list.selected != 0
 	existing_factions.visible = faction_field.visible
 	placement_difficulty.visible = faction_field.visible
 
@@ -625,10 +630,10 @@ func refresh_existing_factions() -> void:
 
 # 預覽只繪製核心回傳的覆蓋格子，不在顯示層重算筆刷範圍。
 func refresh_brush_preview() -> void:
-	if editing_mode not in [0, 1] or map_data.is_empty() or map_view.hovered.x < 0:
+	if not BRUSH_LAYERS.has(editing_mode) or map_data.is_empty() or map_view.hovered.x < 0:
 		map_view.present_brush([])
 		return
-	if editing_mode == 0 and terrain_brushes.ground.is_empty():
+	if editing_mode == EditMode.GROUND and terrain_brushes.ground.is_empty():
 		map_view.present_brush([])
 		return
 	var command := {"x": map_view.hovered.x, "y": map_view.hovered.y, "size": int(brush_size.value)}
@@ -642,14 +647,9 @@ func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
 	if result.is_empty() or not result.changed: return
 	var previous := document_state()
 	map_data = result.map
-	history.record(previous, document_state(), "地形筆刷 %s" % stroke_id, UndoRedo.MERGE_ENDS)
-	update_history_controls()
 	CoreResponse.convert_unit_ids(result.snapshot)
-	if map_view.inspected_unit != 0:
-		refresh_grid()
-	else:
-		map_view.present(map_data, result.snapshot, selected_cell)
-	status_label.text = "資料有效；尚未儲存"
+	# 筆刷結果不含查看中單位的範圍，查看時改由 commit 重新查詢。
+	commit(previous, result.snapshot if map_view.inspected_unit == 0 else {}, "地形筆刷 %s" % stroke_id, UndoRedo.MERGE_ENDS)
 
 func unit_at(cell: Vector2i) -> Dictionary:
 	# 佔用格由核心決定；編輯器只選取 snapshot 中被點擊的單位。
@@ -662,25 +662,24 @@ func inspect_unit(cell: Vector2i) -> void:
 	var unit := unit_at(cell)
 	var unit_id: int = 0 if unit.is_empty() else unit.id
 	map_view.inspected_unit = 0 if unit_id == map_view.inspected_unit else unit_id
-	refresh_grid()
+	refresh_preview()
 
 func edit_cell(cell: Vector2i) -> void:
-	if editing_mode == -1: return
+	if editing_mode == EditMode.NONE: return
 	selected_cell = cell
-	if editing_mode == 5:
+	if editing_mode == EditMode.CARGO:
 		edit_cargo_cell(cell)
 		return
-	var mode := editing_mode
 	var current := unit_at(cell)
-	if mode <= 1:
-		var layer := "ground" if mode == 0 else "overlay"
+	var previous := document_state()
+	if BRUSH_LAYERS.has(editing_mode):
+		var layer: String = BRUSH_LAYERS[editing_mode]
 		var kind: String = terrain_brushes[layer]
-		if mode == 0 and kind.is_empty(): return
+		if editing_mode == EditMode.GROUND and kind.is_empty(): return
 		replace_layer(cell, layer, kind)
 		return
-	elif mode == 2:
+	elif editing_mode == EditMode.PLACE_UNIT:
 		if unit_list.item_count == 0: return
-		checkpoint()
 		var kind := unit_list.get_item_text(unit_list.selected)
 		var id := 1
 		while map_data.units.any(func(u: Dictionary): return u.id == id):
@@ -690,26 +689,25 @@ func edit_cell(cell: Vector2i) -> void:
 		if team_list.selected != 0:
 			placement.min_difficulty = placement_difficulty.get_selected_metadata()
 		map_data.units.append(placement)
-	elif mode == 3:
+	elif editing_mode == EditMode.MOVE_UNIT:
 		if current.is_empty(): return
 		map_view.begin_unit_drag(current, cell)
 		return
 	else:
 		if current.is_empty(): return
-		checkpoint()
 		map_data.units = map_data.units.filter(func(u: Dictionary): return u.id != current.id)
-	validate_current()
+	commit(previous)
 
 func move_unit(id: int, cell: Vector2i) -> void:
-	if editing_mode != 3: return
+	if editing_mode != EditMode.MOVE_UNIT: return
 	selected_cell = cell
 	for unit in map_data.units:
 		if unit.id != id: continue
 		if Vector2i(unit.x, unit.y) == cell: return
-		checkpoint()
+		var previous := document_state()
 		unit.x = cell.x
 		unit.y = cell.y
-		validate_current()
+		commit(previous)
 		return
 
 func refresh_definitions() -> void:
@@ -780,13 +778,11 @@ func edit_definition(command: Dictionary) -> bool:
 	if command.action == "check_remove": return true
 	var previous := document_state()
 	definitions = result.definitions
-	history.record(previous, document_state())
-	update_history_controls()
+	if not commit(previous): return false
 	if command.action == "update_field":
 		for page in definition_pages:
 			if page.category == command.category: page.accept_field(command.id, command.key)
 	refresh_ui()
-	validate_current()
 	return true
 
 func show_definition_error(details: Dictionary) -> void:
@@ -859,9 +855,9 @@ func update_unit_difficulty(index: int) -> void:
 		if unit.id != map_view.inspected_unit: continue
 		var selected: String = inspected_difficulty.get_item_metadata(index)
 		if unit.min_difficulty == selected: return
-		checkpoint()
+		var previous := document_state()
 		unit.min_difficulty = selected
-		validate_current()
+		commit(previous)
 		return
 
 func update_unit_facing(index: int) -> void:
@@ -869,9 +865,9 @@ func update_unit_facing(index: int) -> void:
 		if unit.id != map_view.inspected_unit: continue
 		var selected: String = inspected_facing.get_item_metadata(index)
 		if unit.facing == selected: return
-		checkpoint()
+		var previous := document_state()
 		unit.facing = selected
-		validate_current()
+		commit(previous)
 		return
 
 # 貨物與出口一起提交，未完成的作者配置只作為介面草稿，不送入遊戲預覽。
@@ -913,17 +909,10 @@ func remove_cargo() -> void:
 
 func apply_cargo() -> bool:
 	if not cargo_draft_changed: return true
-	var candidate := map_data.duplicate(true)
-	candidate.cargo = null if cargo_draft.positions.is_empty() and cargo_draft.exits.is_empty() else cargo_draft.duplicate(true)
-	var snapshot := read_core_response(core.inspected_preview_from_json(JSON.stringify(definitions), JSON.stringify(candidate), map_view.inspected_unit if map_view.inspected_unit != 0 else null))
-	if snapshot.is_empty(): return false
 	var previous := document_state()
-	map_data = candidate
+	map_data.cargo = null if cargo_draft.positions.is_empty() and cargo_draft.exits.is_empty() else cargo_draft.duplicate(true)
+	if not commit(previous): return false
 	cargo_draft_changed = false
-	history.record(previous, document_state())
 	update_history_controls()
 	refresh_cargo_tools()
-	map_view.present(map_data, snapshot, selected_cell)
-	refresh_inspected_unit()
-	status_label.text = "資料有效；尚未儲存"
 	return true

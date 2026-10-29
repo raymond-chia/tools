@@ -548,7 +548,7 @@ pub struct MovePreview {
 }
 
 #[derive(Serialize)]
-#[serde(untagged)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ActiveSkillPreview {
     Attack(AttackPreview),
     Healing(HealingPreview),
@@ -604,6 +604,8 @@ pub struct AttackPreview {
 #[derive(Serialize)]
 pub struct UnitView {
     pub carrying_cargo: bool,
+    /// 探索中可切換為目前行動者。
+    pub selectable: bool,
     pub id: i64,
     pub unit_type: String,
     pub visual: String,
@@ -664,6 +666,8 @@ pub struct TurnView {
     pub can_skill: bool,
     pub can_end_turn: bool,
     pub can_delay: bool,
+    /// 分段技能等待下一段時的技能 ID。
+    pub pending_skill: Option<String>,
 }
 
 /// 技能使用的威力由資料明確指定，與近遠距離無關。

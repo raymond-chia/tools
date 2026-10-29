@@ -384,7 +384,7 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 	attack_preview_panel.visible = not preview.is_empty()
 	if preview.is_empty():
 		return
-	var is_healing := preview.has("healing")
+	var is_healing: bool = preview.kind == "healing"
 	healing_preview_segment.get_parent().move_child(healing_preview_segment, 1 if is_healing else 4)
 	healing_preview_segment.visible = is_healing and int(preview.healing) > 0
 	attack_preview_critical.get_parent().visible = not is_healing

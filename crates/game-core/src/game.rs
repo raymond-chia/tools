@@ -636,6 +636,7 @@ impl Game {
             movement_remaining,
             movement_segments_used: _,
         } = self.world.resource::<Turn>();
+        let Exploration { mode, turns } = self.world.resource::<Exploration>();
         let mut units: Vec<_> = self
             .world
             .iter_entities()
@@ -651,6 +652,8 @@ impl Game {
             })
             .map(|(entity, i, p, fp, h, f)| UnitView {
                 carrying_cargo: crate::cargo::is_carrying_cargo(&self.world, entity),
+                selectable: *mode != BattleMode::Combat
+                    && (turns.contains_key(&i.0) || *turn_actor == Some(i.0)),
                 id: i.0,
                 unit_type: f.unit_type.clone(),
                 visual: f.visual.clone(),
@@ -715,7 +718,6 @@ impl Game {
             Vec::new()
         };
         let can_skill = player_turn && can_use_skill(&self.world);
-        let Exploration { mode, turns } = self.world.resource::<Exploration>();
         let exploring = *mode != BattleMode::Combat;
         let turn_order: Vec<_> = if exploring {
             let mut available: Vec<_> = turns.keys().copied().collect();
@@ -865,6 +867,10 @@ impl Game {
                 can_move,
                 can_skill,
                 can_delay,
+                pending_skill: turn_actor
+                    .and_then(|actor| self.entity(actor))
+                    .and_then(|entity| self.world.get::<crate::model::PendingStrike>(entity))
+                    .map(|crate::model::PendingStrike { skill }| skill.clone()),
             },
             round: *round,
             battle_mode: *mode,
