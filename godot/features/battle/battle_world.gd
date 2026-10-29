@@ -70,7 +70,7 @@ func setup_map(snapshot: Dictionary) -> void:
 	BattleVisuals.present_events(unit_nodes, state.presentation_events)
 	camera.configure_board(self, ground, state.width, state.height)
 	for unit in state.units:
-		if unit.team == "player":
+		if not BattleConfig.is_enemy(unit.team):
 			camera.position = camera.clamp_to_bounds(to_global(footprint_center(unit)))
 			break
 

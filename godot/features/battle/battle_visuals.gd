@@ -75,7 +75,7 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	selection.visible = selected
 	var base: Sprite2D = node.get_node("Visual/Base")
 	base.scale = base_scale
-	base.modulate = Color("63a9ff") if team is String else Color("ff6868")
+	base.modulate = Color("ff6868") if BattleConfig.is_enemy(team) else Color("63a9ff")
 	var body: Sprite2D = node.get_node("Visual/Body")
 	body.scale = Vector2.ONE * (BattleConfig.LARGE_UNIT_BODY_SCALE if large else BattleConfig.UNIT_BODY_SCALE)
 	body.position.y = -body.get_rect().end.y * body.scale.y

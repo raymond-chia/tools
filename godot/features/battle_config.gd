@@ -13,6 +13,9 @@ static func unit_name_key(unit_type: String) -> String:
 static func team_name_key(team_name: String) -> String:
 	return "TEAM_NAME_%s" % team_name.to_upper()
 
+static func is_enemy(team: Variant) -> bool:
+	return team is Dictionary and team.has("enemy")
+
 static func skill_name_key(skill_id: String) -> String:
 	return "SKILL_NAME_%s" % skill_id.to_upper()
 

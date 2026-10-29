@@ -279,7 +279,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		for skill in unit.active_skills:
 			active_lines.append("%s\n%s" % [localized_skill_name(skill), localized_skill_details(skill)])
 		active_skills_text.text = "\n\n".join(active_lines) if not active_lines.is_empty() else tr("DETAIL_NO_ACTIVE_SKILLS")
-		detail_values.team.text = tr("TEAM_ALLY") if unit.team is String else tr("TEAM_ENEMY") + "（%s）" % tr(BattleConfig.team_name_key(unit.team.enemy))
+		detail_values.team.text = tr("TEAM_ENEMY") + "（%s）" % tr(BattleConfig.team_name_key(unit.team.enemy)) if BattleConfig.is_enemy(unit.team) else tr("TEAM_ALLY")
 		detail_values.hp.text = "%d / %d" % [int(unit.hp), int(unit.max_hp)]
 		detail_values.size.text = tr("UNIT_SIZE_LARGE") if unit.large else tr("UNIT_SIZE_NORMAL")
 		detail_values.movement.text = "%d" % int(unit.movement)
@@ -385,7 +385,6 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 	if preview.is_empty():
 		return
 	var is_healing: bool = preview.kind == "healing"
-	healing_preview_segment.get_parent().move_child(healing_preview_segment, 1 if is_healing else 4)
 	healing_preview_segment.visible = is_healing and int(preview.healing) > 0
 	attack_preview_critical.get_parent().visible = not is_healing
 	attack_preview_resources.text = tr("ATTACK_PREVIEW_RESOURCES") % [int(preview.target_hp), int(preview.target_max_hp), int(preview.target_mana)]
@@ -543,7 +542,7 @@ func localized_unit_name(unit_type: String) -> String:
 	return tr(BattleConfig.unit_name_key(unit_type))
 
 func colored_unit(unit_type: String, team: Variant) -> String:
-	return "[color=%s]%s[/color]" % [TEAM_COLORS["player" if team is String else "enemy"], localized_unit_name(unit_type)]
+	return "[color=%s]%s[/color]" % [TEAM_COLORS["enemy" if BattleConfig.is_enemy(team) else "player"], localized_unit_name(unit_type)]
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)

@@ -796,7 +796,7 @@ func show_definition_error(details: Dictionary) -> void:
 		"referenced":
 			var references: Array[String] = []
 			for reference in details.references:
-				var category: String = {"unit_types": "單位", "skills": "技能", "maps": "地圖", "defaults": "全體預設"}[reference.category]
+				var category: String = {"unit_types": "單位", "skills": "技能", "maps": "地圖", "defaults": "全體預設"}.get(reference.category, reference.category)
 				var reference_id: String = reference.id
 				if reference.category == "maps": reference_id = reference_id.get_file()
 				references.append("• %s「%s」" % [category, reference_id])
