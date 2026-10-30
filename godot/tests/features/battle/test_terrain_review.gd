@@ -104,6 +104,34 @@ func test_terrain_description_preserves_each_effect() -> void:
 		else:
 			assert_str(battle.ui.terrain_effect.text).not_contains("回合")
 
+# 驗證平地與 rough 疊加泥沼仍可通行且成本相加，只列實際效果，暫時地形剩餘回合獨立一行。
+func test_terrain_description_omits_empty_layers_and_separates_duration() -> void:
+	var effect_parts: Array[String] = [
+		tr("TERRAIN_EFFECT_DODGE").format({"value": 1.0}),
+		tr("TERRAIN_EFFECT_BLOCK").format({"value": 4.0}),
+		tr("TERRAIN_EFFECT_MOVEMENT").format({"value": 2.0}),
+		tr("TERRAIN_EFFECT_DAMAGE").format({"value": 3.0}),
+	]
+	var effects := "，".join(effect_parts)
+	var cases := [
+		{"name": "純平地", "cell": Vector2i(4, 0), "temporary": false, "cost": 1, "expected": tr("TERRAIN_DESCRIPTION_NONE")},
+		{"name": "平地與固定 overlay", "cell": Vector2i(1, 0), "temporary": false, "cost": 3, "expected": effects},
+		{"name": "平地與暫時 overlay", "cell": Vector2i(4, 0), "temporary": true, "cost": 3, "expected": effects + "\n" + tr("TERRAIN_EFFECT_DURATION").format({"value": 3.0})},
+		{"name": "rough 與固定 overlay", "cell": Vector2i(5, 1), "temporary": false, "cost": 4, "expected": effects + "；" + tr("TERRAIN_EFFECT_MOVEMENT").format({"value": 1.0})},
+		{"name": "rough 與暫時 overlay", "cell": Vector2i(4, 1), "temporary": true, "cost": 4, "expected": effects + "；" + tr("TERRAIN_EFFECT_MOVEMENT").format({"value": 1.0}) + "\n" + tr("TERRAIN_EFFECT_DURATION").format({"value": 3.0})},
+	]
+	for test_case in cases:
+		var snapshot := load_case("move_anchor")
+		var cell: Vector2i = test_case.cell
+		if test_case.temporary:
+			snapshot = dispatch({"type": "skill", "actor": ACTOR_ID, "x": cell.x, "y": cell.y, "skill": "mire"})
+		var terrain: Dictionary = snapshot.terrain_cells.filter(func(item): return item.x == cell.x and item.y == cell.y)[0]
+		assert_bool(terrain.passable).override_failure_message(test_case.name + "：疊加後仍應可通行").is_true()
+		assert_int(int(terrain.cost)).override_failure_message(test_case.name + "：基本成本與兩層額外成本應相加").is_equal(test_case.cost)
+		battle.ui.present(snapshot, "", cell, "", "", false)
+		assert_bool(battle.ui.info_panel.visible).is_true()
+		assert_str(battle.ui.terrain_effect.text).override_failure_message(test_case.name + "：僅列有效說明，剩餘回合須另起一行").is_equal(test_case.expected)
+
 func load_case(map_name: String) -> Dictionary:
 	decode(battle.core.load_documents(FileAccess.get_file_as_string(DEFINITIONS), FileAccess.get_file_as_string(DATA + map_name + "_map.toml"), "easy"))
 	reset_random_seed(battle.core)

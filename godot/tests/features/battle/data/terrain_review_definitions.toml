@@ -12,6 +12,12 @@ layer="ground"
 entry_rule="walkable"
 
 [[terrain_types]]
+id="rough"
+layer="ground"
+entry_rule="walkable"
+extra_movement_cost=1
+
+[[terrain_types]]
 id="mire"
 layer="overlay"
 entry_rule="walkable"

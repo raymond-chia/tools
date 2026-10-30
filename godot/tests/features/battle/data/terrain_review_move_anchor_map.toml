@@ -5,6 +5,18 @@ height=2
 x=1
 y=0
 kind="mire"
+[[terrains]]
+x=5
+y=1
+kind="rough"
+[[terrains]]
+x=5
+y=1
+kind="mire"
+[[terrains]]
+x=4
+y=1
+kind="rough"
 [[units]]
 facing = "right"
 id=1

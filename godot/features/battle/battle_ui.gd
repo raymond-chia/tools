@@ -300,9 +300,18 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 	terrain_name.text = "、".join(terrain_names)
 	terrain_cost.text = "%d" % int(terrain.cost) if terrain.passable else tr("TERRAIN_EFFECT_BLOCKED")
 	var terrain_descriptions: Array[String] = []
+	var terrain_durations: Array[String] = []
 	for description in terrain.effect_descriptions:
-		terrain_descriptions.append(localized_terrain_description(description))
-	terrain_effect.text = "；".join(terrain_descriptions) if not terrain_descriptions.is_empty() else tr("TERRAIN_DESCRIPTION_NONE")
+		var effect_description := localized_terrain_description(description)
+		if not effect_description.is_empty():
+			terrain_descriptions.append(effect_description)
+		if description.values.has("remaining_rounds"):
+			terrain_durations.append(tr("TERRAIN_EFFECT_DURATION").format({"value": description.values.remaining_rounds}))
+	var terrain_lines: Array[String] = []
+	if not terrain_descriptions.is_empty():
+		terrain_lines.append("；".join(terrain_descriptions))
+	terrain_lines.append_array(terrain_durations)
+	terrain_effect.text = "\n".join(terrain_lines) if not terrain_lines.is_empty() else tr("TERRAIN_DESCRIPTION_NONE")
 
 func present_turn_order(snapshot: Dictionary, selecting_delay: bool) -> void:
 	turn_order_selecting_delay = selecting_delay
@@ -638,12 +647,11 @@ func localized_terrain_description(description: Dictionary) -> String:
 		"block_penalty": "TERRAIN_EFFECT_BLOCK",
 		"extra_movement_cost": "TERRAIN_EFFECT_MOVEMENT",
 		"damage": "TERRAIN_EFFECT_DAMAGE",
-		"remaining_rounds": "TERRAIN_EFFECT_DURATION",
 	}
 	for key in value_keys:
 		if description.values.has(key):
 			parts.append(tr(value_keys[key]).format({"value": description.values[key]}))
-	return "，".join(parts) if not parts.is_empty() else tr("TERRAIN_DESCRIPTION_NONE")
+	return "，".join(parts)
 
 func skill_with_id(skills: Array, skill_id: String) -> Dictionary:
 	for skill in skills:
