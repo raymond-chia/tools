@@ -5,7 +5,7 @@ use crate::{Game, GridPos, TerrainEntryRule, TerrainLayer, TerrainPlacement};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-struct BrushArea {
+pub(super) struct BrushArea {
     x: i32,
     y: i32,
     size: i32,
@@ -20,7 +20,7 @@ struct TerrainBrush {
 }
 
 // 預覽與實際塗抹共用定位與裁切，偶數邊長向座標正方向多延伸一格。
-fn brush_cells(map: &Map, area: BrushArea) -> Result<Vec<GridPos>, EditorError> {
+pub(super) fn brush_cells(map: &Map, area: BrushArea) -> Result<Vec<GridPos>, EditorError> {
     let BrushArea { x, y, size } = area;
     if size < 1 {
         return Err(EditorError::operation("invalid_brush_size", "", Vec::new()));
@@ -87,29 +87,8 @@ pub fn paint_terrain_from_json(
     };
     let mut changed = false;
     for GridPos { x, y } in cells {
-        // 只略過會讓單位無法站立的格子，其他筆刷覆蓋格仍正常套用。
-        if blocks_units {
-            let mut occupied = false;
-            for unit in &map.units {
-                let unit_type = definitions
-                    .unit_types
-                    .iter()
-                    .find(|entry| entry.id == unit.unit_type)
-                    .ok_or_else(|| crate::error::unknown_unit_type(&unit.unit_type))?;
-                let offset_x = i64::from(x) - i64::from(unit.x);
-                let offset_y = i64::from(y) - i64::from(unit.y);
-                if offset_x >= 0
-                    && offset_x < i64::from(unit_type.width)
-                    && offset_y >= 0
-                    && offset_y < i64::from(unit_type.height)
-                {
-                    occupied = true;
-                    break;
-                }
-            }
-            if occupied {
-                continue;
-            }
+        if blocks_units && unit_occupies(&definitions, &map, GridPos { x, y })? {
+            continue;
         }
         let replaces = |terrain: &TerrainPlacement| {
             terrain.x == x
@@ -149,4 +128,26 @@ pub fn paint_terrain_from_json(
         serde_json::json!({"changed": changed, "map": map, "snapshot": game.take_snapshot(None)})
             .to_string(),
     )
+}
+
+// 一般筆刷、撒放與搬動共用單位佔用規則。
+pub(super) fn unit_occupies(
+    definitions: &Definitions,
+    map: &Map,
+    cell: GridPos,
+) -> Result<bool, EditorError> {
+    for unit in &map.units {
+        let unit_type = definitions
+            .unit_types
+            .iter()
+            .find(|entry| entry.id == unit.unit_type)
+            .ok_or_else(|| crate::error::unknown_unit_type(&unit.unit_type))?;
+        let dx = i64::from(cell.x) - i64::from(unit.x);
+        let dy = i64::from(cell.y) - i64::from(unit.y);
+        if dx >= 0 && dx < i64::from(unit_type.width) && dy >= 0 && dy < i64::from(unit_type.height)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }

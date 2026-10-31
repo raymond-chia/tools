@@ -212,6 +212,24 @@ value = 1.0
 prefix = "筆刷大小 "
 tooltip_text = "數字 N 代表 N×N 格，以滑鼠所在格為中心，偶數大小向座標正方向多延伸一格；超出地圖的部分略過。"
 
+[node name="Tool" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+
+[node name="Density" type="SpinBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+max_value = 100.0
+step = 1.0
+value = 30.0
+prefix = "數量上限 "
+suffix = "%"
+tooltip_text = "只計算範圍內的同種上層，數量上限向下取整；空位不足或會堵路時少放。"
+
+[node name="Connectivity" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
+layout_mode = 2
+button_pressed = true
+text = "保持通路連通"
+tooltip_text = "檢查筆刷範圍外多一圈，避免新障礙切斷通路。"
+
 [node name="Scroll" type="ScrollContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Overlay"]
 layout_mode = 2
 size_flags_vertical = 3

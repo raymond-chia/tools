@@ -94,6 +94,34 @@ impl TacticalGame {
     }
     #[cfg(feature = "editor")]
     #[func]
+    fn scatter_overlay_from_json(
+        &self,
+        definitions: GString,
+        map: GString,
+        command: GString,
+    ) -> GString {
+        editor_response(game_core::editor::scatter_overlay_from_json(
+            &definitions.to_string(),
+            &map.to_string(),
+            &command.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
+    #[func]
+    fn move_overlay_from_json(
+        &self,
+        definitions: GString,
+        map: GString,
+        command: GString,
+    ) -> GString {
+        editor_response(game_core::editor::move_overlay_from_json(
+            &definitions.to_string(),
+            &map.to_string(),
+            &command.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
+    #[func]
     fn terrain_brush_cells_from_json(&self, map: GString, command: GString) -> GString {
         editor_response(game_core::editor::terrain_brush_cells_from_json(
             &map.to_string(),

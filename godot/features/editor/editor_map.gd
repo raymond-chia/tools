@@ -4,6 +4,7 @@ signal cell_pressed(cell: Vector2i)
 signal inspection_clicked(cell: Vector2i)
 signal cell_hovered(cell: Vector2i)
 signal stroke_started()
+signal overlay_dropped(from: Vector2i, to: Vector2i)
 signal unit_dropped(id: int, cell: Vector2i)
 
 @onready var ground: TileMapLayer = $Ground
@@ -28,6 +29,8 @@ var drag_origin := Vector2.ZERO
 var drag_pointer_origin := Vector2.ZERO
 var drag_visual_offset := Vector2.ZERO
 var dragged_unit := 0
+var dragged_overlay := Vector2i(-1, -1)
+var dragged_overlay_visual := ""
 var drag_offset := Vector2i.ZERO
 
 var terrain_overlay: Node2D
@@ -93,7 +96,7 @@ func present_brush(cells: Array) -> void:
 
 func move_camera(delta: float) -> void:
 	camera.move_with_input(delta)
-	if dragged_unit != 0: update_unit_drag(get_local_mouse_position())
+	if dragged_node != null: update_object_drag(get_local_mouse_position())
 
 func center(cell: Vector2i) -> Vector2:
 	return ground.position + ground.map_to_local(cell)
@@ -107,7 +110,7 @@ func cell_at(point: Vector2) -> Vector2i:
 func _gui_input(event: InputEvent) -> void:
 	if map_data.is_empty(): return
 	if event is InputEventMouseMotion:
-		if dragged_unit != 0: update_unit_drag(event.position)
+		if dragged_node != null: update_object_drag(event.position)
 		var cell := cell_at(event.position)
 		if cell != hovered:
 			hovered = cell
@@ -133,6 +136,20 @@ func _gui_input(event: InputEvent) -> void:
 			var cell := cell_at(event.position) if Rect2(Vector2.ZERO, size).has_point(event.position) else Vector2i(-1, -1)
 			finish_pointer(cell)
 
+func begin_overlay_drag(cell: Vector2i) -> void:
+	# 只選取顯示層已有的上層效果；搬動合法性由核心判定。
+	for effect in snapshot.get("terrain_effects", []):
+		if Vector2i(effect.x, effect.y) != cell: continue
+		dragged_overlay = cell
+		dragged_overlay_visual = effect.visual
+		selected = cell
+		var key := "%s:%s:%s" % [effect.x, effect.y, effect.effect]
+		if terrain_object_nodes.has(key):
+			dragged_node = terrain_object_nodes[key]
+			drag_origin = dragged_node.position
+		queue_redraw()
+		return
+
 func begin_unit_drag(unit: Dictionary, cell: Vector2i) -> void:
 	dragged_unit = unit.id
 	dragged_node = unit_nodes[unit.id]
@@ -143,14 +160,17 @@ func begin_unit_drag(unit: Dictionary, cell: Vector2i) -> void:
 	queue_redraw()
 
 # 這只是拖曳中的顯示位移，不修改 snapshot，也不推導移動是否合法。
-func update_unit_drag(point: Vector2) -> void:
+func update_object_drag(point: Vector2) -> void:
 	drag_visual_offset = point - drag_pointer_origin
 	dragged_node.position = drag_origin + drag_visual_offset
 	queue_redraw()
 
 func finish_pointer(cell: Vector2i) -> void:
 	var id := dragged_unit
-	if id != 0: dragged_node.position = drag_origin
+	if dragged_node != null: dragged_node.position = drag_origin
+	var overlay_origin := dragged_overlay
+	dragged_overlay = Vector2i(-1, -1)
+	dragged_overlay_visual = ""
 	dragged_node = null
 	drag_visual_offset = Vector2.ZERO
 	dragged_unit = 0
@@ -159,6 +179,8 @@ func finish_pointer(cell: Vector2i) -> void:
 	selected = Vector2i(-1, -1)
 	if id != 0 and cell.x >= 0:
 		unit_dropped.emit(id, cell - drag_offset)
+	if overlay_origin.x >= 0 and cell.x >= 0:
+		overlay_dropped.emit(overlay_origin, cell)
 	queue_redraw()
 
 func diamond(point: Vector2) -> PackedVector2Array:
@@ -179,7 +201,11 @@ func _draw() -> void:
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))
-	if drag_paint:
+	if dragged_overlay.x >= 0 and hovered.x >= 0:
+		marker(hovered, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))
+		if dragged_node == null:
+			BattleVisuals.draw_terrain_effect(self, dragged_overlay_visual, center(hovered))
+	if not brush_cells.is_empty():
 		for cell in brush_cells:
 			marker(Vector2i(cell.x, cell.y), Color(1, 1, 1, 0.16), Color(1, 1, 1, 0.75))
 	elif hovered.x >= 0:

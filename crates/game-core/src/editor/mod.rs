@@ -4,12 +4,14 @@ mod definitions;
 mod error;
 mod json;
 mod map;
+mod overlay;
 
 use crate::Game;
 use crate::authoring::{Definitions, Map, validation};
 pub use definitions::edit_definition_from_json;
 pub use error::EditorError;
 pub use map::{paint_terrain_from_json, terrain_brush_cells_from_json};
+pub use overlay::{move_overlay_from_json, scatter_overlay_from_json};
 
 /// 依地圖配置順序列出既有敵方派系，供編輯器選用。
 pub fn enemy_factions_from_json(map: &str) -> Result<String, EditorError> {
