@@ -311,6 +311,13 @@ text = "敵方全滅"
 layout_mode = 2
 text = "玩家全滅"
 
+[node name="Teams" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+
+[node name="AddTeam" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
+layout_mode = 2
+fit_to_longest_item = false
+
 [node name="cargo_escaped" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Victory"]
 layout_mode = 2
 text = "貨物離場"
@@ -336,6 +343,13 @@ text = "敵方全滅"
 [node name="player_defeated" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
 layout_mode = 2
 text = "玩家全滅"
+
+[node name="Teams" type="VBoxContainer" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+
+[node name="AddTeam" type="OptionButton" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
+layout_mode = 2
+fit_to_longest_item = false
 
 [node name="cargo_escaped" type="CheckBox" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Outcomes/Groups/Defeat"]
 layout_mode = 2

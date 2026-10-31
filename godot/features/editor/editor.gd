@@ -107,6 +107,8 @@ func _ready() -> void:
 		mode.add_item("全部成立")
 		mode.add_item("任一成立")
 		mode.item_selected.connect(func(_selected: int): update_outcome_group(key, group))
+		var add_team: OptionButton = group.get_node("AddTeam")
+		add_team.item_selected.connect(func(selected: int): add_outcome_team(key, add_team.get_item_metadata(selected)))
 		for child in group.get_children():
 			if child is CheckBox:
 				child.toggled.connect(func(_pressed: bool): update_outcome_group(key, group))
@@ -422,6 +424,7 @@ func present_preview(snapshot: Dictionary) -> void:
 	update_history_controls()
 	map_view.present(map_data, snapshot, selected_cell)
 	refresh_cargo_tools()
+	refresh_outcome_groups()
 	refresh_inspected_unit()
 	status_label.text = "資料有效%s" % ("；尚未儲存" if dirty else "")
 
@@ -524,19 +527,63 @@ func refresh_outcome_groups() -> void:
 		var rule: Dictionary = map_data[["victory", "defeat"][index]]
 		var mode: OptionButton = group.get_node("Mode")
 		mode.select(0 if rule.mode == "all" else 1)
+		refresh_outcome_teams(["victory", "defeat"][index], group, rule.conditions)
 		for child in group.get_children():
 			if child is CheckBox:
 				child.set_pressed_no_signal(rule.conditions.any(func(condition: Dictionary): return condition == OUTCOME_CONDITIONS[str(child.name)]))
 
 func update_outcome_group(key: String, group: VBoxContainer) -> void:
 	if refreshing or map_data.is_empty(): return
-	var conditions: Array = []
+	var conditions: Array = map_data[key].conditions.filter(func(condition: Dictionary): return condition.type == "team_defeated" and condition.team is Dictionary)
 	for child in group.get_children():
 		if child is CheckBox and child.button_pressed:
 			conditions.append(OUTCOME_CONDITIONS[str(child.name)].duplicate(true))
 	var mode: OptionButton = group.get_node("Mode")
 	var previous := document_state()
 	map_data[key] = {"mode": "all" if mode.selected == 0 else "any", "conditions": conditions}
+	commit(previous)
+
+# 下拉選單只整理作者文件中的陣營；勝敗是否合法仍由核心驗證。
+func refresh_outcome_teams(key: String, group: VBoxContainer, conditions: Array) -> void:
+	var rows: VBoxContainer = group.get_node("Teams")
+	for child in rows.get_children():
+		rows.remove_child(child)
+		child.queue_free()
+	var selected_teams: Array = []
+	for condition: Dictionary in conditions:
+		if condition.type != "team_defeated" or not condition.team is Dictionary: continue
+		var team: Variant = condition.team
+		selected_teams.append(team)
+		var checkbox := CheckBox.new()
+		checkbox.text = "%s 全滅" % team.enemy
+		checkbox.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		checkbox.set_pressed_no_signal(true)
+		checkbox.toggled.connect(func(pressed: bool):
+			if not pressed: remove_outcome_team(key, team)
+		)
+		rows.add_child(checkbox)
+	var options: OptionButton = group.get_node("AddTeam")
+	options.clear()
+	options.add_item("加入指定陣營全滅…")
+	options.set_item_disabled(0, true)
+	var teams: Array = []
+	for unit: Dictionary in map_data.units:
+		if not unit.team is Dictionary or teams.has(unit.team): continue
+		teams.append(unit.team)
+		if selected_teams.has(unit.team): continue
+		options.add_item(unit.team.enemy)
+		options.set_item_metadata(options.item_count - 1, unit.team)
+	options.select(0)
+	options.disabled = options.item_count == 1
+
+func add_outcome_team(key: String, team: Variant) -> void:
+	var previous := document_state()
+	map_data[key].conditions.append({"type": "team_defeated", "team": team})
+	commit(previous)
+
+func remove_outcome_team(key: String, team: Variant) -> void:
+	var previous := document_state()
+	map_data[key].conditions = map_data[key].conditions.filter(func(condition: Dictionary): return not (condition.type == "team_defeated" and condition.team is Dictionary and condition.team == team))
 	commit(previous)
 
 func refresh_tools() -> void:
