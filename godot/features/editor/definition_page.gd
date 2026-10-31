@@ -46,9 +46,15 @@ var active_skill_ids: Array = []
 var passive_skill_ids: Array = []
 var field_texts: Dictionary = {}
 var field_id := ""
+var comparison_id := ""
 
 func _ready() -> void:
 	$ListPanel/Title.text = TITLES[category] + "清單"
+	entries.item_clicked.connect(compare_clicked_entry)
+	$FormPanel/Comparison/Close.pressed.connect(func():
+		comparison_id = ""
+		refresh_fields()
+	)
 	entries.item_selected.connect(func(_index: int): refresh_fields())
 	entries.set_drag_forwarding(begin_entry_drag, can_drop_entry, drop_entry)
 	$ListPanel/Actions/Add.pressed.connect(func(): open_create_dialog(false))
@@ -154,8 +160,16 @@ func present(value: Dictionary, terrain_ids: Array, terrain_entries: Array, skil
 	$ListPanel/Actions/Remove.disabled = entries.item_count == 0
 	$ListPanel/Actions/Duplicate.disabled = entries.item_count == 0
 
+# 右鍵只指定參考資料，不改變左鍵選取的編輯對象。
+func compare_clicked_entry(index: int, _position: Vector2, button: int) -> void:
+	if button != MOUSE_BUTTON_RIGHT: return
+	comparison_id = entries.get_item_metadata(index).id
+	refresh_fields()
+
 func selected_definition() -> Dictionary:
-	var id := selected_id()
+	return definition_by_id(selected_id())
+
+func definition_by_id(id: String) -> Dictionary:
 	# 技能頁同時呈現主動與被動技能。
 	var category_entries: Array = definitions.active_skills + definitions.passive_skills if category == "skills" else definitions.get(category, [])
 	for entry in category_entries:
@@ -172,12 +186,19 @@ func refresh_fields() -> void:
 	for child in fields.get_children():
 		fields.remove_child(child)
 		child.queue_free()
+	var comparison := definition_by_id(comparison_id)
+	if comparison.is_empty(): comparison_id = ""
+	var comparing := not comparison_id.is_empty()
+	$FormPanel/Comparison.visible = comparing
+	$FormPanel/Comparison/Title.text = "比對：" + comparison_id + "（唯讀）"
+	fields.columns = 3 if comparing else 2
 	var entry := selected_definition().duplicate()
 	if category == "unit_types":
 		var defaults_label := Label.new()
 		defaults_label.text = "全體預設被動技能"
 		fields.add_child(defaults_label)
 		fields.add_child(create_passive_selector(definitions.default_passive_skills, false, func(value: Variant): default_passive_skills_changed.emit(value)))
+		if comparing: add_comparison_value("default_passive_skills", definitions.default_passive_skills)
 	for key in entry:
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)
@@ -232,7 +253,41 @@ func refresh_fields() -> void:
 		input.custom_minimum_size.x = 320
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fields.add_child(input)
+		if comparing:
+			add_comparison_value(key, comparison.get(key))
+	# 主動與被動技能的欄位可能不同；參考資料獨有的欄位也要顯示。
+	if comparing:
+		for key in comparison:
+			if entry.has(key): continue
+			var label := Label.new()
+			label.text = FIELD_LABELS.get(key, key)
+			fields.add_child(label)
+			var empty := Label.new()
+			empty.text = "—"
+			fields.add_child(empty)
+			add_comparison_value(key, comparison[key])
 	rebuilding = false
+
+# 只排版作者資料，不計算數值差異或遊戲規則。
+func add_comparison_value(key: String, value: Variant) -> void:
+	var label := Label.new()
+	label.custom_minimum_size.x = 320
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.text = comparison_text(key, value)
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	label.tooltip_text = label.text
+	fields.add_child(label)
+
+func comparison_text(key: String, value: Variant) -> String:
+	if value == null: return "—"
+	if value is bool: return "是" if value else "否"
+	if value is Array:
+		if value.is_empty():
+			return "使用全體預設" if key == "passive_skills" and category == "unit_types" else "無"
+		return "、".join(value)
+	if CHOICES.has(key): return CHOICES[key][value]
+	if str(value).is_empty(): return "待選擇" if key == "visual" else "無"
+	return str(value)
 
 func discard_pending_fields() -> void:
 	field_texts.clear()

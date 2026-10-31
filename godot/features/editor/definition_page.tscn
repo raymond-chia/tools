@@ -19,7 +19,7 @@ size_flags_vertical = 3
 
 [node name="OrderHint" type="Label" parent="ListPanel"]
 layout_mode = 2
-text = "拖曳項目以調整順序"
+text = "拖曳項目以調整順序；右鍵點擊以比對"
 
 [node name="Actions" type="HBoxContainer" parent="ListPanel"]
 layout_mode = 2
@@ -39,6 +39,18 @@ text = "刪除"
 [node name="FormPanel" type="VBoxContainer" parent="."]
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="Comparison" type="HBoxContainer" parent="FormPanel"]
+visible = false
+layout_mode = 2
+
+[node name="Title" type="Label" parent="FormPanel/Comparison"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Close" type="Button" parent="FormPanel/Comparison"]
+layout_mode = 2
+text = "關閉比對"
 
 [node name="Scroll" type="ScrollContainer" parent="FormPanel"]
 layout_mode = 2
