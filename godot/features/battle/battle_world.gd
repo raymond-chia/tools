@@ -165,6 +165,7 @@ func sync_unit_sprites() -> void:
 		else:
 			node = unit_nodes[unit.id]
 		node.set_meta("presentation_unit", unit)
+		BattleVisuals.update_unit_cargo(node, unit)
 		# 演出期間由核心事件更新位置與血條，不提前套用最終狀態。
 		if is_new or not is_presenting_combat_events():
 			BattleVisuals.update_unit_health(node, unit)
@@ -531,4 +532,9 @@ func _draw() -> void:
 			draw_marker(Vector2i(interrupted_path[-1].x,interrupted_path[-1].y),Color(0.9,0.05,0.02,0.34),Color("ff4938"),4.0)
 	if is_cell_on_board(hovered): draw_marker(hovered,Color(1,1,1,0.08),Color(1,1,1,0.6))
 	if is_cell_on_board(inspected_cell): draw_marker(inspected_cell,Color(1.0,0.88,0.48,0.16),Color("ffe17a"))
+	if state.cargo != null:
+		for item in state.cargo.items:
+			if item is Dictionary and item.has("ground"):
+				var position: Dictionary = item.ground
+				BattleVisuals.draw_ground_cargo(self, cell_center(Vector2i(position.x, position.y)))
 	terrain_overlay.queue_redraw()

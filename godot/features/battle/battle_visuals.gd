@@ -3,7 +3,17 @@ extends RefCounted
 
 const TILE_SIZE := Vector2i(64, 32)
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
+const CARGO_ART := preload("res://assets/cargo.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
+# 所有地形素材使用相同畫布，格子中心位於圖片的 (32, 48)。
+const TERRAIN_ART_ORIGIN := Vector2(32, 48)
+const TERRAIN_ART := {
+	"tree": preload("res://assets/terrain/tree.svg"),
+	"broken_log": preload("res://assets/terrain/broken_log.svg"),
+	"wagon": preload("res://assets/terrain/wagon.svg"),
+	"spikes": preload("res://assets/terrain/spikes.svg"),
+	"mire": preload("res://assets/terrain/mire.svg"),
+}
 # ground 地形 ID 對應到 GROUND_ART 內的地磚座標。
 const GROUND_TILES := {"plain": Vector2i(0, 0), "rough": Vector2i(1, 0), "cliff": Vector2i(2, 0), "chasm": Vector2i(3, 0)}
 
@@ -61,8 +71,23 @@ static func create_unit_node(unit_id: int, visual_name: String, world_objects: N
 		bar.color = Color("281e25") if bar_name == "Background" else Color("62d27c")
 		health.add_child(bar)
 	node.add_child(health)
+	var cargo_marker := Sprite2D.new()
+	cargo_marker.name = "CargoMarker"
+	cargo_marker.visible = false
+	cargo_marker.texture = CARGO_ART
+	health.add_child(cargo_marker)
 	world_objects.add_child(node)
 	return node
+
+# 編輯器與戰鬥地面共用同一張貨物圖片。
+static func draw_ground_cargo(canvas: CanvasItem, point: Vector2) -> void:
+	canvas.draw_texture(CARGO_ART, point - CARGO_ART.get_size() * 0.5)
+
+static func update_unit_cargo(node: Node2D, unit: Dictionary) -> void:
+	var marker: Sprite2D = node.get_node("Health/CargoMarker")
+	var width: float = BattleConfig.LARGE_UNIT_HEALTH_BAR_WIDTH if unit.large else BattleConfig.UNIT_HEALTH_BAR_WIDTH
+	marker.position = Vector2(width * 0.5 + 14.0, BattleConfig.HEALTH_BAR_HEIGHT * 0.5)
+	marker.visible = unit.carrying_cargo
 
 static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: bool) -> void:
 	var base_scale := Vector2.ONE * (BattleConfig.LARGE_UNIT_BASE_SCALE if large else BattleConfig.UNIT_BASE_SCALE)
@@ -213,45 +238,8 @@ static func draw_exit_marker(canvas: CanvasItem, progress: float) -> void:
 	canvas.draw_circle(head, BattleConfig.EXIT_HEAD_WIDTH * 0.5, BattleConfig.EXIT_HEAD_COLOR, true, -1.0, true)
 
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
-	match visual:
-		"tree":
-			canvas.draw_set_transform(center)
-			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-5, 4), Vector2(5, 4), Vector2(4, -17), Vector2(-4, -17)]), Color("785039"))
-			canvas.draw_circle(Vector2(-9, -19), 11, Color("28543c"))
-			canvas.draw_circle(Vector2(9, -21), 12, Color("346c46"))
-			canvas.draw_circle(Vector2(0, -29), 12, Color("448653"))
-			canvas.draw_circle(Vector2(-4, -32), 5, Color("66a465"))
-			canvas.draw_set_transform(Vector2.ZERO)
-		"broken_log":
-			canvas.draw_set_transform(center)
-			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-23, -3), Vector2(10, -9), Vector2(15, -6), Vector2(10, -2), Vector2(17, 1), Vector2(12, 5), Vector2(-20, 10)]), Color("805035"))
-			canvas.draw_line(Vector2(-17, -1), Vector2(6, -5), Color("b17c4b"), 2.0, true)
-			canvas.draw_line(Vector2(-15, 5), Vector2(8, 1), Color("503626"), 2.0, true)
-			canvas.draw_set_transform(Vector2(-21, 3) + center, 0, Vector2(0.55, 1))
-			canvas.draw_circle(Vector2.ZERO, 7, Color("d2ab70"))
-			canvas.draw_circle(Vector2.ZERO, 4, Color("93683e"), false, 1.0, true)
-			canvas.draw_set_transform(Vector2.ZERO)
-		"wagon":
-			canvas.draw_set_transform(center)
-			canvas.draw_line(Vector2(16, -1), Vector2(29, -4), Color("805536"), 3.0, true)
-			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-24, -17), Vector2(6, -23), Vector2(22, -14), Vector2(-8, -8)]), Color("c49658"))
-			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-24, -17), Vector2(-8, -8), Vector2(-8, 3), Vector2(-24, -6)]), Color("805536"))
-			canvas.draw_colored_polygon(PackedVector2Array([Vector2(-8, -8), Vector2(22, -14), Vector2(22, -3), Vector2(-8, 3)]), Color("a47543"))
-			canvas.draw_line(Vector2(-6, -3), Vector2(20, -9), Color("69452e"), 1.5, true)
-			for wheel in [Vector2(-14, 1), Vector2(15, 1)]:
-				canvas.draw_circle(wheel, 7, Color("40352d"))
-				canvas.draw_circle(wheel, 4.5, Color("b68a52"), false, 1.5, true)
-				canvas.draw_circle(wheel, 1.5, Color("d8b67b"))
-			canvas.draw_set_transform(Vector2.ZERO)
-		"spikes":
-			for offset_x in [-18.0, -6.0, 6.0, 18.0]:
-				var base := center + Vector2(offset_x, 5.0)
-				canvas.draw_colored_polygon(PackedVector2Array([base + Vector2(-5.0, 0.0), base + Vector2(5.0, 0.0), base + Vector2(0.0, -18.0)]), Color("d9d5ca"))
-		"mire":
-			canvas.draw_set_transform(center, 0, Vector2(1, 0.5))
-			canvas.draw_circle(Vector2.ZERO, 23, Color(0.2, 0.55, 0.28, 0.76))
-			canvas.draw_circle(Vector2(-9, 1), 5, Color(0.58, 0.86, 0.38, 0.72))
-			canvas.draw_set_transform(Vector2.ZERO)
+	if TERRAIN_ART.has(visual):
+		canvas.draw_texture(TERRAIN_ART[visual], center - TERRAIN_ART_ORIGIN)
 
 static func draw_movement_range(canvas: CanvasItem, ground: TileMapLayer, reachable: Array, second_reachable: Array, selected: bool) -> void:
 	var first_color: Color = BattleConfig.SELECTED_MOVE_FIRST_COLOR if selected else BattleConfig.FIRST_MOVE_COLOR

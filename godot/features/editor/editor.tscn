@@ -374,7 +374,7 @@ mouse_filter = 2
 [node name="Hint" type="Label" parent="Layout/Pages/MapPage/Materials/PaletteTabs/Cargo"]
 layout_mode = 2
 text = "在地圖點選貨物與出口位置，再按套用。
-橙色方框：貨物；綠色圓環：出口。
+立體小盒子：貨物；綠色圓環：出口。
 啟用時至少需要一份貨物與一個出口。
 只有敵方能使用掠奪技能，每人最多攜帶一份。"
 autowrap_mode = 2

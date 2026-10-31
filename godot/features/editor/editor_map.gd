@@ -170,23 +170,12 @@ func marker(cell: Vector2i, fill: Color, edge: Color) -> void:
 	points.append(points[0])
 	draw_polyline(points, edge, 2.0, true)
 
-func cargo_marker(point: Vector2, color: Color, symbol: PackedVector2Array) -> void:
-	draw_circle(point, 14.0, Color("182332"), true, -1.0, true)
-	draw_arc(point, 12.0, 0, TAU, 32, color, 3.0, true)
-	var points := PackedVector2Array()
-	for offset in symbol:
-		points.append(point + offset)
-	draw_polyline(points, color, 2.0, true)
-
 func _draw() -> void:
 	if map_data.is_empty(): return
 	BattleVisuals.draw_movement_range(self, ground, snapshot.get("inspected_reachable", []), snapshot.get("inspected_second_reachable", []), true)
 	terrain_overlay.queue_redraw()
 	for cargo in cargo_layout.positions:
-		cargo_marker(center(Vector2i(cargo.x, cargo.y)), Color("ffbc60"), PackedVector2Array([
-			Vector2(-5, -5), Vector2(5, -5), Vector2(5, 5), Vector2(-5, 5),
-			Vector2(-5, -5), Vector2(0, -5), Vector2(0, 0),
-		]))
+		BattleVisuals.draw_ground_cargo(self, center(Vector2i(cargo.x, cargo.y)))
 	if selected.x >= 0: marker(selected, Color(1, 0.88, 0.48, 0.16), Color("ffe17a"))
 	if dragged_unit != 0 and hovered.x >= 0:
 		marker(hovered - drag_offset, Color(1, 0.88, 0.48, 0.25), Color("ffe17a"))
