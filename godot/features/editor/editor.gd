@@ -933,13 +933,15 @@ func refresh_cargo_tools() -> void:
 
 func edit_cargo_cell(cell: Vector2i) -> void:
 	var key := "positions" if cargo_tool.selected < 2 else "exits"
-	var point := {"x": cell.x, "y": cell.y}
 	var cells: Array = cargo_draft[key]
+	# 讀檔座標來自 JSON，依格子比對，避免整數與浮點數的字典比對差異。
+	var index := cells.find_custom(func(point: Dictionary): return Vector2i(point.x, point.y) == cell)
 	if cargo_tool.selected in [0, 2]:
-		if cells.has(point): return
-		cells.append(point)
+		if index >= 0: return
+		cells.append({"x": cell.x, "y": cell.y})
 	else:
-		cells.erase(point)
+		if index < 0: return
+		cells.remove_at(index)
 	update_cargo_draft()
 
 func update_cargo_draft() -> void:
