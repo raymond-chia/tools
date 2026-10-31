@@ -243,7 +243,7 @@ impl Game {
                     None => continue,
                 };
                 let candidates: Vec<(Option<i64>, GridPos)> =
-                    if matches!(skill.effect, ActiveSkillEffect::Sweep) {
+                    if matches!(skill.effect, ActiveSkillEffect::Sweep { .. }) {
                         // 四條外側邊都列入候選，涵蓋大型單位的每個合法中心格。
                         let mut centers = Vec::new();
                         for x in position.x..position.x + footprint.width {
@@ -706,7 +706,7 @@ fn preferred_skill_distance(
 fn relevant_positioning_skill(profile: &AiProfile, skill: &ActiveSkillDef, healing: bool) -> bool {
     match skill.effect {
         ActiveSkillEffect::Heal { .. } => healing && profile.healing_weight > 0,
-        ActiveSkillEffect::Sweep
+        ActiveSkillEffect::Sweep { .. }
         | ActiveSkillEffect::Attack { .. }
         | ActiveSkillEffect::Push { .. } => !healing && profile.damage_weight > 0,
         ActiveSkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,

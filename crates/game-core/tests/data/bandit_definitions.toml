@@ -56,6 +56,7 @@ id = "sweep"
 min_range = 1
 max_range = 1
 effect = "sweep"
+power_source = "physical"
 
 [[active_skills]]
 id = "melee_attack"

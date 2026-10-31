@@ -130,8 +130,20 @@ impl Game {
         if matches!(skill.effect, ActiveSkillEffect::Loot) {
             return self.loot_cargo(ae, actor, position, &skill);
         }
-        if matches!(skill.effect, ActiveSkillEffect::Sweep) {
-            return self.use_sweep(ae, actor, position, &skill);
+        if let ActiveSkillEffect::Sweep {
+            power_source,
+            hit_bonus,
+            power_bonus,
+        } = skill.effect
+        {
+            return self.use_sweep(
+                ae,
+                actor,
+                position,
+                &skill,
+                hit_bonus,
+                (power_source, power_bonus),
+            );
         }
         if target_kind(&skill.effect) == ActiveSkillTargetKind::Cell {
             return self.use_cell_skill(ae, actor, position, skill);
@@ -467,6 +479,8 @@ impl Game {
         actor: i64,
         center: GridPos,
         skill: &ActiveSkillDef,
+        hit_bonus: i32,
+        power: (crate::PowerSource, i32),
     ) -> Result<(), GameError> {
         let origin = self.world.get::<Pos>(entity).expect("施放者應有位置").0;
         let cells = sweep_area(&self.world, entity, origin, center, skill)?;
@@ -480,8 +494,8 @@ impl Game {
                 cell,
                 skill,
                 UnitSkillEffect::Attack {
-                    hit_bonus: 0,
-                    power: Some((crate::PowerSource::Physical, 0)),
+                    hit_bonus,
+                    power: Some(power),
                     push: false,
                 },
             );
@@ -584,21 +598,13 @@ fn preview_sweep(
     origin: GridPos,
     center: GridPos,
     skill: &ActiveSkillDef,
+    hit_bonus: i32,
+    power: (crate::PowerSource, i32),
 ) -> Result<ActiveSkillPreview, GameError> {
     let cells = sweep_area(world, actor, origin, center, skill)?;
     let targets = sweep_targets(world, actor, &cells)
         .into_iter()
-        .map(|target| {
-            attack_preview(
-                world,
-                actor,
-                origin,
-                target,
-                skill,
-                0,
-                Some((crate::PowerSource::Physical, 0)),
-            )
-        })
+        .map(|target| attack_preview(world, actor, origin, target, skill, hit_bonus, Some(power)))
         .collect();
     Ok(ActiveSkillPreview::Area { cells, targets })
 }
@@ -691,7 +697,7 @@ fn evaluate_skill(
         Err(error::unit_cannot_use_skill())
     } else {
         match &skill.effect {
-            ActiveSkillEffect::Sweep => {
+            ActiveSkillEffect::Sweep { .. } => {
                 check_sweep_target(world, actor, origin, cell).map(SkillTarget::Sweep)
             }
             ActiveSkillEffect::MoveThenAttack => Ok(SkillTarget::Step),
@@ -772,8 +778,21 @@ pub(crate) fn preview_unit_skill_from_position(
     target_cell: GridPos,
     skill: &ActiveSkillDef,
 ) -> Result<ActiveSkillPreview, GameError> {
-    if matches!(skill.effect, ActiveSkillEffect::Sweep) {
-        return preview_sweep(world, attacker, position, target_cell, skill);
+    if let ActiveSkillEffect::Sweep {
+        power_source,
+        hit_bonus,
+        power_bonus,
+    } = skill.effect
+    {
+        return preview_sweep(
+            world,
+            attacker,
+            position,
+            target_cell,
+            skill,
+            hit_bonus,
+            (power_source, power_bonus),
+        );
     }
     if target_kind(&skill.effect) == ActiveSkillTargetKind::Cell {
         let SkillEvaluation { target, .. } =
@@ -980,7 +999,7 @@ pub(crate) fn target_kind(effect: &ActiveSkillEffect) -> ActiveSkillTargetKind {
             ActiveSkillTargetKind::Enemy
         }
         ActiveSkillEffect::Heal { .. } => ActiveSkillTargetKind::Ally,
-        ActiveSkillEffect::Sweep
+        ActiveSkillEffect::Sweep { .. }
         | ActiveSkillEffect::Mire { .. }
         | ActiveSkillEffect::Loot
         | ActiveSkillEffect::MoveThenAttack => ActiveSkillTargetKind::Cell,
@@ -1095,7 +1114,7 @@ fn check_unit_skill_target(
             power_source: *power_source,
             power_bonus: *power_bonus,
         },
-        ActiveSkillEffect::Sweep
+        ActiveSkillEffect::Sweep { .. }
         | ActiveSkillEffect::Mire { .. }
         | ActiveSkillEffect::Loot
         | ActiveSkillEffect::MoveThenAttack => {
@@ -1371,7 +1390,7 @@ fn flanking_bonus(
 fn melee_enemy_skill(effect: &ActiveSkillEffect) -> bool {
     matches!(
         effect,
-        ActiveSkillEffect::Sweep
+        ActiveSkillEffect::Sweep { .. }
             | ActiveSkillEffect::Attack { ranged: false, .. }
             | ActiveSkillEffect::Push { ranged: false, .. }
     )
@@ -1658,11 +1677,15 @@ fn skill_details(skill: &ActiveSkillDef, board: &Board) -> ActiveSkillDetailsVie
             None,
             ActiveSkillDetailEffect::MoveThenAttack,
         ),
-        ActiveSkillEffect::Sweep => (
-            Some(crate::PowerSource::Physical),
+        ActiveSkillEffect::Sweep {
+            power_source,
+            hit_bonus,
+            power_bonus,
+        } => (
+            Some(*power_source),
             Some(false),
-            Some(0),
-            Some(0),
+            Some(*hit_bonus),
+            Some(*power_bonus),
             ActiveSkillDetailEffect::Sweep,
         ),
         ActiveSkillEffect::Loot => (None, None, None, None, ActiveSkillDetailEffect::Loot),

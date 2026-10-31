@@ -231,7 +231,11 @@ pub fn edit_definition_from_json(
                     hit_bonus: 0,
                     power_bonus: 0,
                 }),
-                EffectSelection::Sweep => Some(ActiveSkillEffect::Sweep),
+                EffectSelection::Sweep => Some(ActiveSkillEffect::Sweep {
+                    power_source: crate::PowerSource::Physical,
+                    hit_bonus: 0,
+                    power_bonus: 0,
+                }),
                 EffectSelection::MoveThenAttack => Some(ActiveSkillEffect::MoveThenAttack),
                 EffectSelection::Loot => Some(ActiveSkillEffect::Loot),
                 EffectSelection::Push => Some(ActiveSkillEffect::Push {
@@ -540,12 +544,12 @@ impl Identified for TerrainTypeDef {
 fn is_magical_effect(effect: &ActiveSkillEffect) -> bool {
     match effect {
         ActiveSkillEffect::Attack { power_source, .. }
-        | ActiveSkillEffect::Heal { power_source, .. } => {
+        | ActiveSkillEffect::Heal { power_source, .. }
+        | ActiveSkillEffect::Sweep { power_source, .. } => {
             *power_source == crate::PowerSource::Magical
         }
         ActiveSkillEffect::Mire { .. } => true,
-        ActiveSkillEffect::Sweep
-        | ActiveSkillEffect::Loot
+        ActiveSkillEffect::Loot
         | ActiveSkillEffect::MoveThenAttack
         | ActiveSkillEffect::Push { .. } => false,
     }

@@ -211,7 +211,7 @@ pub(crate) fn prepare_definitions(
         if skill.min_range < 0 || skill.max_range < skill.min_range {
             return Err(error::invalid_skill_range(&skill.id));
         }
-        if matches!(skill.effect, ActiveSkillEffect::Sweep)
+        if matches!(skill.effect, ActiveSkillEffect::Sweep { .. })
             && (skill.min_range != 1 || skill.max_range != 1)
         {
             return Err(error::invalid_sweep_range(&skill.id));
@@ -611,9 +611,12 @@ fn validate_numeric_ranges(
                     power_source,
                     power_bonus,
                 } => (0, Some((power_source, power_bonus))),
-                ActiveSkillEffect::MoveThenAttack | ActiveSkillEffect::Sweep => {
-                    (0, Some((crate::PowerSource::Physical, 0)))
-                }
+                ActiveSkillEffect::Sweep {
+                    power_source,
+                    hit_bonus,
+                    power_bonus,
+                } => (hit_bonus, Some((power_source, power_bonus))),
+                ActiveSkillEffect::MoveThenAttack => (0, Some((crate::PowerSource::Physical, 0))),
                 ActiveSkillEffect::Mire { .. } | ActiveSkillEffect::Loot => {
                     continue;
                 }

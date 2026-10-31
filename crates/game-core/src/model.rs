@@ -240,7 +240,14 @@ pub enum ActiveSkillEffect {
         #[serde(default)]
         hit_bonus: i32,
     },
-    Sweep,
+    Sweep {
+        #[serde(default)]
+        power_source: PowerSource,
+        #[serde(default)]
+        hit_bonus: i32,
+        #[serde(default)]
+        power_bonus: i32,
+    },
     Heal {
         #[serde(default)]
         power_source: PowerSource,
