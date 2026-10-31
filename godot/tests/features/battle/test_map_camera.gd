@@ -69,28 +69,42 @@ func test_camera_bounds_and_manual_focus_interruption() -> void:
 	await runner.simulate_frames(20)
 	assert_vector(camera.position).is_equal(manual_position)
 
-# 驗證點擊探索回合列切換隊員、移動查看標記並聚焦到所選單位。
-func test_turn_order_button_selects_and_focuses_unit() -> void:
+# 驗證雙擊目前頭像或其他排序單位，都會選取目標、更新查看標記並將移開的鏡頭聚焦回目標。
+func test_double_click_unit_controls_selects_and_focuses_unit() -> void:
 	assert_str(battle.state.battle_mode).is_equal("exploring")
-	battle.world.inspection_clicked.emit(1, Vector2i(0, 1))
-	var target: Dictionary = {}
-	for unit in battle.state.units:
-		if unit.id == 2:
-			target = unit
-	assert_dict(target).is_not_empty()
-	var button: Button
-	for candidate in battle.ui.turn_order.find_children("*", "Button", true, false):
-		if candidate.tooltip_text == tr(BattleConfig.unit_name_key(target.unit_type)):
-			button = candidate
-	assert_object(button).is_not_null()
-	var expected: Vector2 = battle.world.to_global(battle.world.footprint_center(target))
-	button.pressed.emit()
-	assert_int(battle.state.turn.actor).is_equal(2)
-	assert_vector(battle.inspected_cell).is_equal(Vector2i(0, 3))
-	await camera.focus_tween.finished
-	assert_vector(camera.position).is_equal(camera.clamp_to_bounds(expected))
-	assert_bool(battle.world.unit_nodes[2].get_node("Visual/Selection").visible).is_true()
-	assert_bool(battle.world.unit_nodes[1].get_node("Visual/Selection").visible).is_false()
+	var cases := [
+		{"name": "目前單位頭像", "unit_id": 1, "control": "current", "cell": Vector2i(0, 1), "click_ratio": Vector2(0.5, 0.5)},
+		# 目前單位區會蓋住排序按鈕下半部，點擊上緣仍可見的圖示區。
+		{"name": "其他排序單位", "unit_id": 2, "control": "turn_order", "cell": Vector2i(0, 3), "click_ratio": Vector2(0.5, 0.1)},
+	]
+	for test_case in cases:
+		runner = await replace_battle(runner, TEST_DEFINITIONS, TEST_MAP)
+		battle = runner.scene()
+		camera = battle.world.camera
+		battle.world.set_process(false)
+		battle.world.inspection_clicked.emit(1, Vector2i(0, 1))
+		var target: Dictionary = battle.world.unit_with_id(battle.state.units, test_case.unit_id)
+		var expected: Vector2 = camera.clamp_to_bounds(battle.world.to_global(battle.world.footprint_center(target)))
+		camera.position = camera.bounds.end if not camera.bounds.end.is_equal_approx(expected) else camera.bounds.position
+		assert_bool(camera.position.is_equal_approx(expected)).override_failure_message(test_case.name).is_false()
+		var controls := {"current": battle.ui.actor_portrait, "turn_order": battle.ui.turn_order_slots[2].get_node("Button")}
+		var control: Control = controls[test_case.control]
+		await double_click_control(control, control.size * test_case.click_ratio)
+		assert_int(battle.state.turn.actor).override_failure_message(test_case.name).is_equal(test_case.unit_id)
+		assert_vector(battle.inspected_cell).override_failure_message(test_case.name).is_equal(test_case.cell)
+		assert_object(camera.focus_tween).override_failure_message(test_case.name).is_not_null()
+		await camera.focus_tween.finished
+		assert_vector(camera.position).override_failure_message(test_case.name).is_equal(expected)
+		for unit_id in [1, 2]:
+			assert_bool(battle.world.unit_nodes[unit_id].get_node("Visual/Selection").visible).override_failure_message(test_case.name).is_equal(unit_id == test_case.unit_id)
+
+func double_click_control(control: Control, local_position: Vector2) -> void:
+	await runner.simulate_frames(1)
+	var screen_position: Vector2 = control.get_viewport().get_screen_transform() * control.get_global_transform_with_canvas() * local_position
+	runner.simulate_mouse_move(screen_position)
+	await runner.simulate_frames(1)
+	runner.simulate_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	runner.simulate_mouse_button_pressed(MOUSE_BUTTON_LEFT, true)
 
 func set_key(key: Key, pressed: bool) -> void:
 	var event := InputEventKey.new()

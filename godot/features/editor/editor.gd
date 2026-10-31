@@ -43,7 +43,7 @@ const OUTCOME_CONDITIONS: Dictionary = {
 @onready var inspected_facing: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedFacing
 @onready var inspected_unit_type: Label = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedUnitType
 @onready var inspected_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedDifficulty
-@onready var play_difficulty: OptionButton = $Layout/Toolbar/PlayDifficulty
+@onready var play_button: MenuButton = $Layout/Toolbar/Play
 @onready var team_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Team
 @onready var faction_field: LineEdit = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Faction
 @onready var existing_factions: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/ExistingFactions
@@ -86,7 +86,10 @@ func _ready() -> void:
 	core = TacticalGame.new()
 	DifficultyOptions.populate(placement_difficulty, true)
 	DifficultyOptions.populate(inspected_difficulty, true)
-	DifficultyOptions.populate(play_difficulty)
+	var play_menu := play_button.get_popup()
+	for index in DifficultyOptions.IDS.size():
+		play_menu.add_item(DifficultyOptions.LABEL_KEYS[index], index)
+	play_menu.id_pressed.connect(play_map)
 	inspected_difficulty.item_selected.connect(update_unit_difficulty)
 	for options in [placement_facing, inspected_facing]:
 		for direction in ["right", "left"]:
@@ -156,7 +159,6 @@ func _ready() -> void:
 	$DeleteMapDialog.confirmed.connect(delete_map)
 	$Layout/Toolbar/Undo.pressed.connect(undo)
 	$Layout/Toolbar/Redo.pressed.connect(redo)
-	$Layout/Toolbar/Play.pressed.connect(play_map)
 	map_name.text_submitted.connect(func(_value: String): commit_map_name())
 	map_name.focus_exited.connect(commit_map_name)
 	team_list.item_selected.connect(func(_index: int): refresh_tools_visibility())
@@ -390,18 +392,15 @@ func delete_map() -> void:
 		refresh_ui()
 		new_map()
 
-func play_map() -> void:
+func play_map(difficulty_index: int) -> void:
 	if map_data.is_empty(): return
 	if not commit_pending_fields(): return
-	if play_difficulty.selected <= 0:
-		show_error("請選擇試玩難度。")
-		return
 	var result := serialize_documents()
 	if result.is_empty():
 		return
 	get_tree().root.set_meta("editor_session", {"definitions": definitions.duplicate(true), "map": map_data.duplicate(true), "file": map_file, "history": history, "stroke_id": stroke_id, "page": pages.current_tab, "selections": definition_pages.map(func(page): return page.selected_id())})
 	var battle := BATTLE_SCENE.instantiate()
-	battle.configure(result.definitions, result.map, play_difficulty.get_selected_metadata(), true)
+	battle.configure(result.definitions, result.map, DifficultyOptions.IDS[difficulty_index], true)
 	get_tree().change_scene_to_node(battle)
 
 func serialize_documents() -> Dictionary:

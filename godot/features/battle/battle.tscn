@@ -770,3 +770,5 @@ offset_top = 20.0
 offset_right = 247.0
 offset_bottom = 68.0
 text = "×1"
+
+[connection signal="gui_input" from="UI/Root/LeftColumn/CurrentUnitBar/Margin/Layout/Actor/Portrait" to="UI" method="_on_actor_portrait_gui_input"]

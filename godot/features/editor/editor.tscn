@@ -42,11 +42,9 @@ layout_mode = 2
 focus_mode = 0
 text = "重做"
 
-[node name="PlayDifficulty" type="OptionButton" parent="Layout/Toolbar"]
+[node name="Play" type="MenuButton" parent="Layout/Toolbar"]
 layout_mode = 2
-
-[node name="Play" type="Button" parent="Layout/Toolbar"]
-layout_mode = 2
+flat = false
 text = "▶ 試玩"
 
 [node name="Navigation" type="HBoxContainer" parent="Layout"]

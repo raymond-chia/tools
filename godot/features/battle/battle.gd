@@ -38,6 +38,7 @@ func _ready() -> void:
 	ui.delay_selection_requested.connect(_on_delay_selection_requested)
 	ui.delay_target_selected.connect(_on_delay_target_selected)
 	ui.turn_order_focus_requested.connect(_on_turn_order_focus_requested)
+	ui.current_unit_focus_requested.connect(_on_current_unit_focus_requested)
 	ui.inspection_closed.connect(_close_inspection)
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
 	ui.language_changed.connect(_on_language_changed)
@@ -218,6 +219,11 @@ func _on_delay_target_selected(unit_id: int) -> void:
 	var actor: int = state.turn.actor
 	selecting_delay = false
 	send({"type": "delay", "actor": actor, "after": unit_id})
+
+func _on_current_unit_focus_requested() -> void:
+	if state.is_empty() or state.turn.actor == null:
+		return
+	_on_turn_order_focus_requested(state.turn.actor)
 
 func _on_turn_order_focus_requested(unit_id: int) -> void:
 	if input_is_locked():

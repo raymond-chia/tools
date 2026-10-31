@@ -5,6 +5,7 @@ signal end_turn_requested
 signal delay_selection_requested
 signal delay_target_selected(unit_id: int)
 signal turn_order_focus_requested(unit_id: int)
+signal current_unit_focus_requested
 signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
 signal language_changed
@@ -374,6 +375,11 @@ func _on_turn_order_pressed(unit_id: int) -> void:
 		delay_target_selected.emit(unit_id)
 		return
 	turn_order_focus_requested.emit(unit_id)
+
+func _on_actor_portrait_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and event.double_click:
+		actor_portrait.accept_event()
+		current_unit_focus_requested.emit()
 
 func _on_delay_target_hovered(marker: ColorRect, highlighted: bool) -> void:
 	marker.color = BattleConfig.DELAY_SLOT_HIGHLIGHT_COLOR if highlighted and turn_order_selecting_delay else BattleConfig.DELAY_SLOT_COLOR
