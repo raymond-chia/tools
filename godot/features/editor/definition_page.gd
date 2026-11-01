@@ -354,15 +354,17 @@ func create_visual_selector(id: String, visual: String) -> OptionButton:
 	option.add_icon_item(load(BattleConfig.unit_art_path("")), "待選擇")
 	option.set_item_metadata(0, "")
 	option.get_popup().set_item_icon_max_width(0, 48)
-	var files := DirAccess.get_files_at(BattleConfig.UNIT_ART_DIR)
-	for filename in files:
-		if filename in ["faction_base.svg", BattleConfig.PENDING_UNIT_ART]: continue
-		if filename.get_extension().to_lower() not in ["svg", "png", "jpg", "jpeg", "webp"]: continue
-		option.add_icon_item(load(BattleConfig.unit_art_path(filename)), filename)
-		var index := option.item_count - 1
-		option.set_item_metadata(index, filename)
-		option.get_popup().set_item_icon_max_width(index, 48)
-		if filename == visual: option.select(index)
+	# 單位專屬與共用圖片分段列出，避免共用圖混在單位圖之間難以尋找。
+	for section in [["單位", BattleConfig.UNIT_ART_DIR], ["共用", BattleConfig.SHARED_ART_DIR]]:
+		option.add_separator(section[0])
+		for filename in DirAccess.get_files_at(section[1]):
+			if filename in ["faction_base.svg", BattleConfig.PENDING_UNIT_ART]: continue
+			if filename.get_extension().to_lower() not in ["svg", "png", "jpg", "jpeg", "webp"]: continue
+			option.add_icon_item(load(BattleConfig.unit_art_path(filename)), filename)
+			var index := option.item_count - 1
+			option.set_item_metadata(index, filename)
+			option.get_popup().set_item_icon_max_width(index, 48)
+			if filename == visual: option.select(index)
 	option.item_selected.connect(func(index: int): field_changed.emit(category, id, "visual", option.get_item_metadata(index)))
 	return option
 

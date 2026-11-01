@@ -10,7 +10,7 @@ const TERRAIN_ART_ORIGIN := Vector2(32, 48)
 const TERRAIN_ART := {
 	"tree": preload("res://assets/terrain/tree.svg"),
 	"broken_log": preload("res://assets/terrain/broken_log.svg"),
-	"wagon": preload("res://assets/terrain/wagon.svg"),
+	"wagon": preload("res://assets/shared/wagon.svg"),
 	"spikes": preload("res://assets/terrain/spikes.svg"),
 	"mire": preload("res://assets/terrain/mire.svg"),
 }

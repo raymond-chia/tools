@@ -2,10 +2,14 @@ class_name BattleConfig
 extends RefCounted
 
 const UNIT_ART_DIR := "res://assets/units/"
+# 單位與地形共用的圖片；單位資料只寫檔名，與 UNIT_ART_DIR 的檔名不得重複，由編輯器開啟時檢查。
+const SHARED_ART_DIR := "res://assets/shared/"
 const PENDING_UNIT_ART := "pending.svg"
 
 static func unit_art_path(visual: String) -> String:
-	return UNIT_ART_DIR + (PENDING_UNIT_ART if visual.is_empty() else visual)
+	if visual.is_empty():
+		return UNIT_ART_DIR + PENDING_UNIT_ART
+	return (SHARED_ART_DIR if ResourceLoader.exists(SHARED_ART_DIR + visual) else UNIT_ART_DIR) + visual
 
 static func unit_name_key(unit_type: String) -> String:
 	return "UNIT_NAME_%s" % unit_type.to_upper()

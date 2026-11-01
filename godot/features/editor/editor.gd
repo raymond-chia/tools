@@ -240,11 +240,17 @@ func check_all_documents(definitions_source: String) -> void:
 	if report.is_empty(): return
 	var issues: Dictionary = report.maps.duplicate()
 	if report.definitions != null: issues[definitions_path.get_file()] = report.definitions
-	if issues.is_empty():
+	var lines: Array = issues.keys().map(func(path: String): return "%s：%s\n%s" % [path, issues[path].error_id, issues[path].error])
+	# 單位資料只寫圖片檔名，共用圖片與單位圖片同名時無法分辨。
+	var unit_art := DirAccess.get_files_at(BattleConfig.UNIT_ART_DIR)
+	var duplicated_art := Array(DirAccess.get_files_at(BattleConfig.SHARED_ART_DIR)).filter(func(filename: String): return not filename.ends_with(".import") and filename in unit_art)
+	if not duplicated_art.is_empty():
+		lines.append("%s：與 %s 的圖片檔名重複\n%s" % [BattleConfig.SHARED_ART_DIR, BattleConfig.UNIT_ART_DIR, "、".join(duplicated_art)])
+	if lines.is_empty():
 		status_label.text = "全部資料檢查通過"
 		return
-	status_label.text = "資料檢查發現 %s 個文件錯誤" % issues.size()
-	$ValidationDialog/Report.text = "\n\n".join(issues.keys().map(func(path: String): return "%s：%s\n%s" % [path, issues[path].error_id, issues[path].error]))
+	status_label.text = "資料檢查發現 %s 個文件錯誤" % lines.size()
+	$ValidationDialog/Report.text = "\n\n".join(lines)
 	$ValidationDialog.popup_centered.call_deferred()
 
 func map_paths() -> Array[String]:
