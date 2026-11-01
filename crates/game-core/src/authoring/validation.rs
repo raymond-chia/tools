@@ -12,7 +12,7 @@ use bevy_ecs::prelude::World;
 use std::collections::{HashMap, HashSet};
 
 /// 不依賴單位、技能與地形定義的地圖驗證，供文件轉換與正式載入共用。
-pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
+pub(crate) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
     let authoring::Map {
         name,
         width,

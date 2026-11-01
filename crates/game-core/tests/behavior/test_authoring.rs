@@ -3,6 +3,87 @@ use game_core::*;
 
 const AI_DEFINITIONS: &str = include_str!("../data/utility_ai_definitions.toml");
 
+/// 執行批次檢查並取出每筆錯誤的文件與錯誤 ID；定義錯誤以 `definitions` 標示。
+#[cfg(feature = "editor")]
+fn batch_errors(definitions: &str, maps: serde_json::Value) -> Vec<(String, String)> {
+    let report =
+        editor::validate_documents(definitions, &maps.to_string()).expect("批次檢查應回傳報告");
+    let report: serde_json::Value = serde_json::from_str(&report).expect("報告應為 JSON");
+    let error_id =
+        |error: &serde_json::Value| error["error_id"].as_str().expect("錯誤應有 ID").to_string();
+    let definitions = report["definitions"]
+        .as_object()
+        .map(|_| ("definitions".to_string(), error_id(&report["definitions"])));
+    definitions
+        .into_iter()
+        .chain(
+            report["maps"]
+                .as_object()
+                .expect("報告應有地圖錯誤表")
+                .iter()
+                .map(|(path, error)| (path.clone(), error_id(error))),
+        )
+        .collect()
+}
+
+// 批次檢查逐一列出損壞文件；定義失效時地圖不會連帶報錯。
+#[cfg(feature = "editor")]
+#[test]
+fn batch_validation_reports_each_document() {
+    let definitions = include_str!("../data/equipment_definitions.toml");
+    let map = include_str!("../data/equipment_map.toml");
+    let unknown_unit = map.replace("unit_type = \"fighter\"", "unit_type = \"missing\"");
+    for (definitions, maps, expected) in [
+        (definitions, serde_json::json!({"valid.toml": map}), vec![]),
+        (
+            definitions,
+            serde_json::json!({"a.toml": "[", "b.toml": "[", "valid.toml": map}),
+            vec![("a.toml", "map_toml_parse"), ("b.toml", "map_toml_parse")],
+        ),
+        (
+            definitions,
+            serde_json::json!({"unknown.toml": unknown_unit, "valid.toml": map}),
+            vec![("unknown.toml", "unknown_unit_type")],
+        ),
+        (
+            "[",
+            serde_json::json!({"valid.toml": map}),
+            vec![("definitions", "definitions_toml_parse")],
+        ),
+    ] {
+        let expected: Vec<_> = expected
+            .into_iter()
+            .map(|(path, id)| (path.to_string(), id.to_string()))
+            .collect();
+        assert_eq!(batch_errors(definitions, maps), expected);
+    }
+}
+
+// 即使沒有任何關卡引用，全部種類的共用定義仍須通過核心規則驗證。
+#[cfg(feature = "editor")]
+#[test]
+fn batch_validation_checks_unused_definitions() {
+    let source = include_str!("../data/equipment_definitions.toml");
+    for (category, field, value, error_id) in [
+        ("unit_types", "hp", 0, "invalid_unit_type"),
+        ("active_skills", "min_range", -1, "invalid_skill_range"),
+        ("terrain_types", "damage", -1, "invalid_terrain_values"),
+        ("equipment", "hp", -1, "invalid_equipment"),
+    ] {
+        let mut definitions: toml::Value = toml::from_str(source).expect("測試定義應有效");
+        definitions[category][0]
+            .as_table_mut()
+            .expect("定義應為資料表")
+            .insert(field.into(), toml::Value::Integer(value));
+        let definitions = toml::to_string(&definitions).expect("定義應可序列化");
+        assert_eq!(
+            batch_errors(&definitions, serde_json::json!({})),
+            vec![("definitions".to_string(), error_id.to_string())],
+            "{category}"
+        );
+    }
+}
+
 // 驗證明確設定勝敗的地圖仍拒絕無技能敵方，空技能清單不會自動取得所有技能。
 #[test]
 fn enemy_without_skill_rejected_on_load() {

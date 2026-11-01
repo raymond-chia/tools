@@ -19,6 +19,11 @@ pub enum EditorError {
     },
 }
 
+/// 核心規則錯誤統一以語意 ID 與原始訊息回傳。
+pub(crate) fn game_error_json(error: &GameError) -> serde_json::Value {
+    serde_json::json!({"error_id": error.id(), "error": error.message()})
+}
+
 impl From<GameError> for EditorError {
     fn from(error: GameError) -> Self {
         Self::Game(error)
@@ -44,12 +49,12 @@ impl EditorError {
 
     pub fn response_json(&self) -> String {
         match self {
-            Self::Game(error) => {
-                serde_json::json!({"error_id": error.id(), "error": error.message()})
+            Self::Game(error) => game_error_json(error),
+            Self::Map { path, error } => {
+                let mut json = game_error_json(error);
+                json["map_path"] = path.as_str().into();
+                json
             }
-            Self::Map { path, error } => serde_json::json!({
-                "error_id": error.id(), "error": error.message(), "map_path": path,
-            }),
             Self::Conversion { id, message } => {
                 serde_json::json!({"error_id": id, "error": message})
             }

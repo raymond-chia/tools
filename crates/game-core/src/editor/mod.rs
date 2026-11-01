@@ -10,8 +10,39 @@ use crate::Game;
 use crate::authoring::{Definitions, Map, validation};
 pub use definitions::edit_definition_from_json;
 pub use error::EditorError;
+use error::game_error_json;
 pub use map::{paint_terrain_from_json, terrain_brush_cells_from_json};
 pub use overlay::{move_overlay_from_json, scatter_overlay_from_json};
+use std::collections::BTreeMap;
+
+/// 批次檢查原始文件；單一文件失敗仍繼續檢查其他地圖。檔名由呼叫端決定顯示方式。
+pub fn validate_documents(definitions: &str, maps: &str) -> Result<String, EditorError> {
+    let maps: BTreeMap<String, String> = serde_json::from_str(maps)
+        .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
+    let prepared = toml::from_str::<Definitions>(definitions)
+        .map_err(|e| crate::error::definitions_toml_parse(e.to_string()))
+        .and_then(validation::prepare_definitions);
+    let map_errors: serde_json::Map<String, serde_json::Value> = maps
+        .into_iter()
+        .filter_map(|(path, source)| {
+            toml::from_str::<Map>(&source)
+                .map_err(|e| crate::error::map_toml_parse(e.to_string()))
+                .and_then(|map| match &prepared {
+                    Ok(definitions) => {
+                        validation::validate_map_with_definitions(definitions, &map).map(|_| ())
+                    }
+                    Err(_) => validation::validate_map(&map),
+                })
+                .err()
+                .map(|error| (path, game_error_json(&error)))
+        })
+        .collect();
+    let definitions_error = prepared.err().map(|error| game_error_json(&error));
+    serde_json::to_string(
+        &serde_json::json!({"definitions": definitions_error, "maps": map_errors}),
+    )
+    .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
+}
 
 /// 依地圖配置順序列出既有敵方派系，供編輯器選用。
 pub fn enemy_factions_from_json(map: &str) -> Result<String, EditorError> {

@@ -204,6 +204,7 @@ func _ready() -> void:
 	else:
 		refresh_ui()
 		new_map()
+	check_all_documents(source)
 
 # 切換列獨立於內容面板；右側素材分類由右向左排列並自動換行。
 func setup_navigation() -> void:
@@ -231,6 +232,27 @@ func setup_navigation() -> void:
 		button.set_pressed_no_signal(true)
 	)
 
+# 開啟編輯器時檢查硬碟上的全部文件；格式與遊戲規則交給核心。
+func check_all_documents(definitions_source: String) -> void:
+	var sources := {}
+	for path in map_paths(): sources[path.get_file()] = read_file(path)
+	var report := read_core_response(core.validate_documents(definitions_source, JSON.stringify(sources)))
+	if report.is_empty(): return
+	var issues: Dictionary = report.maps.duplicate()
+	if report.definitions != null: issues[definitions_path.get_file()] = report.definitions
+	if issues.is_empty():
+		status_label.text = "全部資料檢查通過"
+		return
+	status_label.text = "資料檢查發現 %s 個文件錯誤" % issues.size()
+	$ValidationDialog/Report.text = "\n\n".join(issues.keys().map(func(path: String): return "%s：%s\n%s" % [path, issues[path].error_id, issues[path].error]))
+	$ValidationDialog.popup_centered.call_deferred()
+
+func map_paths() -> Array[String]:
+	var paths: Array[String] = []
+	for filename in DirAccess.get_files_at(map_dir):
+		if filename.ends_with(".toml"): paths.append(map_dir + filename)
+	return paths
+
 func read_file(path: String) -> String:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
@@ -241,10 +263,8 @@ func read_file(path: String) -> String:
 func refresh_map_list() -> void:
 	var previous := selected_map()
 	map_list.clear()
-	for filename in DirAccess.get_files_at(map_dir):
-		if not filename.ends_with(".toml"): continue
-		var path := map_dir + filename
-		var index := map_list.add_item(filename)
+	for path in map_paths():
+		var index := map_list.add_item(path.get_file())
 		map_list.set_item_metadata(index, path)
 	if not map_file.is_empty() and not FileAccess.file_exists(map_file):
 		var index := map_list.add_item(map_file.get_file())
@@ -905,9 +925,7 @@ func update_definition(category: String, id: String, key: String, value: Variant
 # ID 建立後不可更動，因此不需要更新既有引用；刪除檢查仍涵蓋所有地圖。
 func edit_definition(command: Dictionary) -> bool:
 	var maps := {}
-	for filename in DirAccess.get_files_at(map_dir):
-		if not filename.ends_with(".toml"): continue
-		var path := map_dir + filename
+	for path in map_paths():
 		if path == map_file: continue
 		var parsed := read_core_response(core.map_to_json(read_file(path)))
 		if parsed.is_empty(): return false

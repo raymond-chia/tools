@@ -56,6 +56,14 @@ impl TacticalGame {
     }
     #[cfg(feature = "editor")]
     #[func]
+    fn validate_documents(&self, definitions: GString, maps: GString) -> GString {
+        editor_response(game_core::editor::validate_documents(
+            &definitions.to_string(),
+            &maps.to_string(),
+        ))
+    }
+    #[cfg(feature = "editor")]
+    #[func]
     fn documents_from_json(&self, definitions: GString, map: GString) -> GString {
         match game_core::editor::documents_from_json(&definitions.to_string(), &map.to_string()) {
             Ok((definitions, map)) => GString::from(
