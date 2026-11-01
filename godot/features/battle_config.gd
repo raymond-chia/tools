@@ -75,12 +75,10 @@ const SELECTED_MOVE_LINE_SPACING := 10.0
 const SELECTED_MOVE_LINE_WIDTH := 1.0
 
 const MAP_DISPLAY_SCALE := 1.5
-# 角色圖片與腳下光環共用倍率；圖片底部由繪製端對齊格子中心。
-const UNIT_DISPLAY_SCALE := 0.75
-const UNIT_BODY_SCALE := 0.72 * UNIT_DISPLAY_SCALE
-const LARGE_UNIT_BODY_SCALE := 0.88 * UNIT_DISPLAY_SCALE
-const UNIT_BASE_SCALE := 1.0 * UNIT_DISPLAY_SCALE
-const LARGE_UNIT_BASE_SCALE := 1.7 * UNIT_DISPLAY_SCALE
+# 單位（含大型）、腳下光環與地形圖片共用的繪製倍率，共用同一張圖時大小一致；單位圖片底部由繪製端對齊格子中心。
+const ART_SCALE := 0.55
+# 大型單位腳下光環相對一般光環的倍數。
+const LARGE_UNIT_BASE_RATIO := 1.7
 const UNIT_SELECTION_RING_SCALE := 1.18
 const UNIT_HEALTH_BAR_WIDTH := 60.0
 const LARGE_UNIT_HEALTH_BAR_WIDTH := 96.0

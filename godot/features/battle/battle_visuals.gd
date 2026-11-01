@@ -5,8 +5,8 @@ const TILE_SIZE := Vector2i(64, 32)
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
 const CARGO_ART := preload("res://assets/cargo.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
-# 所有地形素材使用相同畫布，格子中心位於圖片的 (32, 48)。
-const TERRAIN_ART_ORIGIN := Vector2(32, 48)
+# 所有地形素材使用相同畫布，格子中心位於圖片的 (64, 96)；與單位圖同樣以 ART_SCALE 縮小繪製，共用圖片才會一樣大。
+const TERRAIN_ART_ORIGIN := Vector2(64, 96)
 const TERRAIN_ART := {
 	"tree": preload("res://assets/terrain/tree.svg"),
 	"broken_log": preload("res://assets/terrain/broken_log.svg"),
@@ -90,7 +90,7 @@ static func update_unit_cargo(node: Node2D, unit: Dictionary) -> void:
 	marker.visible = unit.carrying_cargo
 
 static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: bool) -> void:
-	var base_scale := Vector2.ONE * (BattleConfig.LARGE_UNIT_BASE_SCALE if large else BattleConfig.UNIT_BASE_SCALE)
+	var base_scale := Vector2.ONE * BattleConfig.ART_SCALE * (BattleConfig.LARGE_UNIT_BASE_RATIO if large else 1.0)
 	var attack_preview_ring: Sprite2D = node.get_node("Visual/AttackPreviewRing")
 	attack_preview_ring.scale = base_scale * BattleConfig.ATTACK_PREVIEW_RING_SCALE
 	attack_preview_ring.modulate = Color("ffe17a")
@@ -102,7 +102,7 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	base.scale = base_scale
 	base.modulate = Color("ff6868") if BattleConfig.is_enemy(team) else Color("63a9ff")
 	var body: Sprite2D = node.get_node("Visual/Body")
-	body.scale = Vector2.ONE * (BattleConfig.LARGE_UNIT_BODY_SCALE if large else BattleConfig.UNIT_BODY_SCALE)
+	body.scale = Vector2.ONE * BattleConfig.ART_SCALE
 	body.position.y = -body.get_rect().end.y * body.scale.y
 	body.modulate = Color.WHITE
 	var health: Node2D = node.get_node("Health")
@@ -239,7 +239,9 @@ static func draw_exit_marker(canvas: CanvasItem, progress: float) -> void:
 
 static func draw_terrain_effect(canvas: CanvasItem, visual: String, center: Vector2) -> void:
 	if TERRAIN_ART.has(visual):
-		canvas.draw_texture(TERRAIN_ART[visual], center - TERRAIN_ART_ORIGIN)
+		canvas.draw_set_transform(center, 0.0, Vector2.ONE * BattleConfig.ART_SCALE)
+		canvas.draw_texture(TERRAIN_ART[visual], -TERRAIN_ART_ORIGIN)
+		canvas.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 static func draw_movement_range(canvas: CanvasItem, ground: TileMapLayer, reachable: Array, second_reachable: Array, selected: bool) -> void:
 	var first_color: Color = BattleConfig.SELECTED_MOVE_FIRST_COLOR if selected else BattleConfig.FIRST_MOVE_COLOR
