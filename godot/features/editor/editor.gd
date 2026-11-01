@@ -54,7 +54,7 @@ const OUTCOME_CONDITIONS: Dictionary = {
 @onready var definition_pages: Array = [$Layout/Pages/UnitPage, $Layout/Pages/SkillPage, $Layout/Pages/TerrainPage, $Layout/Pages/EquipmentPage]
 @onready var status_label: Label = $Layout/Status
 
-var cargo_draft := {"positions": [], "exits": []}
+var cargo_draft := {"positions": [], "carriers": [], "exits": []}
 var cargo_draft_changed := false
 
 var editing_mode := EditMode.GROUND
@@ -101,7 +101,7 @@ func _ready() -> void:
 		mode_list.set_item_metadata(mode_list.item_count - 1, UNIT_MODES[title])
 	for index in palette_tabs.get_tab_count():
 		palette_tabs.set_tab_title(index, PALETTE_TABS[str(palette_tabs.get_tab_control(index).name)].title)
-	for tool in ["放置貨物", "刪除貨物", "放置出口", "刪除出口"]:
+	for tool in ["放置貨物", "刪除貨物", "放置出口", "刪除出口", "設定開場攜貨", "取消開場攜貨"]:
 		cargo_tool.add_item(tool)
 	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Apply.pressed.connect(apply_cargo)
 	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Reset.pressed.connect(reset_cargo_draft)
@@ -115,6 +115,8 @@ func _ready() -> void:
 		mode.item_selected.connect(func(_selected: int): update_outcome_group(key, group))
 		var add_team: OptionButton = group.get_node("AddTeam")
 		add_team.item_selected.connect(func(selected: int): add_outcome_team(key, add_team.get_item_metadata(selected)))
+		var add_unit: OptionButton = group.get_node("AddUnit")
+		add_unit.item_selected.connect(func(selected: int): add_outcome_unit(key, add_unit.get_item_metadata(selected)))
 		for child in group.get_children():
 			if child is CheckBox:
 				child.toggled.connect(func(_pressed: bool): update_outcome_group(key, group))
@@ -535,14 +537,14 @@ func refresh_outcome_groups() -> void:
 		var rule: Dictionary = map_data[["victory", "defeat"][index]]
 		var mode: OptionButton = group.get_node("Mode")
 		mode.select(0 if rule.mode == "all" else 1)
-		refresh_outcome_teams(["victory", "defeat"][index], group, rule.conditions)
+		refresh_outcome_targets(["victory", "defeat"][index], group, rule.conditions)
 		for child in group.get_children():
 			if child is CheckBox:
 				child.set_pressed_no_signal(rule.conditions.any(func(condition: Dictionary): return condition == OUTCOME_CONDITIONS[str(child.name)]))
 
 func update_outcome_group(key: String, group: VBoxContainer) -> void:
 	if refreshing or map_data.is_empty(): return
-	var conditions: Array = map_data[key].conditions.filter(func(condition: Dictionary): return condition.type == "team_defeated" and condition.team is Dictionary)
+	var conditions: Array = map_data[key].conditions.filter(func(condition: Dictionary): return condition.type == "units_defeated" or (condition.type == "team_defeated" and condition.team is Dictionary))
 	for child in group.get_children():
 		if child is CheckBox and child.button_pressed:
 			conditions.append(OUTCOME_CONDITIONS[str(child.name)].duplicate(true))
@@ -551,14 +553,18 @@ func update_outcome_group(key: String, group: VBoxContainer) -> void:
 	map_data[key] = {"mode": "all" if mode.selected == 0 else "any", "conditions": conditions}
 	commit(previous)
 
-# 下拉選單只整理作者文件中的陣營；勝敗是否合法仍由核心驗證。
-func refresh_outcome_teams(key: String, group: VBoxContainer, conditions: Array) -> void:
-	var rows: VBoxContainer = group.get_node("Teams")
+# 下拉選單只整理作者文件中的單位與陣營；勝敗是否合法仍由核心驗證。
+func refresh_outcome_targets(key: String, group: VBoxContainer, conditions: Array) -> void:
+	var rows: VBoxContainer = group.get_node("Targets")
 	for child in rows.get_children():
 		rows.remove_child(child)
 		child.queue_free()
 	var selected_teams: Array = []
-	for condition: Dictionary in conditions:
+	for condition_index in conditions.size():
+		var condition: Dictionary = conditions[condition_index]
+		if condition.type == "units_defeated":
+			rows.add_child(target_group_block(key, condition_index, condition.unit_ids))
+			continue
 		if condition.type != "team_defeated" or not condition.team is Dictionary: continue
 		var team: Variant = condition.team
 		selected_teams.append(team)
@@ -583,6 +589,77 @@ func refresh_outcome_teams(key: String, group: VBoxContainer, conditions: Array)
 		options.set_item_metadata(options.item_count - 1, unit.team)
 	options.select(0)
 	options.disabled = options.item_count == 1
+	fill_unit_options(group.get_node("AddUnit"), "加入指定陣亡目標組…", [])
+
+# 一個目標組一個區塊；本難度有出場的目標都倒下才成立，由核心判定。
+func target_group_block(key: String, condition_index: int, unit_ids: Array) -> VBoxContainer:
+	var block := VBoxContainer.new()
+	var title := Label.new()
+	title.text = "指定陣亡目標組"
+	block.add_child(title)
+	for unit_id: int in unit_ids:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = unit_label(unit_id)
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+		var remove := Button.new()
+		remove.text = "✕"
+		remove.pressed.connect(func(): remove_target_unit(key, condition_index, unit_id))
+		row.add_child(remove)
+		block.add_child(row)
+	var add := OptionButton.new()
+	add.fit_to_longest_item = false
+	fill_unit_options(add, "加入單位…", unit_ids)
+	add.item_selected.connect(func(index: int): add_target_unit(key, condition_index, add.get_item_metadata(index)))
+	block.add_child(add)
+	var remove_group := Button.new()
+	remove_group.text = "移除此目標組"
+	remove_group.pressed.connect(func(): remove_target_group(key, condition_index))
+	block.add_child(remove_group)
+	return block
+
+# 只列作者配置，不依預覽難度隱藏尚未出場的單位。
+func fill_unit_options(options: OptionButton, placeholder: String, excluded: Array) -> void:
+	options.clear()
+	options.add_item(placeholder)
+	options.set_item_disabled(0, true)
+	for unit: Dictionary in map_data.units:
+		if excluded.has(unit.id): continue
+		options.add_item(unit_label(unit.id))
+		options.set_item_metadata(options.item_count - 1, unit.id)
+	options.select(0)
+	options.disabled = options.item_count == 1
+
+# 核心驗證已確保目標組只引用存在的單位。
+func unit_label(unit_id: int) -> String:
+	var unit: Dictionary = map_data.units.filter(func(candidate: Dictionary): return candidate.id == unit_id)[0]
+	return "單位 %s（%s）" % [unit.id, unit.unit_type]
+
+func add_outcome_unit(key: String, unit_id: int) -> void:
+	var previous := document_state()
+	map_data[key].conditions.append({"type": "units_defeated", "unit_ids": [unit_id]})
+	commit(previous)
+
+func add_target_unit(key: String, condition_index: int, unit_id: int) -> void:
+	var previous := document_state()
+	map_data[key].conditions[condition_index].unit_ids.append(unit_id)
+	commit(previous)
+
+# 拿掉最後一隻單位時整組一起移除，避免留下空目標組。
+func remove_target_unit(key: String, condition_index: int, unit_id: int) -> void:
+	var unit_ids: Array = map_data[key].conditions[condition_index].unit_ids
+	if unit_ids.size() == 1:
+		remove_target_group(key, condition_index)
+		return
+	var previous := document_state()
+	unit_ids.erase(unit_id)
+	commit(previous)
+
+func remove_target_group(key: String, condition_index: int) -> void:
+	var previous := document_state()
+	map_data[key].conditions.remove_at(condition_index)
+	commit(previous)
 
 func add_outcome_team(key: String, team: Variant) -> void:
 	var previous := document_state()
@@ -947,18 +1024,28 @@ func update_unit_facing(index: int) -> void:
 # 貨物與出口一起提交，未完成的作者配置只作為介面草稿，不送入遊戲預覽。
 func reset_cargo_draft() -> void:
 	var cargo: Variant = map_data.get("cargo")
-	cargo_draft = {"positions": [], "exits": []} if cargo == null else cargo.duplicate(true)
+	cargo_draft = {"positions": [], "carriers": [], "exits": []} if cargo == null else cargo.duplicate(true)
 	cargo_draft_changed = false
 	refresh_cargo_tools()
 	update_history_controls()
 
 func refresh_cargo_tools() -> void:
-	cargo_summary.text = "貨物：%s 份；出口：%s 個%s" % [cargo_draft.positions.size(), cargo_draft.exits.size(), "（尚未套用）" if cargo_draft_changed else ""]
+	cargo_summary.text = "地面貨物：%s 份；攜貨單位：%s；出口：%s 個%s" % [cargo_draft.positions.size(), str(cargo_draft.carriers), cargo_draft.exits.size(), "（尚未套用）" if cargo_draft_changed else ""]
 	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Apply.disabled = not cargo_draft_changed
 	$Layout/Pages/MapPage/Materials/PaletteTabs/Cargo/Reset.disabled = not cargo_draft_changed
 	map_view.present_cargo(cargo_draft)
 
 func edit_cargo_cell(cell: Vector2i) -> void:
+	if cargo_tool.selected >= 4:
+		var unit := unit_at(cell)
+		if unit.is_empty(): return
+		if cargo_tool.selected == 4:
+			if unit.id in cargo_draft.carriers: return
+			cargo_draft.carriers.append(unit.id)
+		else:
+			cargo_draft.carriers.erase(unit.id)
+		update_cargo_draft()
+		return
 	var key := "positions" if cargo_tool.selected < 2 else "exits"
 	var cells: Array = cargo_draft[key]
 	# 讀檔座標來自 JSON，依格子比對，避免整數與浮點數的字典比對差異。
@@ -973,20 +1060,20 @@ func edit_cargo_cell(cell: Vector2i) -> void:
 
 func update_cargo_draft() -> void:
 	var cargo: Variant = map_data.get("cargo")
-	var original: Dictionary = {"positions": [], "exits": []} if cargo == null else cargo
+	var original: Dictionary = {"positions": [], "carriers": [], "exits": []} if cargo == null else cargo
 	cargo_draft_changed = cargo_draft != original
 	refresh_cargo_tools()
 	update_history_controls()
 	status_label.text = "貨物配置尚未套用；儲存或試玩時會一併套用。" if cargo_draft_changed else "貨物配置未變更。"
 
 func remove_cargo() -> void:
-	cargo_draft = {"positions": [], "exits": []}
+	cargo_draft = {"positions": [], "carriers": [], "exits": []}
 	update_cargo_draft()
 
 func apply_cargo() -> bool:
 	if not cargo_draft_changed: return true
 	var previous := document_state()
-	map_data.cargo = null if cargo_draft.positions.is_empty() and cargo_draft.exits.is_empty() else cargo_draft.duplicate(true)
+	map_data.cargo = null if cargo_draft.positions.is_empty() and cargo_draft.carriers.is_empty() and cargo_draft.exits.is_empty() else cargo_draft.duplicate(true)
 	if not commit(previous): return false
 	cargo_draft_changed = false
 	update_history_controls()

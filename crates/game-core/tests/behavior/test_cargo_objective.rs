@@ -37,6 +37,7 @@ fn map_data(layout: &AsciiBoard) -> authoring::Map {
         .map(|marker| marked_cell(layout, marker))
         .collect();
     map.cargo = Some(authoring::CargoObjective {
+        carriers: Vec::new(),
         positions,
         exits: vec![marked_cell(layout, 'E')],
     });
@@ -127,7 +128,7 @@ fn cargo_objective_survives_authoring_conversion() {
     assert_eq!(
         actual["cargo"],
         json!({
-            "positions": [{"x": x, "y": y}], "exits": [{"x": exit_x, "y": exit_y}]
+            "positions": [{"x": x, "y": y}], "carriers": [], "exits": [{"x": exit_x, "y": exit_y}]
         })
     );
 }

@@ -34,29 +34,6 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
     {
         return Err(error::invalid_map_dimensions());
     }
-    for group in [victory, defeat] {
-        if group.conditions.is_empty() {
-            return Err(error::invalid_outcome_conditions());
-        }
-        if cargo.is_none()
-            && group
-                .conditions
-                .iter()
-                .any(|condition| matches!(condition, authoring::OutcomeCondition::CargoEscaped))
-        {
-            return Err(error::invalid_cargo_objective());
-        }
-    }
-    if let Some(authoring::CargoObjective { positions, exits }) = cargo {
-        let inside = |p: crate::GridPos| p.x >= 0 && p.y >= 0 && p.x < *width && p.y < *height;
-        if positions.is_empty()
-            || positions.iter().any(|position| !inside(*position))
-            || exits.is_empty()
-            || exits.iter().any(|position| !inside(*position))
-        {
-            return Err(error::invalid_cargo_objective());
-        }
-    }
     let mut used_ids = HashSet::new();
     for unit in units {
         if unit.id <= 0 {
@@ -72,6 +49,65 @@ pub(super) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
             if unit.min_difficulty.is_none() {
                 return Err(error::missing_enemy_difficulty(unit.id));
             }
+        }
+    }
+    let unit_exists = |id: i64| used_ids.contains(&id);
+    // 最低難度也出場的單位，在所有難度都會出場。
+    let always_present = |id: i64| {
+        units.iter().any(|unit| {
+            unit.id == id
+                && (!matches!(unit.team, Team::Enemy(_))
+                    || unit.min_difficulty == Some(authoring::Difficulty::Easy))
+        })
+    };
+    for group in [victory, defeat] {
+        if group.conditions.is_empty() {
+            return Err(error::invalid_outcome_conditions());
+        }
+        for condition in &group.conditions {
+            if let authoring::OutcomeCondition::UnitsDefeated { unit_ids } = condition {
+                let mut listed = HashSet::new();
+                if !unit_ids.iter().all(|id| listed.insert(*id)) {
+                    return Err(error::invalid_target_units());
+                }
+                if let Some(id) = unit_ids.iter().find(|id| !unit_exists(**id)) {
+                    return Err(error::missing_outcome_unit(*id));
+                }
+                if !unit_ids.iter().any(|id| always_present(*id)) {
+                    return Err(error::invalid_target_units());
+                }
+            }
+        }
+        if cargo.is_none()
+            && group
+                .conditions
+                .iter()
+                .any(|condition| matches!(condition, authoring::OutcomeCondition::CargoEscaped))
+        {
+            return Err(error::invalid_cargo_objective());
+        }
+    }
+    if let Some(authoring::CargoObjective {
+        positions,
+        carriers,
+        exits,
+    }) = cargo
+    {
+        let inside = |p: crate::GridPos| p.x >= 0 && p.y >= 0 && p.x < *width && p.y < *height;
+        if positions.iter().any(|position| !inside(*position))
+            || exits.is_empty()
+            || exits.iter().any(|position| !inside(*position))
+        {
+            return Err(error::invalid_cargo_objective());
+        }
+        let mut assigned = HashSet::new();
+        for id in carriers {
+            if !assigned.insert(*id) || !unit_exists(*id) {
+                return Err(error::invalid_cargo_carrier(*id));
+            }
+        }
+        if positions.is_empty() && !carriers.iter().any(|id| always_present(*id)) {
+            return Err(error::invalid_cargo_objective());
         }
     }
     if terrains.iter().any(|terrain| {
@@ -404,12 +440,19 @@ pub(crate) fn load_map(
         width,
         height,
         terrains: _,
-        units: placements,
+        units: mut placements,
         victory,
         defeat,
         cargo,
         alliances,
     } = map;
+    placements.retain(|unit| {
+        !matches!(unit.team, Team::Enemy(_))
+            || unit
+                .min_difficulty
+                .expect("作者輸入邊界已確認每隻怪物都有出現難度")
+                <= difficulty
+    });
     let mut w = World::new();
     w.insert_resource(crate::model::Alliances(alliances));
     w.insert_resource(Board {
@@ -418,18 +461,43 @@ pub(crate) fn load_map(
         terrains,
         terrain_types,
     });
-    w.insert_resource(crate::model::OutcomeRules { victory, defeat });
-    if let Some(authoring::CargoObjective { positions, exits }) = cargo {
+    let present = |id: &i64| placements.iter().any(|unit| unit.id == *id);
+    // 未在本難度出場的目標不參與勝敗判定。
+    let present_targets = |mut group: authoring::OutcomeGroup| {
+        for condition in &mut group.conditions {
+            if let authoring::OutcomeCondition::UnitsDefeated { unit_ids } = condition {
+                unit_ids.retain(present);
+            }
+        }
+        group
+    };
+    w.insert_resource(crate::model::OutcomeRules {
+        victory: present_targets(victory),
+        defeat: present_targets(defeat),
+    });
+    if let Some(authoring::CargoObjective {
+        positions,
+        carriers,
+        exits,
+    }) = cargo
+    {
         w.insert_resource(crate::model::Cargo {
             items: positions
                 .into_iter()
                 .map(crate::model::CargoState::Ground)
+                .chain(
+                    carriers
+                        .into_iter()
+                        .filter(present)
+                        .map(crate::model::CargoState::Carried),
+                )
                 .collect(),
             exits,
         });
     }
     w.insert_resource(ai_profiles);
     w.insert_resource(Encounter::default());
+    w.insert_resource(crate::model::DefeatedUnits::default());
     w.insert_resource(Exploration {
         mode: BattleMode::Exploring,
         turns: HashMap::new(),
@@ -451,7 +519,7 @@ pub(crate) fn load_map(
         let authoring::UnitPlacement {
             facing,
             id,
-            min_difficulty,
+            min_difficulty: _,
             unit_type,
             team,
             x,
@@ -494,11 +562,6 @@ pub(crate) fn load_map(
             .clone();
         let f = Footprint { width, height };
         let p = GridPos { x, y };
-        if matches!(team, Team::Enemy(_))
-            && min_difficulty.expect("作者輸入邊界已確認每隻怪物都有出現難度") > difficulty
-        {
-            continue;
-        }
         presentation_events.push(crate::model::PresentationEvent::UnitFaced {
             unit_id: id,
             facing,

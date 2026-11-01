@@ -82,6 +82,7 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 	for unit in units:
 		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == inspected_unit)
 		BattleVisuals.update_unit_health(unit_nodes[unit.id], unit)
+		BattleVisuals.update_unit_cargo(unit_nodes[unit.id], unit)
 	cell_hovered.emit(hovered)
 	queue_redraw()
 

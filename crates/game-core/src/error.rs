@@ -371,10 +371,28 @@ pub(crate) fn missing_enemy_difficulty(id: i64) -> GameError {
 pub(crate) fn invalid_outcome_conditions() -> GameError {
     GameError::new("invalid_outcome_conditions", "勝敗條件組不可為空".into())
 }
+pub(crate) fn missing_outcome_unit(id: i64) -> GameError {
+    GameError::new(
+        "missing_outcome_unit",
+        format!("指定陣亡目標組的單位 {id} 不存在於地圖"),
+    )
+}
+pub(crate) fn invalid_target_units() -> GameError {
+    GameError::new(
+        "invalid_target_units",
+        "指定陣亡目標組不可重複單位，且須有單位在所有難度出場".into(),
+    )
+}
 pub(crate) fn invalid_cargo_objective() -> GameError {
     GameError::new(
         "invalid_cargo_objective",
-        "貨物目標需有地圖內的貨物位置與邊界撤離格".into(),
+        "貨物目標需有地圖內的出口，且所有難度都有地上貨物或出場的開場攜貨單位".into(),
+    )
+}
+pub(crate) fn invalid_cargo_carrier(id: i64) -> GameError {
+    GameError::new(
+        "invalid_cargo_carrier",
+        format!("開場攜貨單位 {id} 須存在於地圖且不可重複指定"),
     )
 }
 pub(crate) fn cannot_loot() -> GameError {

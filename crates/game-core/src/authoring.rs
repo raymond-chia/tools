@@ -140,14 +140,22 @@ pub enum ConditionMode {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutcomeCondition {
-    TeamDefeated { team: Team },
+    TeamDefeated {
+        team: Team,
+    },
     AllEnemiesDefeated,
+    /// 本難度有出場的目標全部倒下才成立；未出場的目標不列入。
+    UnitsDefeated {
+        unit_ids: Vec<i64>,
+    },
     CargoEscaped,
     NoCargoCarried,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct CargoObjective {
+    #[serde(default)]
+    pub carriers: Vec<i64>,
     pub positions: Vec<GridPos>,
     pub exits: Vec<GridPos>,
 }

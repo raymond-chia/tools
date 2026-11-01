@@ -183,6 +183,10 @@ pub(crate) struct Log(pub(crate) Vec<CombatLogEvent>);
 #[derive(Resource)]
 pub(crate) struct ResultState(pub(crate) Outcome);
 
+/// 本場被擊倒的單位 ID；攜貨離場不算陣亡。
+#[derive(Resource, Default)]
+pub(crate) struct DefeatedUnits(pub(crate) HashSet<i64>);
+
 #[derive(Resource)]
 pub(crate) struct AiProfiles {
     pub(crate) by_unit_type: HashMap<String, AiProfile>,

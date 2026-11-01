@@ -25,6 +25,16 @@ static func read(response: String, show_error: Callable, ignored_error_ids: Arra
 
 # Godot 會把 JSON 數字解析成 float；在接收核心資料時還原單位實例 ID 的整數型別。
 static func convert_unit_ids(value: Dictionary) -> void:
+	# 作者文件的攜貨者與勝敗目標也使用單位實例 ID。
+	if value.get("cargo") is Dictionary and value.cargo.has("carriers"):
+		for index in value.cargo.carriers.size():
+			value.cargo.carriers[index] = int(value.cargo.carriers[index])
+	for key in ["victory", "defeat"]:
+		if value.has(key):
+			for condition in value[key].conditions:
+				if condition.has("unit_ids"):
+					for index in condition.unit_ids.size():
+						condition.unit_ids[index] = int(condition.unit_ids[index])
 	for unit in value.get("units", []):
 		unit.id = int(unit.id)
 	for terrain in value.get("terrain_cells", []):

@@ -487,6 +487,10 @@ impl Game {
             downed: hp.current == 0,
         };
         if downed {
+            self.world
+                .resource_mut::<crate::model::DefeatedUnits>()
+                .0
+                .insert(id);
             self.remove_unit(entity, id);
         }
         result
@@ -587,6 +591,10 @@ impl Game {
                     .world
                     .iter_entities()
                     .any(|e| e.get::<Unit>().is_some_and(|unit| &unit.team == team)),
+                OutcomeCondition::UnitsDefeated { unit_ids } => {
+                    let defeated = &self.world.resource::<crate::model::DefeatedUnits>().0;
+                    unit_ids.iter().all(|id| defeated.contains(id))
+                }
                 OutcomeCondition::NoCargoCarried => self
                     .world
                     .get_resource::<crate::model::Cargo>()

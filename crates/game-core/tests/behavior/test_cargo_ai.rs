@@ -46,6 +46,7 @@ fn raiders_split_roles_and_focus_on_looting_then_escaping() {
         ],
     );
     map.cargo = Some(authoring::CargoObjective {
+        carriers: Vec::new(),
         positions: vec![marked_cell(&layout, 'C')],
         exits: vec![marked_cell(&layout, 'E')],
     });
