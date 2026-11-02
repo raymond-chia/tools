@@ -18,16 +18,17 @@ const FIELD_LABELS := {
 	"main_hand": "主手", "off_hand": "副手", "armor": "護具", "accessory": "飾品",
 	"slot": "裝備種類", "block_reduction": "格擋減傷", "power_source": "威力來源", "active_skills": "主動技能", "passive_skills": "被動技能",
 	"ranged": "遠程技能", "min_range": "最小範圍", "max_range": "最大範圍",
-	"effect": "效果", "hit_bonus": "命中加成", "power_bonus": "威力加成",
+	"effect": "效果", "effects": "基礎效果", "hit_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
 	"entry_rule": "進入規則", "damage": "傷害", "extra_movement_cost": "額外移動消耗",
 	"blocks_sight": "阻擋視線", "dodge_penalty": "閃避減值", "block_penalty": "格擋減值"
 }
+const PASSIVE_EFFECT_LABELS := {"flanking": "近戰夾擊", "unhealable": "無法接受治癒"}
 const CHOICES := {
 	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},
 	"power_source": {"physical": "物理", "magical": "魔法"},
 	# 效果選單依一般主動、魔法、被動排列，與技能清單一致。
-	"effect": {"attack": "攻擊", "sweep": "前方三格橫掃", "loot": "掠奪", "push": "推擊", "move_then_attack": "位移後攻擊", "heal": "治療", "mire": "產生地形", "flanking": "被動夾擊"},
+	"effect": {"attack": "攻擊", "sweep": "前方三格橫掃", "loot": "掠奪", "push": "推擊", "move_then_attack": "位移後攻擊", "heal": "治療", "mire": "產生地形", "passive": "被動（組合基礎效果）"},
 	"layer": {"ground": "地面", "overlay": "上層"},
 	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
 }
@@ -186,13 +187,15 @@ func refresh_fields() -> void:
 	for child in fields.get_children():
 		fields.remove_child(child)
 		child.queue_free()
-	var comparison := definition_by_id(comparison_id)
+	var comparison := definition_by_id(comparison_id).duplicate()
+	if comparison.has("effects"): comparison["effect"] = "passive"
 	if comparison.is_empty(): comparison_id = ""
 	var comparing := not comparison_id.is_empty()
 	$FormPanel/Comparison.visible = comparing
 	$FormPanel/Comparison/Title.text = "比對：" + comparison_id + "（唯讀）"
 	fields.columns = 3 if comparing else 2
 	var entry := selected_definition().duplicate()
+	if entry.has("effects"): entry["effect"] = "passive"
 	if category == "unit_types":
 		var defaults_label := Label.new()
 		defaults_label.text = "全體預設被動技能"
@@ -205,7 +208,9 @@ func refresh_fields() -> void:
 		fields.add_child(label)
 		var value = entry[key]
 		var input: Control
-		if key == "passive_skills":
+		if key == "effects":
+			input = create_passive_effect_editor(id, value)
+		elif key == "passive_skills":
 			input = create_passive_selector(value, true, func(v: Variant): field_changed.emit(category, id, key, v))
 		elif value is bool:
 			var check := CheckBox.new()
@@ -281,6 +286,14 @@ func add_comparison_value(key: String, value: Variant) -> void:
 func comparison_text(key: String, value: Variant) -> String:
 	if value == null: return "—"
 	if value is bool: return "是" if value else "否"
+	if key == "effects":
+		var descriptions: Array[String] = []
+		for effect in value:
+			var text: String = PASSIVE_EFFECT_LABELS[effect.effect]
+			for field in effect:
+				if field != "effect": text += " %s：%s" % [FIELD_LABELS[field], str(int(effect[field]))]
+			descriptions.append(text)
+		return "；".join(descriptions) if not descriptions.is_empty() else "無"
 	if value is Array:
 		if value.is_empty():
 			return "使用全體預設" if key == "passive_skills" and category == "unit_types" else "無"
@@ -301,6 +314,10 @@ func commit_pending_fields(has_error: Callable) -> void:
 	for child in fields.get_children():
 		if child is LineEdit and child.editable:
 			pending.append({"key": child.get_meta("field_key"), "text": child.text})
+	# SpinBox 的文字可能尚未確認，儲存前先交給控制項提交。
+	for number: SpinBox in fields.find_children("*", "SpinBox", true, false):
+		number.apply()
+		if has_error.call(): return
 	for field in pending:
 		for child in fields.get_children():
 			if child is LineEdit and child.get_meta("field_key") == field.key:
@@ -381,3 +398,48 @@ func create_passive_selector(value: Array, unit_passives: bool, changed: Callabl
 		if option.get_item_metadata(index) == value: option.select(index)
 	option.item_selected.connect(func(index: int): changed.call(option.get_item_metadata(index)))
 	return option
+
+# 此處只編輯作者輸入；效果的預設值、重複與數值合法性由核心處理。
+func create_passive_effect_editor(id: String, effects: Array) -> VBoxContainer:
+	var container := VBoxContainer.new()
+	for kind in PASSIVE_EFFECT_LABELS:
+		var row := HBoxContainer.new()
+		var check := CheckBox.new()
+		check.text = PASSIVE_EFFECT_LABELS[kind]
+		check.set_meta("effect", kind)
+		var selected: Dictionary = {}
+		for effect in effects:
+			if effect.effect == kind: selected = effect
+		check.button_pressed = not selected.is_empty()
+		check.toggled.connect(func(enabled: bool): toggle_passive_effect(id, kind, enabled))
+		row.add_child(check)
+		for field in selected:
+			if field == "effect": continue
+			var label := Label.new()
+			label.text = FIELD_LABELS[field]
+			row.add_child(label)
+			var number := SpinBox.new()
+			number.allow_greater = true
+			number.allow_lesser = true
+			number.value = selected[field]
+			number.set_meta("effect", kind)
+			number.set_meta("field", field)
+			number.value_changed.connect(func(value: float): update_passive_effect_field(id, kind, field, value))
+			row.add_child(number)
+		container.add_child(row)
+	return container
+
+func toggle_passive_effect(id: String, kind: String, enabled: bool) -> void:
+	var effects: Array = selected_definition().effects.duplicate(true)
+	if enabled:
+		effects.append({"effect": kind})
+	else:
+		for index in range(effects.size() - 1, -1, -1):
+			if effects[index].effect == kind: effects.remove_at(index)
+	field_changed.emit(category, id, "effects", effects)
+
+func update_passive_effect_field(id: String, kind: String, field: String, value: float) -> void:
+	var effects: Array = selected_definition().effects.duplicate(true)
+	for effect in effects:
+		if effect.effect == kind: effect[field] = value
+	field_changed.emit(category, id, "effects", effects)

@@ -170,6 +170,10 @@ fn hit_uses_expected_flanking_bonus() {
             ("一般夾擊", Some("test_flanking"), 2),
             // 特殊夾擊被動提供 4 點命中加值，支援者不需要持有被動。
             ("特殊夾擊", Some("test_pack_flanking"), 4),
+            // 機械組合包含禁止治療與 2 點夾擊加成。
+            ("機械", Some("test_mechanical"), 2),
+            // 精密機械組合包含禁止治療與 4 點夾擊加成。
+            ("精密機械", Some("test_precision_mechanical"), 4),
         ] {
             let (game, attacker, target) =
                 flanking_world(diagram, min_range, max_range, passive_id);
@@ -201,7 +205,7 @@ fn attack_skill(ranged: bool, min_range: i32, max_range: i32) -> ActiveSkillDef 
     }
 }
 
-// 透過共用作者資料建局；B 改為攻擊者同隊的支援者，攻擊者依案例持有夾擊被動。
+// 透過共用作者資料建局；B 改為攻擊者同隊的支援者，攻擊者依案例持有單一或組合被動。
 fn flanking_world(
     diagram: &str,
     min_range: i32,
@@ -225,9 +229,20 @@ fn flanking_world(
         .into_iter()
         .map(|(id, hit_bonus)| PassiveSkillDef {
             id: id.to_owned(),
-            effect: PassiveSkillEffect::Flanking { hit_bonus },
+            effects: vec![PassiveSkillEffect::Flanking { hit_bonus }],
         })
         .collect();
+    definitions.passive_skills.extend(
+        [("test_mechanical", 2), ("test_precision_mechanical", 4)]
+            .into_iter()
+            .map(|(id, hit_bonus)| PassiveSkillDef {
+                id: id.into(),
+                effects: vec![
+                    PassiveSkillEffect::Unhealable,
+                    PassiveSkillEffect::Flanking { hit_bonus },
+                ],
+            }),
+    );
     for unit_type in &mut definitions.unit_types {
         unit_type.hit = 5;
         if unit_type.id == "test_actor" {

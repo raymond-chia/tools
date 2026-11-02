@@ -11,6 +11,7 @@ var test_translations: Array[Translation] = []
 func setup_test() -> void:
 	add_test_translation("zh_TW", {
 		"SKILL_POWER_STRIKE_NAME": "強力一擊",
+		"SKILL_NAME_TEST_PASSIVE_BUNDLE": "測試組合被動",
 		"SKILL_TARGET_ENEMY": "目標：敵方單位",
 		"SKILL_TYPE_MELEE": "類型：近戰",
 		"SKILL_RANGE": "射程：%d 格",
@@ -20,6 +21,7 @@ func setup_test() -> void:
 	})
 	add_test_translation("en", {
 		"SKILL_POWER_STRIKE_NAME": "Power Strike",
+		"SKILL_NAME_TEST_PASSIVE_BUNDLE": "Test Passive Bundle",
 		"SKILL_TARGET_ENEMY": "Target: Enemy unit",
 		"SKILL_TYPE_MELEE": "Type: Melee",
 		"SKILL_RANGE": "Range: %d tiles",
@@ -38,28 +40,49 @@ func cleanup_test() -> void:
 		TranslationServer.remove_translation(translation)
 	test_translations.clear()
 
-# 驗證被動不提供可選主動按鈕，但被動技能分頁顯示技能名稱與翻譯後的夾擊命中加值說明，切換無被動單位後顯示無被動技能。
+# 驗證單一與組合被動皆不可當主動技能選取，中英文顯示全部效果，切換單位後不殘留。
 func test_passive_skill_is_inspectable_but_not_selectable() -> void:
-	assert_int(battle.state.turn.actor).is_equal(1)
-	assert_array(battle.ui.action_buttons.keys()).contains_exactly(["melee_attack", "ranged_attack", "power_strike", "aimed_shot"])
-	var passive_label: Label = battle.ui.passive_skills_text
 	var cases := [
-		# 繁體中文顯示被動名稱、近戰夾擊條件與 4 點加成。
-		{"locale": "zh_TW", "text": "狼群夾擊：被動：近戰夾擊時命中加值 +4"},
-		# 英文顯示相同技能與特殊加成。
-		{"locale": "en", "text": "Pack flanking：Passive: +4 hit modifier when flanking in melee"},
+		# 保留原本的狼群夾擊案例：中英文顯示單一效果與 4 點加成。
+		{"passive": "pack_flanking", "texts": {
+			"zh_TW": "狼群夾擊：被動：近戰夾擊時命中加值 +4",
+			"en": "Pack flanking：Passive: +4 hit modifier when flanking in melee",
+		}},
+		# 測試專用組合案例：中英文同時顯示 2 點夾擊加成與禁止治療。
+		{"passive": "test_passive_bundle", "texts": {
+			"zh_TW": "測試組合被動：被動：近戰夾擊時命中加值 +2\n被動：無法接受治療技能的治療",
+			"en": "Test Passive Bundle：Passive: +2 hit modifier when flanking in melee\nPassive: Cannot receive healing from skills",
+		}},
 	]
 	for test_case in cases:
-		TranslationServer.set_locale(test_case.locale)
-		battle.world.inspection_clicked.emit(1, Vector2i(1, 3))
-		battle.present()
-		battle.ui.detail_tabs.current_tab = battle.ui.DetailTab.PASSIVE_SKILLS
-		assert_bool(passive_label.is_visible_in_tree()).is_true()
-		assert_str(passive_label.text).is_equal(test_case.text)
-		battle.world.inspection_clicked.emit(2, Vector2i(3, 1))
-		assert_int(battle.ui.detail_tabs.current_tab).is_equal(battle.ui.DetailTab.PASSIVE_SKILLS)
-		assert_bool(passive_label.is_visible_in_tree()).is_true()
-		assert_str(passive_label.text).is_equal(tr("DETAIL_NO_PASSIVE_SKILLS"))
+		# 僅調整本案例的作者輸入，經真實核心序列化後載入真實戰鬥場景。
+		var core := TacticalGame.new()
+		var definitions: Dictionary = JSON.parse_string(core.definitions_to_json(FileAccess.get_file_as_string(TEST_DEFINITIONS)))
+		for unit_type in definitions.unit_types:
+			if unit_type.id == "aria": unit_type.passive_skills = [test_case.passive]
+		var map: Dictionary = JSON.parse_string(core.map_to_json(FileAccess.get_file_as_string(TEST_MAP)))
+		var documents: Dictionary = JSON.parse_string(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map)))
+		runner.scene().free()
+		var scene := BATTLE_SCENE.instantiate()
+		scene.configure(documents.definitions, documents.map, "easy", false, RANDOM_SEED)
+		runner = battle_scene_runner(auto_free(scene))
+		await runner.simulate_frames(1)
+		battle = runner.scene()
+		await wait_until_idle(battle, runner)
+		assert_int(battle.state.turn.actor).is_equal(1)
+		assert_array(battle.ui.action_buttons.keys()).contains_exactly(["melee_attack", "ranged_attack", "power_strike", "aimed_shot"])
+		var passive_label: Label = battle.ui.passive_skills_text
+		for locale in test_case.texts:
+			TranslationServer.set_locale(locale)
+			battle.world.inspection_clicked.emit(1, Vector2i(1, 3))
+			battle.present()
+			battle.ui.detail_tabs.current_tab = battle.ui.DetailTab.PASSIVE_SKILLS
+			assert_bool(passive_label.is_visible_in_tree()).is_true()
+			assert_str(passive_label.text).is_equal(test_case.texts[locale])
+			battle.world.inspection_clicked.emit(2, Vector2i(3, 1))
+			assert_int(battle.ui.detail_tabs.current_tab).is_equal(battle.ui.DetailTab.PASSIVE_SKILLS)
+			assert_bool(passive_label.is_visible_in_tree()).is_true()
+			assert_str(passive_label.text).is_equal(tr("DETAIL_NO_PASSIVE_SKILLS"))
 
 # 驗證首次查看屬性、依地形、屬性、主動、被動順序隔離各分頁內容，切換單位更新技能，經過空地後恢復單位分頁。
 func test_unit_detail_tabs_show_inspected_unit_skills() -> void:

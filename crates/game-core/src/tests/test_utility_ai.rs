@@ -1627,3 +1627,52 @@ fn sweep_ai_large_actor_uses_centers_outside_its_footprint() {
         ]
     );
 }
+
+// 驗證 AI 忽略無法接受治癒的重傷隊友，改為治療可接受治癒的隊友。
+#[test]
+fn healer_ignores_unhealable_ally() {
+    let mut definitions = definitions();
+    definitions
+        .as_table_mut()
+        .expect("測試定義應為表格")
+        .insert(
+            "passive_skills".into(),
+            toml::Value::Array(vec![
+                toml::from_str::<toml::Value>("id = 'mechanical'\neffects = [{effect = 'unhealable'}, {effect = 'flanking', hit_bonus = 3}]")
+                    .expect("被動測試資料應有效"),
+            ]),
+        );
+    let mut immune = unit_type_mut(&mut definitions, "target").clone();
+    immune["id"] = "unhealable_target".into();
+    immune.as_table_mut().expect("測試單位應為表格").insert(
+        "passive_skills".into(),
+        toml::Value::Array(vec!["mechanical".into()]),
+    );
+    definitions["unit_types"]
+        .as_array_mut()
+        .expect("測試單位清單應存在")
+        .push(immune);
+    let mut game = game(
+        &definitions,
+        "
+        .SA..T.....L
+    ",
+        &[
+            ('A', ACTOR_ID, "healer", enemy()),
+            ('T', TARGET_ID, "target", Team::Player),
+            ('L', ALLY_ID, "unhealable_target", enemy()),
+            ('S', SECOND_ALLY_ID, "target", enemy()),
+        ],
+    );
+    wound(&mut game, ALLY_ID, 5);
+    wound(&mut game, SECOND_ALLY_ID, 20);
+    let snapshot = act(&mut game);
+    assert_eq!(action(&snapshot), Some(("heal", SECOND_ALLY_ID)));
+    assert_eq!(
+        game.world
+            .get::<Hp>(game.entity(ALLY_ID).expect("隊友應存在"))
+            .expect("隊友應具有 Hp")
+            .current,
+        5
+    );
+}

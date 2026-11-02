@@ -283,7 +283,7 @@ fn selected_difficulty_filters_enemy_placements() {
 // 驗證作者輸入拒絕不會生效或彼此衝突的設定，避免設定被靜默忽略。
 #[test]
 fn ineffective_or_conflicting_settings_are_rejected() {
-    let cases: [(&str, fn(&mut serde_json::Value), &str); 9] = [
+    let cases: [(&str, fn(&mut serde_json::Value), &str); 11] = [
         // 不可通行地形不能設定傷害、移動消耗與防禦懲罰。
         (
             "牆壁傷害",
@@ -337,6 +337,28 @@ fn ineffective_or_conflicting_settings_are_rejected() {
             },
             "unknown_unit_skill",
         ),
+        // 同一被動不能重複放入相同種類的基礎效果。
+        (
+            "重複基礎效果",
+            |d| {
+                add_flanking(d, "test_flanking");
+                d["passive_skills"][0]["effects"] = serde_json::json!([
+                    {"effect": "flanking", "hit_bonus": 2}, {"effect": "flanking", "hit_bonus": 4}
+                ]);
+            },
+            "invalid_passive_skills",
+        ),
+        // 組合效果中的夾擊加成仍須符合非負限制。
+        (
+            "組合被動負夾擊",
+            |d| {
+                add_flanking(d, "test_flanking");
+                d["passive_skills"][0]["effects"] = serde_json::json!([
+                    {"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": -1}
+                ]);
+            },
+            "invalid_passive_skills",
+        ),
         // 被動技能清單不可引用主動技能。
         (
             "被動清單引用主動",
@@ -378,7 +400,7 @@ fn entry<'a>(
 
 fn add_flanking(definitions: &mut serde_json::Value, id: &str) {
     definitions["passive_skills"] =
-        serde_json::json!([{"id": id, "effect": "flanking", "hit_bonus": 2}]);
+        serde_json::json!([{"id": id, "effects": [{"effect": "flanking", "hit_bonus": 2}]}]);
 }
 
 // 簡單、普通、困難各一隻怪物，所有難度共用同一份作者配置。

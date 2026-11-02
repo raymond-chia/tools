@@ -215,12 +215,11 @@ pub struct ActiveSkillDef {
     pub(crate) effect: ActiveSkillEffect,
 }
 
-/// 被動技能沒有射程與目標，與主動技能分開定義。
+/// 被動技能沒有射程與目標，以一層基礎效果清單組合行為。
 #[derive(Clone, Deserialize, Serialize)]
 pub struct PassiveSkillDef {
     pub(crate) id: String,
-    #[serde(flatten)]
-    pub(crate) effect: PassiveSkillEffect,
+    pub(crate) effects: Vec<PassiveSkillEffect>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -269,6 +268,7 @@ pub enum ActiveSkillEffect {
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum PassiveSkillEffect {
+    Unhealable,
     Flanking {
         #[serde(default)]
         hit_bonus: i32,
@@ -709,7 +709,7 @@ pub struct ActiveSkillView {
 #[derive(Serialize)]
 pub struct PassiveSkillView {
     pub id: String,
-    pub hit_bonus: i32,
+    pub effects: Vec<PassiveSkillEffect>,
 }
 
 pub(crate) fn default_one() -> i32 {

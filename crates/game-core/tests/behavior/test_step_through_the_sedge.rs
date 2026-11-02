@@ -525,7 +525,7 @@ fn step_through_the_sedge_data(
     definitions.unit_types[0].movement = 5;
     definitions.passive_skills.push(
         serde_json::from_value(serde_json::json!({
-            "id": "test_flanking", "effect": "flanking", "hit_bonus": 2
+            "id": "test_flanking", "effects": [{"effect": "flanking", "hit_bonus": 2}]
         }))
         .expect("測試夾擊被動應有效"),
     );

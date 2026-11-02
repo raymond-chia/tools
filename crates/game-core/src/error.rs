@@ -145,6 +145,10 @@ pub(crate) fn target_too_far() -> GameError {
     GameError::new("target_too_far", "目標距離太遠".to_owned())
 }
 
+pub(crate) fn target_unhealable() -> GameError {
+    GameError::new("target_unhealable", "目標無法接受治癒".to_owned())
+}
+
 pub(crate) fn heal_allies_only() -> GameError {
     GameError::new("heal_allies_only", "只能治療自己或友軍".to_owned())
 }

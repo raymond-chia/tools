@@ -196,9 +196,13 @@ pub(crate) fn prepare_definitions(
         if skill_ids.contains(passive.id.as_str()) || !passive_ids.insert(passive.id.as_str()) {
             return Err(error::duplicate_skill_id());
         }
-        let crate::model::PassiveSkillEffect::Flanking { hit_bonus } = passive.effect;
-        if hit_bonus < 0 {
-            return Err(error::invalid_passive_skills(&passive.id));
+        let mut effect_kinds = HashSet::new();
+        for effect in &passive.effects {
+            if !effect_kinds.insert(std::mem::discriminant(effect))
+                || matches!(effect, crate::model::PassiveSkillEffect::Flanking { hit_bonus } if *hit_bonus < 0)
+            {
+                return Err(error::invalid_passive_skills(&passive.id));
+            }
         }
     }
     let ai_profiles = crate::ai::resolve_profiles(ai_profiles, &unit_types)?;

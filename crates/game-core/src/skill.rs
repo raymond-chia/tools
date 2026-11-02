@@ -1127,6 +1127,9 @@ fn check_unit_skill_target(
         {
             return Err(error::heal_allies_only());
         }
+        UnitSkillEffect::Heal { .. } if !can_receive_healing(world, target) => {
+            return Err(error::target_unhealable());
+        }
         UnitSkillEffect::Attack { .. }
             if crate::teams::are_allied(world, attacker_team, target_team) =>
         {
@@ -1732,15 +1735,47 @@ pub(crate) fn validate_passive_skills(
     Ok(())
 }
 
+/// 後面的被動只覆蓋相同種類的效果，其餘效果及來源保留供規則與畫面共用。
+fn resolved_passive_effects<'a>(
+    passives: impl IntoIterator<Item = &'a PassiveSkillDef>,
+) -> Vec<(&'a str, &'a PassiveSkillEffect)> {
+    let mut resolved: Vec<(&str, &PassiveSkillEffect)> = Vec::new();
+    for passive in passives {
+        for effect in &passive.effects {
+            let kind = std::mem::discriminant(effect);
+            if let Some(index) = resolved
+                .iter()
+                .position(|(_, existing)| std::mem::discriminant(*existing) == kind)
+            {
+                resolved.remove(index);
+            }
+            resolved.push((passive.id.as_str(), effect));
+        }
+    }
+    resolved
+}
+
+pub(crate) fn can_receive_healing(world: &World, entity: Entity) -> bool {
+    let unit = world.get::<Unit>(entity).expect("治療目標應具有 Unit");
+    let PassiveSkills { definitions } = world.resource::<PassiveSkills>();
+    !resolved_passive_effects(
+        unit.passive_skills
+            .iter()
+            .map(|id| definitions.get(id).expect("單位被動技能已驗證")),
+    )
+    .iter()
+    .any(|(_, effect)| matches!(effect, PassiveSkillEffect::Unhealable))
+}
+
 pub(crate) fn flanking_hit_bonus<'a>(
     passives: impl IntoIterator<Item = &'a PassiveSkillDef>,
 ) -> i32 {
-    passives
+    resolved_passive_effects(passives)
         .into_iter()
-        .map(|passive| match passive.effect {
-            PassiveSkillEffect::Flanking { hit_bonus } => hit_bonus,
+        .find_map(|(_, effect)| match effect {
+            PassiveSkillEffect::Flanking { hit_bonus } => Some(*hit_bonus),
+            PassiveSkillEffect::Unhealable => None,
         })
-        .next()
         .unwrap_or(0)
 }
 
@@ -1768,41 +1803,42 @@ pub(crate) fn passive_skill_views(
 ) -> Vec<crate::model::PassiveSkillView> {
     let unit = world.get::<Unit>(entity).expect("戰鬥單位應具有 Unit");
     let PassiveSkills { definitions } = world.resource::<PassiveSkills>();
+    let effects = resolved_passive_effects(
+        unit.passive_skills
+            .iter()
+            .map(|id| definitions.get(id).expect("單位被動技能已驗證")),
+    );
     unit.passive_skills
         .iter()
-        .map(|id| definitions.get(id).expect("單位被動技能已驗證"))
-        .map(|passive| match passive.effect {
-            PassiveSkillEffect::Flanking { hit_bonus } => crate::model::PassiveSkillView {
-                id: passive.id.clone(),
-                hit_bonus,
-            },
+        .filter_map(|id| {
+            let effects: Vec<_> = effects
+                .iter()
+                .filter(|(owner, _)| *owner == id)
+                .map(|(_, effect)| (*effect).clone())
+                .collect();
+            if effects.is_empty() {
+                None
+            } else {
+                Some(crate::model::PassiveSkillView {
+                    id: id.clone(),
+                    effects,
+                })
+            }
         })
         .collect()
 }
 
-/// 載入與編輯器共用被動技能分配；同效果由單位版本覆蓋全體預設。
+/// 載入與編輯器共用被動技能分配；保留預設在前、單位專屬在後的覆蓋順序。
 pub(crate) fn resolve_passive_skills(
     unit: &crate::authoring::UnitType,
     defaults: &[String],
     passives: &[PassiveSkillDef],
 ) -> Result<Vec<String>, GameError> {
     validate_passive_skills(&unit.passive_skills, passives, &unit.id)?;
-    let mut resolved: Vec<String> = Vec::new();
+    let mut resolved = Vec::new();
     for id in defaults.iter().chain(&unit.passive_skills) {
-        let passive = passives
-            .iter()
-            .find(|passive| passive.id == *id)
-            .expect("預設與單位被動技能已在作者輸入邊界驗證");
-        let effect = std::mem::discriminant(&passive.effect);
-        match resolved.iter().position(|existing| {
-            let definition = passives
-                .iter()
-                .find(|skill| skill.id == *existing)
-                .expect("已解析的被動技能應存在");
-            std::mem::discriminant(&definition.effect) == effect
-        }) {
-            Some(index) => resolved[index] = id.clone(),
-            None => resolved.push(id.clone()),
+        if !resolved.contains(id) {
+            resolved.push(id.clone());
         }
     }
     Ok(resolved)

@@ -59,11 +59,15 @@ min_range=1
 max_range=4
 effect="attack"
 
-# 專用特殊夾擊被動：驗證主動操作排除與單位詳情的技能說明。
+# 專用特殊夾擊被動：保留單一效果的技能說明驗證。
 [[passive_skills]]
 id="pack_flanking"
-effect="flanking"
-hit_bonus=4
+effects = [{ effect = "flanking", hit_bonus = 4 }]
+
+# 專用組合被動：使用測試名稱，避免與正式機械的效果混淆。
+[[passive_skills]]
+id="test_passive_bundle"
+effects = [{ effect = "flanking", hit_bonus = 2 }, { effect = "unhealable" }]
 
 [[unit_types]]
 ai_profile="near"

@@ -274,7 +274,14 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		unit_name.text = localized_unit_name(unit.unit_type)
 		var passive_lines: Array[String] = []
 		for passive in unit.passive_skills:
-			passive_lines.append("%s：%s" % [tr(BattleConfig.skill_name_key(passive.id)), tr("SKILL_EFFECT_FLANKING") % int(passive.hit_bonus)])
+			var descriptions: Array[String] = []
+			for effect in passive.effects:
+				match effect.effect:
+					"flanking":
+						descriptions.append(tr("SKILL_EFFECT_FLANKING") % int(effect.hit_bonus))
+					"unhealable":
+						descriptions.append(tr("SKILL_EFFECT_UNHEALABLE"))
+			passive_lines.append("%s：%s" % [tr(BattleConfig.skill_name_key(passive.id)), "\n".join(descriptions)])
 		passive_skills_text.text = "\n\n".join(passive_lines) if not passive_lines.is_empty() else tr("DETAIL_NO_PASSIVE_SKILLS")
 		var active_lines: Array[String] = []
 		for skill in unit.active_skills:

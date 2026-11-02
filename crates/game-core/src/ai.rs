@@ -534,6 +534,7 @@ fn healing_focus(
                 .get::<Unit>()
                 .is_some_and(|unit| crate::teams::are_allied(world, &unit.team, team))
         })
+        .filter(|target| crate::skill::can_receive_healing(world, target.id()))
         .filter(|target| target.get::<Hp>().is_some_and(|hp| hp.current < hp.maximum))
         .min_by(|a, b| {
             let Hp {

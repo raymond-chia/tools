@@ -3,8 +3,8 @@ use super::EditorError;
 use crate::authoring::{Definitions, EquipmentDef, EquipmentSlot, Map, UnitType, validation};
 use crate::gameplay_config::DEFAULT_GROUND_TERRAIN;
 use crate::{
-    ActiveSkillDef, ActiveSkillEffect, PassiveSkillDef, PassiveSkillEffect, TerrainEntryRule,
-    TerrainLayer, TerrainTypeDef,
+    ActiveSkillDef, ActiveSkillEffect, PassiveSkillDef, TerrainEntryRule, TerrainLayer,
+    TerrainTypeDef,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -64,7 +64,7 @@ enum EffectSelection {
     Push,
     Mire { terrain: String },
     Heal,
-    Flanking,
+    Passive,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -250,7 +250,7 @@ pub fn edit_definition_from_json(
                     power_source: crate::PowerSource::Magical,
                     power_bonus: 0,
                 }),
-                EffectSelection::Flanking => None,
+                EffectSelection::Passive => None,
             };
             match (active_effect, active, passive) {
                 (Some(effect), Some(index), _) => definitions.active_skills[index].effect = effect,
@@ -263,15 +263,12 @@ pub fn edit_definition_from_json(
                         effect,
                     });
                 }
-                (None, _, Some(index)) => {
-                    definitions.passive_skills[index].effect =
-                        PassiveSkillEffect::Flanking { hit_bonus: 0 }
-                }
+                (None, _, Some(index)) => definitions.passive_skills[index].effects.clear(),
                 (None, _, None) => {
                     remove_entry(&mut definitions.active_skills, &id);
                     definitions.passive_skills.push(PassiveSkillDef {
                         id,
-                        effect: PassiveSkillEffect::Flanking { hit_bonus: 0 },
+                        effects: Vec::new(),
                     });
                 }
             }
