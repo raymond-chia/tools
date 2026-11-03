@@ -197,7 +197,7 @@ func refresh_fields() -> void:
 	if entry.has("effects"): entry["effect"] = "passive"
 	for key in entry:
 		var label := Label.new()
-		label.text = FIELD_LABELS.get(key, key)
+		label.text = "" if key in ["active_skills", "passive_skills"] else FIELD_LABELS.get(key, key)
 		fields.add_child(label)
 		var value = entry[key]
 		var input: Control
@@ -248,6 +248,8 @@ func refresh_fields() -> void:
 			edit.text_submitted.connect(func(_text: String): commit_field(id, key, edit, value))
 			edit.focus_exited.connect(func(): commit_field(id, key, edit, value))
 			input = edit
+		if key in ["active_skills", "passive_skills"]:
+			input = create_skill_section(FIELD_LABELS[key], input)
 		input.custom_minimum_size.x = 320
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fields.add_child(input)
@@ -377,6 +379,29 @@ func create_visual_selector(id: String, visual: String) -> OptionButton:
 			if filename == visual: option.select(index)
 	option.item_selected.connect(func(index: int): field_changed.emit(category, id, "visual", option.get_item_metadata(index)))
 	return option
+
+# 技能欄位由同一種盒子呈現，標題與清單放在一起，避免兩組看成連續選項。
+func create_skill_section(title: String, selector: Control) -> MarginContainer:
+	var spacing := MarginContainer.new()
+	spacing.add_theme_constant_override("margin_top", 6)
+	spacing.add_theme_constant_override("margin_bottom", 6)
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.18, 0.20, 0.24, 0.65)
+	style.border_color = Color(0.45, 0.49, 0.56, 0.8)
+	style.set_border_width_all(1)
+	style.set_content_margin_all(12)
+	panel.add_theme_stylebox_override("panel", style)
+	spacing.add_child(panel)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 8)
+	panel.add_child(content)
+	var heading := Label.new()
+	heading.text = title
+	content.add_child(heading)
+	content.add_child(HSeparator.new())
+	content.add_child(selector)
+	return spacing
 
 # 選項由核心分類；此處只編輯勾選清單，效果強弱由核心判斷。
 func create_passive_selector(value: Array, changed: Callable) -> VBoxContainer:
