@@ -1,7 +1,6 @@
 extends HSplitContainer
 
 # 資料頁只負責清單與作者輸入；資料操作由 game-core::editor 處理，遊戲規則由 game-core 驗證。
-signal default_passive_skills_changed(skills: Array)
 signal field_changed(category: String, id: String, key: String, value: Variant)
 signal create_requested(category: String, id: String, source_id: String)
 signal remove_requested(category: String, id: String)
@@ -196,12 +195,6 @@ func refresh_fields() -> void:
 	fields.columns = 3 if comparing else 2
 	var entry := selected_definition().duplicate()
 	if entry.has("effects"): entry["effect"] = "passive"
-	if category == "unit_types":
-		var defaults_label := Label.new()
-		defaults_label.text = "全體預設被動技能"
-		fields.add_child(defaults_label)
-		fields.add_child(create_passive_selector(definitions.default_passive_skills, false, func(value: Variant): default_passive_skills_changed.emit(value)))
-		if comparing: add_comparison_value("default_passive_skills", definitions.default_passive_skills)
 	for key in entry:
 		var label := Label.new()
 		label.text = FIELD_LABELS.get(key, key)
@@ -211,7 +204,7 @@ func refresh_fields() -> void:
 		if key == "effects":
 			input = create_passive_effect_editor(id, value)
 		elif key == "passive_skills":
-			input = create_passive_selector(value, true, func(v: Variant): field_changed.emit(category, id, key, v))
+			input = create_passive_selector(value, func(v: Variant): field_changed.emit(category, id, key, v))
 		elif value is bool:
 			var check := CheckBox.new()
 			check.button_pressed = value
@@ -296,7 +289,7 @@ func comparison_text(key: String, value: Variant) -> String:
 		return "；".join(descriptions) if not descriptions.is_empty() else "無"
 	if value is Array:
 		if value.is_empty():
-			return "使用全體預設" if key == "passive_skills" and category == "unit_types" else "無"
+			return "無"
 		return "、".join(value)
 	if CHOICES.has(key): return CHOICES[key][value]
 	if str(value).is_empty(): return "待選擇" if key == "visual" else "無"
@@ -385,19 +378,21 @@ func create_visual_selector(id: String, visual: String) -> OptionButton:
 	option.item_selected.connect(func(index: int): field_changed.emit(category, id, "visual", option.get_item_metadata(index)))
 	return option
 
-# 選項由核心分類；單位空清單保留全體預設，合併與覆蓋由核心處理。
-func create_passive_selector(value: Array, unit_passives: bool, changed: Callable) -> OptionButton:
-	var option := OptionButton.new()
-	option.custom_minimum_size.x = 320
-	option.add_item("使用全體預設" if unit_passives else "無")
-	option.set_item_metadata(option.item_count - 1, [])
+# 選項由核心分類；此處只編輯勾選清單，效果強弱由核心判斷。
+func create_passive_selector(value: Array, changed: Callable) -> VBoxContainer:
+	var container := VBoxContainer.new()
 	for skill_id in passive_skill_ids:
-		option.add_item(skill_id)
-		option.set_item_metadata(option.item_count - 1, [skill_id])
-	for index in option.item_count:
-		if option.get_item_metadata(index) == value: option.select(index)
-	option.item_selected.connect(func(index: int): changed.call(option.get_item_metadata(index)))
-	return option
+		var check := CheckBox.new()
+		check.text = skill_id
+		check.button_pressed = value.has(skill_id)
+		check.toggled.connect(func(enabled: bool):
+			var selected: Array = value.duplicate()
+			if enabled: selected.append(skill_id)
+			else: selected.erase(skill_id)
+			changed.call(selected)
+		)
+		container.add_child(check)
+	return container
 
 # 此處只編輯作者輸入；效果的預設值、重複與數值合法性由核心處理。
 func create_passive_effect_editor(id: String, effects: Array) -> VBoxContainer:

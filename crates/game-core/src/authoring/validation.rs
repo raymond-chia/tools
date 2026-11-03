@@ -129,8 +129,6 @@ pub(crate) struct PreparedDefinitions {
     active_skills: HashMap<String, ActiveSkillDef>,
     passive_skills: HashMap<String, crate::model::PassiveSkillDef>,
     unit_types: HashMap<String, authoring::UnitType>,
-    /// key 是單位種類 ID，value 是已合併全體預設的被動技能 ID。
-    unit_passives: HashMap<String, Vec<String>>,
     equipment_stats: HashMap<String, crate::equipment::EquipmentStats>,
     ai_profiles: crate::model::AiProfiles,
 }
@@ -140,7 +138,6 @@ pub(crate) fn prepare_definitions(
 ) -> Result<PreparedDefinitions, GameError> {
     let authoring::Definitions {
         equipment,
-        default_passive_skills,
         ai_profiles,
         terrain_types,
         active_skills,
@@ -209,11 +206,8 @@ pub(crate) fn prepare_definitions(
     let equipment = crate::equipment::definitions(equipment)?;
     let mut equipment_stats = HashMap::new();
     let mut types = HashMap::new();
-    let mut unit_passives = HashMap::new();
-    crate::skill::validate_passive_skills(&default_passive_skills, &passive_skills, "全體預設")?;
     for kind in unit_types {
-        let passives =
-            crate::skill::resolve_passive_skills(&kind, &default_passive_skills, &passive_skills)?;
+        crate::skill::validate_passive_skills(&kind.passive_skills, &passive_skills, &kind.id)?;
         if kind.id.trim().is_empty()
             || kind.hp <= 0
             || kind.width <= 0
@@ -241,7 +235,6 @@ pub(crate) fn prepare_definitions(
             kind.id.clone(),
             crate::equipment::resolve(&kind, &equipment)?,
         );
-        unit_passives.insert(kind.id.clone(), passives);
         if types.insert(kind.id.clone(), kind).is_some() {
             return Err(error::duplicate_unit_type_id());
         }
@@ -280,7 +273,6 @@ pub(crate) fn prepare_definitions(
             .map(|skill| (skill.id.clone(), skill))
             .collect(),
         unit_types: types,
-        unit_passives,
         equipment_stats,
         ai_profiles,
     })
@@ -297,7 +289,6 @@ pub(crate) fn validate_map_with_definitions(
         active_skills,
         passive_skills,
         unit_types: types,
-        unit_passives,
         equipment_stats,
         ai_profiles: _,
     } = definitions;
@@ -326,7 +317,6 @@ pub(crate) fn validate_map_with_definitions(
         active_skills,
         passive_skills,
         types,
-        unit_passives,
         equipment_stats,
         *width,
         *height,
@@ -435,7 +425,6 @@ pub(crate) fn load_map(
         active_skills: skill_definitions,
         passive_skills,
         unit_types: types,
-        unit_passives,
         equipment_stats,
         ai_profiles,
     } = definitions;
@@ -547,7 +536,7 @@ pub(crate) fn load_map(
             armor: _,
             accessory: _,
             active_skills,
-            passive_skills: _,
+            passive_skills: passives,
         } = types
             .get(&unit_type)
             .expect("單位配置的類型已在上方驗證")
@@ -560,10 +549,6 @@ pub(crate) fn load_map(
             block_reduction,
             equipment,
         } = equipment_stats.get(&unit_type).expect("配裝已驗證").clone();
-        let passives = unit_passives
-            .get(&unit_type)
-            .expect("被動技能已解析")
-            .clone();
         let f = Footprint { width, height };
         let p = GridPos { x, y };
         presentation_events.push(crate::model::PresentationEvent::UnitFaced {
@@ -608,7 +593,6 @@ fn validate_numeric_ranges(
     active_skills: &HashMap<String, ActiveSkillDef>,
     passive_skills: &HashMap<String, crate::model::PassiveSkillDef>,
     units: &HashMap<String, authoring::UnitType>,
-    unit_passives: &HashMap<String, Vec<String>>,
     equipment_stats: &HashMap<String, crate::equipment::EquipmentStats>,
     width: i32,
     height: i32,
@@ -698,9 +682,7 @@ fn validate_numeric_ranges(
             if hit < i64::from(i32::MIN)
                 || hit
                     + i64::from(crate::skill::flanking_hit_bonus(
-                        unit_passives
-                            .get(&unit.id)
-                            .expect("被動技能已解析")
+                        unit.passive_skills
                             .iter()
                             .map(|id| passive_skills.get(id).expect("被動技能已驗證")),
                     ))

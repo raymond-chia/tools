@@ -15,9 +15,6 @@ use std::collections::BTreeMap;
 #[serde(tag = "action", rename_all = "snake_case")]
 enum DefinitionEdit {
     SkillEffectOptions,
-    UpdateDefaultPassiveSkills {
-        skills: Vec<String>,
-    },
     Move {
         category: DefinitionCategory,
         id: String,
@@ -93,9 +90,6 @@ pub fn edit_definition_from_json(
     let command: DefinitionEdit = super::json::from_str(command)
         .map_err(|e| EditorError::operation("invalid_command", &e.to_string(), Vec::new()))?;
     match command {
-        DefinitionEdit::UpdateDefaultPassiveSkills { skills } => {
-            definitions.default_passive_skills = skills;
-        }
         DefinitionEdit::SkillEffectOptions => {
             let terrain_ids: Vec<_> = definitions
                 .terrain_types
@@ -263,12 +257,12 @@ pub fn edit_definition_from_json(
                         effect,
                     });
                 }
-                (None, _, Some(index)) => definitions.passive_skills[index].effects.clear(),
+                (None, _, Some(_)) => {}
                 (None, _, None) => {
                     remove_entry(&mut definitions.active_skills, &id);
                     definitions.passive_skills.push(PassiveSkillDef {
                         id,
-                        effects: Vec::new(),
+                        effects: vec![crate::PassiveSkillEffect::Flanking { hit_bonus: 2 }],
                     });
                 }
             }
@@ -436,13 +430,6 @@ fn check_removal(
             }
         }
         DefinitionCategory::Skills => {
-            if definitions
-                .default_passive_skills
-                .iter()
-                .any(|skill| skill == id)
-            {
-                references.push(("defaults", "default_passive_skills".into()));
-            }
             for unit in &definitions.unit_types {
                 if unit
                     .active_skills

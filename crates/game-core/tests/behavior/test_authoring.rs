@@ -89,7 +89,6 @@ fn batch_validation_checks_unused_definitions() {
 fn enemy_without_skill_rejected_on_load() {
     let definitions = authoring::Definitions {
         equipment: Vec::new(),
-        default_passive_skills: Vec::new(),
         ai_profiles: vec![tank_ai_profile()],
         terrain_types: vec![
             serde_json::from_value::<TerrainTypeDef>(serde_json::json!({

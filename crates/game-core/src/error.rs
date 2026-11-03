@@ -361,7 +361,9 @@ pub(crate) fn target_not_visible() -> GameError {
 pub(crate) fn invalid_passive_skills(owner: &str) -> GameError {
     GameError::new(
         "invalid_passive_skills",
-        format!("{owner} 的被動技能必須引用已定義的非負夾擊加成，且同一效果只能選一個版本"),
+        format!(
+            "{owner} 的被動技能設定無效：技能 ID 必須已定義且不重複，組合內效果不可重複，夾擊加成不可為負"
+        ),
     )
 }
 

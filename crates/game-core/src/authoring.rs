@@ -10,9 +10,6 @@ use serde::{Deserialize, Serialize};
 pub struct Definitions {
     #[serde(default)]
     pub equipment: Vec<EquipmentDef>,
-    /// 所有單位預設取得的被動技能；僅相同的基礎效果由單位版本覆蓋。
-    #[serde(default)]
-    pub default_passive_skills: Vec<String>,
     #[serde(default)]
     pub ai_profiles: Vec<AiProfile>,
     #[serde(default)]
@@ -60,7 +57,7 @@ pub struct UnitType {
     pub accessory: String,
     #[serde(default)]
     pub active_skills: Vec<String>,
-    /// 與全體預設合併，僅相同的基礎效果由此清單覆蓋；空清單保留預設。
+    /// 單位持有的被動技能；同類效果取較強值，空清單表示沒有被動。
     #[serde(default)]
     pub passive_skills: Vec<String>,
 }

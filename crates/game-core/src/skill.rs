@@ -1720,7 +1720,7 @@ fn block_reduction(world: &World, entity: Entity) -> i32 {
         .block_reduction
 }
 
-/// 作者輸入邊界只允許已定義的被動技能，且同一效果只能選一個版本。
+/// 作者輸入邊界只允許已定義且不重複的被動技能 ID。
 pub(crate) fn validate_passive_skills(
     ids: &[String],
     passives: &[PassiveSkillDef],
@@ -1729,13 +1729,14 @@ pub(crate) fn validate_passive_skills(
     let valid = ids
         .iter()
         .all(|id| passives.iter().any(|passive| passive.id == *id));
-    if ids.len() > 1 || !valid {
+    let unique: std::collections::HashSet<_> = ids.iter().collect();
+    if unique.len() != ids.len() || !valid {
         return Err(error::invalid_passive_skills(owner));
     }
     Ok(())
 }
 
-/// 後面的被動只覆蓋相同種類的效果，其餘效果及來源保留供規則與畫面共用。
+/// 同類效果取較強值；相同強度保留先出現者，其餘效果及來源供規則與畫面共用。
 fn resolved_passive_effects<'a>(
     passives: impl IntoIterator<Item = &'a PassiveSkillDef>,
 ) -> Vec<(&'a str, &'a PassiveSkillEffect)> {
@@ -1747,6 +1748,16 @@ fn resolved_passive_effects<'a>(
                 .iter()
                 .position(|(_, existing)| std::mem::discriminant(*existing) == kind)
             {
+                let stronger = match (effect, resolved[index].1) {
+                    (
+                        PassiveSkillEffect::Flanking { hit_bonus },
+                        PassiveSkillEffect::Flanking { hit_bonus: current },
+                    ) => hit_bonus > current,
+                    _ => false,
+                };
+                if !stronger {
+                    continue;
+                }
                 resolved.remove(index);
             }
             resolved.push((passive.id.as_str(), effect));
@@ -1826,20 +1837,4 @@ pub(crate) fn passive_skill_views(
             }
         })
         .collect()
-}
-
-/// 載入與編輯器共用被動技能分配；保留預設在前、單位專屬在後的覆蓋順序。
-pub(crate) fn resolve_passive_skills(
-    unit: &crate::authoring::UnitType,
-    defaults: &[String],
-    passives: &[PassiveSkillDef],
-) -> Result<Vec<String>, GameError> {
-    validate_passive_skills(&unit.passive_skills, passives, &unit.id)?;
-    let mut resolved = Vec::new();
-    for id in defaults.iter().chain(&unit.passive_skills) {
-        if !resolved.contains(id) {
-            resolved.push(id.clone());
-        }
-    }
-    Ok(resolved)
 }

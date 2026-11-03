@@ -80,7 +80,7 @@ pub(crate) struct Unit {
     pub(crate) equipment: EquipmentView,
     /// 單位可使用的技能 ID。
     pub(crate) active_skills: Vec<String>,
-    /// 已合併全體預設的被動技能 ID。
+    /// 單位持有的被動技能 ID；同類效果由規則層取較強值。
     pub(crate) passive_skills: Vec<String>,
 }
 

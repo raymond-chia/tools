@@ -116,7 +116,7 @@ ERROR_INVALID_DIFFICULTY,請選擇有效的難度,Select a valid difficulty
 ERROR_INVALID_DURATION,技能持續時間必須大於 0,Skill duration must be greater than zero
 ERROR_INVALID_EQUIPMENT,配裝不合法：請檢查裝備欄位與雙手占用,Invalid equipment: Check slots and hand occupancy
 ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be positive
-ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；同一效果只能選一個版本,Invalid passive skills; select only one version of each effect
+ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；請檢查技能引用、重複項目與效果數值,Invalid passive skills; check skill references duplicates and effect values
 ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
 ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
 ERROR_INVALID_TERRAIN_VALUES,地形傷害、閃避懲罰與格擋懲罰不可為負數,"Terrain damage, dodge penalty, and block penalty cannot be negative"

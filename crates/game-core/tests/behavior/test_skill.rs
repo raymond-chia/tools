@@ -228,25 +228,47 @@ fn game_with_skill_on_ascii_map(
         .expect("測試戰鬥定義應有效")
 }
 
-// 驗證單位專屬被動只覆蓋預設中的相同效果，禁止治癒與技能說明保持一致。
+// 驗證多個被動的同類效果取較強值，保留其他效果，且禁止治癒與技能說明一致。
 #[test]
-fn passive_bundle_override_preserves_other_effects() {
-    for (default_effects, unit_effects, expected) in [
-        // 預設有禁止治療及夾擊 +2；專屬夾擊 +4 只替換夾擊，保留預設的禁止治療。
+fn passive_skills_keep_strongest_effect_and_preserve_other_effects() {
+    for (first_effects, second_effects, selected, expected) in [
+        // 弱組合先選，較強夾擊只取代夾擊，保留禁止治療。
         (
             serde_json::json!([{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 2}]),
             serde_json::json!([{"effect": "flanking", "hit_bonus": 4}]),
+            vec!["first", "second"],
             serde_json::json!([
-                {"id": "baseline", "effects": [{"effect": "unhealable"}]},
-                {"id": "mechanical", "effects": [{"effect": "flanking", "hit_bonus": 4}]}
+                {"id": "first", "effects": [{"effect": "unhealable"}]},
+                {"id": "second", "effects": [{"effect": "flanking", "hit_bonus": 4}]}
             ]),
         ),
-        // 預設只有夾擊 +2；專屬組合提供禁止治療及夾擊 +4，預設被完全取代。
+        // 強夾擊先選，較弱夾擊不能覆蓋它，禁止治療仍保留。
         (
-            serde_json::json!([{"effect": "flanking", "hit_bonus": 2}]),
-            serde_json::json!([{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 4}]),
+            serde_json::json!([{"effect": "flanking", "hit_bonus": 4}]),
+            serde_json::json!([{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 2}]),
+            vec!["first", "second"],
             serde_json::json!([
-                {"id": "mechanical", "effects": [{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 4}]}
+                {"id": "first", "effects": [{"effect": "flanking", "hit_bonus": 4}]},
+                {"id": "second", "effects": [{"effect": "unhealable"}]}
+            ]),
+        ),
+        // 交換勾選順序，仍取較強夾擊並保留禁止治療。
+        (
+            serde_json::json!([{"effect": "flanking", "hit_bonus": 4}]),
+            serde_json::json!([{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 2}]),
+            vec!["second", "first"],
+            serde_json::json!([
+                {"id": "second", "effects": [{"effect": "unhealable"}]},
+                {"id": "first", "effects": [{"effect": "flanking", "hit_bonus": 4}]}
+            ]),
+        ),
+        // 相同禁止治療與同值夾擊只生效一次，保留先選技能的來源。
+        (
+            serde_json::json!([{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 2}]),
+            serde_json::json!([{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 2}]),
+            vec!["first", "second"],
+            serde_json::json!([
+                {"id": "first", "effects": [{"effect": "unhealable"}, {"effect": "flanking", "hit_bonus": 2}]}
             ]),
         ),
     ] {
@@ -263,12 +285,12 @@ fn passive_bundle_override_preserves_other_effects() {
         ",
         );
         definitions.passive_skills = serde_json::from_value(serde_json::json!([
-            {"id": "baseline", "effects": default_effects},
-            {"id": "mechanical", "effects": unit_effects}
+            {"id": "first", "effects": first_effects},
+            {"id": "second", "effects": second_effects}
         ]))
         .expect("組合被動應符合作者格式");
-        definitions.default_passive_skills = vec!["baseline".into()];
-        definitions.unit_types[0].passive_skills = vec!["mechanical".into()];
+        definitions.unit_types[0].passive_skills =
+            selected.into_iter().map(str::to_owned).collect();
         let mut game =
             Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
                 .expect("組合被動應可載入");
