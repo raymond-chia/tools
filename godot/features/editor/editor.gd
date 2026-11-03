@@ -74,9 +74,13 @@ var refreshing := false
 var selected_cell := Vector2i(-1, -1)
 var stroke_id := 0
 var input_error_count := 0
+var target_options: OptionButton
 
 func _process(delta: float) -> void:
 	if pages.current_tab != 0: return
+	if is_instance_valid(target_options):
+		var index := target_options.get_popup().get_focused_item()
+		map_view.highlight_target_unit(int(target_options.get_item_metadata(index)) if index > 0 else 0)
 	var focused := get_viewport().gui_get_focus_owner()
 	if focused is LineEdit or focused is TextEdit:
 		return
@@ -116,6 +120,7 @@ func _ready() -> void:
 		var add_team: OptionButton = group.get_node("AddTeam")
 		add_team.item_selected.connect(func(selected: int): add_outcome_team(key, add_team.get_item_metadata(selected)))
 		var add_unit: OptionButton = group.get_node("AddUnit")
+		connect_target_options(add_unit)
 		add_unit.item_selected.connect(func(selected: int): add_outcome_unit(key, add_unit.get_item_metadata(selected)))
 		for child in group.get_children():
 			if child is CheckBox:
@@ -623,26 +628,38 @@ func target_group_block(key: String, condition_index: int, unit_ids: Array) -> V
 	title.text = "指定陣亡目標組"
 	block.add_child(title)
 	for unit_id: int in unit_ids:
-		var row := HBoxContainer.new()
-		var label := Label.new()
-		label.text = unit_label(unit_id)
-		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(label)
-		var remove := Button.new()
-		remove.text = "✕"
-		remove.pressed.connect(func(): remove_target_unit(key, condition_index, unit_id))
-		row.add_child(remove)
-		block.add_child(row)
+		var checkbox := CheckBox.new()
+		checkbox.text = unit_label(unit_id)
+		checkbox.mouse_entered.connect(func(): map_view.highlight_target_unit(unit_id))
+		checkbox.mouse_exited.connect(func(): map_view.highlight_target_unit(0))
+		checkbox.tree_exiting.connect(func(): map_view.highlight_target_unit(0))
+		checkbox.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		checkbox.set_pressed_no_signal(true)
+		checkbox.toggled.connect(func(pressed: bool):
+			if not pressed: remove_target_unit(key, condition_index, unit_id)
+		)
+		block.add_child(checkbox)
 	var add := OptionButton.new()
 	add.fit_to_longest_item = false
+	connect_target_options(add)
 	fill_unit_options(add, "加入單位…", unit_ids)
 	add.item_selected.connect(func(index: int): add_target_unit(key, condition_index, add.get_item_metadata(index)))
 	block.add_child(add)
-	var remove_group := Button.new()
-	remove_group.text = "移除此目標組"
-	remove_group.pressed.connect(func(): remove_target_group(key, condition_index))
-	block.add_child(remove_group)
 	return block
+
+# 選單的焦點包含滑鼠停留項目；關閉時清掉預覽，不改變目前查看的單位。
+func connect_target_options(options: OptionButton) -> void:
+	var popup := options.get_popup()
+	popup.about_to_popup.connect(func(): target_options = options)
+	popup.popup_hide.connect(func():
+		target_options = null
+		map_view.highlight_target_unit(0)
+	)
+	options.tree_exiting.connect(func():
+		if target_options == options:
+			target_options = null
+			map_view.highlight_target_unit(0)
+	)
 
 # 只列作者配置，不依預覽難度隱藏尚未出場的單位。
 func fill_unit_options(options: OptionButton, placeholder: String, excluded: Array) -> void:
@@ -659,7 +676,7 @@ func fill_unit_options(options: OptionButton, placeholder: String, excluded: Arr
 # 核心驗證已確保目標組只引用存在的單位。
 func unit_label(unit_id: int) -> String:
 	var unit: Dictionary = map_data.units.filter(func(candidate: Dictionary): return candidate.id == unit_id)[0]
-	return "單位 %s（%s）" % [unit.id, unit.unit_type]
+	return tr(BattleConfig.unit_name_key(unit.unit_type))
 
 func add_outcome_unit(key: String, unit_id: int) -> void:
 	var previous := document_state()

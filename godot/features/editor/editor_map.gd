@@ -17,6 +17,7 @@ var snapshot: Dictionary = {}
 var brush_cells: Array = []
 var hovered := Vector2i(-1, -1)
 var inspected_unit := 0
+var highlighted_target_unit := 0
 var selected := Vector2i(-1, -1)
 var dragging := false
 var drag_paint := false
@@ -80,11 +81,18 @@ func present(map_value: Dictionary, snapshot_value: Dictionary, selected_cell: V
 	if not units.any(func(unit: Dictionary): return unit.id == inspected_unit):
 		inspected_unit = 0
 	for unit in units:
-		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == inspected_unit)
+		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == (highlighted_target_unit if highlighted_target_unit != 0 else inspected_unit))
 		BattleVisuals.update_unit_health(unit_nodes[unit.id], unit)
 		BattleVisuals.update_unit_cargo(unit_nodes[unit.id], unit)
 	cell_hovered.emit(hovered)
 	queue_redraw()
+
+# 只切換顯示光圈，不觸發查看單位或核心規則查詢。
+func highlight_target_unit(unit_id: int) -> void:
+	if highlighted_target_unit == unit_id: return
+	highlighted_target_unit = unit_id
+	for unit in presented_units:
+		BattleVisuals.style_unit_node(unit_nodes[unit.id], unit.large, unit.team, unit.id == (highlighted_target_unit if highlighted_target_unit != 0 else inspected_unit))
 
 func present_cargo(layout: Dictionary) -> void:
 	cargo_layout = layout.duplicate(true)
