@@ -4,6 +4,7 @@ signal cell_pressed(cell: Vector2i)
 signal inspection_clicked(cell: Vector2i)
 signal cell_hovered(cell: Vector2i)
 signal stroke_started()
+signal stroke_segment(from: Vector2i, to: Vector2i)
 signal overlay_dropped(from: Vector2i, to: Vector2i)
 signal unit_dropped(id: int, cell: Vector2i)
 
@@ -22,6 +23,7 @@ var selected := Vector2i(-1, -1)
 var dragging := false
 var drag_paint := false
 var last_painted := Vector2i(-1, -1)
+var line_origin := Vector2i(-1, -1)
 var camera_initialized := false
 var presented_units: Array = []
 var unit_nodes: Dictionary = {}
@@ -125,22 +127,28 @@ func _gui_input(event: InputEvent) -> void:
 			hovered = cell
 			cell_hovered.emit(cell)
 			queue_redraw()
-		if dragging and drag_paint and cell.x >= 0 and cell != last_painted:
+		if dragging and drag_paint and line_origin.x < 0 and cell.x >= 0 and cell != last_painted:
+			var previous := last_painted if last_painted.x >= 0 else cell
 			last_painted = cell
-			cell_pressed.emit(cell)
+			stroke_segment.emit(previous, cell)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			inspection_clicked.emit(cell_at(event.position))
 		accept_event()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		dragging = event.pressed
-		if dragging:
+		if event.pressed:
+			dragging = true
 			drag_pointer_origin = event.position
 			stroke_started.emit()
 			var cell := cell_at(event.position)
+			hovered = cell
 			if cell.x >= 0:
 				last_painted = cell
-				cell_pressed.emit(cell)
+				if drag_paint and event.shift_pressed:
+					line_origin = cell
+					cell_hovered.emit(cell)
+				else:
+					cell_pressed.emit(cell)
 		else:
 			var cell := cell_at(event.position) if Rect2(Vector2.ZERO, size).has_point(event.position) else Vector2i(-1, -1)
 			finish_pointer(cell)
@@ -175,6 +183,10 @@ func update_object_drag(point: Vector2) -> void:
 	queue_redraw()
 
 func finish_pointer(cell: Vector2i) -> void:
+	var line_start := line_origin
+	line_origin = Vector2i(-1, -1)
+	var stroke_end := last_painted
+	var finish_brush := dragging and drag_paint and line_start.x < 0 and cell.x >= 0 and cell != stroke_end
 	var id := dragged_unit
 	if dragged_node != null: dragged_node.position = drag_origin
 	var overlay_origin := dragged_overlay
@@ -186,10 +198,15 @@ func finish_pointer(cell: Vector2i) -> void:
 	dragging = false
 	last_painted = Vector2i(-1, -1)
 	selected = Vector2i(-1, -1)
+	if line_start.x >= 0 and cell.x >= 0:
+		stroke_segment.emit(line_start, cell)
+	elif finish_brush:
+		stroke_segment.emit(stroke_end if stroke_end.x >= 0 else cell, cell)
 	if id != 0 and cell.x >= 0:
 		unit_dropped.emit(id, cell - drag_offset)
 	if overlay_origin.x >= 0 and cell.x >= 0:
 		overlay_dropped.emit(overlay_origin, cell)
+	cell_hovered.emit(hovered)
 	queue_redraw()
 
 func diamond(point: Vector2) -> PackedVector2Array:

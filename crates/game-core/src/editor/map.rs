@@ -3,12 +3,14 @@ use super::EditorError;
 use crate::authoring::{Definitions, Map};
 use crate::{Game, GridPos, TerrainEntryRule, TerrainLayer, TerrainPlacement};
 use serde::Deserialize;
+use std::collections::BTreeSet;
 
 #[derive(Deserialize)]
 pub(super) struct BrushArea {
     x: i32,
     y: i32,
     size: i32,
+    from: GridPos,
 }
 
 #[derive(Deserialize)]
@@ -21,23 +23,50 @@ struct TerrainBrush {
 
 // 預覽與實際塗抹共用定位與裁切，偶數邊長向座標正方向多延伸一格。
 pub(super) fn brush_cells(map: &Map, area: BrushArea) -> Result<Vec<GridPos>, EditorError> {
-    let BrushArea { x, y, size } = area;
+    let BrushArea { x, y, size, from } = area;
     if size < 1 {
         return Err(EditorError::operation("invalid_brush_size", "", Vec::new()));
     }
     if x < 0 || y < 0 || x >= map.width || y >= map.height {
         return Ok(Vec::new());
     }
+    let GridPos {
+        x: mut start_x,
+        y: mut start_y,
+    } = from;
+    if start_x < 0 || start_y < 0 || start_x >= map.width || start_y >= map.height {
+        return Err(EditorError::operation("invalid_cell", "", Vec::new()));
+    }
     let before = (size - 1) / 2;
     let after = size / 2;
-    let mut cells = Vec::new();
-    // 先裁切延伸量，再與起點相加，避免過大的作者輸入造成溢位。
-    for y in (y - before).max(0)..=y + after.min(map.height - 1 - y) {
-        for x in (x - before).max(0)..=x + after.min(map.width - 1 - x) {
-            cells.push(GridPos { x, y });
+    let mut cells = BTreeSet::new();
+    // 預覽、塗抹與撒放共用 Bresenham 路徑；補齊快速拖曳跳過的格子。
+    let dx = i64::from((x - start_x).abs());
+    let dy = -i64::from((y - start_y).abs());
+    let step_x = (x - start_x).signum();
+    let step_y = (y - start_y).signum();
+    let mut error = dx + dy;
+    loop {
+        // 先裁切延伸量，再與起點相加，避免過大的作者輸入造成溢位。
+        for row in (start_y - before).max(0)..=start_y + after.min(map.height - 1 - start_y) {
+            for column in (start_x - before).max(0)..=start_x + after.min(map.width - 1 - start_x) {
+                cells.insert((row, column));
+            }
+        }
+        if start_x == x && start_y == y {
+            break;
+        }
+        let twice_error = 2 * error;
+        if twice_error >= dy {
+            error += dy;
+            start_x += step_x;
+        }
+        if twice_error <= dx {
+            error += dx;
+            start_y += step_y;
         }
     }
-    Ok(cells)
+    Ok(cells.into_iter().map(|(y, x)| GridPos { x, y }).collect())
 }
 
 /// 只查詢筆刷覆蓋格子，不修改地圖，也不建立遊戲預覽。

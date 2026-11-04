@@ -161,6 +161,15 @@ layout_mode = 2
 layout_mode = 2
 text = "素材面板"
 
+[node name="BrushHelp" type="RichTextLabel" parent="Layout/Pages/MapPage/Materials"]
+layout_mode = 2
+mouse_filter = 2
+bbcode_enabled = true
+text = "按住左鍵拖曳可沿路塗抹或隨機撒放。
+按住 [color=#ffe17a]Shift[/color] 再拖曳可預覽直線，放開左鍵套用。"
+fit_content = true
+scroll_active = false
+
 [node name="PaletteTabs" type="TabContainer" parent="Layout/Pages/MapPage/Materials"]
 layout_mode = 2
 size_flags_vertical = 3

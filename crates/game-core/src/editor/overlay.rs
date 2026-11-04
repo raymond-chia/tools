@@ -122,15 +122,26 @@ pub fn scatter_overlay_from_json(
         .ok_or_else(|| EditorError::operation("not_found", &kind, Vec::new()))?;
     let blocks = terrain.entry_rule != TerrainEntryRule::Walkable;
     let cells = brush_cells(&map, area)?;
-    let bounds = match (cells.first(), cells.last()) {
-        (Some(first), Some(last)) => (
-            (first.x - 1).max(0),
-            (first.y - 1).max(0),
-            (last.x + 1).min(map.width - 1),
-            (last.y + 1).min(map.height - 1),
-        ),
-        _ => return response(definitions, map, false),
-    };
+    if cells.is_empty() {
+        return response(definitions, map, false);
+    }
+    // 斜線的首尾格不一定是包圍框角落，使用所有覆蓋格的範圍。
+    let bounds = cells
+        .iter()
+        .fold((map.width - 1, map.height - 1, 0, 0), |bounds, cell| {
+            (
+                bounds.0.min(cell.x),
+                bounds.1.min(cell.y),
+                bounds.2.max(cell.x),
+                bounds.3.max(cell.y),
+            )
+        });
+    let bounds = (
+        (bounds.0 - 1).max(0),
+        (bounds.1 - 1).max(0),
+        (bounds.2 + 1).min(map.width - 1),
+        (bounds.3 + 1).min(map.height - 1),
+    );
     let existing = cells
         .iter()
         .filter(|cell| {

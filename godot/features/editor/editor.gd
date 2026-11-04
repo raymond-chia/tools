@@ -146,6 +146,7 @@ func _ready() -> void:
 	map_view.cell_pressed.connect(edit_cell)
 	map_view.inspection_clicked.connect(inspect_unit)
 	map_view.stroke_started.connect(func(): stroke_id += 1)
+	map_view.stroke_segment.connect(paint_terrain_stroke)
 	map_view.unit_dropped.connect(move_unit)
 	map_view.overlay_dropped.connect(move_overlay)
 	for title in ["塗抹上層", "隨機撒放", "搬動上層"]:
@@ -784,7 +785,8 @@ func terrain_kinds(layer: String) -> Array:
 func refresh_tools_visibility() -> void:
 	# 工具切換只更新介面狀態；資料修改的驗證與預覽由 commit 統一處理。
 	var placing := editing_mode == EditMode.PLACE_UNIT
-	map_view.drag_paint = BRUSH_LAYERS.has(editing_mode) and (editing_mode != EditMode.OVERLAY or overlay_tool.selected == 0)
+	map_view.drag_paint = BRUSH_LAYERS.has(editing_mode) and (editing_mode != EditMode.OVERLAY or overlay_tool.selected != 2)
+	$Layout/Pages/MapPage/Materials/BrushHelp.visible = map_view.drag_paint
 	overlay_density.visible = overlay_tool.selected == 1
 	overlay_connectivity.visible = overlay_density.visible
 	unit_list.visible = placing
@@ -812,14 +814,26 @@ func refresh_brush_preview() -> void:
 	if editing_mode == EditMode.GROUND and terrain_brushes.ground.is_empty():
 		map_view.present_brush([])
 		return
-	var command := {"x": map_view.hovered.x, "y": map_view.hovered.y, "size": int(brush_size.value)}
+	var origin: Vector2i = map_view.line_origin if map_view.line_origin.x >= 0 else map_view.hovered
+	var command := {"x": map_view.hovered.x, "y": map_view.hovered.y, "from": {"x": origin.x, "y": origin.y}, "size": int(brush_size.value)}
 	var result := read_core_response(core.terrain_brush_cells_from_json(JSON.stringify(map_data), JSON.stringify(command)))
 	map_view.present_brush([] if result.is_empty() else result.cells)
 
 # 筆刷只傳遞作者選擇；圖層替換、清除與合法性由 Rust 決定。
-func replace_layer(cell: Vector2i, layer: String, kind: String) -> void:
-	var command := {"x": cell.x, "y": cell.y, "layer": layer, "kind": kind, "size": int(brush_size.value)}
-	apply_terrain_result(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), "地形筆刷 %s" % stroke_id, UndoRedo.MERGE_ENDS)
+func paint_terrain_stroke(from: Vector2i, cell: Vector2i) -> void:
+	if not map_view.drag_paint: return
+	selected_cell = cell
+	var layer: String = BRUSH_LAYERS[editing_mode]
+	var kind: String = terrain_brushes[layer]
+	if kind.is_empty() and (layer == "ground" or overlay_tool.selected == 1): return
+	var command := {"x": cell.x, "y": cell.y, "from": {"x": from.x, "y": from.y}, "kind": kind, "size": int(brush_size.value)}
+	var label := "地形筆刷 %s" % stroke_id
+	if editing_mode == EditMode.OVERLAY and overlay_tool.selected == 1:
+		command.merge({"percent": int(overlay_density.value), "preserve_connectivity": overlay_connectivity.button_pressed, "seed": randi()})
+		apply_terrain_result(core.scatter_overlay_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label, UndoRedo.MERGE_ENDS)
+	else:
+		command.layer = layer
+		apply_terrain_result(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label, UndoRedo.MERGE_ENDS)
 
 func unit_at(cell: Vector2i) -> Dictionary:
 	# 佔用格由核心決定；編輯器只選取 snapshot 中被點擊的單位。
@@ -843,19 +857,10 @@ func edit_cell(cell: Vector2i) -> void:
 	var current := unit_at(cell)
 	var previous := document_state()
 	if BRUSH_LAYERS.has(editing_mode):
-		var layer: String = BRUSH_LAYERS[editing_mode]
-		var kind: String = terrain_brushes[layer]
-		if editing_mode == EditMode.GROUND and kind.is_empty(): return
-		if editing_mode == EditMode.OVERLAY:
-			if overlay_tool.selected == 2:
-				map_view.begin_overlay_drag(cell)
-				return
-			if overlay_tool.selected == 1:
-				if kind.is_empty(): return
-				var command := {"x": cell.x, "y": cell.y, "size": int(brush_size.value), "kind": kind, "percent": int(overlay_density.value), "preserve_connectivity": overlay_connectivity.button_pressed, "seed": randi()}
-				apply_terrain_result(core.scatter_overlay_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), "隨機撒放上層")
-				return
-		replace_layer(cell, layer, kind)
+		if editing_mode == EditMode.OVERLAY and overlay_tool.selected == 2:
+			map_view.begin_overlay_drag(cell)
+		else:
+			paint_terrain_stroke(cell, cell)
 		return
 	elif editing_mode == EditMode.PLACE_UNIT:
 		if unit_list.item_count == 0: return
