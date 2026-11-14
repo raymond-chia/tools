@@ -3,7 +3,7 @@ extends RefCounted
 
 const TILE_SIZE := Vector2i(64, 32)
 const GROUND_ART := preload("res://assets/tiles/isometric_ground.svg")
-const CARGO_ART := preload("res://assets/cargo.svg")
+const CARGO_ART := preload("res://assets/shared/cargo.svg")
 const BASE_ART := preload("res://assets/units/faction_base.svg")
 # 所有地形素材使用相同畫布，格子中心位於圖片的 (64, 96)；與單位圖同樣以 ART_SCALE 縮小繪製，共用圖片才會一樣大。
 const TERRAIN_ART_ORIGIN := Vector2(64, 96)
