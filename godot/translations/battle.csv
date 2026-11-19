@@ -221,3 +221,21 @@ UNIT_NAME_SWORDSMAN,流浪劍客,Wandering Swordsman
 UNIT_NAME_WOLF,荒原狼,Wasteland Wolf
 UNIT_SIZE_LARGE,大型,Large
 UNIT_SIZE_NORMAL,一般,Normal
+UNIT_NAME_PROTAGONIST,主角,Protagonist
+UNIT_NAME_BUTLER,管家,Butler
+UNIT_NAME_OFFICER,隨行武官,Officer
+UNIT_NAME_NEKOMATA_SISTER,貓又姊姊,Nekomata Elder Sister
+UNIT_NAME_NEKOMATA_MOTHER,貓又母親,Nekomata Mother
+UNIT_NAME_NEKOMATA_YOUNGER_SISTER,貓又妹妹,Nekomata Younger Sister
+SKILL_NAME_DOUBLE_STRIKE,雙重打擊,Double Strike
+SKILL_NAME_LONG_REACH,長兵器,Long Reach
+SKILL_EFFECT_MELEE_REACH,近戰攻擊距離 +1,Melee attack range +1
+SKILL_EFFECT_DOUBLE_STRIKE,連打 %d 次，每擊 %d%% 傷害；分別判定命中與格擋。,Strike %d times at %d%% damage each; resolve each hit and block independently.
+ATTACK_PREVIEW_MULTI_DAMAGE,每擊傷害 %d × %d（機率為每擊）,Damage %d × %d (chances per strike)
+SKILL_NAME_FIRE_CLAW,火焰爪,Fire Claw
+SKILL_NAME_OPPORTUNITY_ATTACK,藉機攻擊,Opportunity Attack
+SKILL_NAME_COLLISION_COUNTER,碰撞反擊,Collision Counter
+SKILL_EFFECT_FIRE_CLAW,攻擊附加 %d 點火焰傷害；一同計算格擋與暴擊。,Add %d fire damage; apply block and critical to the combined damage.
+SKILL_EFFECT_OPPORTUNITY_ATTACK,敵人主動離開近戰範圍前普攻；每輪最多 %d 次，推撞不觸發。,Make a basic attack before an enemy voluntarily leaves melee reach; up to %d times per round. Pushing does not trigger this.
+SKILL_EFFECT_COLLISION_COUNTER,每輪最多 %d 次碰撞免疫自身碰撞傷害，並普攻直接碰撞自己的敵人；須在普攻範圍內。,Ignore own collision damage and make a basic attack against the colliding enemy within basic attack reach; up to %d times per round.
+TEAM_NAME_REFUGEES,難民,Refugees

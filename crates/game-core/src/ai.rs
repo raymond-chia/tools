@@ -1,5 +1,6 @@
 //! Utility AI：貨物目標優先，其餘評估第一段移動與技能，無法施放時再利用兩段移動接近。
 mod cargo;
+mod flee;
 use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
@@ -89,7 +90,13 @@ impl Game {
             let mut active_skills: Vec<_> = unit
                 .active_skills
                 .iter()
-                .map(|id| definitions.get(id).expect("作者資料已驗證技能引用").clone())
+                .map(|id| {
+                    crate::skill::effective_skill(
+                        &self.world,
+                        entity,
+                        definitions.get(id).expect("作者資料已驗證技能引用"),
+                    )
+                })
                 .collect();
             active_skills.sort_by(|a, b| a.id.cmp(&b.id));
             let AiTurnPlan {
@@ -134,7 +141,14 @@ impl Game {
                     attack_target,
                 }) if can_use_skill(&self.world) => {
                     let attack = target_kind(&skill.effect) == ActiveSkillTargetKind::Enemy;
-                    self.use_skill_at_cell(actor, target_cell, skill)?;
+                    let definition = self
+                        .world
+                        .resource::<ActiveSkills>()
+                        .definitions
+                        .get(&skill.id)
+                        .expect("AI 技能引用已驗證")
+                        .clone();
+                    self.use_skill_at_cell(actor, target_cell, definition)?;
                     if attack && self.world.get_entity(entity).is_ok() {
                         if let Some(target) = attack_target {
                             self.world
@@ -164,14 +178,23 @@ impl Game {
         let mut positions =
             movement_options(&self.world, actor, self.world.resource::<Turn>(), false);
         let healing_focus = healing_focus(&self.world, actor, profile, active_skills);
-        match self.ai_skill_plan(
+        let skill_plan = self.ai_skill_plan(
             actor,
             profile,
             active_skills,
             &positions,
             healing_focus,
             |_| 0,
-        ) {
+        );
+        if let Some((flee_plan, utility)) = self.flee_turn_plan(actor, profile.fleeing_weight) {
+            if skill_plan
+                .as_ref()
+                .is_none_or(|skill| utility > skill.utility)
+            {
+                return flee_plan;
+            }
+        }
+        match skill_plan {
             Some(ActiveSkillPlan {
                 position_index,
                 skill,
@@ -246,29 +269,31 @@ impl Game {
                     if matches!(skill.effect, ActiveSkillEffect::Sweep { .. }) {
                         // 四條外側邊都列入候選，涵蓋大型單位的每個合法中心格。
                         let mut centers = Vec::new();
-                        for x in position.x..position.x + footprint.width {
-                            centers.extend([
-                                GridPos {
-                                    x,
-                                    y: position.y - 1,
-                                },
-                                GridPos {
-                                    x,
-                                    y: position.y + footprint.height,
-                                },
-                            ]);
-                        }
-                        for y in position.y..position.y + footprint.height {
-                            centers.extend([
-                                GridPos {
-                                    x: position.x - 1,
-                                    y,
-                                },
-                                GridPos {
-                                    x: position.x + footprint.width,
-                                    y,
-                                },
-                            ]);
+                        for distance in skill.min_range..=skill.max_range {
+                            for x in position.x..position.x + footprint.width {
+                                centers.extend([
+                                    GridPos {
+                                        x,
+                                        y: position.y - distance,
+                                    },
+                                    GridPos {
+                                        x,
+                                        y: position.y + footprint.height - 1 + distance,
+                                    },
+                                ]);
+                            }
+                            for y in position.y..position.y + footprint.height {
+                                centers.extend([
+                                    GridPos {
+                                        x: position.x - distance,
+                                        y,
+                                    },
+                                    GridPos {
+                                        x: position.x + footprint.width - 1 + distance,
+                                        y,
+                                    },
+                                ]);
+                            }
                         }
                         centers.into_iter().map(|cell| (None, cell)).collect()
                     } else {
@@ -708,6 +733,8 @@ fn relevant_positioning_skill(profile: &AiProfile, skill: &ActiveSkillDef, heali
     match skill.effect {
         ActiveSkillEffect::Heal { .. } => healing && profile.healing_weight > 0,
         ActiveSkillEffect::Sweep { .. }
+        | ActiveSkillEffect::DoubleStrike { .. }
+        | ActiveSkillEffect::FireClaw { .. }
         | ActiveSkillEffect::Attack { .. }
         | ActiveSkillEffect::Push { .. } => !healing && profile.damage_weight > 0,
         ActiveSkillEffect::Mire { .. } => !healing && profile.positioning_weight > 0,
@@ -730,19 +757,39 @@ fn attack_score(world: &World, actor: Entity, profile: &AiProfile, preview: Atta
 }
 
 fn attack_utility(preview: AttackPreview) -> f64 {
-    let target_hp = preview.target_hp;
-    attack_outcomes(&preview)
+    // 各擊獨立擲骰；合併傷害分布，避免把兩擊當成一次大傷害。
+    let mut distribution = vec![(1.0, 0)];
+    let outcomes = attack_outcomes(&preview);
+    for _ in 0..preview.strikes {
+        distribution = distribution
+            .into_iter()
+            .flat_map(|(chance, damage)| {
+                outcomes.into_iter().map(move |(next_chance, next_damage)| {
+                    (
+                        chance * f64::from(next_chance) / 100.0,
+                        (damage + next_damage).min(preview.target_hp),
+                    )
+                })
+            })
+            .collect();
+    }
+    distribution
         .into_iter()
         .map(|(chance, damage)| {
-            // 擊倒能移除對手後續行動，收益與傷害一同受 damage_weight 控制。
-            f64::from(chance) / 100.0
-                * (f64::from(damage.min(target_hp)) + if damage >= target_hp { 100.0 } else { 0.0 })
+            chance
+                * (f64::from(damage)
+                    + if damage >= preview.target_hp {
+                        100.0
+                    } else {
+                        0.0
+                    })
         })
         .sum()
 }
 
-fn attack_outcomes(preview: &AttackPreview) -> [(u32, i32); 4] {
+fn attack_outcomes(preview: &AttackPreview) -> [(u32, i32); 5] {
     let AttackPreview {
+        strikes: _,
         target: _,
         target_type: _,
         target_hp: _,
@@ -751,7 +798,7 @@ fn attack_outcomes(preview: &AttackPreview) -> [(u32, i32); 4] {
         hit_remaining_hp: _,
         block_remaining_hp: _,
         dodge_remaining_hp: _,
-        dodge_chance: _,
+        dodge_chance,
         block_chance,
         hit_chance,
         critical_chance,
@@ -770,6 +817,7 @@ fn attack_outcomes(preview: &AttackPreview) -> [(u32, i32); 4] {
         (0, 0)
     };
     [
+        (*dodge_chance, 0),
         (*hit_chance - critical_hit, *hit_damage),
         (*block_chance - critical_block, *block_damage),
         (critical_hit, *critical_hit_damage),

@@ -31,19 +31,53 @@ pub(crate) fn skill_for_current_stage(
         if pending != &skill.id {
             return Err(error::cannot_use_skill());
         }
-        return Ok(ActiveSkillDef {
-            id: skill.id.clone(),
-            min_range: 1,
-            max_range: 1,
-            effect: ActiveSkillEffect::Attack {
-                power_source: crate::PowerSource::Physical,
-                ranged: false,
-                hit_bonus: 0,
-                power_bonus: 0,
+        return Ok(effective_skill(
+            world,
+            actor,
+            &ActiveSkillDef {
+                id: skill.id.clone(),
+                min_range: 1,
+                max_range: 1,
+                effect: ActiveSkillEffect::Attack {
+                    power_source: crate::PowerSource::Physical,
+                    ranged: false,
+                    hit_bonus: 0,
+                    power_bonus: 0,
+                },
             },
-        });
+        ));
     }
-    Ok(skill.clone())
+    Ok(effective_skill(world, actor, skill))
+}
+
+/// 套用角色被動後的技能供施放、預覽、AI 與查看共用，不改寫原始定義。
+pub(crate) fn effective_skill(
+    world: &World,
+    actor: Entity,
+    skill: &ActiveSkillDef,
+) -> ActiveSkillDef {
+    let mut result = skill.clone();
+    let unit = world.get::<Unit>(actor).expect("施放者應具有 Unit");
+    let PassiveSkills { definitions } = world.resource::<PassiveSkills>();
+    let reaches = unit.passive_skills.iter().any(|id| {
+        definitions
+            .get(id)
+            .expect("被動技能引用已驗證")
+            .effects
+            .contains(&PassiveSkillEffect::MeleeReach)
+    });
+    if reaches && melee_enemy_skill(&skill.effect) {
+        result.max_range += 1;
+    }
+    result
+}
+
+fn strike_count(effect: &ActiveSkillEffect) -> u32 {
+    if matches!(effect, ActiveSkillEffect::DoubleStrike { .. }) {
+        2
+    } else {
+        1
+    }
 }
 
 fn check_step_destination(
@@ -149,13 +183,18 @@ impl Game {
             return self.use_cell_skill(ae, actor, position, skill);
         }
         let (target, effect) = validate_unit_skill_target(&self.world, ae, position, &skill)?;
-        self.resolve_unit_skill(ae, actor, target, position, &skill, effect);
+        for _ in 0..strike_count(&skill.effect) {
+            if self.world.get_entity(target).is_err() {
+                break;
+            }
+            self.resolve_unit_skill(ae, actor, target, position, &skill, effect);
+        }
         self.finish_turn();
         Ok(())
     }
 
     // 已驗證的單體與範圍命中共用結算；整個技能結束後才消耗回合。
-    fn resolve_unit_skill(
+    pub(crate) fn resolve_unit_skill(
         &mut self,
         ae: Entity,
         a: i64,
@@ -285,6 +324,7 @@ impl Game {
         let mut push_blocked = false;
         let mut collision_damage = 0;
         let mut collision_units = Vec::new();
+        let mut counters = Vec::new();
         if push && result == AttackResult::Hit && !downed {
             let direction = push_direction(&self.world, ae, target_cell);
             let (current, footprint) = placement(&self.world, te);
@@ -313,7 +353,17 @@ impl Game {
                 push_path = Some([current, destination]);
             } else {
                 push_blocked = true;
-                collision_damage = gameplay_config::COLLISION_DAMAGE;
+                let counter = self.take_collision_counter(te);
+                collision_damage = if counter.is_some() {
+                    0
+                } else {
+                    gameplay_config::COLLISION_DAMAGE
+                };
+                if let Some(id) = counter {
+                    if let Some(blocker) = self.collision_counter_target(te, &blocking_units) {
+                        counters.push((te, blocker, id));
+                    }
+                }
                 DamageResult {
                     remaining_hp,
                     max_hp,
@@ -346,12 +396,22 @@ impl Game {
                         .expect("佔用格子的戰鬥單位應具有 Id 元件")
                         .0
                         .clone();
+                    let counter = self.take_collision_counter(blocking_entity);
+                    let received_damage = if counter.is_some() {
+                        0
+                    } else {
+                        gameplay_config::COLLISION_DAMAGE
+                    };
+                    if let Some(counter_id) = counter {
+                        counters.push((blocking_entity, te, counter_id));
+                    }
                     let DamageResult {
                         remaining_hp,
                         max_hp,
                         downed,
-                    } = self.apply_damage(blocking_entity, id, collision_damage);
+                    } = self.apply_damage(blocking_entity, id, received_damage);
                     collision_units.push(CollisionUnitLog {
+                        damage: received_damage,
                         unit: id,
                         unit_type,
                         team,
@@ -401,6 +461,9 @@ impl Game {
                 collision_damage,
                 collision_units,
             });
+        for (attacker, target, id) in counters {
+            self.reaction_attack(attacker, target, &id);
+        }
         if let Some(path) = push_path {
             // 技能結果先入日誌，位置變更入口再記錄推移與地形效果的呈現順序。
             self.change_position(te, target, &path, TerrainEntry::Push);
@@ -527,6 +590,7 @@ fn check_sweep_target(
     actor: Entity,
     origin: GridPos,
     center: GridPos,
+    skill: &ActiveSkillDef,
 ) -> Result<Vec<GridPos>, GameError> {
     let Board {
         width,
@@ -538,7 +602,10 @@ fn check_sweep_target(
         return Err(error::target_cell_out_of_bounds());
     }
     let footprint = *world.get::<Footprint>(actor).expect("施放者應有尺寸");
-    if footprint_cell_distance(origin, footprint, center) != 1 {
+    let distance = footprint_cell_distance(origin, footprint, center);
+    let aligned = (origin.x..origin.x + footprint.width).contains(&center.x)
+        || (origin.y..origin.y + footprint.height).contains(&center.y);
+    if distance < skill.min_range || distance > skill.max_range || !aligned {
         return Err(error::target_too_far());
     }
     let dx = if center.x < origin.x {
@@ -698,7 +765,7 @@ fn evaluate_skill(
     } else {
         match &skill.effect {
             ActiveSkillEffect::Sweep { .. } => {
-                check_sweep_target(world, actor, origin, cell).map(SkillTarget::Sweep)
+                check_sweep_target(world, actor, origin, cell, skill).map(SkillTarget::Sweep)
             }
             ActiveSkillEffect::MoveThenAttack => Ok(SkillTarget::Step),
             ActiveSkillEffect::Loot => {
@@ -707,6 +774,8 @@ fn evaluate_skill(
             ActiveSkillEffect::Mire { .. } => check_cell_skill_target(world, cell, skill)
                 .map(|(terrain, duration)| SkillTarget::Terrain(terrain, duration)),
             ActiveSkillEffect::Attack { .. }
+            | ActiveSkillEffect::DoubleStrike { .. }
+            | ActiveSkillEffect::FireClaw { .. }
             | ActiveSkillEffect::Push { .. }
             | ActiveSkillEffect::Heal { .. } => {
                 check_unit_skill_target(world, actor, origin, cell, skill)
@@ -907,14 +976,16 @@ fn attack_preview(
             AttackResult::Hit => hit_count += 1,
         }
     }
-    let hit_remaining_hp = (*target_hp - hit_damage).max(0);
-    let block_remaining_hp = (*target_hp - block_damage).max(0);
+    let strikes = strike_count(&skill.effect);
+    let hit_remaining_hp = (*target_hp - hit_damage * strikes as i32).max(0);
+    let block_remaining_hp = (*target_hp - block_damage * strikes as i32).max(0);
     let block_segment = if block_count > 0 {
         block_remaining_hp - hit_remaining_hp
     } else {
         0
     };
     AttackPreview {
+        strikes,
         target,
         target_type: target_type.clone(),
         target_hp: *target_hp,
@@ -995,9 +1066,10 @@ fn skill_power(power: i32, power_bonus: i32) -> i32 {
 /// 技能指定的目標種類；以技能種類決定行為時一律經過此函式。
 pub(crate) fn target_kind(effect: &ActiveSkillEffect) -> ActiveSkillTargetKind {
     match effect {
-        ActiveSkillEffect::Attack { .. } | ActiveSkillEffect::Push { .. } => {
-            ActiveSkillTargetKind::Enemy
-        }
+        ActiveSkillEffect::Attack { .. }
+        | ActiveSkillEffect::DoubleStrike { .. }
+        | ActiveSkillEffect::FireClaw { .. }
+        | ActiveSkillEffect::Push { .. } => ActiveSkillTargetKind::Enemy,
         ActiveSkillEffect::Heal { .. } => ActiveSkillTargetKind::Ally,
         ActiveSkillEffect::Sweep { .. }
         | ActiveSkillEffect::Mire { .. }
@@ -1007,7 +1079,8 @@ pub(crate) fn target_kind(effect: &ActiveSkillEffect) -> ActiveSkillTargetKind {
 }
 
 /// 以單位為目標的技能效果，只能由 validate_unit_skill_target 驗證後取得。
-enum UnitSkillEffect {
+#[derive(Clone, Copy)]
+pub(crate) enum UnitSkillEffect {
     Attack {
         hit_bonus: i32,
         /// 推擊沒有直接傷害，因此不具威力來源與加值。
@@ -1094,6 +1167,19 @@ fn check_unit_skill_target(
             ranged: _,
             hit_bonus,
             power_bonus,
+        }
+        | ActiveSkillEffect::DoubleStrike {
+            power_source,
+            ranged: _,
+            hit_bonus,
+            power_bonus,
+        }
+        | ActiveSkillEffect::FireClaw {
+            power_source,
+            ranged: _,
+            hit_bonus,
+            power_bonus,
+            fire_damage: _,
         } => UnitSkillEffect::Attack {
             hit_bonus: *hit_bonus,
             power: Some((*power_source, *power_bonus)),
@@ -1163,7 +1249,17 @@ fn attack_calculation(
     let hit = hit_breakdown_from_position(world, attacker, position, target, skill, hit_bonus);
     let dodge_target = effective_dodge(world, target);
     let block_target = dodge_target + effective_block(world, target);
-    let hit_damage = direct_damage(world, attacker, power);
+    let base_damage = direct_damage(world, attacker, power);
+    let hit_damage = if matches!(skill.effect, ActiveSkillEffect::DoubleStrike { .. }) {
+        base_damage / 2
+    } else {
+        base_damage
+    };
+    let hit_damage = hit_damage
+        + match skill.effect {
+            ActiveSkillEffect::FireClaw { fire_damage, .. } => fire_damage,
+            _ => 0,
+        };
     let reduction = block_reduction(world, target);
     AttackCalculation {
         hit,
@@ -1366,6 +1462,7 @@ fn flanking_bonus(
             .filter_map(|skill_id| definitions.get(skill_id))
             .filter(|support_skill| melee_enemy_skill(&support_skill.effect))
             .any(|support_skill| {
+                let support_skill = effective_skill(world, entity.id(), support_skill);
                 target_side_within_range(
                     world,
                     entity.id(),
@@ -1390,10 +1487,12 @@ fn flanking_bonus(
 }
 
 /// 夾擊只計入近戰攻擊、橫掃與推擊。
-fn melee_enemy_skill(effect: &ActiveSkillEffect) -> bool {
+pub(crate) fn melee_enemy_skill(effect: &ActiveSkillEffect) -> bool {
     matches!(
         effect,
         ActiveSkillEffect::Sweep { .. }
+            | ActiveSkillEffect::FireClaw { ranged: false, .. }
+            | ActiveSkillEffect::DoubleStrike { ranged: false, .. }
             | ActiveSkillEffect::Attack { ranged: false, .. }
             | ActiveSkillEffect::Push { ranged: false, .. }
     )
@@ -1644,6 +1743,36 @@ fn skill_details(skill: &ActiveSkillDef, board: &Board) -> ActiveSkillDetailsVie
             Some(*power_bonus),
             ActiveSkillDetailEffect::Attack,
         ),
+        ActiveSkillEffect::DoubleStrike {
+            power_source,
+            ranged,
+            hit_bonus,
+            power_bonus,
+        } => (
+            Some(*power_source),
+            Some(*ranged),
+            Some(*hit_bonus),
+            Some(*power_bonus),
+            ActiveSkillDetailEffect::DoubleStrike {
+                strikes: strike_count(skill_effect),
+                damage_percent: 50,
+            },
+        ),
+        ActiveSkillEffect::FireClaw {
+            power_source,
+            ranged,
+            hit_bonus,
+            power_bonus,
+            fire_damage,
+        } => (
+            Some(*power_source),
+            Some(*ranged),
+            Some(*hit_bonus),
+            Some(*power_bonus),
+            ActiveSkillDetailEffect::FireClaw {
+                fire_damage: *fire_damage,
+            },
+        ),
         ActiveSkillEffect::Push { ranged, hit_bonus } => (
             None,
             Some(*ranged),
@@ -1736,23 +1865,42 @@ pub(crate) fn validate_passive_skills(
     Ok(())
 }
 
-/// 同類效果取較強值；相同強度保留先出現者，其餘效果及來源供規則與畫面共用。
+/// 反應次數相加並保留首個來源；其他同類效果取較強值，供規則與畫面共用。
 fn resolved_passive_effects<'a>(
     passives: impl IntoIterator<Item = &'a PassiveSkillDef>,
-) -> Vec<(&'a str, &'a PassiveSkillEffect)> {
-    let mut resolved: Vec<(&str, &PassiveSkillEffect)> = Vec::new();
+) -> Vec<(&'a str, PassiveSkillEffect)> {
+    let mut resolved: Vec<(&str, PassiveSkillEffect)> = Vec::new();
     for passive in passives {
         for effect in &passive.effects {
             let kind = std::mem::discriminant(effect);
             if let Some(index) = resolved
                 .iter()
-                .position(|(_, existing)| std::mem::discriminant(*existing) == kind)
+                .position(|(_, existing)| std::mem::discriminant(existing) == kind)
             {
-                let stronger = match (effect, resolved[index].1) {
+                let stronger = match (effect, &mut resolved[index].1) {
                     (
                         PassiveSkillEffect::Flanking { hit_bonus },
                         PassiveSkillEffect::Flanking { hit_bonus: current },
                     ) => hit_bonus > current,
+                    (
+                        PassiveSkillEffect::OpportunityAttack {
+                            reactions_per_round,
+                        },
+                        PassiveSkillEffect::OpportunityAttack {
+                            reactions_per_round: current,
+                        },
+                    )
+                    | (
+                        PassiveSkillEffect::CollisionCounter {
+                            reactions_per_round,
+                        },
+                        PassiveSkillEffect::CollisionCounter {
+                            reactions_per_round: current,
+                        },
+                    ) => {
+                        *current += *reactions_per_round;
+                        continue;
+                    }
                     _ => false,
                 };
                 if !stronger {
@@ -1760,10 +1908,24 @@ fn resolved_passive_effects<'a>(
                 }
                 resolved.remove(index);
             }
-            resolved.push((passive.id.as_str(), effect));
+            resolved.push((passive.id.as_str(), effect.clone()));
         }
     }
     resolved
+}
+
+/// 規則與顯示共用次數疊加、其他效果取最強的結果。
+pub(crate) fn unit_passive_effects(
+    world: &World,
+    entity: Entity,
+) -> Vec<(&str, PassiveSkillEffect)> {
+    let unit = world.get::<Unit>(entity).expect("戰鬥單位應有 Unit");
+    let PassiveSkills { definitions } = world.resource::<PassiveSkills>();
+    resolved_passive_effects(
+        unit.passive_skills
+            .iter()
+            .map(|id| definitions.get(id).expect("被動技能引用已驗證")),
+    )
 }
 
 pub(crate) fn can_receive_healing(world: &World, entity: Entity) -> bool {
@@ -1784,8 +1946,11 @@ pub(crate) fn flanking_hit_bonus<'a>(
     resolved_passive_effects(passives)
         .into_iter()
         .find_map(|(_, effect)| match effect {
-            PassiveSkillEffect::Flanking { hit_bonus } => Some(*hit_bonus),
-            PassiveSkillEffect::Unhealable => None,
+            PassiveSkillEffect::Flanking { hit_bonus } => Some(hit_bonus),
+            PassiveSkillEffect::Unhealable
+            | PassiveSkillEffect::MeleeReach
+            | PassiveSkillEffect::OpportunityAttack { .. }
+            | PassiveSkillEffect::CollisionCounter { .. } => None,
         })
         .unwrap_or(0)
 }
@@ -1801,9 +1966,10 @@ pub(crate) fn active_skill_views(
     unit.active_skills
         .iter()
         .map(|id| definitions.get(id).expect("單位技能已驗證"))
+        .map(|skill| effective_skill(world, entity, skill))
         .map(|skill| crate::model::ActiveSkillView {
             id: skill.id.clone(),
-            details: skill_details(skill, board),
+            details: skill_details(&skill, board),
         })
         .collect()
 }
@@ -1825,7 +1991,7 @@ pub(crate) fn passive_skill_views(
             let effects: Vec<_> = effects
                 .iter()
                 .filter(|(owner, _)| *owner == id)
-                .map(|(_, effect)| (*effect).clone())
+                .map(|(_, effect)| effect.clone())
                 .collect();
             if effects.is_empty() {
                 None

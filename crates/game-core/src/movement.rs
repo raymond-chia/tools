@@ -154,10 +154,29 @@ impl Game {
             .world
             .get::<Footprint>(e)
             .expect("執行移動的單位應具有 Footprint 元件");
-        let log_insert_index = self.world.resource::<Log>().0.len();
+        let mut log_insert_index = self.world.resource::<Log>().0.len();
         let mut actual_path = vec![*path.first().expect("已規劃的移動路徑應包含起點")];
         let exploring = self.world.resource::<Exploration>().mode == BattleMode::Exploring;
         for p in path.iter().copied().skip(1) {
+            if matches!(entry, TerrainEntry::Movement) {
+                let before = self.world.resource::<Log>().0.len();
+                self.opportunity_attacks_before_step(e, p);
+                let after = self.world.resource::<Log>().0.len();
+                if after != before {
+                    if actual_path.len() > 1 {
+                        self.movements.push(MovementTransition {
+                            unit_id: a,
+                            path: actual_path.clone(),
+                            log_insert_index,
+                        });
+                    }
+                    actual_path = vec![*actual_path.last().expect("路徑至少包含目前位置")];
+                    log_insert_index = after;
+                }
+                if self.world.get_entity(e).is_err() {
+                    break;
+                }
+            }
             let grid = self.world.resource::<TerrainGrid>();
             let ends_movement = terrain_ends_movement(grid, p, footprint);
             self.world

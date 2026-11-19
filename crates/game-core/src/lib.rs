@@ -12,6 +12,7 @@ mod game;
 mod gameplay_config;
 mod model;
 mod movement;
+mod reaction;
 mod sight;
 mod skill;
 mod teams;

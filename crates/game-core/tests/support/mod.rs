@@ -12,6 +12,7 @@ pub(super) const TEST_SKILL_ID: &str = "test_skill";
 pub(super) fn tank_ai_profile() -> authoring::AiProfile {
     authoring::AiProfile {
         id: "tank".into(),
+        fleeing_weight: 0,
         distance_preference: authoring::DistancePreference::Near,
         damage_weight: 10,
         friendly_fire_weight: 10,
@@ -326,4 +327,26 @@ pub(super) fn sight_game_in_range(
     }
     Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
         .expect("視線測試應可載入")
+}
+
+// 共用被動技能測試資料建立；同步建立定義與單位引用，避免測試各自拼裝。
+pub(super) fn add_passive_skill(
+    definitions: &mut authoring::Definitions,
+    unit_type: &str,
+    id: &str,
+    effects: &[game_core::PassiveSkillEffect],
+) {
+    definitions.passive_skills.push(
+        serde_json::from_value(serde_json::json!({
+            "id": id, "effects": effects
+        }))
+        .expect("測試被動技能應可載入"),
+    );
+    definitions
+        .unit_types
+        .iter_mut()
+        .find(|unit| unit.id == unit_type)
+        .expect("測試單位種類應存在")
+        .passive_skills
+        .push(id.into());
 }

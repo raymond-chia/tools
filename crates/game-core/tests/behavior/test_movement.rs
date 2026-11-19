@@ -300,3 +300,197 @@ fn movement_game(movement: u32, layout: &AsciiBoard) -> Game {
     game.command(Command::Start).expect("移動測試應可開始");
     game
 }
+
+// 驗證藉機攻擊可設定每輪零至多次反應，耗盡後不再觸發，並於下一輪重置。
+#[test]
+fn opportunity_attack_uses_configured_reactions_and_resets_each_round() {
+    use crate::support::{add_passive_skill, end_turn_and_continue};
+    use game_core::{CombatLogEvent, PassiveSkillEffect, authoring};
+    for quota in [0, 1, 2] {
+        let (mut definitions, map) = skill_test_data(
+            1,
+            1,
+            ActiveSkillEffect::Attack {
+                power_source: PowerSource::Physical,
+                ranged: false,
+                hit_bonus: 0,
+                power_bonus: 0,
+            },
+            Team::Enemy("test_enemy".into()),
+            "
+        TA.....
+        ......B
+        ",
+        );
+        definitions.unit_types[0].movement = 6;
+        definitions.unit_types[1].physical_power = 3;
+        definitions.unit_types[1].hit = 100;
+        add_passive_skill(
+            &mut definitions,
+            "test_target",
+            "opportunity",
+            &[PassiveSkillEffect::OpportunityAttack {
+                reactions_per_round: quota,
+            }],
+        );
+        let mut game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+            .expect("反應次數資料應有效");
+        game.command(Command::Start).expect("戰鬥應可開始");
+        let mut hits = 0;
+        for x in [3, 1, 3, 1, 3, 1] {
+            game.set_random_seed(1);
+            let snapshot = game
+                .command(Command::Move {
+                    actor: ACTOR_ID,
+                    x,
+                    y: 0,
+                })
+                .expect("移動應成功");
+            hits += snapshot.log.iter().filter(|event| matches!(event, CombatLogEvent::Skill { skill, .. } if skill == "opportunity")).count();
+            assert_eq!(unit(&snapshot, ACTOR_ID).x, x);
+        }
+        assert_eq!(hits, quota as usize);
+        let mut next = end_turn_and_continue(&mut game);
+        for _ in 0..3 {
+            if next.turn.actor == Some(ACTOR_ID) {
+                break;
+            }
+            next = end_turn_and_continue(&mut game);
+        }
+        assert_eq!((next.round, next.turn.actor), (2, Some(ACTOR_ID)));
+        game.set_random_seed(1);
+        let snapshot = game
+            .command(Command::Move {
+                actor: ACTOR_ID,
+                x: 3,
+                y: 0,
+            })
+            .expect("下一輪應可移動");
+        assert_eq!(snapshot.log.iter().filter(|event| matches!(event, CombatLogEvent::Skill { skill, .. } if skill == "opportunity")).count(), usize::from(quota > 0));
+    }
+}
+
+// 驗證逐格離開敵方攻擊範圍才觸發藉機攻擊；繞出再回來仍觸發，友軍不觸發，被擊倒則停止移動。
+#[test]
+fn opportunity_attack_respects_reach_alliances_and_lethal_interruptions() {
+    use crate::support::add_passive_skill;
+    use game_core::{CombatLogEvent, PassiveSkillEffect, authoring};
+    let straight_path = "
+        TA.....
+        ......B
+        ";
+    for (name, diagram, reach, allied, hp, (x, y), expected_hits, survives) in [
+        (
+            "範圍內移動",
+            straight_path,
+            true,
+            false,
+            100,
+            (2, 0),
+            0,
+            true,
+        ),
+        (
+            "跨出長兵器範圍",
+            straight_path,
+            true,
+            false,
+            100,
+            (3, 0),
+            1,
+            true,
+        ),
+        (
+            "友軍不觸發",
+            straight_path,
+            false,
+            true,
+            100,
+            (3, 0),
+            0,
+            true,
+        ),
+        (
+            "擊倒前不離開原格",
+            straight_path,
+            false,
+            false,
+            3,
+            (3, 0),
+            1,
+            false,
+        ),
+        // A 必須從右側繞過牆，途中離開 T 的兩格攻擊範圍，再回到 T 下方。
+        (
+            "起終點都在範圍內，途中繞出仍觸發",
+            "
+        TA.
+        .#.
+        ...
+        ",
+            true,
+            false,
+            100,
+            (0, 1),
+            1,
+            true,
+        ),
+    ] {
+        let (mut definitions, mut map) = skill_test_data(
+            1,
+            1,
+            ActiveSkillEffect::Attack {
+                power_source: PowerSource::Physical,
+                ranged: false,
+                hit_bonus: 0,
+                power_bonus: 0,
+            },
+            Team::Enemy("test_enemy".into()),
+            diagram,
+        );
+        definitions.unit_types[0].movement = 6;
+        definitions.unit_types[0].hp = hp;
+        definitions.unit_types[1].physical_power = 3;
+        definitions.unit_types[1].hit = 100;
+        if allied {
+            map.units
+                .iter_mut()
+                .find(|unit| unit.id == TARGET_ID)
+                .expect("應有反應者")
+                .team = Team::Player;
+        }
+        let mut effects = vec![PassiveSkillEffect::OpportunityAttack {
+            reactions_per_round: 1,
+        }];
+        if reach {
+            effects.push(PassiveSkillEffect::MeleeReach);
+        }
+        add_passive_skill(&mut definitions, "test_target", "opportunity", &effects);
+        let mut game = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+            .expect("反應範圍資料應有效");
+        game.command(Command::Start).expect("戰鬥應可開始");
+        game.set_random_seed(1);
+        let snapshot = game
+            .command(Command::Move {
+                actor: ACTOR_ID,
+                x,
+                y,
+            })
+            .expect("應能結算移動與反應");
+        assert_eq!(snapshot.log.iter().filter(|event| matches!(event, CombatLogEvent::Skill { skill, .. } if skill == "opportunity")).count(), expected_hits, "{name}");
+        assert_eq!(
+            snapshot.units.iter().any(|unit| unit.id == ACTOR_ID),
+            survives,
+            "{name}"
+        );
+        if survives {
+            assert_eq!(
+                (unit(&snapshot, ACTOR_ID).x, unit(&snapshot, ACTOR_ID).y),
+                (x, y),
+                "{name}"
+            );
+        } else {
+            assert_eq!(snapshot.movements.len(), 0, "{name}");
+        }
+    }
+}

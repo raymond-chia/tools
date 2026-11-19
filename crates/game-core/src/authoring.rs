@@ -3,7 +3,7 @@
 pub(crate) mod validation;
 use super::{ActiveSkillDef, GridPos, PassiveSkillDef, Team, TerrainPlacement, TerrainTypeDef};
 use crate::error::{self, GameError};
-use crate::model::default_one;
+use crate::model::default_one_i32;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -29,11 +29,11 @@ pub struct UnitType {
     pub ai_profile: String,
     #[serde(default)]
     pub visual: String,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub width: i32,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub height: i32,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub hp: i32,
     #[serde(default)]
     pub movement: u32,
@@ -66,6 +66,9 @@ pub struct UnitType {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct AiProfile {
     pub id: String,
+    /// 每多拉開一格與最近敵人的距離，就增加此權重的逃跑收益。
+    #[serde(default)]
+    pub fleeing_weight: u32,
     #[serde(default)]
     pub distance_preference: DistancePreference,
     #[serde(default = "default_ai_weight")]
@@ -104,9 +107,9 @@ pub struct Map {
     pub cargo: Option<CargoObjective>,
     #[serde(default)]
     pub name: String,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub width: i32,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub height: i32,
     #[serde(default)]
     pub terrains: Vec<TerrainPlacement>,

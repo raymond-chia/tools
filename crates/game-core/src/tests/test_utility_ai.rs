@@ -1676,3 +1676,204 @@ fn healer_ignores_unhealable_ally() {
         5
     );
 }
+
+// 驗證 AI 使用長兵器後的射程，連打兩次，且不會在施放時重複加長射程。
+#[test]
+fn ai_uses_double_strike_with_passive_melee_reach() {
+    for (name, diagram, expected_hits) in [
+        (
+            "兩格可連打",
+            "
+        A.T
+        ",
+            2,
+        ),
+        (
+            "三格不可攻擊",
+            "
+        A..T
+        ",
+            0,
+        ),
+    ] {
+        let mut definitions = definitions();
+        let skill: toml::Value = toml::from_str(
+            "
+            id = 'double_strike'
+            min_range = 1
+            max_range = 1
+            effect = 'double_strike'
+            power_source = 'physical'
+            hit_bonus = 100
+            power_bonus = 0
+        ",
+        )
+        .expect("雙重打擊測試定義應有效");
+        definitions["active_skills"]
+            .as_array_mut()
+            .expect("應有主動技能")
+            .push(skill);
+        let passives = toml::from_str::<toml::Value>(
+            "
+            [[skills]]
+            id = 'reach'
+            effects = [{ effect = 'melee_reach' }]
+        ",
+        )
+        .expect("長兵器測試定義應有效")["skills"]
+            .clone();
+        definitions
+            .as_table_mut()
+            .expect("應為定義表")
+            .insert("passive_skills".into(), passives);
+        let actor = unit_type_mut(&mut definitions, "tank");
+        actor["movement"] = 0.into();
+        actor["physical_power"] = 6.into();
+        actor["active_skills"] = toml::Value::Array(vec!["double_strike".into()]);
+        actor.as_table_mut().expect("應為單位表").insert(
+            "passive_skills".into(),
+            toml::Value::Array(vec!["reach".into()]),
+        );
+        let mut game = duel(&definitions, "tank", diagram);
+        let snapshot = act(&mut game);
+        let hits: Vec<_> = snapshot["log"]
+            .as_array()
+            .expect("應有日誌")
+            .iter()
+            .filter(|event| event["actor"] == ACTOR_ID && event["skill"] == "double_strike")
+            .collect();
+        assert_eq!(hits.len(), expected_hits, "{name}");
+        for hit in hits {
+            assert_eq!(hit["target"], TARGET_ID, "{name}");
+        }
+    }
+}
+
+// 驗證無攻擊技能的同盟逃跑 AI 能遠離最近敵人、避免危險格，且被困住時留在原地。
+#[test]
+fn unarmed_allied_flee_ai_uses_safe_escape_positions() {
+    for (name, diagram, movement, expected) in [
+        (
+            "遠離敵人且不踩友軍",
+            "
+        P.A.T....
+        ",
+            1,
+            (1, 0),
+        ),
+        (
+            "先避開危險地形",
+            "
+        P.A^T..
+        ",
+            2,
+            (1, 0),
+        ),
+        (
+            "被困住不報錯",
+            "
+        ..#...PT
+        ##A#####
+        ########
+        ",
+            2,
+            (2, 1),
+        ),
+    ] {
+        let mut definitions = definitions();
+        let mut flee = definitions["ai_profiles"][0].clone();
+        flee["id"] = "flee".into();
+        for field in [
+            "damage_weight",
+            "friendly_fire_weight",
+            "healing_weight",
+            "positioning_weight",
+            "hit_weight",
+            "pursuit_weight",
+        ] {
+            flee[field] = 0.into();
+        }
+        flee.as_table_mut()
+            .expect("應為傾向表")
+            .insert("fleeing_weight".into(), 100.into());
+        definitions["ai_profiles"]
+            .as_array_mut()
+            .expect("應有傾向陣列")
+            .push(flee);
+        let actor = unit_type_mut(&mut definitions, "tank");
+        actor["ai_profile"] = "flee".into();
+        actor["initiative"] = 100.into();
+        actor["movement"] = movement.into();
+        actor["active_skills"] = toml::Value::Array(Vec::new());
+        let mut map = ascii_map(
+            "flee",
+            diagram,
+            &[
+                ('A', ACTOR_ID, "tank", Team::Enemy("refugees".into())),
+                ('T', TARGET_ID, "target", Team::Enemy("bandits".into())),
+                ('P', ALLY_ID, "target", Team::Player),
+            ],
+        );
+        map.alliances.push(authoring::Alliance {
+            teams: vec![Team::Player, Team::Enemy("refugees".into())],
+        });
+        let mut game = game_on_map(&definitions, map);
+        let snapshot = act(&mut game);
+        let actor = snapshot["units"]
+            .as_array()
+            .expect("應有單位")
+            .iter()
+            .find(|unit| unit["id"] == ACTOR_ID)
+            .expect("難民應存活");
+        assert_eq!(
+            (actor["x"].as_i64(), actor["y"].as_i64()),
+            (Some(expected.0), Some(expected.1)),
+            "{name}"
+        );
+        assert_eq!(action(&snapshot), None, "{name}：難民不攻擊");
+    }
+}
+
+// 驗證逃跑與攻擊共同比較權重，低權重不蓋過攻擊，零權重不產生逃跑行動。
+#[test]
+fn fleeing_weight_competes_with_attack_utility() {
+    for (name, fleeing, damage, expected_x, expected_action) in [
+        ("零逃跑權重", 0, 10, 1, Some(("melee", TARGET_ID))),
+        ("低逃跑權重仍攻擊", 1, 10, 1, Some(("melee", TARGET_ID))),
+        ("高逃跑權重撤離", 100, 10, 0, None),
+        ("純逃跑傾向", 100, 0, 0, None),
+        ("全部為零留在原地", 0, 0, 1, None),
+    ] {
+        let mut definitions = definitions();
+        definitions["active_skills"]
+            .as_array_mut()
+            .expect("應有技能陣列")
+            .iter_mut()
+            .find(|skill| skill["id"].as_str() == Some("melee"))
+            .expect("應有普攻")["power_bonus"] = 0.into();
+        let profile = profile_mut(&mut definitions, "tank");
+        profile["fleeing_weight"] = fleeing.into();
+        profile["damage_weight"] = damage.into();
+        profile["positioning_weight"] = 0.into();
+        let actor = unit_type_mut(&mut definitions, "tank");
+        actor["movement"] = 1.into();
+        actor["physical_power"] = 4.into();
+        actor["hit"] = 100.into();
+        let mut game = duel(
+            &definitions,
+            "tank",
+            "
+        .AT....
+        ",
+        );
+        let snapshot = act(&mut game);
+        assert_eq!(action(&snapshot), expected_action, "{name}");
+        let actor = snapshot["units"]
+            .as_array()
+            .expect("應有單位")
+            .iter()
+            .find(|unit| unit["id"] == ACTOR_ID)
+            .expect("施放者應存活");
+        assert_eq!(actor["x"], expected_x, "{name}");
+    }
+}

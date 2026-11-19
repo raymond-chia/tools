@@ -244,6 +244,10 @@ pub(crate) fn prepare_definitions(
         if skill.min_range < 0 || skill.max_range < skill.min_range {
             return Err(error::invalid_skill_range(&skill.id));
         }
+        if matches!(skill.effect, ActiveSkillEffect::FireClaw { fire_damage, .. } if fire_damage < 0)
+        {
+            return Err(error::numeric_range(&skill.id));
+        }
         if matches!(skill.effect, ActiveSkillEffect::Sweep { .. })
             && (skill.min_range != 1 || skill.max_range != 1)
         {
@@ -290,7 +294,7 @@ pub(crate) fn validate_map_with_definitions(
         passive_skills,
         unit_types: types,
         equipment_stats,
-        ai_profiles: _,
+        ai_profiles,
     } = definitions;
     let authoring::Map {
         name: _,
@@ -307,8 +311,11 @@ pub(crate) fn validate_map_with_definitions(
         let kind = types
             .get(&placement.unit_type)
             .ok_or_else(|| error::unknown_unit_type(&placement.unit_type))?;
-        // 敵方 AI 依主動技能決定行動，沒有技能就無法推進回合。
-        if matches!(placement.team, Team::Enemy(_)) && kind.active_skills.is_empty() {
+        // 沒有技能的 AI 必須有逃跑權重，才能以移動產生行動收益。
+        if matches!(placement.team, Team::Enemy(_))
+            && kind.active_skills.is_empty()
+            && ai_profiles.by_unit_type[&kind.id].fleeing_weight == 0
+        {
             return Err(error::missing_ai_skill(placement.id));
         }
     }
@@ -643,16 +650,61 @@ fn validate_numeric_ranges(
         {
             return Err(error::numeric_range(&unit.id));
         }
+        let reaction_skill = unit
+            .passive_skills
+            .iter()
+            .any(|id| {
+                passive_skills
+                    .get(id)
+                    .expect("被動技能已驗證")
+                    .effects
+                    .iter()
+                    .any(|effect| {
+                        matches!(
+                            effect,
+                            crate::PassiveSkillEffect::OpportunityAttack { .. }
+                                | crate::PassiveSkillEffect::CollisionCounter { .. }
+                        )
+                    })
+            })
+            .then(|| crate::reaction::basic_attack_definition("reaction"));
         for skill in active_skills
             .values()
             .filter(|skill| unit.active_skills.contains(&skill.id))
+            .chain(reaction_skill.iter())
         {
+            let has_reach = unit.passive_skills.iter().any(|id| {
+                passive_skills
+                    .get(id)
+                    .expect("被動技能已驗證")
+                    .effects
+                    .contains(&crate::PassiveSkillEffect::MeleeReach)
+            });
+            if has_reach
+                && crate::skill::melee_enemy_skill(&skill.effect)
+                && skill.max_range == i32::MAX
+            {
+                return Err(error::numeric_range(&unit.id));
+            }
             let (hit_bonus, power) = match skill.effect {
                 ActiveSkillEffect::Attack {
                     power_source,
                     ranged: _,
                     hit_bonus,
                     power_bonus,
+                }
+                | ActiveSkillEffect::DoubleStrike {
+                    power_source,
+                    ranged: _,
+                    hit_bonus,
+                    power_bonus,
+                }
+                | ActiveSkillEffect::FireClaw {
+                    power_source,
+                    ranged: _,
+                    hit_bonus,
+                    power_bonus,
+                    fire_damage: _,
                 } => (hit_bonus, Some((power_source, power_bonus))),
                 ActiveSkillEffect::Push {
                     ranged: _,
@@ -679,6 +731,10 @@ fn validate_numeric_ranges(
                     crate::PowerSource::Magical => stats.magical_power,
                 }) + i64::from(bonus)
             });
+            let fire_damage = match skill.effect {
+                ActiveSkillEffect::FireClaw { fire_damage, .. } => i64::from(fire_damage),
+                _ => 0,
+            };
             if hit < i64::from(i32::MIN)
                 || hit
                     + i64::from(crate::skill::flanking_hit_bonus(
@@ -689,7 +745,7 @@ fn validate_numeric_ranges(
                     + i64::from(gameplay_config::HIT_DIE_SIDES)
                     > i64::from(i32::MAX)
                 || power < i64::from(i32::MIN)
-                || power.max(0) * 2 > i64::from(i32::MAX)
+                || (power.max(0) + fire_damage) * 2 > i64::from(i32::MAX)
                 || matches!(skill.effect, ActiveSkillEffect::Heal { .. })
                     && power.max(0) + i64::from(maximum_hp) > i64::from(i32::MAX)
             {

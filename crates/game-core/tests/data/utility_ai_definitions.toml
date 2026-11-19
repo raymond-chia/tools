@@ -1,5 +1,6 @@
 # Utility AI 專用測試資料：共用傾向與各單位種類的引用。
 [[ai_profiles]]
+fleeing_weight = 0
 id = "tank"
 hit_weight = 0
 pursuit_weight = 0
@@ -10,6 +11,7 @@ healing_weight = 0
 positioning_weight = 10
 
 [[ai_profiles]]
+fleeing_weight = 0
 id = "archer"
 hit_weight = 0
 pursuit_weight = 0
@@ -20,6 +22,7 @@ healing_weight = 0
 positioning_weight = 10
 
 [[ai_profiles]]
+fleeing_weight = 0
 id = "healer"
 hit_weight = 0
 pursuit_weight = 0

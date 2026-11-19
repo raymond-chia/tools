@@ -57,6 +57,8 @@ enum EffectSelection {
     Sweep,
     MoveThenAttack,
     Attack,
+    DoubleStrike,
+    FireClaw,
     Loot,
     Push,
     Mire { terrain: String },
@@ -225,6 +227,19 @@ pub fn edit_definition_from_json(
                     hit_bonus: 0,
                     power_bonus: 0,
                 }),
+                EffectSelection::DoubleStrike => Some(ActiveSkillEffect::DoubleStrike {
+                    power_source: crate::PowerSource::Physical,
+                    ranged: false,
+                    hit_bonus: 0,
+                    power_bonus: 0,
+                }),
+                EffectSelection::FireClaw => Some(ActiveSkillEffect::FireClaw {
+                    power_source: crate::PowerSource::Physical,
+                    ranged: false,
+                    hit_bonus: 0,
+                    power_bonus: 0,
+                    fire_damage: 1,
+                }),
                 EffectSelection::Sweep => Some(ActiveSkillEffect::Sweep {
                     power_source: crate::PowerSource::Physical,
                     hit_bonus: 0,
@@ -238,7 +253,7 @@ pub fn edit_definition_from_json(
                 }),
                 EffectSelection::Mire { terrain } => Some(ActiveSkillEffect::Mire {
                     terrain,
-                    duration: crate::model::default_duration(),
+                    duration: crate::model::default_one_u32(),
                 }),
                 EffectSelection::Heal => Some(ActiveSkillEffect::Heal {
                     power_source: crate::PowerSource::Magical,
@@ -252,8 +267,8 @@ pub fn edit_definition_from_json(
                     remove_entry(&mut definitions.passive_skills, &id);
                     definitions.active_skills.push(ActiveSkillDef {
                         id,
-                        min_range: crate::model::default_one(),
-                        max_range: crate::model::default_one(),
+                        min_range: crate::model::default_one_i32(),
+                        max_range: crate::model::default_one_i32(),
                         effect,
                     });
                 }
@@ -294,9 +309,9 @@ pub fn edit_definition_from_json(
                         .clone(),
                     id,
                     visual: String::new(),
-                    width: crate::model::default_one(),
-                    height: crate::model::default_one(),
-                    hp: crate::model::default_one(),
+                    width: crate::model::default_one_i32(),
+                    height: crate::model::default_one_i32(),
+                    hp: crate::model::default_one_i32(),
                     movement: 0,
                     initiative: 0,
                     dodge: 0,
@@ -312,8 +327,8 @@ pub fn edit_definition_from_json(
                 }),
                 DefinitionCategory::Skills => definitions.active_skills.push(ActiveSkillDef {
                     id,
-                    min_range: crate::model::default_one(),
-                    max_range: crate::model::default_one(),
+                    min_range: crate::model::default_one_i32(),
+                    max_range: crate::model::default_one_i32(),
                     effect: ActiveSkillEffect::Attack {
                         power_source: crate::PowerSource::default(),
                         ranged: false,
@@ -528,6 +543,8 @@ impl Identified for TerrainTypeDef {
 fn is_magical_effect(effect: &ActiveSkillEffect) -> bool {
     match effect {
         ActiveSkillEffect::Attack { power_source, .. }
+        | ActiveSkillEffect::FireClaw { power_source, .. }
+        | ActiveSkillEffect::DoubleStrike { power_source, .. }
         | ActiveSkillEffect::Heal { power_source, .. }
         | ActiveSkillEffect::Sweep { power_source, .. } => {
             *power_source == crate::PowerSource::Magical

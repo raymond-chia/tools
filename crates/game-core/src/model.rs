@@ -160,6 +160,14 @@ pub enum Phase {
     Ended,
 }
 
+/// 每輪各自記錄動作反應與碰撞反應的已用次數；不改變單位的一般行動。
+#[derive(Component, Clone, Copy, Default)]
+pub(crate) struct ReactionState {
+    pub(crate) round: u32,
+    pub(crate) action_reactions_used: u32,
+    pub(crate) collision_reactions_used: u32,
+}
+
 #[derive(Component)]
 pub(crate) struct PendingStrike {
     pub(crate) skill: String,
@@ -207,9 +215,9 @@ pub(crate) struct PassiveSkills {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct ActiveSkillDef {
     pub(crate) id: String,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub(crate) min_range: i32,
-    #[serde(default = "default_one")]
+    #[serde(default = "default_one_i32")]
     pub(crate) max_range: i32,
     #[serde(flatten, deserialize_with = "deserialize_active_skill_effect")]
     pub(crate) effect: ActiveSkillEffect,
@@ -236,6 +244,28 @@ pub enum ActiveSkillEffect {
         #[serde(default)]
         power_bonus: i32,
     },
+    DoubleStrike {
+        #[serde(default)]
+        power_source: PowerSource,
+        #[serde(default)]
+        ranged: bool,
+        #[serde(default)]
+        hit_bonus: i32,
+        #[serde(default)]
+        power_bonus: i32,
+    },
+    FireClaw {
+        #[serde(default)]
+        power_source: PowerSource,
+        #[serde(default)]
+        ranged: bool,
+        #[serde(default)]
+        hit_bonus: i32,
+        #[serde(default)]
+        power_bonus: i32,
+        #[serde(default = "default_one_i32")]
+        fire_damage: i32,
+    },
     MoveThenAttack,
     Push {
         #[serde(default)]
@@ -260,7 +290,7 @@ pub enum ActiveSkillEffect {
     Mire {
         #[serde(default)]
         terrain: String,
-        #[serde(default = "default_duration")]
+        #[serde(default = "default_one_u32")]
         duration: u32,
     },
 }
@@ -269,6 +299,15 @@ pub enum ActiveSkillEffect {
 #[serde(tag = "effect", rename_all = "snake_case")]
 pub enum PassiveSkillEffect {
     Unhealable,
+    MeleeReach,
+    OpportunityAttack {
+        #[serde(default = "default_one_u32")]
+        reactions_per_round: u32,
+    },
+    CollisionCounter {
+        #[serde(default = "default_one_u32")]
+        reactions_per_round: u32,
+    },
     Flanking {
         #[serde(default)]
         hit_bonus: i32,
@@ -464,6 +503,7 @@ pub enum CombatLogEvent {
 
 #[derive(Clone, Serialize)]
 pub struct CollisionUnitLog {
+    pub(crate) damage: i32,
     pub(crate) unit: i64,
     pub(crate) unit_type: String,
     pub(crate) team: Team,
@@ -516,6 +556,13 @@ pub enum ActiveSkillTargetKind {
 pub enum ActiveSkillDetailEffect {
     Loot,
     Attack,
+    DoubleStrike {
+        strikes: u32,
+        damage_percent: i32,
+    },
+    FireClaw {
+        fire_damage: i32,
+    },
     MoveThenAttack,
     Push {
         distance: i32,
@@ -592,6 +639,8 @@ pub struct HealthSegmentsView {
 
 #[derive(Serialize)]
 pub struct AttackPreview {
+    /// 傷害與機率欄位為每擊；血量與血條為整招皆命中或皆格擋的結果。
+    pub strikes: u32,
     pub target: i64,
     pub target_type: String,
     pub target_hp: i32,
@@ -712,11 +761,11 @@ pub struct PassiveSkillView {
     pub effects: Vec<PassiveSkillEffect>,
 }
 
-pub(crate) fn default_one() -> i32 {
+pub(crate) fn default_one_i32() -> i32 {
     1
 }
 
-pub(crate) fn default_duration() -> u32 {
+pub(crate) fn default_one_u32() -> u32 {
     1
 }
 

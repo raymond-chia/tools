@@ -258,9 +258,10 @@ func present_skill_result(event: Dictionary, movement: Dictionary) -> void:
 			hit_tween = animate_unit_hit(event.target)
 	if int(event.collision_damage) > 0:
 		present_unit_text(event.target, "-%d" % int(event.collision_damage), BattleConfig.DAMAGE_TEXT_COLOR, 18.0)
-		for collision_unit in event.collision_units:
-			present_event_health(collision_unit.unit, collision_unit.remaining_hp, collision_unit.max_hp)
-			present_unit_text(collision_unit.unit, "-%d" % int(event.collision_damage), BattleConfig.DAMAGE_TEXT_COLOR)
+	for collision_unit in event.collision_units:
+		present_event_health(collision_unit.unit, collision_unit.remaining_hp, collision_unit.max_hp)
+		if int(collision_unit.damage) > 0:
+			present_unit_text(collision_unit.unit, "-%d" % int(collision_unit.damage), BattleConfig.DAMAGE_TEXT_COLOR)
 			animate_unit_hit(collision_unit.unit)
 	# 技能接續的位移與受擊效果一起播放，停留時間放在完整演出之後。
 	if not movement.is_empty():

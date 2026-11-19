@@ -20,14 +20,15 @@ const FIELD_LABELS := {
 	"effect": "效果", "effects": "基礎效果", "hit_bonus": "命中加成", "power_bonus": "威力加成",
 	"terrain": "產生地形", "duration": "持續回合", "layer": "圖層",
 	"entry_rule": "進入規則", "damage": "傷害", "extra_movement_cost": "額外移動消耗",
+	"fire_damage": "火焰附加傷害", "reactions_per_round": "每輪反應次數",
 	"blocks_sight": "阻擋視線", "dodge_penalty": "閃避減值", "block_penalty": "格擋減值"
 }
-const PASSIVE_EFFECT_LABELS := {"flanking": "近戰夾擊", "unhealable": "無法接受治癒"}
+const PASSIVE_EFFECT_LABELS := {"flanking": "近戰夾擊", "unhealable": "無法接受治癒", "melee_reach": "近戰距離 +1", "opportunity_attack": "藉機攻擊", "collision_counter": "碰撞免傷並反擊"}
 const CHOICES := {
 	"slot": {"one_hand": "單手", "two_hand": "雙手", "armor": "護具", "accessory": "飾品"},
 	"power_source": {"physical": "物理", "magical": "魔法"},
 	# 效果選單依一般主動、魔法、被動排列，與技能清單一致。
-	"effect": {"attack": "攻擊", "sweep": "前方三格橫掃", "loot": "掠奪", "push": "推擊", "move_then_attack": "位移後攻擊", "heal": "治療", "mire": "產生地形", "passive": "被動（組合基礎效果）"},
+	"effect": {"attack": "攻擊", "double_strike": "雙重打擊", "fire_claw": "火焰爪", "sweep": "前方三格橫掃", "loot": "掠奪", "push": "推擊", "move_then_attack": "位移後攻擊", "heal": "治療", "mire": "產生地形", "passive": "被動（組合基礎效果）"},
 	"layer": {"ground": "地面", "overlay": "上層"},
 	"entry_rule": {"walkable": "可通行", "blocked": "不可通行", "instant_down_when_pushed": "推入時陣亡"}
 }
@@ -254,7 +255,7 @@ func refresh_fields() -> void:
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fields.add_child(input)
 		if comparing:
-			add_comparison_value(key, comparison.get(key))
+			add_comparison_value(key, comparison.get(key), category == "unit_types" and comparison.has(key) and value == comparison[key])
 	# 主動與被動技能的欄位可能不同；參考資料獨有的欄位也要顯示。
 	if comparing:
 		for key in comparison:
@@ -265,17 +266,21 @@ func refresh_fields() -> void:
 			var empty := Label.new()
 			empty.text = "—"
 			fields.add_child(empty)
-			add_comparison_value(key, comparison[key])
+			add_comparison_value(key, comparison[key], false)
 	rebuilding = false
 
-# 只排版作者資料，不計算數值差異或遊戲規則。
-func add_comparison_value(key: String, value: Variant) -> void:
+# 只比對作者資料是否相同，不推導遊戲規則。
+func add_comparison_value(key: String, value: Variant, matching: bool) -> void:
 	var label := Label.new()
 	label.custom_minimum_size.x = 320
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.text = comparison_text(key, value)
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.tooltip_text = label.text
+	if matching:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.15, 0.38, 0.22, 0.8)
+		label.add_theme_stylebox_override("normal", style)
 	fields.add_child(label)
 
 func comparison_text(key: String, value: Variant) -> String:

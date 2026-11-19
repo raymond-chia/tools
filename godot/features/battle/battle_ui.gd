@@ -279,6 +279,12 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 				match effect.effect:
 					"flanking":
 						descriptions.append(tr("SKILL_EFFECT_FLANKING") % int(effect.hit_bonus))
+					"melee_reach":
+						descriptions.append(tr("SKILL_EFFECT_MELEE_REACH"))
+					"opportunity_attack":
+						descriptions.append(tr("SKILL_EFFECT_OPPORTUNITY_ATTACK") % int(effect.reactions_per_round))
+					"collision_counter":
+						descriptions.append(tr("SKILL_EFFECT_COLLISION_COUNTER") % int(effect.reactions_per_round))
 					"unhealable":
 						descriptions.append(tr("SKILL_EFFECT_UNHEALABLE"))
 			passive_lines.append("%s：%s" % [tr(BattleConfig.skill_name_key(passive.id)), "\n".join(descriptions)])
@@ -420,6 +426,8 @@ func present_attack_preview(preview: Dictionary, pointer_position: Vector2) -> v
 		return
 	attack_preview_title.text = tr("ATTACK_PREVIEW_TITLE") % localized_unit_name(preview.target_type)
 	attack_preview_damage.text = tr("ATTACK_PREVIEW_DAMAGE") % int(preview.hit_damage)
+	if int(preview.strikes) > 1:
+		attack_preview_damage.text = tr("ATTACK_PREVIEW_MULTI_DAMAGE") % [int(preview.hit_damage), int(preview.strikes)]
 	attack_preview_result_labels.hit.text = tr("ATTACK_PREVIEW_HIT") % int(preview.hit_chance)
 	attack_preview_result_labels.block.text = tr("ATTACK_PREVIEW_BLOCK") % int(preview.block_chance)
 	attack_preview_critical.text = tr("ATTACK_PREVIEW_CRITICAL") % int(preview.critical_chance)
@@ -512,7 +520,7 @@ func format_log(events: Array, start_index := 0) -> String:
 				elif event.push_blocked:
 					entries.append(tr("COMBAT_LOG_PUSH_BLOCKED") % [colored_unit(event.target_type, event.target_team), int(event.collision_damage)])
 					for collision_unit in event.collision_units:
-						entries.append(tr("COMBAT_LOG_COLLISION_DAMAGE") % [colored_unit(collision_unit.unit_type, collision_unit.team), int(event.collision_damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
+						entries.append(tr("COMBAT_LOG_COLLISION_DAMAGE") % [colored_unit(collision_unit.unit_type, collision_unit.team), int(collision_unit.damage), int(collision_unit.remaining_hp), int(collision_unit.max_hp)])
 				if event.downed:
 					entries.append(tr("COMBAT_LOG_UNIT_DEFEATED") % colored_unit(event.target_type, event.target_team))
 				for collision_unit in event.collision_units:
@@ -634,7 +642,11 @@ func localized_skill_details(skill: Dictionary) -> String:
 	if details.power_bonus != null:
 		lines.append(tr("SKILL_POWER_BONUS") % int(details.power_bonus))
 	var effect: Dictionary = details.effect
-	if effect.kind == "sweep":
+	if effect.kind == "double_strike":
+		lines.append(tr("SKILL_EFFECT_DOUBLE_STRIKE") % [int(effect.strikes), int(effect.damage_percent)])
+	elif effect.kind == "fire_claw":
+		lines.append(tr("SKILL_EFFECT_FIRE_CLAW") % int(effect.fire_damage))
+	elif effect.kind == "sweep":
 		lines.append(tr("SKILL_EFFECT_SWEEP"))
 	elif effect.kind == "push":
 		lines.append(tr("SKILL_EFFECT_PUSH") % int(effect.distance))

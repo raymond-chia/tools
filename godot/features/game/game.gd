@@ -5,7 +5,7 @@ const BATTLE_SCENE := preload("res://features/battle/battle.tscn")
 @onready var error_label: Label = $Center/Menu/Error
 
 var data_dir := DataSource.directory()
-var map_path := "maps/ch1.toml"
+var map_path := "maps/prelude-1.toml"
 
 func _ready() -> void:
 	start_game.call_deferred()
