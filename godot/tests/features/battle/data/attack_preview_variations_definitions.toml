@@ -81,7 +81,7 @@ effect="attack"
 
 [[unit_types]]
 ai_profile="near"
-id="aria"
+id="test1"
 visual="fighter.svg"
 hp=100
 movement=0
@@ -136,7 +136,7 @@ active_skills=["preview_5","preview_2","preview_7","preview_16","preview_0","set
 accessory = "test_reduction_2"
 [[unit_types]]
 ai_profile="near"
-id="lyra"
+id="test2"
 visual="archer.svg"
 hp=20
 movement=0

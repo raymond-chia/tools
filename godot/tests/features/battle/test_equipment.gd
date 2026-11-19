@@ -19,9 +19,9 @@ func setup_test() -> void:
 func test_unit_details_show_equipment_and_resolved_stats() -> void:
 	var cases := [
 		# 劍盾重甲與戒指的各項能力加總後顯示在戰士詳情。
-		{"id": 1, "cell": Vector2i(1, 1), "hp": "16 / 16", "physical_power": "5", "magical_power": "3", "dodge": "2", "block": "5", "block_reduction": "3", "equipment": ["單手劍", "盾牌", "重甲", "魔力戒指"]},
+		{"id": 1, "cell": Vector2i(1, 1), "hp": "16 / 16", "physical_power": "5", "magical_power": "3", "dodge": "2", "block": "5", "block_reduction": "3", "equipment": ["單手劍", "盾牌", "重甲", "power_ring"]},
 		# 輕甲法師保留單位閃避，但不具有格擋或減傷。
-		{"id": 2, "cell": Vector2i(0, 2), "hp": "14 / 14", "physical_power": "1", "magical_power": "11", "dodge": "2", "block": "0", "block_reduction": "0", "equipment": ["法杖", "無", "輕甲", "魔力戒指"]},
+		{"id": 2, "cell": Vector2i(0, 2), "hp": "14 / 14", "physical_power": "1", "magical_power": "11", "dodge": "2", "block": "0", "block_reduction": "0", "equipment": ["法杖", "無", "輕甲", "power_ring"]},
 		# 無裝備單位明確顯示四個空欄位，格擋與減傷為零。
 		{"id": 3, "cell": Vector2i(2, 1), "hp": "50 / 50", "physical_power": "0", "magical_power": "0", "dodge": "2", "block": "0", "block_reduction": "0", "equipment": ["無", "無", "無", "無"]},
 	]
@@ -36,14 +36,14 @@ func test_unit_details_show_equipment_and_resolved_stats() -> void:
 			var slot: String = ["main_hand", "off_hand", "armor", "accessory"][index]
 			assert_str(battle.ui.detail_values[slot].text).override_failure_message("單位 %d：%s 配裝應正確顯示" % [test_case.id, slot]).is_equal(test_case.equipment[index])
 
-# 驗證裝備名稱、HP 與各項威力／防禦欄位標題隨語系切換，裝備 ID 由顯示層翻譯。
+# 驗證裝備名稱、HP 與各項威力／防禦欄位標題隨語系切換；無翻譯的測試戒指顯示原 ID。
 func test_equipment_details_use_current_locale() -> void:
 	battle.world.inspection_clicked.emit(ACTOR_ID, Vector2i(1, 1))
 	var cases := [
 		# 繁體中文顯示裝備名稱與防禦欄位意義。
-		{"locale": "zh_TW", "sword": "單手劍", "shield": "盾牌", "armor": "重甲", "ring": "魔力戒指", "labels": ["HP", "物理威力", "魔法威力", "閃避", "格擋", "格擋減傷"]},
+		{"locale": "zh_TW", "sword": "單手劍", "shield": "盾牌", "armor": "重甲", "ring": "power_ring", "labels": ["HP", "物理威力", "魔法威力", "閃避", "格擋", "格擋減傷"]},
 		# 英文顯示同一配裝與欄位語意。
-		{"locale": "en", "sword": "Sword", "shield": "Shield", "armor": "Heavy armor", "ring": "Magic ring", "labels": ["HP", "Physical power", "Magical power", "Dodge", "Block", "Block reduction"]},
+		{"locale": "en", "sword": "Sword", "shield": "Shield", "armor": "Heavy armor", "ring": "power_ring", "labels": ["HP", "Physical power", "Magical power", "Dodge", "Block", "Block reduction"]},
 	]
 	for test_case in cases:
 		TranslationServer.set_locale(test_case.locale)

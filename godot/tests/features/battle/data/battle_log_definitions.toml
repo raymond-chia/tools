@@ -43,7 +43,7 @@ effect="attack"
 
 [[unit_types]]
 ai_profile="near"
-id="aria"
+id="test1"
 visual="fighter.svg"
 hp=50
 movement=3

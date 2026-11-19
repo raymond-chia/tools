@@ -7,7 +7,7 @@ height=7
 [[units]]
 facing = "right"
 id=1
-unit_type="aria"
+unit_type="test1"
 team="player"
 x=1
 y=3
@@ -42,7 +42,7 @@ y=3
 [[units]]
 facing = "right"
 id=5
-unit_type="lyra"
+unit_type="test2"
 min_difficulty = "easy"
 team={ enemy="targets" }
 x=3

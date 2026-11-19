@@ -65,7 +65,7 @@ off_hand = "test_guard_10"
 
 [[unit_types]]
 ai_profile="near"
-id="aria"
+id="test1"
 visual="fighter.svg"
 width=1
 height=1

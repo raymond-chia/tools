@@ -88,7 +88,7 @@ func test_skill_resolution_log() -> void:
 	var result_names := {"dodge": "[color=#f0c96a]閃避[/color]", "block": "[color=#f0c96a]格擋[/color]", "hit": "[color=#f0c96a]命中[/color]"}
 	var critical_text := "，暴擊" if event.critical else ""
 	var log_text: String = formatted_log()
-	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「%s」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_ARIA"), tr(BattleConfig.skill_name_key("precise_strike")), tr("UNIT_NAME_WOLF_A")])
+	assert_str(log_text).contains("[color=#63a9ff]%s[/color] 使用「%s」影響 [color=#ff6868]%s[/color]" % [tr("UNIT_NAME_TEST1"), tr(BattleConfig.skill_name_key("precise_strike")), tr("UNIT_NAME_WOLF_A")])
 	assert_str(log_text).contains("D20 擲骰 %d + 命中加值 104 = 命中總值 %d" % [int(event.roll), int(event.hit_total)])
 	assert_str(log_text).contains("目標防禦：閃避門檻 12／格擋門檻 15")
 	assert_str(log_text).contains("結果：%s%s，%d 點傷害，HP %d/10000" % [result_names[event.result], critical_text, expected_damage, 10000 - expected_damage])
@@ -122,7 +122,7 @@ func test_spikes_damage_log() -> void:
 	assert_int(int(actor.hp)).override_failure_message("踩到地刺後 snapshot 應反映剩餘生命").is_equal(47)
 	assert_int(int(actor.x)).is_equal(0)
 	assert_int(int(actor.y)).override_failure_message("角色應停在觸發地刺的格子").is_equal(2)
-	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]%s[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50" % tr("UNIT_NAME_ARIA"))
+	assert_str(formatted_log()).override_failure_message("戰鬥紀錄應顯示地刺傷害與剩餘生命").contains("[color=#63a9ff]%s[/color] 踩到「地刺」，受到 3 點傷害，HP 47/50" % tr("UNIT_NAME_TEST1"))
 
 # 驗證六次真實攻擊與自動回合完成後，長戰鬥紀錄仍可拖曳捲動。
 func test_battle_log_can_be_dragged_to_scroll() -> void:

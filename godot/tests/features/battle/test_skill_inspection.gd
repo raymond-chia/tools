@@ -59,7 +59,7 @@ func test_passive_skill_is_inspectable_but_not_selectable() -> void:
 		var core := TacticalGame.new()
 		var definitions: Dictionary = JSON.parse_string(core.definitions_to_json(FileAccess.get_file_as_string(TEST_DEFINITIONS)))
 		for unit_type in definitions.unit_types:
-			if unit_type.id == "aria": unit_type.passive_skills = [test_case.passive]
+			if unit_type.id == "test1": unit_type.passive_skills = [test_case.passive]
 		var map: Dictionary = JSON.parse_string(core.map_to_json(FileAccess.get_file_as_string(TEST_MAP)))
 		var documents: Dictionary = JSON.parse_string(core.documents_from_json(JSON.stringify(definitions), JSON.stringify(map)))
 		runner.scene().free()

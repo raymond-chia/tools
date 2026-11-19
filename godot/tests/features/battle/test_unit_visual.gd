@@ -12,7 +12,7 @@ func test_unit_selects_shared_art() -> void:
 	var runner := scene_runner(auto_free(editor))
 	await runner.simulate_frames(1)
 	var unit_page = editor.definition_pages[0]
-	unit_page.select_id("aria")
+	unit_page.select_id("test1")
 	var selector := visual_selector(unit_page)
 	var sections: Array = []
 	var wagon_index := -1

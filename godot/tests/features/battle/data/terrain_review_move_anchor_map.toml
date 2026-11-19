@@ -27,7 +27,7 @@ y=0
 [[units]]
 facing = "right"
 id=2
-unit_type="aria"
+unit_type="test1"
 min_difficulty = "easy"
 team={enemy="targets"}
 x=6

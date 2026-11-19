@@ -134,7 +134,7 @@ func test_editor_places_units_with_selected_facing() -> void:
 	await runner.simulate_frames(1)
 	editor.palette_tabs.current_tab = 2
 	editor.mode_list.select(0)
-	editor.select_text(editor.unit_list, "aria")
+	editor.select_text(editor.unit_list, "test1")
 	assert_bool(editor.placement_facing.visible).is_true()
 	for test_case in [{"cell": Vector2i(0, 1), "option": 1, "facing": "left"}, {"cell": Vector2i(1, 1), "option": 0, "facing": "right"}]:
 		editor.placement_facing.select(test_case.option)

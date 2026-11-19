@@ -9,7 +9,7 @@ kind="spikes"
 [[units]]
 facing = "right"
 id=1
-unit_type="aria"
+unit_type="test1"
 team="player"
 x=0
 y=1

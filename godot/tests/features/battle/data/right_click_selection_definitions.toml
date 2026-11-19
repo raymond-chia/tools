@@ -36,7 +36,7 @@ entry_rule="walkable"
 extra_movement_cost=1
 [[unit_types]]
 ai_profile="near"
-id="aria"
+id="test1"
 visual="fighter.svg"
 hp=10
 movement=4
@@ -50,7 +50,7 @@ off_hand = "test_guard_3"
 
 [[unit_types]]
 ai_profile="near"
-id="lyra"
+id="test2"
 visual="archer.svg"
 hp=8
 movement=5

@@ -71,7 +71,7 @@ effects = [{ effect = "flanking", hit_bonus = 2 }, { effect = "unhealable" }]
 
 [[unit_types]]
 ai_profile="near"
-id="aria"
+id="test1"
 passive_skills=["pack_flanking"]
 visual="fighter.svg"
 hp=10
