@@ -38,6 +38,7 @@ func _ready() -> void:
 	ui.delay_selection_requested.connect(_on_delay_selection_requested)
 	ui.delay_target_selected.connect(_on_delay_target_selected)
 	ui.turn_order_focus_requested.connect(_on_turn_order_focus_requested)
+	ui.turn_order_inspection_requested.connect(_on_turn_order_inspection_requested)
 	ui.current_unit_focus_requested.connect(_on_current_unit_focus_requested)
 	ui.inspection_closed.connect(_close_inspection)
 	ui.skill_inspection_requested.connect(_on_skill_inspection_requested)
@@ -232,6 +233,13 @@ func _on_turn_order_focus_requested(unit_id: int) -> void:
 		send({"type": "select_unit", "actor": unit_id})
 	world.focus_unit(unit_id)
 	if world.unit_id_at_cell(inspected_cell) == 0:
+		return
+	inspected_cell = world.unit_cell(unit_id)
+	inspected_skill = ""
+	present()
+
+func _on_turn_order_inspection_requested(unit_id: int) -> void:
+	if input_is_locked():
 		return
 	inspected_cell = world.unit_cell(unit_id)
 	inspected_skill = ""

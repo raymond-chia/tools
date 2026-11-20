@@ -5,6 +5,7 @@ signal end_turn_requested
 signal delay_selection_requested
 signal delay_target_selected(unit_id: int)
 signal turn_order_focus_requested(unit_id: int)
+signal turn_order_inspection_requested(unit_id: int)
 signal current_unit_focus_requested
 signal inspection_closed
 signal skill_inspection_requested(skill_id: String)
@@ -373,6 +374,7 @@ func create_turn_order_slot(unit_id: int) -> VBoxContainer:
 	button.mouse_entered.connect(_on_delay_target_hovered.bind(marker, true))
 	button.mouse_exited.connect(_on_delay_target_hovered.bind(marker, false))
 	button.pressed.connect(_on_turn_order_pressed.bind(unit_id))
+	button.gui_input.connect(_on_turn_order_gui_input.bind(unit_id))
 	slot.add_child(button)
 	turn_order.add_child(slot)
 	return slot
@@ -389,6 +391,11 @@ func _on_turn_order_pressed(unit_id: int) -> void:
 		delay_target_selected.emit(unit_id)
 		return
 	turn_order_focus_requested.emit(unit_id)
+
+func _on_turn_order_gui_input(event: InputEvent, unit_id: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		turn_order_inspection_requested.emit(unit_id)
+		turn_order_slots[unit_id].get_node("Button").accept_event()
 
 func _on_actor_portrait_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and event.double_click:
