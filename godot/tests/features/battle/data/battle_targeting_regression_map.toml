@@ -1,3 +1,9 @@
+teams = [
+    { team = "player", color = "#63a9ff" },
+    { team = { enemy = "targets" }, color = "#ff6868" },
+    { team = { enemy = "ogres" }, color = "#ff6868" },
+]
+
 name="battle_targeting_regression"
 
 width=6

@@ -68,6 +68,7 @@ fn with_player_ally(mut map: authoring::Map) -> authoring::Map {
     map.alliances = vec![authoring::Alliance {
         teams: vec![Team::Player, team],
     }];
+    crate::support::configure_teams(&mut map);
     map
 }
 

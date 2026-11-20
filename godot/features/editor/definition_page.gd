@@ -52,10 +52,6 @@ var comparison_id := ""
 func _ready() -> void:
 	$ListPanel/Title.text = TITLES[category] + "清單"
 	entries.item_clicked.connect(compare_clicked_entry)
-	$FormPanel/Comparison/Close.pressed.connect(func():
-		comparison_id = ""
-		refresh_fields()
-	)
 	entries.item_selected.connect(func(_index: int): refresh_fields())
 	entries.set_drag_forwarding(begin_entry_drag, can_drop_entry, drop_entry)
 	$ListPanel/Actions/Add.pressed.connect(func(): open_create_dialog(false))
@@ -191,8 +187,6 @@ func refresh_fields() -> void:
 	if comparison.has("effects"): comparison["effect"] = "passive"
 	if comparison.is_empty(): comparison_id = ""
 	var comparing := not comparison_id.is_empty()
-	$FormPanel/Comparison.visible = comparing
-	$FormPanel/Comparison/Title.text = "比對：" + comparison_id + "（唯讀）"
 	fields.columns = 3 if comparing else 2
 	var entry := selected_definition().duplicate()
 	if entry.has("effects"): entry["effect"] = "passive"
@@ -255,7 +249,7 @@ func refresh_fields() -> void:
 		input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		fields.add_child(input)
 		if comparing:
-			add_comparison_value(key, comparison.get(key), category == "unit_types" and comparison.has(key) and value == comparison[key])
+			add_comparison_value(key, comparison.get(key), comparison.has(key) and value == comparison[key])
 	# 主動與被動技能的欄位可能不同；參考資料獨有的欄位也要顯示。
 	if comparing:
 		for key in comparison:
@@ -269,10 +263,13 @@ func refresh_fields() -> void:
 			add_comparison_value(key, comparison[key], false)
 	rebuilding = false
 
+func close_comparison() -> void:
+	comparison_id = ""
+	refresh_fields()
+
 # 只比對作者資料是否相同，不推導遊戲規則。
 func add_comparison_value(key: String, value: Variant, matching: bool) -> void:
 	var label := Label.new()
-	label.custom_minimum_size.x = 320
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.text = comparison_text(key, value)
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -281,7 +278,19 @@ func add_comparison_value(key: String, value: Variant, matching: bool) -> void:
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(0.15, 0.38, 0.22, 0.8)
 		label.add_theme_stylebox_override("normal", style)
-	fields.add_child(label)
+	if key == "id":
+		var id_row := HBoxContainer.new()
+		id_row.custom_minimum_size.x = 320
+		id_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		id_row.add_child(label)
+		var close_button := Button.new()
+		close_button.text = "關閉比對"
+		close_button.pressed.connect(close_comparison)
+		id_row.add_child(close_button)
+		fields.add_child(id_row)
+	else:
+		label.custom_minimum_size.x = 320
+		fields.add_child(label)
 
 func comparison_text(key: String, value: Variant) -> String:
 	if value == null: return "—"

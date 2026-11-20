@@ -89,7 +89,14 @@ static func update_unit_cargo(node: Node2D, unit: Dictionary) -> void:
 	marker.position = Vector2(width * 0.5 + 14.0, BattleConfig.HEALTH_BAR_HEIGHT * 0.5)
 	marker.visible = unit.carrying_cargo
 
-static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: bool) -> void:
+# 隊伍設定已由核心驗證；這裡只依身分查找顯示資料。
+static func team_definition(teams: Array, team: Variant) -> Dictionary:
+	return teams.filter(func(entry: Dictionary): return typeof(entry.team) == typeof(team) and entry.team == team)[0]
+
+static func team_color(teams: Array, team: Variant) -> Color:
+	return Color(team_definition(teams, team).color)
+
+static func style_unit_node(node: Node2D, large: bool, color: Color, selected: bool) -> void:
 	var base_scale := Vector2.ONE * BattleConfig.ART_SCALE * (BattleConfig.LARGE_UNIT_BASE_RATIO if large else 1.0)
 	var attack_preview_ring: Sprite2D = node.get_node("Visual/AttackPreviewRing")
 	attack_preview_ring.scale = base_scale * BattleConfig.ATTACK_PREVIEW_RING_SCALE
@@ -100,7 +107,7 @@ static func style_unit_node(node: Node2D, large: bool, team: Variant, selected: 
 	selection.visible = selected
 	var base: Sprite2D = node.get_node("Visual/Base")
 	base.scale = base_scale
-	base.modulate = Color("ff6868") if BattleConfig.is_enemy(team) else Color("63a9ff")
+	base.modulate = color
 	var body: Sprite2D = node.get_node("Visual/Body")
 	body.scale = Vector2.ONE * BattleConfig.ART_SCALE
 	body.position.y = -body.get_rect().end.y * body.scale.y

@@ -34,6 +34,7 @@ fn encounter_game(diagram: &str, reverse: bool) -> (Game, Vec<(char, i64)>) {
     map.alliances = vec![authoring::Alliance {
         teams: vec![Team::Player, ally_team],
     }];
+    crate::support::configure_teams(&mut map);
     if reverse {
         map.units.reverse();
     }

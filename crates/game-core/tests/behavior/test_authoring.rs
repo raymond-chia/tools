@@ -127,6 +127,10 @@ fn enemy_without_skill_rejected_on_load() {
         }],
     };
     let map = authoring::Map {
+        teams: vec![TeamDefinition {
+            team: Team::Enemy("test_enemy".into()),
+            color: "#ff6868".into(),
+        }],
         alliances: Vec::new(),
         victory: authoring::OutcomeGroup {
             mode: authoring::ConditionMode::All,
@@ -426,11 +430,135 @@ fn difficulty_map() -> serde_json::Value {
 }
 
 // 作者格式案例明確提供殲滅戰勝敗設定。
-const OUTCOME_SETTINGS: &str = r#"
+const OUTCOME_SETTINGS: &str = r##"
+[[teams]]
+team = "player"
+color = "#63a9ff"
+[[teams]]
+team = { enemy = "test_enemy" }
+color = "#ff6868"
 [victory]
 mode = "all"
 conditions = [{ type = "all_enemies_defeated" }]
 [defeat]
 mode = "any"
 conditions = [{ type = "team_defeated", team = "player" }]
-"#;
+"##;
+
+// 玩家與友軍禁止改色；敵方同盟含重疊群組須一次改色，且存檔重載保留結果。
+#[cfg(feature = "editor")]
+#[test]
+fn editor_team_colors_follow_alliances_and_survive_saving() {
+    let definitions = authoring::definitions_to_json(AI_DEFINITIONS).expect("測試定義應可轉換");
+    let mut map = difficulty_map();
+    let teams = map["teams"].as_array_mut().expect("測試地圖應有隊伍設定");
+    for (id, color) in [
+        ("friends", "#68d98b"),
+        ("enemy_b", "#ff6868"),
+        ("enemy_c", "#ff6868"),
+        ("independent", "#e0aa44"),
+    ] {
+        teams.push(serde_json::json!({"team": {"enemy": id}, "color": color}));
+    }
+    map["alliances"] = serde_json::json!([
+        {"teams": ["player", {"enemy": "friends"}]},
+        {"teams": [{"enemy": "test_enemy"}, {"enemy": "enemy_b"}]},
+        {"teams": [{"enemy": "enemy_b"}, {"enemy": "enemy_c"}]}
+    ]);
+    let factions: serde_json::Value = serde_json::from_str(
+        &editor::factions_from_json(&map.to_string()).expect("隊伍設定應可列出派系"),
+    )
+    .expect("派系回應應為 JSON");
+    assert_eq!(
+        factions["factions"],
+        serde_json::json!(["test_enemy", "friends", "enemy_b", "enemy_c", "independent"])
+    );
+    for (team, allowed) in [
+        (serde_json::json!("player"), false),
+        (serde_json::json!({"enemy": "friends"}), false),
+        (serde_json::json!({"enemy": "test_enemy"}), true),
+    ] {
+        let command = serde_json::json!({"action": "set_color", "team": team, "color": "#AA55CC"});
+        let result =
+            editor::edit_team_from_json(&definitions, &map.to_string(), &command.to_string());
+        if !allowed {
+            assert_eq!(
+                result
+                    .err()
+                    .expect("固定色必須拒絕修改")
+                    .response_json()
+                    .contains("invalid_team_settings"),
+                true
+            );
+            continue;
+        }
+        let result: serde_json::Value =
+            serde_json::from_str(&result.expect("敵軍應能改色")).expect("回應應為 JSON");
+        assert_eq!(result["changed"], true);
+        for definition in result["snapshot"]["teams"]
+            .as_array()
+            .expect("快照應包含隊伍")
+        {
+            let expected = match definition["team"]["enemy"].as_str() {
+                Some("friends") => "#68d98b",
+                Some("independent") => "#e0aa44",
+                Some(_) => "#aa55cc",
+                None => "#63a9ff",
+            };
+            assert_eq!(definition["color"], expected);
+        }
+        let (_, saved) = editor::documents_from_json(&definitions, &result["map"].to_string())
+            .expect("改色後應能儲存");
+        let reloaded: serde_json::Value =
+            serde_json::from_str(&authoring::map_to_json(&saved).expect("儲存資料應可重載"))
+                .expect("重載應為 JSON");
+        assert_eq!(reloaded["teams"], result["map"]["teams"]);
+        let repeated: serde_json::Value = serde_json::from_str(
+            &editor::edit_team_from_json(&definitions, &reloaded.to_string(), &command.to_string())
+                .expect("重複套用顏色應成功"),
+        )
+        .expect("回應應為 JSON");
+        assert_eq!(repeated["changed"], false);
+    }
+}
+
+// 作者輸入拒絕非法顏色、重複或缺少隊伍、固定色錯誤與敵方同盟顏色不一致。
+#[test]
+fn authoring_rejects_invalid_team_settings() {
+    let cases: [fn(&mut serde_json::Value); 6] = [
+        |map| map["teams"][0]["color"] = "red".into(),
+        |map| map["teams"][0]["color"] = "#ffffff".into(),
+        |map| {
+            map["teams"].as_array_mut().expect("隊伍應為陣列").pop();
+        },
+        |map| {
+            let duplicate = map["teams"][0].clone();
+            map["teams"]
+                .as_array_mut()
+                .expect("隊伍應為陣列")
+                .push(duplicate);
+        },
+        |map| {
+            map["alliances"] = serde_json::json!([{ "teams": ["player", {"enemy": "test_enemy"}] }])
+        },
+        |map| {
+            map["teams"]
+                .as_array_mut()
+                .expect("隊伍應為陣列")
+                .push(serde_json::json!({"team": {"enemy": "enemy_b"}, "color": "#ffaa66"}));
+            map["alliances"] =
+                serde_json::json!([{ "teams": [{"enemy": "test_enemy"}, {"enemy": "enemy_b"}] }]);
+        },
+    ];
+    for change in cases {
+        let mut map = difficulty_map();
+        change(&mut map);
+        let map: authoring::Map = serde_json::from_value(map).expect("測試地圖應符合資料結構");
+        let definitions: authoring::Definitions =
+            toml::from_str(AI_DEFINITIONS).expect("測試定義應有效");
+        let error = Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+            .err()
+            .expect("無效隊伍設定應被拒絕");
+        assert_eq!(error.id(), "invalid_team_settings");
+    }
+}

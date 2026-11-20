@@ -1,3 +1,8 @@
+teams = [
+    { team = "player", color = "#63a9ff" },
+    { team = { enemy = "targets" }, color = "#ff6868" },
+]
+
 # 相機與探索操作專用：敵人距離超過接敵範圍。
 name="combat_presentation"
 width=24

@@ -535,6 +535,7 @@ fn step_through_the_sedge_data(
     if let Some(blocker) = map.units.iter_mut().find(|unit| unit.id == BLOCKER_ID) {
         blocker.team = blocker_team;
     }
+    crate::support::configure_teams(&mut map);
     (definitions, map)
 }
 

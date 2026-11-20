@@ -1,3 +1,8 @@
+teams = [
+    { team = "player", color = "#63a9ff" },
+    { team = { enemy = "targets" }, color = "#ff6868" },
+]
+
 # 演出測試專用：推動終點區分地形傷害、墜落與撞到其他單位。
 name="combat_presentation"
 width=8

@@ -252,7 +252,8 @@ pub(super) fn map_from_ascii_board(
             }
         })
         .collect();
-    authoring::Map {
+    let mut map = authoring::Map {
+        teams: Vec::new(),
         alliances: Vec::new(),
         victory: authoring::OutcomeGroup {
             mode: authoring::ConditionMode::All,
@@ -268,7 +269,42 @@ pub(super) fn map_from_ascii_board(
         height: board.1,
         terrains: terrains.clone(),
         units: placements,
+    };
+    configure_teams(&mut map);
+    map
+}
+
+// 建立案例專用隊伍設定；測試改變單位或同盟後須明確同步呼叫。
+pub(super) fn configure_teams(map: &mut authoring::Map) {
+    let mut teams = vec![Team::Player];
+    for team in map
+        .units
+        .iter()
+        .map(|unit| &unit.team)
+        .chain(map.alliances.iter().flat_map(|alliance| &alliance.teams))
+    {
+        if !teams.contains(team) {
+            teams.push(team.clone());
+        }
     }
+    map.teams = teams
+        .into_iter()
+        .map(|team| {
+            let color = if team == Team::Player {
+                "#63a9ff"
+            } else if map.alliances.iter().any(|alliance| {
+                alliance.teams.contains(&Team::Player) && alliance.teams.contains(&team)
+            }) {
+                "#68d98b"
+            } else {
+                "#ff6868"
+            };
+            game_core::TeamDefinition {
+                team,
+                color: color.into(),
+            }
+        })
+        .collect();
 }
 
 // 從公開快照查詢單位，避免讓行為測試依賴 ECS 元件。
@@ -324,6 +360,7 @@ pub(super) fn sight_game_in_range(
             y: 0,
         });
         map.width += 1;
+        configure_teams(&mut map);
     }
     Game::from_authoring(definitions, map, game_core::authoring::Difficulty::Easy)
         .expect("視線測試應可載入")

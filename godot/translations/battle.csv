@@ -8,6 +8,7 @@ ATTACK_PREVIEW_DAMAGE_INITIAL,傷害 0,Damage 0
 ATTACK_PREVIEW_HEADING,攻擊預覽,Attack Preview
 ATTACK_PREVIEW_HIT,命中 %d%%,Hit %d%%
 ATTACK_PREVIEW_HIT_INITIAL,命中 0%,Hit 0%
+ATTACK_PREVIEW_MULTI_DAMAGE,每擊傷害 %d × %d（機率為每擊）,Damage %d × %d (chances per strike)
 ATTACK_PREVIEW_RESOURCES,HP %d / %d｜MP %d,HP %d / %d | MP %d
 ATTACK_PREVIEW_TITLE,攻擊預覽：%s,Attack preview: %s
 ATTACK_RESULT_BLOCK,格擋,Block
@@ -119,6 +120,7 @@ ERROR_INVALID_MAP_DIMENSIONS,地圖尺寸必須為正數,Map dimensions must be 
 ERROR_INVALID_PASSIVE_SKILLS,被動技能設定無效；請檢查技能引用、重複項目與效果數值,Invalid passive skills; check skill references duplicates and effect values
 ERROR_INVALID_SKILL_RANGE,技能射程設定無效,Skill range is invalid
 ERROR_INVALID_SKILL_TERRAIN,技能必須指定已定義的地形,Skill must specify a defined terrain type
+ERROR_INVALID_TEAM_SETTINGS,隊伍設定或顏色無效,Invalid team settings or colors
 ERROR_INVALID_TERRAIN_VALUES,地形傷害、閃避懲罰與格擋懲罰不可為負數,"Terrain damage, dodge penalty, and block penalty cannot be negative"
 ERROR_INVALID_UNIT_TYPE,單位定義的 ID、HP 或佔用尺寸無效,"Unit type ID, HP, or size is invalid"
 ERROR_JSON_SERIALIZE,無法轉換資料,Could not convert data
@@ -156,21 +158,31 @@ GAME_DATA_READ_ERROR,無法讀取戰鬥資料：%s,Unable to read battle data: %
 HEAL_PREVIEW_AMOUNT,回復 %d HP,Restore %d HP
 HEAL_PREVIEW_TITLE,治療預覽：%s,Healing preview: %s
 LANGUAGE_MENU,語言：%s,Language: %s
+SKILL_EFFECT_COLLISION_COUNTER,每輪最多 %d 次碰撞免疫自身碰撞傷害，並普攻直接碰撞自己的敵人；須在普攻範圍內。,Ignore own collision damage and make a basic attack against the colliding enemy within basic attack reach; up to %d times per round.
+SKILL_EFFECT_DOUBLE_STRIKE,連打 %d 次，每擊 %d%% 傷害；分別判定命中與格擋。,Strike %d times at %d%% damage each; resolve each hit and block independently.
+SKILL_EFFECT_FIRE_CLAW,攻擊附加 %d 點火焰傷害；一同計算格擋與暴擊。,Add %d fire damage; apply block and critical to the combined damage.
 SKILL_EFFECT_FLANKING,被動：近戰夾擊時命中加值 +%d,Passive: +%d hit modifier when flanking in melee
 SKILL_EFFECT_HEAL,效果：依威力回復 HP,Effect: Restores HP based on power
+SKILL_EFFECT_MELEE_REACH,近戰攻擊距離 +1,Melee attack range +1
 SKILL_EFFECT_MIRE,效果：建立泥沼，移動成本 +%d，持續 %d 回合,Effect: Creates mire; movement cost +%d for %d rounds
+SKILL_EFFECT_OPPORTUNITY_ATTACK,敵人主動離開近戰範圍前普攻；每輪最多 %d 次，推撞不觸發。,Make a basic attack before an enemy voluntarily leaves melee reach; up to %d times per round. Pushing does not trigger this.
 SKILL_EFFECT_PUSH,效果：命中後推動目標 %d 格；發生碰撞時，參與碰撞的單位皆受到碰撞傷害,Effect: Pushes the target %d tile on hit; all units involved in a collision take collision damage
 SKILL_EFFECT_STEP_THROUGH_THE_SEDGE,穿過單位移至視線內空格，再選擇近戰攻擊或結束回合。,Pass through units to a visible empty cell; then make a melee attack or end the turn.
 SKILL_EFFECT_SWEEP,選擇相鄰格決定方向，橫掃該方向的一排三格；會傷害友軍。,Choose an adjacent cell to sweep a row of three cells in that direction; hits allies too.
 SKILL_EFFECT_UNHEALABLE,被動：無法接受治療技能的治療,Passive: Cannot receive healing from skills
 SKILL_HIT_BONUS,命中加值：%+d,Hit modifier: %+d
 SKILL_NAME_AIMED_SHOT,瞄準射擊,Aimed Shot
+SKILL_NAME_COLLISION_COUNTER,碰撞反擊,Collision Counter
+SKILL_NAME_DOUBLE_STRIKE,雙重打擊,Double Strike
+SKILL_NAME_FIRE_CLAW,火焰爪,Fire Claw
 SKILL_NAME_FLANKING,夾擊,Flanking
 SKILL_NAME_HEAL,治癒術,Heal
 SKILL_NAME_LOOT,拾取貨物,Pick up cargo
 SKILL_NAME_MECHANICAL,機械,Mechanical
 SKILL_NAME_MELEE_ATTACK,近戰攻擊,Melee Attack
+SKILL_NAME_OPPORTUNITY_ATTACK,藉機攻擊,Opportunity Attack
 SKILL_NAME_PACK_FLANKING,狼群夾擊,Pack flanking
+SKILL_NAME_POLEARM,長兵器,Polearm
 SKILL_NAME_POWER_STRIKE,強力一擊,Power Strike
 SKILL_NAME_RANGED_ATTACK,遠程攻擊,Ranged Attack
 SKILL_NAME_SHIELD_BASH,盾牌推擊,Shield Bash
@@ -188,6 +200,7 @@ SKILL_TYPE_RANGED,類型：遠程,Type: Ranged
 TEAM_ALLY,我方,Ally
 TEAM_ENEMY,敵方,Enemy
 TEAM_NAME_BANDITS,盜賊,Bandits
+TEAM_NAME_REFUGEES,難民,Refugees
 TERRAIN_DESCRIPTION_NONE,無特殊效果,No special effect
 TERRAIN_EFFECT_BLOCK,格擋 −{value},Block −{value}
 TERRAIN_EFFECT_BLOCKED,無法通行,Impassable
@@ -206,23 +219,11 @@ TERRAIN_NAME_TREE,樹木,Tree
 UNIT_NAME_BANDIT_ARCHER,盜賊弓手,Bandit Archer
 UNIT_NAME_BANDIT_AXE_USER,持斧盜賊,Bandit Axe User
 UNIT_NAME_BANDIT_LEADER,盜賊首領,Bandit Leader
+UNIT_NAME_BUTLER,管家,Butler
+UNIT_NAME_NEKOMATA_MOTHER,貓又母親,Nekomata Mother
+UNIT_NAME_NEKOMATA_SISTER,貓又姊姊,Nekomata Elder Sister
+UNIT_NAME_NEKOMATA_YOUNGER_SISTER,貓又妹妹,Nekomata Younger Sister
+UNIT_NAME_OFFICER,隨行武官,Officer
+UNIT_NAME_PROTAGONIST,主角,Protagonist
 UNIT_SIZE_LARGE,大型,Large
 UNIT_SIZE_NORMAL,一般,Normal
-UNIT_NAME_PROTAGONIST,主角,Protagonist
-UNIT_NAME_BUTLER,管家,Butler
-UNIT_NAME_OFFICER,隨行武官,Officer
-UNIT_NAME_NEKOMATA_SISTER,貓又姊姊,Nekomata Elder Sister
-UNIT_NAME_NEKOMATA_MOTHER,貓又母親,Nekomata Mother
-UNIT_NAME_NEKOMATA_YOUNGER_SISTER,貓又妹妹,Nekomata Younger Sister
-SKILL_NAME_DOUBLE_STRIKE,雙重打擊,Double Strike
-SKILL_NAME_POLEARM,長兵器,Polearm
-SKILL_EFFECT_MELEE_REACH,近戰攻擊距離 +1,Melee attack range +1
-SKILL_EFFECT_DOUBLE_STRIKE,連打 %d 次，每擊 %d%% 傷害；分別判定命中與格擋。,Strike %d times at %d%% damage each; resolve each hit and block independently.
-ATTACK_PREVIEW_MULTI_DAMAGE,每擊傷害 %d × %d（機率為每擊）,Damage %d × %d (chances per strike)
-SKILL_NAME_FIRE_CLAW,火焰爪,Fire Claw
-SKILL_NAME_OPPORTUNITY_ATTACK,藉機攻擊,Opportunity Attack
-SKILL_NAME_COLLISION_COUNTER,碰撞反擊,Collision Counter
-SKILL_EFFECT_FIRE_CLAW,攻擊附加 %d 點火焰傷害；一同計算格擋與暴擊。,Add %d fire damage; apply block and critical to the combined damage.
-SKILL_EFFECT_OPPORTUNITY_ATTACK,敵人主動離開近戰範圍前普攻；每輪最多 %d 次，推撞不觸發。,Make a basic attack before an enemy voluntarily leaves melee reach; up to %d times per round. Pushing does not trigger this.
-SKILL_EFFECT_COLLISION_COUNTER,每輪最多 %d 次碰撞免疫自身碰撞傷害，並普攻直接碰撞自己的敵人；須在普攻範圍內。,Ignore own collision damage and make a basic attack against the colliding enemy within basic attack reach; up to %d times per round.
-TEAM_NAME_REFUGEES,難民,Refugees

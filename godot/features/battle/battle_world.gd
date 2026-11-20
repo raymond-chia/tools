@@ -171,7 +171,7 @@ func sync_unit_sprites() -> void:
 			BattleVisuals.update_unit_health(node, unit)
 			node.position = footprint_center(unit)
 		var large: bool = unit.large
-		BattleVisuals.style_unit_node(node, large, unit.team, unit_occupies_cell(unit, inspected_cell))
+		BattleVisuals.style_unit_node(node, large, BattleVisuals.team_color(state.teams, unit.team), unit_occupies_cell(unit, inspected_cell))
 
 func queue_new_combat_events() -> void:
 	for index in state.log.size():

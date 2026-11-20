@@ -99,6 +99,7 @@ pub enum DistancePreference {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Map {
+    pub teams: Vec<crate::TeamDefinition>,
     #[serde(default)]
     pub alliances: Vec<Alliance>,
     pub victory: OutcomeGroup,

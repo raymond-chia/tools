@@ -810,6 +810,11 @@ impl Game {
             })
             .collect();
         Snapshot {
+            teams: self
+                .world
+                .resource::<crate::model::TeamDefinitions>()
+                .0
+                .clone(),
             cargo: self
                 .world
                 .get_resource::<crate::model::Cargo>()

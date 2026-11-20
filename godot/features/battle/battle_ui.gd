@@ -13,7 +13,7 @@ signal playback_speed_changed(speed: float)
 
 enum DetailTab { TERRAIN, ATTRIBUTES, ACTIVE_SKILLS, PASSIVE_SKILLS }
 
-const TEAM_COLORS := {"player": "#63a9ff", "enemy": "#ff6868"}
+var presented_teams: Array = []
 const RESULT_STYLE := "[color=#f0c96a]%s[/color]"
 const MOVE_COST_POPUP_OFFSET := Vector2(16.0, 16.0)
 const ATTACK_PREVIEW_OFFSET := Vector2(18.0, 18.0)
@@ -210,6 +210,7 @@ func present(snapshot: Dictionary, pending_action: String, inspected_cell: Vecto
 		$Root/ActionBar/Margin/Layout/EndTurn.disabled = true
 		delay_button.disabled = true
 		return
+	presented_teams = snapshot.teams
 	$Root/ActionBar/Margin/Layout/EndTurn.disabled = not snapshot.turn.can_end_turn
 	var new_events: Array = snapshot.log
 	if not new_events.is_empty():
@@ -572,7 +573,7 @@ func localized_unit_name(unit_type: String) -> String:
 	return tr(BattleConfig.unit_name_key(unit_type))
 
 func colored_unit(unit_type: String, team: Variant) -> String:
-	return "[color=%s]%s[/color]" % [TEAM_COLORS["enemy" if BattleConfig.is_enemy(team) else "player"], localized_unit_name(unit_type)]
+	return "[color=%s]%s[/color]" % ["#" + BattleVisuals.team_color(presented_teams, team).to_html(false), localized_unit_name(unit_type)]
 
 func _on_action_pressed(action: String) -> void:
 	action_selected.emit(action)

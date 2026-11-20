@@ -1817,6 +1817,7 @@ fn unarmed_allied_flee_ai_uses_safe_escape_positions() {
         map.alliances.push(authoring::Alliance {
             teams: vec![Team::Player, Team::Enemy("refugees".into())],
         });
+        super::support::configure_teams(&mut map);
         let mut game = game_on_map(&definitions, map);
         let snapshot = act(&mut game);
         let actor = snapshot["units"]

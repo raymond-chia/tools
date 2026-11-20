@@ -31,7 +31,7 @@ pub use model::{
     BattleMode, CargoState, CargoView, CollisionUnitLog, CombatLogEvent, Command, EquipmentView,
     GridPos, HealingPreview, HealthSegmentsView, InitiativeRollLog, MovePreview,
     MovementTransition, Outcome, PassiveSkillDef, PassiveSkillEffect, PassiveSkillView, Phase,
-    PowerSource, PresentationEvent, RollDegree, Snapshot, Team, TerrainCellView,
+    PowerSource, PresentationEvent, RollDegree, Snapshot, Team, TeamDefinition, TerrainCellView,
     TerrainDescriptionView, TerrainEffectView, TerrainEntryRule, TerrainLayer, TerrainPlacement,
     TerrainTypeDef, TurnView, UnitView,
 };

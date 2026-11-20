@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 /// 不依賴單位、技能與地形定義的地圖驗證，供文件轉換與正式載入共用。
 pub(crate) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
     let authoring::Map {
+        teams: _,
         name,
         width,
         height,
@@ -51,6 +52,7 @@ pub(crate) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
             }
         }
     }
+    validate_teams(map)?;
     let unit_exists = |id: i64| used_ids.contains(&id);
     // 最低難度也出場的單位，在所有難度都會出場。
     let always_present = |id: i64| {
@@ -114,6 +116,45 @@ pub(crate) fn validate_map(map: &authoring::Map) -> Result<(), GameError> {
         terrain.x < 0 || terrain.y < 0 || terrain.x >= *width || terrain.y >= *height
     }) {
         return Err(error::terrain_out_of_bounds());
+    }
+    Ok(())
+}
+
+fn validate_teams(map: &authoring::Map) -> Result<(), GameError> {
+    use crate::teams::{allied_in, fixed_color, valid_color};
+    for (index, definition) in map.teams.iter().enumerate() {
+        let crate::TeamDefinition { team, color } = definition;
+        if matches!(team, Team::Enemy(id) if id.trim().is_empty()) {
+            return Err(error::empty_enemy_faction());
+        }
+        if map.teams[..index].iter().any(|other| other.team == *team) {
+            return Err(error::invalid_team_settings("隊伍設定重複"));
+        }
+        if !valid_color(color) {
+            return Err(error::invalid_team_settings("隊伍顏色必須為 #RRGGBB"));
+        }
+        if let Some(fixed) = fixed_color(&map.alliances, team) {
+            if !color.eq_ignore_ascii_case(fixed) {
+                return Err(error::invalid_team_settings("玩家固定藍色，友軍固定綠色"));
+            }
+        } else if map.teams.iter().any(|other| {
+            fixed_color(&map.alliances, &other.team).is_none()
+                && allied_in(&map.alliances, team, &other.team)
+                && !color.eq_ignore_ascii_case(&other.color)
+        }) {
+            return Err(error::invalid_team_settings("同盟敵軍必須使用相同顏色"));
+        }
+    }
+    let defined = |team: &Team| map.teams.iter().any(|definition| definition.team == *team);
+    if map.units.iter().any(|unit| !defined(&unit.team))
+        || map
+            .alliances
+            .iter()
+            .any(|alliance| alliance.teams.iter().any(|team| !defined(team)))
+    {
+        return Err(error::invalid_team_settings(
+            "單位與同盟必須引用已定義的隊伍",
+        ));
     }
     Ok(())
 }
@@ -297,6 +338,7 @@ pub(crate) fn validate_map_with_definitions(
         ai_profiles,
     } = definitions;
     let authoring::Map {
+        teams: _,
         name: _,
         width,
         height,
@@ -436,6 +478,7 @@ pub(crate) fn load_map(
         ai_profiles,
     } = definitions;
     let authoring::Map {
+        teams,
         name: _,
         width,
         height,
@@ -455,6 +498,7 @@ pub(crate) fn load_map(
     });
     let mut w = World::new();
     w.insert_resource(crate::model::Alliances(alliances));
+    w.insert_resource(crate::model::TeamDefinitions(teams));
     w.insert_resource(Board {
         width,
         height,

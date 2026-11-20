@@ -21,6 +21,10 @@ impl GameError {
     }
 }
 
+pub(crate) fn invalid_team_settings(message: &str) -> GameError {
+    GameError::new("invalid_team_settings", message.to_owned())
+}
+
 pub(crate) fn empty_map_name() -> GameError {
     GameError::new("empty_map_name", "地圖名稱不可為空".to_owned())
 }

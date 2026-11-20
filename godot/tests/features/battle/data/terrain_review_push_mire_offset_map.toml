@@ -1,3 +1,8 @@
+teams = [
+    { team = "player", color = "#63a9ff" },
+    { team = { enemy = "targets" }, color = "#ff6868" },
+]
+
 name="terrain_review_push_mire_offset"
 width=8
 height=2

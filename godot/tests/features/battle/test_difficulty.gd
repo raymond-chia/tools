@@ -78,3 +78,26 @@ func test_editor_requires_difficulty_before_enemy_placement() -> void:
 	editor.edit_cell(Vector2i(0, 1))
 	assert_int(editor.map_data.units.size()).is_equal(5)
 	assert_str(editor.map_data.units[4].min_difficulty).is_equal("easy")
+
+# 驗證玩家顏色鎖定，敵軍選色會更新所有同隊底圈，並能一次復原與重做。
+func test_editor_changes_and_undoes_team_color() -> void:
+	var editor := EDITOR_SCENE.instantiate()
+	editor.data_dir = DATA
+	editor.definitions_path = DATA + "definitions.toml"
+	editor.map_dir = DATA + "maps/"
+	var runner := scene_runner(auto_free(editor))
+	await runner.simulate_frames(1)
+	editor.inspect_unit(Vector2i(0, 0))
+	assert_bool(editor.inspected_team_color.disabled).is_true()
+	assert_str(editor.inspected_team_color.color.to_html(false)).is_equal("63a9ff")
+	editor.inspect_unit(Vector2i(1, 0))
+	assert_bool(editor.inspected_team_color.disabled).is_false()
+	editor.inspected_team_color.color = Color("#aa55cc")
+	editor.inspected_team_color.popup_closed.emit()
+	for unit in editor.map_view.snapshot.units:
+		var base: Sprite2D = editor.map_view.unit_nodes[unit.id].get_node("Visual/Base")
+		assert_str(base.modulate.to_html(false)).is_equal("63a9ff" if unit.id == 1 else "aa55cc")
+	editor.undo()
+	assert_str(editor.map_data.teams[1].color).is_equal("#ff6868")
+	editor.redo()
+	assert_str(editor.map_data.teams[1].color).is_equal("#aa55cc")

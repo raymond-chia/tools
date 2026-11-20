@@ -391,6 +391,8 @@ pub enum Command {
 
 #[derive(Serialize)]
 pub struct Snapshot {
+    /// 各隊伍的設定；單位透過 team 對應，不各自保存顏色。
+    pub teams: Vec<TeamDefinition>,
     pub cargo: Option<CargoView>,
     pub width: i32,
     pub height: i32,
@@ -660,6 +662,19 @@ pub struct AttackPreview {
     pub critical_hit_damage: i32,
     pub health_segments: HealthSegmentsView,
 }
+
+/// 隊伍設定；同盟關係另外由地圖的 alliances 記錄。
+#[derive(Clone, Deserialize, Serialize)]
+pub struct TeamDefinition {
+    pub team: Team,
+    /// 底圈顏色，格式為 #RRGGBB，由作者輸入邊界驗證。
+    /// 玩家固定藍色、玩家的友軍固定綠色；敵軍可編輯。
+    /// 編輯敵軍顏色時，核心編輯器操作須同步更新同盟內各隊設定。
+    pub color: String,
+}
+
+#[derive(Resource)]
+pub(crate) struct TeamDefinitions(pub(crate) Vec<TeamDefinition>);
 
 #[derive(Serialize)]
 pub struct UnitView {

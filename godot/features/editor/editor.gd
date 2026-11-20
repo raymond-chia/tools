@@ -40,6 +40,10 @@ const OUTCOME_CONDITIONS: Dictionary = {
 @onready var unit_list: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Unit
 @onready var placement_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/MinimumDifficulty
 @onready var placement_facing: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/Tools/Facing
+@onready var inspected_team_color: ColorPickerButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedTeamColor
+@onready var inspected_team: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedTeam
+@onready var inspected_faction: LineEdit = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedFaction
+@onready var apply_inspected_team: Button = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/ApplyInspectedTeam
 @onready var inspected_facing: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedFacing
 @onready var inspected_unit_type: Label = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedUnitType
 @onready var inspected_difficulty: OptionButton = $Layout/Pages/MapPage/Materials/PaletteTabs/Units/InspectedDifficulty
@@ -125,10 +129,16 @@ func _ready() -> void:
 		for child in group.get_children():
 			if child is CheckBox:
 				child.toggled.connect(func(_pressed: bool): update_outcome_group(key, group))
-	for value in ["player", "enemy"]:
+	for value in ["玩家", "其他派系"]:
 		team_list.add_item(value)
 	mode_list.select(0)
 	team_list.select(0)
+	inspected_team.item_selected.connect(func(index: int):
+		inspected_faction.visible = index != 0
+		if index > 1: inspected_faction.text = inspected_team.get_item_metadata(index)
+	)
+	apply_inspected_team.pressed.connect(update_unit_team)
+	inspected_team_color.popup_closed.connect(update_team_color)
 	for index in [0, 1, 2, 3, 4]:
 		pages.set_tab_title(index, ["地圖與單位配置", "單位", "技能", "地形", "裝備"][index])
 	setup_navigation()
@@ -174,7 +184,7 @@ func _ready() -> void:
 		faction_field.text = existing_factions.get_item_text(index)
 		existing_factions.select(0)
 	)
-	existing_factions.add_item("選擇既有敵方派系")
+	existing_factions.add_item("選擇既有派系")
 	existing_factions.set_item_disabled(0, true)
 	faction_field.visible = false
 	width_box.value_changed.connect(func(_value: float): resize_map())
@@ -368,7 +378,7 @@ func submit_map() -> void:
 		map_data.name += " 副本"
 	else:
 		map_data = {
-			"name": filename, "width": 10, "height": 8, "terrains": [], "units": [],
+			"name": filename, "width": 10, "height": 8, "terrains": [], "units": [], "teams": [],
 			"victory": {"mode": "all", "conditions": [{"type": "all_enemies_defeated"}]},
 			"defeat": {"mode": "any", "conditions": [{"type": "team_defeated", "team": "player"}]},
 		}
@@ -797,11 +807,11 @@ func refresh_tools_visibility() -> void:
 	placement_difficulty.visible = faction_field.visible
 
 func refresh_existing_factions() -> void:
-	var result := read_core_response(core.enemy_factions_from_json(JSON.stringify(map_data)))
+	var result := read_core_response(core.factions_from_json(JSON.stringify(map_data)))
 	if result.is_empty(): return
 	var factions: Array = result.factions
 	existing_factions.clear()
-	existing_factions.add_item("尚無既有敵方派系" if factions.is_empty() else "選擇既有敵方派系")
+	existing_factions.add_item("尚無既有派系" if factions.is_empty() else "選擇既有派系")
 	existing_factions.set_item_disabled(0, true)
 	for faction in factions:
 		existing_factions.add_item(faction)
@@ -830,10 +840,10 @@ func paint_terrain_stroke(from: Vector2i, cell: Vector2i) -> void:
 	var label := "地形筆刷 %s" % stroke_id
 	if editing_mode == EditMode.OVERLAY and overlay_tool.selected == 1:
 		command.merge({"percent": int(overlay_density.value), "preserve_connectivity": overlay_connectivity.button_pressed, "seed": randi()})
-		apply_terrain_result(core.scatter_overlay_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label, UndoRedo.MERGE_ENDS)
+		apply_map_result(core.scatter_overlay_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label, UndoRedo.MERGE_ENDS)
 	else:
 		command.layer = layer
-		apply_terrain_result(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label, UndoRedo.MERGE_ENDS)
+		apply_map_result(core.paint_terrain_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label, UndoRedo.MERGE_ENDS)
 
 func unit_at(cell: Vector2i) -> Dictionary:
 	# 佔用格由核心決定；編輯器只選取 snapshot 中被點擊的單位。
@@ -872,7 +882,8 @@ func edit_cell(cell: Vector2i) -> void:
 		var placement := {"id":id,"unit_type":kind,"team":team,"x":cell.x,"y":cell.y,"min_difficulty":null,"facing":placement_facing.get_selected_metadata()}
 		if team_list.selected != 0:
 			placement.min_difficulty = placement_difficulty.get_selected_metadata()
-		map_data.units.append(placement)
+		apply_team_edit({"action": "place_unit", "unit": placement}, "放置單位")
+		return
 	elif editing_mode == EditMode.MOVE_UNIT:
 		if current.is_empty(): return
 		map_view.begin_unit_drag(current, cell)
@@ -882,11 +893,12 @@ func edit_cell(cell: Vector2i) -> void:
 		map_data.units = map_data.units.filter(func(u: Dictionary): return u.id != current.id)
 	commit(previous)
 
-func apply_terrain_result(response: String, label: String, merge_mode := UndoRedo.MERGE_DISABLE) -> void:
+func apply_map_result(response: String, label: String, merge_mode := UndoRedo.MERGE_DISABLE) -> void:
 	var result := read_core_response(response)
 	if result.is_empty() or not result.changed: return
 	var previous := document_state()
 	map_data = result.map
+	CoreResponse.convert_unit_ids(map_data)
 	CoreResponse.convert_unit_ids(result.snapshot)
 	# 核心結果不含查看中單位的範圍，查看時由 commit 重新查詢。
 	commit(previous, result.snapshot if map_view.inspected_unit == 0 else {}, label, merge_mode)
@@ -894,7 +906,7 @@ func apply_terrain_result(response: String, label: String, merge_mode := UndoRed
 func move_overlay(from: Vector2i, to: Vector2i) -> void:
 	if editing_mode != EditMode.OVERLAY or overlay_tool.selected != 2: return
 	var command := {"from": {"x": from.x, "y": from.y}, "to": {"x": to.x, "y": to.y}}
-	apply_terrain_result(core.move_overlay_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), "搬動上層")
+	apply_map_result(core.move_overlay_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), "搬動上層")
 
 func move_unit(id: int, cell: Vector2i) -> void:
 	if editing_mode != EditMode.MOVE_UNIT: return
@@ -1022,11 +1034,32 @@ func change_terrain_effect(id: String, terrain: String) -> void:
 
 # 呈現作者設定；未設定的玩家以簡單顯示，不改寫資料。
 func refresh_inspected_unit() -> void:
+	inspected_team_color.visible = false
+	inspected_team.visible = false
+	inspected_faction.visible = false
+	apply_inspected_team.visible = false
 	inspected_unit_type.visible = false
 	inspected_facing.visible = false
 	inspected_difficulty.visible = false
 	for unit in map_data.get("units", []):
 		if unit.id != map_view.inspected_unit: continue
+		var result := read_core_response(core.factions_from_json(JSON.stringify(map_data)))
+		if result.is_empty(): return
+		inspected_team.clear()
+		inspected_team.add_item("玩家（藍色）")
+		inspected_team.add_item("其他派系")
+		for faction in result.factions:
+			inspected_team.add_item(faction)
+			inspected_team.set_item_metadata(inspected_team.item_count - 1, faction)
+		inspected_team.select(0 if unit.team is String else 1)
+		inspected_faction.text = "" if unit.team is String else unit.team.enemy
+		inspected_team.visible = true
+		inspected_faction.visible = inspected_team.selected != 0
+		apply_inspected_team.visible = true
+		var definition := BattleVisuals.team_definition(map_view.snapshot.teams, unit.team)
+		inspected_team_color.color = Color(definition.color)
+		inspected_team_color.disabled = not map_view.snapshot.team_color_editable
+		inspected_team_color.visible = true
 		inspected_unit_type.text = "單位：" + unit.unit_type
 		inspected_unit_type.visible = true
 		inspected_facing.visible = true
@@ -1039,6 +1072,20 @@ func refresh_inspected_unit() -> void:
 			if inspected_difficulty.get_item_metadata(index) == displayed_difficulty:
 				inspected_difficulty.select(index)
 				return
+
+# 所屬隊伍與批次改色由核心編輯器操作處理，沿用文件歷史與驗證。
+func apply_team_edit(command: Dictionary, label: String) -> void:
+	apply_map_result(core.edit_team_from_json(JSON.stringify(definitions), JSON.stringify(map_data), JSON.stringify(command)), label)
+
+func update_unit_team() -> void:
+	var selected: Variant = "player" if inspected_team.selected == 0 else {"enemy": inspected_faction.text.strip_edges()}
+	apply_team_edit({"action": "set_unit_team", "unit_id": map_view.inspected_unit, "team": selected}, "修改單位陣營")
+
+func update_team_color() -> void:
+	for unit in map_data.units:
+		if unit.id != map_view.inspected_unit: continue
+		apply_team_edit({"action": "set_color", "team": unit.team, "color": "#" + inspected_team_color.color.to_html(false)}, "修改敵方同盟顏色")
+		return
 
 func update_unit_difficulty(index: int) -> void:
 	if index <= 0: return

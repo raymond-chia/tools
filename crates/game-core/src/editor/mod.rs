@@ -5,6 +5,7 @@ mod error;
 mod json;
 mod map;
 mod overlay;
+mod teams;
 
 use crate::Game;
 use crate::authoring::{Definitions, Map, validation};
@@ -14,6 +15,7 @@ use error::game_error_json;
 pub use map::{paint_terrain_from_json, terrain_brush_cells_from_json};
 pub use overlay::{move_overlay_from_json, scatter_overlay_from_json};
 use std::collections::BTreeMap;
+pub use teams::edit_team_from_json;
 
 /// 批次檢查原始文件；單一文件失敗仍繼續檢查其他地圖。檔名由呼叫端決定顯示方式。
 pub fn validate_documents(definitions: &str, maps: &str) -> Result<String, EditorError> {
@@ -44,16 +46,15 @@ pub fn validate_documents(definitions: &str, maps: &str) -> Result<String, Edito
     .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }
 
-/// 依地圖配置順序列出既有敵方派系，供編輯器選用。
-pub fn enemy_factions_from_json(map: &str) -> Result<String, EditorError> {
+/// 依隊伍設定順序列出既有非玩家派系，供編輯器選用。
+pub fn factions_from_json(map: &str) -> Result<String, EditorError> {
     let map: Map = json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
     let mut factions = Vec::new();
-    for unit in map.units {
-        if let crate::Team::Enemy(faction) = unit.team {
-            if !factions.contains(&faction) {
-                factions.push(faction);
-            }
+    for definition in map.teams {
+        let crate::TeamDefinition { team, color: _ } = definition;
+        if let crate::Team::Enemy(faction) = team {
+            factions.push(faction);
         }
     }
     serde_json::to_string(&serde_json::json!({ "factions": factions }))
@@ -97,7 +98,16 @@ pub fn inspected_preview_from_json(
         .map_err(|e| EditorError::conversion("definitions_json_parse", e.to_string()))?;
     let map: Map = json::from_str(map)
         .map_err(|e| EditorError::conversion("map_json_parse", e.to_string()))?;
+    let team_color_editable = map
+        .units
+        .iter()
+        .find(|unit| Some(unit.id) == inspected_actor)
+        .is_some_and(|unit| crate::teams::fixed_color(&map.alliances, &unit.team).is_none());
     let mut game = Game::from_authoring(definitions, map, crate::authoring::Difficulty::Hard)?;
-    serde_json::to_string(&game.take_snapshot(inspected_actor))
+    // 可否編輯只屬於編輯器回應，不放入正式遊戲的隊伍資料。
+    let mut snapshot = serde_json::to_value(game.take_snapshot(inspected_actor))
+        .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))?;
+    snapshot["team_color_editable"] = team_color_editable.into();
+    serde_json::to_string(&snapshot)
         .map_err(|e| EditorError::conversion("json_serialize", e.to_string()))
 }
