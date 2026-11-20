@@ -1878,3 +1878,133 @@ fn fleeing_weight_competes_with_attack_utility() {
         assert_eq!(actor["x"], expected_x, "{name}");
     }
 }
+
+fn opportunity_game(definitions: &toml::Value, diagram: &str) -> Game {
+    let mut definitions: authoring::Definitions = definitions
+        .clone()
+        .try_into()
+        .expect("藉機攻擊測試定義應有效");
+    super::support::add_passive_skill(
+        &mut definitions,
+        "target",
+        "opportunity",
+        &[crate::PassiveSkillEffect::OpportunityAttack {
+            reactions_per_round: 1,
+        }],
+    );
+    let map = ascii_map(
+        "opportunity_ai_test",
+        diagram,
+        &[
+            ('A', ACTOR_ID, "tank", enemy()),
+            ('T', TARGET_ID, "target", Team::Player),
+            ('L', ALLY_ID, "target", Team::Player),
+        ],
+    );
+    Game::from_authoring(definitions, map, authoring::Difficulty::Easy)
+        .expect("藉機攻擊測試戰鬥應有效")
+}
+
+// 驗證追擊收益可抵過非致死風險，高命中與致死風險則降低離開近敵的意願。
+#[test]
+fn pursuit_competes_with_opportunity_risk() {
+    for (name, hit, hp, pursuit, exhausted, expected) in [
+        ("低命中可冒險殺敵", -100, 300, 0, false, ALLY_ID),
+        ("高命中改打眼前敵人", 100, 300, 0, false, TARGET_ID),
+        ("高追擊權重仍追殺", 100, 300, 1000, false, ALLY_ID),
+        ("致死風險放棄追殺", 100, 50, 1000, false, TARGET_ID),
+        ("反應用完可以追殺", 100, 50, 0, true, ALLY_ID),
+    ] {
+        let mut definitions = definitions();
+        unit_type_mut(&mut definitions, "tank")["hp"] = hp.into();
+        unit_type_mut(&mut definitions, "target")["hit"] = hit.into();
+        unit_type_mut(&mut definitions, "target")["physical_power"] = 110.into();
+        profile_mut(&mut definitions, "tank")["pursuit_weight"] = pursuit.into();
+        let mut game = opportunity_game(
+            &definitions,
+            "
+            TA..L
+        ",
+        );
+        wound(&mut game, ALLY_ID, 1);
+        game.command(Command::Start).expect("戰鬥應可開始");
+        let actor = game.entity(ACTOR_ID).expect("AI 應存在");
+        game.world
+            .entity_mut(actor)
+            .insert(crate::model::PreviousAttackTarget(ALLY_ID));
+        if exhausted {
+            let round = game.world.resource::<Encounter>().round;
+            let target = game.entity(TARGET_ID).expect("近敵應存在");
+            game.world
+                .entity_mut(target)
+                .insert(crate::model::ReactionState {
+                    round,
+                    action_reactions_used: 1,
+                    collision_reactions_used: 0,
+                });
+        }
+        game.set_random_seed(1);
+        let snapshot = serde_json::to_value(game.command(Command::Continue).expect("AI 應可行動"))
+            .expect("快照應可序列化");
+        assert_eq!(action(&snapshot), Some(("melee", expected)), "{name}");
+        assert_eq!(game.entity(ACTOR_ID).is_some(), true, "{name}：AI 應存活");
+    }
+}
+
+// 驗證逃跑接受非致死傷害，並累計單人與多人藉機攻擊的致死風險。
+#[test]
+fn fleeing_accepts_nonlethal_opportunity_attacks() {
+    for (name, power, hp, diagram, expected_x) in [
+        (
+            "挨打仍撤離",
+            5,
+            100,
+            "
+            TA....L
+        ",
+            3,
+        ),
+        (
+            "致死時留下",
+            200,
+            100,
+            "
+            TA....L
+        ",
+            1,
+        ),
+        (
+            "單人攻擊仍值得逃",
+            30,
+            50,
+            "
+            TA....L
+        ",
+            3,
+        ),
+        (
+            "多人連擊可能致死",
+            30,
+            50,
+            "
+            #L#####
+            TA.....
+            #######
+        ",
+            1,
+        ),
+    ] {
+        let mut definitions = definitions();
+        let profile = profile_mut(&mut definitions, "tank");
+        profile["fleeing_weight"] = 100.into();
+        profile["damage_weight"] = 0.into();
+        profile["positioning_weight"] = 0.into();
+        unit_type_mut(&mut definitions, "tank")["movement"] = 1.into();
+        unit_type_mut(&mut definitions, "tank")["hp"] = hp.into();
+        unit_type_mut(&mut definitions, "target")["hit"] = 100.into();
+        unit_type_mut(&mut definitions, "target")["physical_power"] = power.into();
+        let mut game = opportunity_game(&definitions, diagram);
+        let snapshot = act(&mut game);
+        assert_eq!(actor_x(&snapshot), expected_x, "{name}");
+    }
+}

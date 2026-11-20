@@ -167,40 +167,53 @@ impl Game {
             .cargo_route(actor, active_skills, None)
             .or_else(|| self.assigned_cargo_route(actor))?;
         let turn = self.world.resource::<Turn>();
-        let mut first = movement_options(&self.world, actor, turn, false);
+        let mut all = movement_options(&self.world, actor, turn, true);
+        let mut loot_action = None;
         if can_use_skill(&self.world) {
-            if let Some((skill, target_cell)) = loot.as_ref() {
-                if let Some(index) = first.iter().position(|plan| plan.position == goal) {
-                    return Some(AiTurnPlan {
-                        movement: first.swap_remove(index),
-                        action: Some(AiAction {
-                            skill: skill.clone(),
-                            target_cell: *target_cell,
-                            attack_target: None,
-                        }),
+            if let Some((skill, target_cell)) = loot {
+                let first = movement_options(&self.world, actor, turn, false);
+                if let Some(movement) = first.into_iter().find(|plan| plan.position == goal) {
+                    all.retain(|plan| plan.position != goal);
+                    all.push(movement);
+                    loot_action = Some(AiAction {
+                        skill,
+                        target_cell,
+                        attack_target: None,
                     });
                 }
             }
         }
-        let mut all = movement_options(&self.world, actor, turn, true);
-        // 本回合能離場時先離場，不為攻擊延後撤離。
-        if loot.is_none() {
-            if let Some(index) = all.iter().position(|plan| plan.position == goal) {
-                return Some(AiTurnPlan {
-                    movement: all.swap_remove(index),
-                    action: None,
-                });
-            }
-        }
-        // 危險地形可能截斷路徑，僅走到本回合實際可到達的最遠路徑前綴。
-        let index = route
+        // 沿貨物路徑比較前進收益與挨打風險；完成目標另有加分。
+        let index = all
             .iter()
-            .rev()
-            .find_map(|cell| all.iter().position(|plan| plan.position == *cell))
+            .enumerate()
+            .filter_map(|(index, movement)| {
+                route
+                    .iter()
+                    .position(|cell| *cell == movement.position)
+                    .map(|progress| {
+                        let risk = super::risk::movement_risk(&self.world, actor, &movement.path);
+                        let completion = if movement.position == goal {
+                            100.0
+                        } else {
+                            0.0
+                        };
+                        (
+                            index,
+                            (progress as f64 * 10.0 + completion) * (1.0 - risk.death_chance)
+                                - risk.cost(),
+                        )
+                    })
+            })
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(index, _)| index)
             .expect("貨物路徑起點應包含在可用移動選項中");
-        Some(AiTurnPlan {
-            movement: all.swap_remove(index),
-            action: None,
-        })
+        let movement = all.swap_remove(index);
+        let action = if movement.position == goal {
+            loot_action
+        } else {
+            None
+        };
+        Some(AiTurnPlan { movement, action })
     }
 }

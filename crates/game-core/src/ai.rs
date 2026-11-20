@@ -1,6 +1,7 @@
 //! Utility AI：貨物目標優先，其餘評估第一段移動與技能，無法施放時再利用兩段移動接近。
 mod cargo;
 mod flee;
+mod risk;
 use crate::authoring::{AiProfile, DistancePreference, UnitType};
 use crate::error::{self, GameError};
 use crate::game::Game;
@@ -251,11 +252,12 @@ impl Game {
             position_index,
             MovementOption {
                 position,
-                path: _,
+                path,
                 cost,
             },
         ) in positions.iter().enumerate()
         {
+            let risk = risk::movement_risk(&self.world, actor, path);
             for skill in active_skills {
                 let preferred_distance = match preferred_skill_distance(
                     profile,
@@ -346,7 +348,7 @@ impl Game {
                         skill: skill.clone(),
                         target_cell: cell,
                         target_id,
-                        utility,
+                        utility: utility * (1.0 - risk.death_chance) - risk.cost(),
                     };
                     let replace = best.as_ref().is_none_or(|previous| {
                         candidate.utility.total_cmp(&previous.utility).is_gt()
@@ -371,6 +373,9 @@ impl Game {
                                     positions[previous.position_index].position.x,
                                 ))
                     });
+                    if candidate.utility <= 0.0 {
+                        continue;
+                    }
                     if replace {
                         best = Some(candidate);
                     }
@@ -707,7 +712,29 @@ fn fallback_position(
                 .min_by(|(a, _), (b, _)| a.cmp(b))
                 .map(|(_, index)| index);
             if let Some(index) = position {
-                return index;
+                let destination = positions[index].position;
+                let route = &positions[index].path;
+                return (0..positions.len())
+                    .filter(|candidate| route.contains(&positions[*candidate].position))
+                    .max_by(|a, b| {
+                        let value = |index: usize| {
+                            let progress = route
+                                .iter()
+                                .position(|cell| *cell == positions[index].position)
+                                .expect("候選停點應位於接敵路徑")
+                                as f64;
+                            let risk = risk::movement_risk(world, actor, &positions[index].path);
+                            progress * f64::from(profile.positioning_weight) - risk.cost()
+                        };
+                        value(*a)
+                            .total_cmp(&value(*b))
+                            .then_with(|| {
+                                (positions[*b].position != destination)
+                                    .cmp(&(positions[*a].position != destination))
+                            })
+                            .then_with(|| positions[*b].cost.cmp(&positions[*a].cost))
+                    })
+                    .expect("路徑至少包含起點");
             }
         }
     }

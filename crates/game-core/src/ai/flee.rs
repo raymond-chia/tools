@@ -1,5 +1,6 @@
 //! 逃跑候選與攻擊、治療共同比較效益；沿用一般移動的額度、避障與危險地形規則。
 use super::AiTurnPlan;
+use super::risk::movement_risk;
 use crate::game::Game;
 use crate::model::{TerrainGrid, Turn, Unit};
 use crate::movement::{
@@ -7,7 +8,6 @@ use crate::movement::{
 };
 use crate::teams::are_allied;
 use bevy_ecs::prelude::Entity;
-use std::cmp::Reverse;
 
 impl Game {
     pub(super) fn flee_turn_plan(&self, actor: Entity, weight: u32) -> Option<(AiTurnPlan, f64)> {
@@ -50,30 +50,29 @@ impl Game {
                         .any(|cell| grid.cells[(cell.y * grid.width + cell.x) as usize].hazard)
                 },
             )
-            .min_by_key(
-                |MovementOption {
-                     position,
-                     path: _,
-                     cost,
-                 }| {
-                    (
-                        Reverse(nearest_distance(*position).expect("已確認至少有一名敵人")),
-                        *cost,
-                        position.y,
-                        position.x,
-                    )
-                },
-            )?;
+            .max_by(|a, b| {
+                let utility = |movement: &MovementOption| {
+                    let gain = nearest_distance(movement.position).expect("已確認至少有一名敵人")
+                        - initial;
+                    let risk = movement_risk(&self.world, actor, &movement.path);
+                    // 非致死的藉機攻擊不阻止撤離。
+                    f64::from(gain) * f64::from(weight) - risk.death_cost()
+                };
+                utility(a).total_cmp(&utility(b)).then_with(|| {
+                    (b.cost, b.position.y, b.position.x).cmp(&(a.cost, a.position.y, a.position.x))
+                })
+            })?;
         let gain = nearest_distance(movement.position).expect("已確認至少有一名敵人") - initial;
         if gain <= 0 {
             return None;
         }
+        let risk = movement_risk(&self.world, actor, &movement.path);
         Some((
             AiTurnPlan {
                 movement,
                 action: None,
             },
-            f64::from(gain) * f64::from(weight),
+            f64::from(gain) * f64::from(weight) - risk.death_cost(),
         ))
     }
 }

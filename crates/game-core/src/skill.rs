@@ -306,7 +306,16 @@ impl Game {
             block_damage: _,
             critical_hit_damage: _,
             critical_block_damage: _,
-        } = attack_calculation(&self.world, ae, position, te, &skill, hit_bonus, power);
+        } = attack_calculation(
+            &self.world,
+            ae,
+            position,
+            te,
+            placement(&self.world, te).0,
+            &skill,
+            hit_bonus,
+            power,
+        );
         let natural = die(&mut self.world, gameplay_config::HIT_DIE_SIDES) as i32;
         let AttackRoll {
             result,
@@ -671,7 +680,18 @@ fn preview_sweep(
     let cells = sweep_area(world, actor, origin, center, skill)?;
     let targets = sweep_targets(world, actor, &cells)
         .into_iter()
-        .map(|target| attack_preview(world, actor, origin, target, skill, hit_bonus, Some(power)))
+        .map(|target| {
+            attack_preview(
+                world,
+                actor,
+                origin,
+                target,
+                placement(world, target).0,
+                skill,
+                hit_bonus,
+                Some(power),
+            )
+        })
         .collect();
     Ok(ActiveSkillPreview::Area { cells, targets })
 }
@@ -903,17 +923,19 @@ pub(crate) fn preview_unit_skill_from_position(
         attacker,
         position,
         target_entity,
+        placement(world, target_entity).0,
         skill,
         hit_bonus,
         power,
     )))
 }
 
-fn attack_preview(
+pub(crate) fn attack_preview(
     world: &World,
     attacker: Entity,
     position: GridPos,
     target_entity: Entity,
+    target_position: GridPos,
     skill: &ActiveSkillDef,
     hit_bonus: i32,
     power: Option<(crate::PowerSource, i32)>,
@@ -956,6 +978,7 @@ fn attack_preview(
         attacker,
         position,
         target_entity,
+        target_position,
         skill,
         hit_bonus,
         power,
@@ -1242,13 +1265,22 @@ fn attack_calculation(
     attacker: Entity,
     position: GridPos,
     target: Entity,
+    target_position: GridPos,
     skill: &ActiveSkillDef,
     hit_bonus: i32,
     power: Option<(crate::PowerSource, i32)>,
 ) -> AttackCalculation {
-    let hit = hit_breakdown_from_position(world, attacker, position, target, skill, hit_bonus);
-    let dodge_target = effective_dodge(world, target);
-    let block_target = dodge_target + effective_block(world, target);
+    let hit = hit_breakdown_from_position(
+        world,
+        attacker,
+        position,
+        target,
+        target_position,
+        skill,
+        hit_bonus,
+    );
+    let dodge_target = effective_dodge_at(world, target, target_position);
+    let block_target = dodge_target + effective_block_at(world, target, target_position);
     let base_damage = direct_damage(world, attacker, power);
     let hit_damage = if matches!(skill.effect, ActiveSkillEffect::DoubleStrike { .. }) {
         base_damage / 2
@@ -1378,7 +1410,15 @@ fn hit_breakdown(
     hit_bonus: i32,
 ) -> HitBreakdown {
     let position = world.get::<Pos>(attacker).expect("攻擊者應具有位置").0;
-    hit_breakdown_from_position(world, attacker, position, target, skill, hit_bonus)
+    hit_breakdown_from_position(
+        world,
+        attacker,
+        position,
+        target,
+        placement(world, target).0,
+        skill,
+        hit_bonus,
+    )
 }
 
 fn hit_breakdown_from_position(
@@ -1386,6 +1426,7 @@ fn hit_breakdown_from_position(
     attacker: Entity,
     position: GridPos,
     target: Entity,
+    target_position: GridPos,
     skill: &ActiveSkillDef,
     hit_bonus: i32,
 ) -> HitBreakdown {
@@ -1394,7 +1435,8 @@ fn hit_breakdown_from_position(
         .expect("可發動攻擊的單位應具有 Unit");
     let base_hit = unit.hit;
     let skill_hit = hit_bonus;
-    let flanking_modifier = flanking_bonus(world, attacker, position, target, skill);
+    let flanking_modifier =
+        flanking_bonus(world, attacker, position, target, target_position, skill);
     HitBreakdown {
         base_hit,
         skill_hit,
@@ -1408,6 +1450,7 @@ fn flanking_bonus(
     attacker: Entity,
     position: GridPos,
     target: Entity,
+    target_position: GridPos,
     skill: &ActiveSkillDef,
 ) -> i32 {
     let ActiveSkillDef {
@@ -1420,7 +1463,13 @@ fn flanking_bonus(
         return 0;
     }
     let attacker_side = match target_side_from_position(
-        world, attacker, position, target, *min_range, *max_range,
+        world,
+        attacker,
+        position,
+        target,
+        target_position,
+        *min_range,
+        *max_range,
     ) {
         Some(side) => side,
         None => return 0,
@@ -1463,10 +1512,12 @@ fn flanking_bonus(
             .filter(|support_skill| melee_enemy_skill(&support_skill.effect))
             .any(|support_skill| {
                 let support_skill = effective_skill(world, entity.id(), support_skill);
-                target_side_within_range(
+                target_side_from_position(
                     world,
                     entity.id(),
+                    placement(world, entity.id()).0,
                     target,
+                    target_position,
                     support_skill.min_range,
                     support_skill.max_range,
                 )
@@ -1498,22 +1549,12 @@ pub(crate) fn melee_enemy_skill(effect: &ActiveSkillEffect) -> bool {
     )
 }
 
-fn target_side_within_range(
-    world: &World,
-    unit: Entity,
-    target: Entity,
-    min_range: i32,
-    max_range: i32,
-) -> Option<TargetSide> {
-    let unit_position = world.get::<Pos>(unit).expect("參與包夾的單位應具有 Pos").0;
-    target_side_from_position(world, unit, unit_position, target, min_range, max_range)
-}
-
 fn target_side_from_position(
     world: &World,
     unit: Entity,
     unit_position: GridPos,
     target: Entity,
+    target_position: GridPos,
     min_range: i32,
     max_range: i32,
 ) -> Option<TargetSide> {
@@ -1524,7 +1565,7 @@ fn target_side_from_position(
         .get::<Footprint>(unit)
         .expect("參與包夾的單位應具有 Footprint");
     let (
-        target_position,
+        _,
         target_footprint @ Footprint {
             width: target_width,
             height: target_height,
@@ -1598,10 +1639,14 @@ pub fn degree(n: i32, m: i32, t: i32) -> RollDegree {
 }
 
 pub(crate) fn effective_dodge(w: &World, entity: Entity) -> i32 {
+    effective_dodge_at(w, entity, placement(w, entity).0)
+}
+
+fn effective_dodge_at(w: &World, entity: Entity, position: GridPos) -> i32 {
     let unit = w
         .get::<Unit>(entity)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    let dodge = defense_after_terrain(w, entity, unit.dodge, |cell| cell.dodge_penalty);
+    let dodge = defense_after_terrain(w, entity, position, unit.dodge, |cell| cell.dodge_penalty);
     if crate::cargo::is_carrying_cargo(w, entity) {
         (dodge - gameplay_config::CARGO_DODGE_PENALTY).max(0)
     } else {
@@ -1610,20 +1655,25 @@ pub(crate) fn effective_dodge(w: &World, entity: Entity) -> i32 {
 }
 
 pub(crate) fn effective_block(w: &World, entity: Entity) -> i32 {
+    effective_block_at(w, entity, placement(w, entity).0)
+}
+
+fn effective_block_at(w: &World, entity: Entity, position: GridPos) -> i32 {
     let unit = w
         .get::<Unit>(entity)
         .expect("已建立的戰鬥單位應具有 Unit 元件");
-    defense_after_terrain(w, entity, unit.block, |cell| cell.block_penalty)
+    defense_after_terrain(w, entity, position, unit.block, |cell| cell.block_penalty)
 }
 
 /// 防禦值扣除佔用範圍內的地形懲罰，最低為 0。
 fn defense_after_terrain(
     w: &World,
     entity: Entity,
+    position: GridPos,
     base: i32,
     penalty: impl Fn(CellTerrain) -> i32,
 ) -> i32 {
-    let (position, footprint) = placement(w, entity);
+    let (_, footprint) = placement(w, entity);
     let penalty =
         footprint_terrain_penalty(w.resource::<TerrainGrid>(), position, footprint, penalty);
     (base - penalty).max(0)

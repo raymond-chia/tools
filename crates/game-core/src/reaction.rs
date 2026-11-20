@@ -55,52 +55,73 @@ fn in_basic_attack_range(
     )
 }
 
+/// 選路預估與實際結算共用觸發條件，額度由呼叫端依路徑累計。
+pub(crate) fn opportunity_attackers(
+    world: &World,
+    mover: Entity,
+    origin: GridPos,
+    destination: GridPos,
+) -> Vec<(i64, Entity, String)> {
+    let team = world
+        .get::<Unit>(mover)
+        .expect("移動者應有 Unit")
+        .team
+        .clone();
+    let mut attackers: Vec<_> = world
+        .iter_entities()
+        .filter_map(|entity| {
+            let unit = entity.get::<Unit>()?;
+            if are_allied(world, &team, &unit.team) {
+                return None;
+            }
+            let (id, quota) = unit_passive_effects(world, entity.id())
+                .into_iter()
+                .find_map(|(id, effect)| match effect {
+                    PassiveSkillEffect::OpportunityAttack {
+                        reactions_per_round,
+                    } => Some((id.to_string(), reactions_per_round)),
+                    _ => None,
+                })?;
+            if state(world, entity.id()).action_reactions_used >= quota
+                || !in_basic_attack_range(world, entity.id(), mover, origin)
+                || {
+                    let (source, size) = placement(world, entity.id());
+                    let (_, mover_size) = placement(world, mover);
+                    let skill = effective_skill(world, entity.id(), &basic_attack_definition(""));
+                    footprint_distance(source, size, destination, mover_size) <= skill.max_range
+                }
+            {
+                return None;
+            }
+            Some((
+                entity.get::<Id>().expect("戰鬥單位應有 Id").0,
+                entity.id(),
+                id,
+            ))
+        })
+        .collect();
+    attackers.sort_by_key(|(id, _, _)| *id);
+    attackers
+}
+
+pub(crate) fn remaining_opportunity_reactions(world: &World, entity: Entity) -> u32 {
+    let quota = unit_passive_effects(world, entity)
+        .into_iter()
+        .find_map(|(_, effect)| match effect {
+            PassiveSkillEffect::OpportunityAttack {
+                reactions_per_round,
+            } => Some(reactions_per_round),
+            _ => None,
+        })
+        .expect("藉機攻擊者應具有對應被動技能");
+    quota.saturating_sub(state(world, entity).action_reactions_used)
+}
+
 impl Game {
     /// 在跨出射程的那一步之前結算；推擊不呼叫此入口。
     pub(crate) fn opportunity_attacks_before_step(&mut self, mover: Entity, destination: GridPos) {
         let (origin, _) = placement(&self.world, mover);
-        let team = self
-            .world
-            .get::<Unit>(mover)
-            .expect("移動者應有 Unit")
-            .team
-            .clone();
-        let mut attackers: Vec<_> = self
-            .world
-            .iter_entities()
-            .filter_map(|entity| {
-                let unit = entity.get::<Unit>()?;
-                if are_allied(&self.world, &team, &unit.team) {
-                    return None;
-                }
-                let (id, quota) = unit_passive_effects(&self.world, entity.id())
-                    .into_iter()
-                    .find_map(|(id, effect)| match effect {
-                        PassiveSkillEffect::OpportunityAttack {
-                            reactions_per_round,
-                        } => Some((id.to_string(), reactions_per_round)),
-                        _ => None,
-                    })?;
-                if state(&self.world, entity.id()).action_reactions_used >= quota
-                    || !in_basic_attack_range(&self.world, entity.id(), mover, origin)
-                    || {
-                        let (source, size) = placement(&self.world, entity.id());
-                        let (_, mover_size) = placement(&self.world, mover);
-                        let skill =
-                            effective_skill(&self.world, entity.id(), &basic_attack_definition(""));
-                        footprint_distance(source, size, destination, mover_size) <= skill.max_range
-                    }
-                {
-                    return None;
-                }
-                Some((
-                    entity.get::<Id>().expect("戰鬥單位應有 Id").0,
-                    entity.id(),
-                    id,
-                ))
-            })
-            .collect();
-        attackers.sort_by_key(|(id, _, _)| *id);
+        let attackers = opportunity_attackers(&self.world, mover, origin, destination);
         for (_, attacker, skill_id) in attackers {
             if self.world.get_entity(mover).is_err() {
                 break;
